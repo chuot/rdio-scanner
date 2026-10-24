@@ -143,9 +143,8 @@ func (fixture *ingestFixture) logMessages() []string {
 	return out
 }
 
-// configEntries returns what the ingest wrote about the administrator's configuration: the things this
-// recording created that were not there before. A call that created nothing has nothing to say, so the
-// tests that expect silence read this.
+// configEntries returns what the ingest wrote about the administrator's configuration: the things
+// this recording created that were not there before.
 func (fixture *ingestFixture) configEntries() []string {
 	out := []string{}
 
@@ -158,11 +157,8 @@ func (fixture *ingestFixture) configEntries() []string {
 	return out
 }
 
-// reposted returns what the downstream fan-out re-posted.
-//
-// The fan-out runs on its own goroutine — that is what it is for — so the ingest returning
-// does not mean it has finished. It only touches memory in these tests, so it counts as
-// finished once its count has stopped growing.
+// reposted returns what the downstream fan-out re-posted. The fan-out runs on its own goroutine,
+// so the ingest returning does not mean it has finished; counting settles once it stops growing.
 func (fixture *ingestFixture) reposted() []fakes.ForwardedCall {
 	deadline := time.Now().Add(2 * time.Second)
 
@@ -190,10 +186,8 @@ func (fixture *ingestFixture) reposted() []fakes.ForwardedCall {
 	return current
 }
 
-// loggedAs reports whether the ingest wrote an entry naming that part of the server and saying the
-// fragment. The ingest path writes under four different sources — the call decisions under ingest, the
-// conversion under ffmpeg, the hold under delayer, the re-posts under downstream — so the source is part
-// of what these tests pin.
+// loggedAs reports whether the ingest wrote an entry naming that part of the server and saying
+// the fragment; the ingest path writes under four different sources, so the source is pinned.
 func (fixture *ingestFixture) loggedAs(source domain.LogSource, fragment string) bool {
 	for _, entry := range fixture.logs.Recorded() {
 		if entry.Source == source && strings.Contains(entry.Message, fragment) {
@@ -243,10 +237,8 @@ func storedUnitByRef(system domain.System, ref uint) (domain.Unit, bool) {
 	return domain.Unit{}, false
 }
 
-// The five cases ported from the legacy ingest tests
-// (`server/controller_test.go`), which run against a real temporary database. Here they run
-// against the in-memory repositories, which is what makes the rules they pin testable
-// without a database.
+// The five cases ported from the legacy ingest tests (`server/controller_test.go`), ported to
+// the in-memory repositories so the rules they pin are testable without a database.
 
 func TestIngestCallAddsOneLabeledUnit(t *testing.T) {
 	fixture := newIngestFixture()
@@ -484,9 +476,8 @@ func TestIngestCallNeverRepairsAConfiguredLabel(t *testing.T) {
 	}
 }
 
-// TestACallThatCreatesNothingSaysNothingAboutTheConfiguration is the other half of the requirement. An
-// ordinary call against a configuration that already knows everything it names changes nothing, and an
-// entry for it would teach an operator to ignore the entries that mean something.
+// A call that creates nothing says nothing about the configuration: an entry for an ordinary
+// call would teach an operator to ignore the entries that mean something.
 func TestACallThatCreatesNothingSaysNothingAboutTheConfiguration(t *testing.T) {
 	fixture := newIngestFixture()
 	fixture.options.Stored.AutoPopulate = false
@@ -574,10 +565,8 @@ func TestIngestCallRefusesABlacklistedTalkgroup(t *testing.T) {
 	}
 }
 
-// TestIngestCallRefusesABlacklistedTalkgroupWithAutoPopulateOff: the gate is on every call whose
-// talkgroup resolves, not only on the calls auto populate would create. The system already stores
-// the talkgroup, and neither the system nor the server auto-populates: the call the blacklist names
-// is refused all the same.
+// The blacklist gate is on every call whose talkgroup resolves, not only on the calls auto
+// populate would create: a blacklisted talkgroup is refused even when nothing would be created.
 func TestIngestCallRefusesABlacklistedTalkgroupWithAutoPopulateOff(t *testing.T) {
 	fixture := newIngestFixture()
 	fixture.options.Stored.AutoPopulate = false
@@ -674,8 +663,7 @@ func TestIngestCallRejectsADuplicateWithinTheWindow(t *testing.T) {
 	}
 }
 
-// TestIngestCallStoresTheSameCallOnADifferentSite pins the site rule at the ingest seam:
-// the same talkgroup heard on two sites is two real calls, so the second one is stored.
+// The same talkgroup heard on two sites is two real calls, so the second one is stored.
 func TestIngestCallStoresTheSameCallOnADifferentSite(t *testing.T) {
 	fixture := newIngestFixture()
 
@@ -782,8 +770,8 @@ func TestIngestCallStoresAndDeliversAKnownCall(t *testing.T) {
 	}
 }
 
-// TestIngestCallReportsACallItCouldNotStore is the one ingest line that carries the failure's own text:
-// the repository refused the write, and the statement that failed is the part an operator needs.
+// A call the repository refused to store is reported with the failure's own text: the statement
+// that failed is the part an operator needs.
 func TestIngestCallReportsACallItCouldNotStore(t *testing.T) {
 	fixture := newIngestFixture()
 
@@ -862,9 +850,8 @@ func TestIngestCallLeavesAudioAloneWhenConversionIsDisabled(t *testing.T) {
 	}
 }
 
-// TestIngestCallKeepsTheLengthTheUploaderCounted: a recorder that counted its recording's
-// seconds is believed. The conversion the administrator configured still converts — the
-// length rule measures nothing, and measuring is exactly what the uploader already did.
+// A recorder that counted its recording's seconds is believed: the length rule measures
+// nothing, and the conversion the administrator configured still converts.
 func TestIngestCallKeepsTheLengthTheUploaderCounted(t *testing.T) {
 	fixture := newIngestFixture()
 	fixture.converter.Duration = 3010 * time.Millisecond
@@ -1015,10 +1002,9 @@ func TestIngestCallProbesTheConvertedAudioWhenTheConversionNamesNoLength(t *test
 	}
 }
 
-// A probe that cannot answer — no ffprobe installed, a recording it refuses — leaves the
-// call with no known length, and the call is stored all the same: the length is a fact the
-// server learns, never a reason to lose a recording. The reason is said once, under the
-// same part of the server the conversion reports under.
+// A probe that cannot answer — no ffprobe installed, a recording it refuses — leaves the call
+// with no known length, and the call is stored all the same; the reason is said once, under the
+// part of the server the conversion reports under.
 func TestIngestCallStoresTheCallWithNoLengthWhenTheProbeFails(t *testing.T) {
 	fixture := newIngestFixture()
 	fixture.options.Stored.AudioConversion = domain.AudioConversionDisabled
@@ -1114,10 +1100,8 @@ func TestIngestCallAutoPopulatesSystemTalkgroupGroupAndTag(t *testing.T) {
 		t.Error("auto-populate must broadcast the new configuration before the call is delivered")
 	}
 
-	// Auto-populate changed four things in the administrator's configuration, and each one is an entry
-	// naming the recording that caused it. A system appearing in the configuration that nobody created is
-	// a support request this product gets, and the recording that named it is the thing an operator has to
-	// be able to find.
+	// Auto-populate changed four things in the configuration, and each one is an entry naming
+	// the recording that caused it.
 	want := []string{
 		`the recording test.wav created the system "Gaston County Conventional" (system 1)`,
 		`the recording test.wav created the group "Unknown"`,
@@ -1225,15 +1209,10 @@ func TestIngestCallReportsFailureWhenARepositoryFails(t *testing.T) {
 	}
 }
 
-// The server stores one call at a time.
-//
-// The legacy server gets this for free: every call — from a watched directory, from an upload, from a
-// downstream server — goes to one queue with one worker, so a call is never compared against the history
-// before an earlier call has been written. That is what makes its duplicate detection mean anything, and
-// what makes two calls naming a system the server does not know create that system once and not twice.
-//
-// Here the watchers run on their own goroutines and an upload is answered on the connection that posted
-// it, so the rule has to be held on purpose.
+// The server stores one call at a time: the watchers run on their own goroutines and an upload
+// is answered on the connection that posted it, so the rule is held on purpose. Duplicate
+// detection and creating an unknown system once both depend on it; the rationale lives in the
+// ingest-serialization maintainer note.
 func TestIngestCallHandlerStoresOneCallAtATime(t *testing.T) {
 	fixture := newIngestFixture()
 	fixture.seedKnownSystem()
@@ -1324,10 +1303,8 @@ observing:
 	}
 }
 
-// TestIngestCallStoresAndDeliversACallWhenTheServerLogCannotBeWritten is the criterion for the ingest path: the
-// call is the thing the server exists to store, and the line it writes about the call is a report. A log
-// view that cannot be written must not lose a recording, must not stop it reaching a listener, and must not
-// stop it reaching the downstream servers.
+// A log view that cannot be written must not lose a recording, stop it reaching a listener, or
+// stop it reaching the downstream servers: the call is stored and delivered all the same.
 func TestIngestCallStoresAndDeliversACallWhenTheServerLogCannotBeWritten(t *testing.T) {
 	fixture := newIngestFixture()
 	fixture.logs.Err = errors.New("no such table: logs")
@@ -1360,14 +1337,10 @@ func TestIngestCallStoresAndDeliversACallWhenTheServerLogCannotBeWritten(t *test
 	}
 }
 
-// A talkgroup or a system can hold its calls back from the operators who read them. The call is
-// recorded and reported like any other, and it is the telling that is held back: neither the other
-// servers this one re-posts to, nor the listeners watching the talkgroup, hear about it until the
-// hold has run out.
-//
-// The delay is set on the system the server stores, because it is the stored system and talkgroup
-// that a call is resolved against, and therefore the ones whose delay decides what happens to it.
-
+// A talkgroup or a system can hold its calls back: the call is recorded and reported like any
+// other, and only the telling is held back, until the hold runs out. The delay is set on the
+// stored system and talkgroup because those are the ones a call is resolved against; the
+// rationale lives in the holding-delayed-calls maintainer note.
 func TestIngestCallHoldsBackACallOnADelayedTalkgroup(t *testing.T) {
 	fixture := newIngestFixture()
 
@@ -1798,9 +1771,8 @@ func TestIngestCallLogsACallTheDownstreamRefused(t *testing.T) {
 	}
 }
 
-// TestIngestCallReportsDownstreamsItCouldNotRead is the line the re-post writes when it cannot even get
-// the list: the call was stored and delivered here, and the only trace of the re-post that never happened
-// is this entry.
+// A downstream list that cannot be read leaves one server log entry naming the failure's own
+// text; the call itself is still stored and delivered.
 func TestIngestCallReportsDownstreamsItCouldNotRead(t *testing.T) {
 	fixture := newIngestFixture()
 
@@ -1878,11 +1850,8 @@ func TestIngestCallDoesNotWaitForADownstreamThatTakesItsTime(t *testing.T) {
 	close(fixture.forwarder.Release)
 }
 
-// TestIngestCallSanitizesSuppliedTextIntoSingleLogLines: a label an
-// upload supplies with a newline in it is a way to write a second line into the server's log
-// view — the forged line reads like the server's own. The ingested call's text arrives as one
-// line per decision, the stored labels carry no control characters, and the log view holds
-// exactly the entries the decisions make.
+// Supplied text is sanitized: one log line per decision, stored labels free of control
+// characters, so a newline cannot forge a second line into the server's log view.
 func TestIngestCallSanitizesSuppliedTextIntoSingleLogLines(t *testing.T) {
 	fixture := newIngestFixture()
 
@@ -1932,11 +1901,8 @@ func TestIngestCallSanitizesSuppliedTextIntoSingleLogLines(t *testing.T) {
 	}
 }
 
-// TestIngestCallDeliveryDoesNotSerializeTheNextIngest: the
-// delivery is the part of ingest a listener can stall — a listener that cannot keep up waits in
-// its own queue. The store, the log, and the duplicate decision are the server's own work, and
-// the next call the server ingests must not be serialized behind one slow listener: the ingest
-// lock is released before the delivery is made.
+// The ingest lock is released before delivery, so one stalled listener cannot serialize the
+// next ingest.
 func TestIngestCallDeliveryDoesNotSerializeTheNextIngest(t *testing.T) {
 	fixture := newIngestFixture()
 
@@ -2013,10 +1979,7 @@ func TestIngestCallDeliveryDoesNotSerializeTheNextIngest(t *testing.T) {
 	close(stall.Release)
 }
 
-// TestIngestCallPostsNoMoreThanEightCallsToTheDownstreamsAtOnce:
-// a burst of ingested calls must not turn into an unbounded flood of posts to the
-// downstream servers. The server caps how many calls it posts at the same time; the
-// rest queue behind it.
+// A burst of ingested calls posts to the downstream servers at most eight calls at a time.
 func TestIngestCallPostsNoMoreThanEightCallsToTheDownstreamsAtOnce(t *testing.T) {
 	fixture := newIngestFixture()
 

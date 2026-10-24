@@ -88,11 +88,7 @@ func (fixture *historyFixture) searchHistory(criteria domain.CallSearch, scope d
 	return fixture.search.Handle(context.Background(), SearchCallsQuery{Criteria: criteria, Scope: scope})
 }
 
-// historyCriteria parses a listener payload into criteria, which is what the presentation
-// layer does before it builds the query.
-
-// historyCriteria parses a listener payload into criteria, which is what the presentation
-// layer does before it builds the query.
+// historyCriteria parses a listener payload into criteria, as the presentation layer does.
 func historyCriteria(payload ...map[string]any) domain.CallSearch {
 	submitted := map[string]any{}
 
@@ -215,13 +211,7 @@ func TestSearchCallsQueryExpandsATagLabel(t *testing.T) {
 	}
 }
 
-// TestSearchCallsQueryLeavesAnUnmatchedLabelUnfiltered pins the legacy behavior: a group
-// or tag label that stands for nothing adds no filter at all, so the search returns the
-// whole history rather than nothing.
-
-// TestSearchCallsQueryLeavesAnUnmatchedLabelUnfiltered pins the legacy behavior: a group
-// or tag label that stands for nothing adds no filter at all, so the search returns the
-// whole history rather than nothing.
+// A group or tag label that stands for nothing adds no filter, returning the whole history.
 func TestSearchCallsQueryLeavesAnUnmatchedLabelUnfiltered(t *testing.T) {
 	fixture := newHistoryFixture()
 

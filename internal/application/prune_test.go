@@ -54,8 +54,7 @@ func (fixture *pruneFixture) run() (PruneOldCallsResult, error) {
 	return fixture.prune.Handle(context.Background(), PruneOldCallsCommand{})
 }
 
-// filedUnder reports the entry the retention pass filed with itself, which is the only thing a deployment
-// sees of a pass that ran, and of a pass that could not run.
+// filedUnder reports the entry the retention pass filed with itself.
 func (fixture *pruneFixture) filedUnder() (domain.LogEntry, bool) {
 	entry := domain.LogEntry{}
 	found := false
@@ -181,10 +180,8 @@ func TestPruneOldCallsCommandDoesNothingWhenTheRetentionIsZero(t *testing.T) {
 	}
 }
 
-// The legacy server writes "database pruning" before it prunes, which tells an operator that a pass was
-// attempted and nothing about what it did. The counts DeleteCallsBefore and DeleteLogsBefore already return
-// are the part an operator reads: a retention that is not removing anything is the failure they need to see
-// before the disk fills.
+// A pruning pass reports what it removed: the legacy "database pruning" notice alone would hide a
+// retention that removes nothing.
 func TestPruneOldCallsCommandReportsWhatTheRetentionPassRemoved(t *testing.T) {
 	fixture := newPruneFixture()
 
@@ -226,8 +223,7 @@ func TestPruneOldCallsCommandReportsWhatTheRetentionPassRemoved(t *testing.T) {
 	}
 }
 
-// A pass that removes nothing is the ordinary case on a healthy server, and it is the case an operator
-// needs to be able to tell apart from a pass that did not run.
+// A pass that removes nothing is reported apart from a pass that did not run.
 func TestPruneOldCallsCommandSaysWhenTheRetentionPassRemovedNothing(t *testing.T) {
 	fixture := newPruneFixture()
 
@@ -290,9 +286,7 @@ func TestPruneOldCallsCommandLeavesTheLogAloneWhenTheCallHistoryCannotBePruned(t
 	}
 }
 
-// A retention pass that cannot do its work currently writes nothing at all, and its caller throws the error
-// away, so a deployment whose retention has been broken for a month has a log that looks healthy. Each of
-// the three things the pass depends on gets its own entry naming what it was trying to do.
+// A retention pass that fails names what it was trying to do.
 func TestPruneOldCallsCommandReportsWhatItWasTryingToDoWhenItFailed(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -404,13 +398,8 @@ func TestPruneOldCallsCommandAppliesTheRetentionTheConfigurationSetsNow(t *testi
 	}
 }
 
-// TestPruneOldCallsCommandAppliesTheRetentionWhenTheServerLogCannotBeWritten is the criterion for the retention:
-// the administrator's data is what the pruning is for, and the report about it is a report. A deployment
-// whose log table is broken must still discard what has outlived the retention.
-//
-// The failure is set on the write alone. Deleting the old entries is part of what the retention pass *does*,
-// so a delete that fails changes its outcome and should; a write that fails is a report that could not be
-// filed, and must not.
+// Retention still discards entries when the log write fails; only a failed write must not change
+// the outcome.
 func TestPruneOldCallsCommandAppliesTheRetentionWhenTheServerLogCannotBeWritten(t *testing.T) {
 	fixture := newPruneFixture()
 	fixture.logs.AppendErr = errors.New("no such table: logs")

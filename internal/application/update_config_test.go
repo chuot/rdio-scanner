@@ -117,10 +117,6 @@ func (fixture *configFixture) read() (domain.Configuration, error) {
 // loggedAs reports whether the server wrote an entry that names that part of the server and says the
 // fragment. The source is part of the assertion: a line that says the right thing and is filed under
 // nothing is the state this feature exists to remove.
-
-// loggedAs reports whether the server wrote an entry that names that part of the server and says the
-// fragment. The source is part of the assertion: a line that says the right thing and is filed under
-// nothing is the state this feature exists to remove.
 func (fixture *configFixture) loggedAs(source domain.LogSource, fragment string) bool {
 	for _, entry := range fixture.logs.Stored {
 		if entry.Source == source && strings.Contains(entry.Message, fragment) {
@@ -234,11 +230,8 @@ func TestUpdateConfigurationLeavesAnUnnamedSectionAlone(t *testing.T) {
 	}
 }
 
-// TestUpdateConfigurationReplacesASectionWithNothingWhenItIsNamedButEmpty pins the difference
-// between saying "no groups" and saying nothing about groups.
-
-// TestUpdateConfigurationReplacesASectionWithNothingWhenItIsNamedButEmpty pins the difference
-// between saying "no groups" and saying nothing about groups.
+// Naming a section but leaving it empty replaces it with nothing; saying nothing about it
+// leaves it alone.
 func TestUpdateConfigurationReplacesASectionWithNothingWhenItIsNamedButEmpty(t *testing.T) {
 	fixture := newConfigFixture()
 
@@ -295,17 +288,10 @@ func TestUpdateConfigurationKeepsGoingWhenASectionCannotBeStored(t *testing.T) {
 	}
 }
 
-// TestUpdateConfigurationReportsTheSectionsItStoredWhenTheAnnouncementFailed separates a section the
-// store refused from a section the store holds while the announcement failed, on the save that answers
-// with both. They are not the same failure, and the administrator's next action is not the same action:
-// a section that never reached the store is named in `Failed`, and a section that did is one the server
-// is now running with. Reporting the second as the first tells the administrator that their
-// configuration did not change when it did, and re-submitting it is not the same as reading what the
-// server holds.
-//
-// The announcement reads the configuration the save resulted in, so the arrangement here is a repository
-// that cannot answer its read — `tags`, which this save never writes to, so the store write is not the
-// thing under test.
+// A whole-configuration save names a section the store refused in `Failed` and a section the
+// store holds while the announcement failed separately; the distinction lives in the
+// configuration-save-failure maintainer note. The announcement here reads a configuration
+// through a repository that cannot answer its read — `tags`, which this save never writes.
 func TestUpdateConfigurationReportsTheSectionsItStoredWhenTheAnnouncementFailed(t *testing.T) {
 	fixture := newConfigFixture()
 
@@ -403,13 +389,8 @@ func TestUpdateConfigurationStopsAndRestartsTheDirectoryWatchersAroundTheSave(t 
 	}
 }
 
-// TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing pins the preserved quirk
-// that stopping the watchers empties what the server watches from, and only naming the
-// dirwatch section fills it again.
-
-// TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing pins the preserved quirk
-// that stopping the watchers empties what the server watches from, and only naming the
-// dirwatch section fills it again.
+// A whole-configuration save that names no dirwatch section leaves the server watching nothing,
+// the preserved quirk the dirwatch-save maintainer note records.
 func TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing(t *testing.T) {
 	fixture := newConfigFixture()
 
@@ -444,15 +425,8 @@ func TestUpdateConfigurationWatchesTheStoredDirectoriesWhenItSavesTheDirwatchSec
 	}
 }
 
-// TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails pins the preserved quirk
-// that a dirwatch save that could not be persisted leaves the submitted directories being
-// watched, because the legacy server restarts its watchers from what it was given and only
-// reads the stored list back when the save succeeded.
-
-// TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails pins the preserved quirk
-// that a dirwatch save that could not be persisted leaves the submitted directories being
-// watched, because the legacy server restarts its watchers from what it was given and only
-// reads the stored list back when the save succeeded.
+// A failed dirwatch section save leaves the submitted directories being watched, the preserved
+// quirk the dirwatch-save maintainer note records.
 func TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails(t *testing.T) {
 	fixture := newConfigFixture()
 	fixture.dirwatches.SaveErr = errors.New("disk full")
@@ -475,15 +449,8 @@ func TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails(t *t
 	}
 }
 
-// TestUpdateConfigurationWithNoSectionsStillAnnouncesAndLeavesNothingWatching pins the legacy
-// behavior of a whole-configuration save that names nothing it recognises: the watchers are
-// stopped and nothing is restarted, the configuration is still announced, and the change is
-// still recorded.
-
-// TestUpdateConfigurationWithNoSectionsStillAnnouncesAndLeavesNothingWatching pins the legacy
-// behavior of a whole-configuration save that names nothing it recognises: the watchers are
-// stopped and nothing is restarted, the configuration is still announced, and the change is
-// still recorded.
+// A whole-configuration save naming no recognized section stops the watchers, still announces
+// the configuration, and still records the change.
 func TestUpdateConfigurationWithNoSectionsStillAnnouncesAndLeavesNothingWatching(t *testing.T) {
 	fixture := newConfigFixture()
 
@@ -587,10 +554,9 @@ func TestUpdateConfigurationSectionReportsAFailureAndChangesNothingElse(t *testi
 	}
 }
 
-// TestUpdateConfigurationSectionReportsASectionItStoredWhenTheAnnouncementFailed is the same
-// distinction on the per-section save — the one the administration page answers with a status code, and
-// so the one where a section the store holds has to be distinguishable from a section it refused,
-// because the page reports both the same way and the server's log is what tells them apart.
+// A per-section save distinguishes a section the store holds while the announcement failed from
+// one it refused, even though the administration page answers both the same way; the
+// distinction lives in the configuration-save-failure maintainer note.
 //
 // The watchers are restarted before the announcement is attempted, exactly as they are for a save the
 // store refused, so an announcement failure cannot leave the server stopped watching. That is pinned
@@ -719,13 +685,8 @@ func TestUpdateConfigurationSectionAnnouncesTheWholeConfigurationForOneSection(t
 	}
 }
 
-// TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten is the criterion for the configuration:
-// the save is the operation and the announcement is a report about it. A deployment whose log table is
-// broken must still be able to change its configuration, and the listeners must still be told the new one.
-
-// TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten is the criterion for the configuration:
-// the save is the operation and the announcement is a report about it. A deployment whose log table is
-// broken must still be able to change its configuration, and the listeners must still be told the new one.
+// A broken server log does not stop the save: every section is stored and the listeners still
+// hear about the new configuration.
 func TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten(t *testing.T) {
 	fixture := newConfigFixture()
 	fixture.logs.Err = errors.New("no such table: logs")
@@ -754,9 +715,8 @@ func TestUpdateConfigurationSavesEverySectionWhenTheServerLogCannotBeWritten(t *
 	}
 }
 
-// TestUpdateConfigurationSectionRefusesAKeylessApikey: an apikey row with no
-// key is refused at apply time — the section save reports the failure, the list is not stored,
-// and the server keeps the credentials it had.
+// An apikey row with no key is refused at apply time: the section save reports the failure, the
+// list is not stored, and the server keeps the credentials it had.
 func TestUpdateConfigurationSectionRefusesAKeylessApikey(t *testing.T) {
 	fixture := newConfigFixture()
 
@@ -786,9 +746,8 @@ func TestUpdateConfigurationSectionRefusesAKeylessApikey(t *testing.T) {
 	}
 }
 
-// TestUpdateConfigurationSectionRefusesAnUncompilableMask:
-// a dirwatch payload whose mask does not compile is refused at apply — the section save
-// reports the failure, the list is not stored, and the server keeps the watches it had.
+// A dirwatch payload whose mask does not compile is refused at apply: the section save reports
+// the failure, the list is not stored, and the server keeps the watches it had.
 func TestUpdateConfigurationSectionRefusesAnUncompilableMask(t *testing.T) {
 	fixture := newConfigFixture()
 
@@ -817,8 +776,7 @@ func TestUpdateConfigurationSectionRefusesAnUncompilableMask(t *testing.T) {
 	}
 }
 
-// TestUpdateConfigurationSectionStoresAWatchWithAValidMask is the other half of the criterion:
-// a watch carrying a mask that compiles is stored, as it has always been.
+// A watch carrying a mask that compiles is stored.
 func TestUpdateConfigurationSectionStoresAWatchWithAValidMask(t *testing.T) {
 	fixture := newConfigFixture()
 

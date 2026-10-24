@@ -113,12 +113,7 @@ type adminFixture struct {
 }
 
 // loggedAs reports whether the server wrote a log line naming that part of the server and saying the
-// fragment. The administrator endpoints write only about the administrator account, so the source is part
-// of what these tests pin.
-
-// loggedAs reports whether the server wrote a log line naming that part of the server and saying the
-// fragment. The administrator endpoints write only about the administrator account, so the source is part
-// of what these tests pin.
+// fragment; the source is part of what these tests pin.
 func (fixture *adminFixture) loggedAs(source domain.LogSource, fragment string) bool {
 	for _, entry := range fixture.logs.Stored {
 		if entry.Source == source && strings.Contains(entry.Message, fragment) {
@@ -164,13 +159,7 @@ func TestSearchLogsQueryReturnsTheMatchingEntriesAndTheTotal(t *testing.T) {
 	}
 }
 
-// The log view records its own failure, in the same view the search was asked for. An administrator who
-// is shown an empty log has to be able to tell an empty log apart from a log that cannot be read, and
-// the legacy server has always said which one in the log itself.
-
-// The log view records its own failure, in the same view the search was asked for. An administrator who
-// is shown an empty log has to be able to tell an empty log apart from a log that cannot be read, and
-// the legacy server has always said which one in the log itself.
+// A failed log read is recorded in the same log view the search was asked for.
 func TestSearchLogsRecordsTheFailureItCouldNotAnswerWith(t *testing.T) {
 	fixture := newAdminFixture()
 

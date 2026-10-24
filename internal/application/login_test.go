@@ -49,10 +49,9 @@ type loginFixture struct {
 
 func newLoginFixture() *loginFixture {
 	fixture := &loginFixture{
-		// The credential on record is held in the options, which is where the server keeps
-		// it. The in-memory verifier below compares the two credentials as written; the
-		// real one compares a submitted password against the bcrypt hash stored here, and
-		// nothing in the application layer can tell the difference.
+		// The credential on record lives in the options, the way it does in the stored
+		// configuration. The in-memory verifier below compares the two credentials as
+		// written; the real one compares against the bcrypt hash stored here.
 		options:   &fakes.Options{Stored: domain.Options{AdminPasswordHash: adminCredential}},
 		logs:      &fakes.Logs{},
 		tokens:    fakes.NewTokens(),
@@ -69,21 +68,14 @@ func newLoginFixture() *loginFixture {
 }
 
 // sessionIsOpen asks the question every administrator endpoint asks before it does anything else.
-
-// sessionIsOpen asks the question every administrator endpoint asks before it does anything else.
 func (fixture *loginFixture) sessionIsOpen(token string) bool {
 	return fixture.check.Handle(context.Background(), CheckAdminSessionQuery{Token: token})
 }
 
 // attempt logs in from the address the tests use by default.
-
-// attempt logs in from the address the tests use by default.
 func (fixture *loginFixture) attempt(credential string) (AdminLoginResult, error) {
 	return fixture.attemptFrom(adminAddress, credential)
 }
-
-// attemptFrom logs in from a named address, which is how the tests show that the attempt
-// budget belongs to the address that made the attempt.
 
 // attemptFrom logs in from a named address, which is how the tests show that the attempt
 // budget belongs to the address that made the attempt.
@@ -93,9 +85,6 @@ func (fixture *loginFixture) attemptFrom(remoteAddr, credential string) (AdminLo
 		Credential: credential,
 	})
 }
-
-// mustLogin logs in and fails the test unless a session was started, returning the token
-// the server issued.
 
 // mustLogin logs in and fails the test unless a session was started, returning the token
 // the server issued.
@@ -116,9 +105,6 @@ func (fixture *loginFixture) mustLogin(t *testing.T, credential string) string {
 
 // warnings returns the entries the login use case reported to the server log, which is what
 // a deployment sees in its log view.
-
-// warnings returns the entries the login use case reported to the server log, which is what
-// a deployment sees in its log view.
 func (fixture *loginFixture) warnings() []domain.LogEntry {
 	out := []domain.LogEntry{}
 
@@ -131,11 +117,7 @@ func (fixture *loginFixture) warnings() []domain.LogEntry {
 	return out
 }
 
-// entries returns everything the login and logout use cases wrote to the server log. A sign-out is not a
-// warning, so the tests that care about what the log view holds read it whole.
-
-// entries returns everything the login and logout use cases wrote to the server log. A sign-out is not a
-// warning, so the tests that care about what the log view holds read it whole.
+// entries returns everything the login and logout use cases wrote to the server log.
 func (fixture *loginFixture) entries() []domain.LogEntry {
 	out := []domain.LogEntry{}
 
@@ -143,8 +125,6 @@ func (fixture *loginFixture) entries() []domain.LogEntry {
 
 	return out
 }
-
-// signedOut returns the entries that say a session was ended.
 
 // signedOut returns the entries that say a session was ended.
 func (fixture *loginFixture) signedOut() []domain.LogEntry {
@@ -235,13 +215,8 @@ func TestLoginHandlerRefusesAWrongCredentialAndSaysWhyInItsOwnLog(t *testing.T) 
 	}
 }
 
-// TestLoginHandlerRefusesAnEmptyCredentialEvenWhenNothingIsOnRecord pins the legacy rule
-// that an empty submission is never compared against the stored credential: a server whose
-// stored credential is empty still refuses a caller that submits nothing.
-
-// TestLoginHandlerRefusesAnEmptyCredentialEvenWhenNothingIsOnRecord pins the legacy rule
-// that an empty submission is never compared against the stored credential: a server whose
-// stored credential is empty still refuses a caller that submits nothing.
+// An empty submission is never compared against the stored credential: a server whose stored
+// credential is empty still refuses a caller that submits nothing.
 func TestLoginHandlerRefusesAnEmptyCredentialEvenWhenNothingIsOnRecord(t *testing.T) {
 	fixture := newLoginFixture()
 	fixture.options.Stored.AdminPasswordHash = ""
@@ -375,21 +350,8 @@ func TestLoginHandlerCountsAttemptsSeparatelyForEachAddress(t *testing.T) {
 	}
 }
 
-// TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow is the repaired half of a preserved quirk: the window the
-// contract describes is the window the server enforces.
-//
-// The legacy server built its window with `time.Duration(time.Duration.Minutes(10))`, a method
-// expression that converts ten nanoseconds to minutes and back and truncates to zero, so an address's
-// attempt count never aged out. Here the window is the ten minutes that was meant, and an address that
-// has spent its budget is refused while that window is still open.
-
-// TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow is the repaired half of a preserved quirk: the window the
-// contract describes is the window the server enforces.
-//
-// The legacy server built its window with `time.Duration(time.Duration.Minutes(10))`, a method
-// expression that converts ten nanoseconds to minutes and back and truncates to zero, so an address's
-// attempt count never aged out. Here the window is the ten minutes that was meant, and an address that
-// has spent its budget is refused while that window is still open.
+// An address that has spent its attempt budget is refused while the window is still open; the
+// window is the ten minutes the legacy server meant to enforce.
 func TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow(t *testing.T) {
 	if loginAttemptsWindow != 10*time.Minute {
 		t.Fatalf("attempt window = %v, want the ten minutes the contract describes", loginAttemptsWindow)
@@ -419,11 +381,8 @@ func TestLoginHandlerRefusesAttemptsMadeInsideTheAttemptWindow(t *testing.T) {
 	}
 }
 
-// TestLoginHandlerRestoresTheAttemptBudgetAfterTheWindow is the other half of the repair: the budget is
-// measured over a window, so an address that waits out the window is answered on its merits again.
-
-// TestLoginHandlerRestoresTheAttemptBudgetAfterTheWindow is the other half of the repair: the budget is
-// measured over a window, so an address that waits out the window is answered on its merits again.
+// An address that waits out the window is answered on its merits again: the budget is measured over
+// a window.
 func TestLoginHandlerRestoresTheAttemptBudgetAfterTheWindow(t *testing.T) {
 	fixture := newLoginFixture()
 
@@ -449,11 +408,7 @@ func TestLoginHandlerRestoresTheAttemptBudgetAfterTheWindow(t *testing.T) {
 	}
 }
 
-// TestLoginHandlerCountsAFreshWindowAsAFreshBudget keeps the restored budget a budget: the address gets
-// three attempts in the new window, not an unlimited run at the server.
-
-// TestLoginHandlerCountsAFreshWindowAsAFreshBudget keeps the restored budget a budget: the address gets
-// three attempts in the new window, not an unlimited run at the server.
+// A fresh window carries the full budget again: three attempts, not an unlimited run.
 func TestLoginHandlerCountsAFreshWindowAsAFreshBudget(t *testing.T) {
 	fixture := newLoginFixture()
 
@@ -486,10 +441,8 @@ func TestLoginHandlerCountsAFreshWindowAsAFreshBudget(t *testing.T) {
 	}
 }
 
-// TestSuccessfulLoginClearsOnlyItsOwnAddressAttemptCount repairs the legacy
-// global reset: a successful sign-in from address B must not unlock address A, which has spent its
-// budget. The global reset let any successful login — including one an attacker paid for — unlock
-// brute-forcing from every address at once.
+// A successful login clears only its own address's attempt count; a success elsewhere must not unlock
+// an address that has spent its budget.
 func TestSuccessfulLoginClearsOnlyItsOwnAddressAttemptCount(t *testing.T) {
 	fixture := newLoginFixture()
 
@@ -513,10 +466,8 @@ func TestSuccessfulLoginClearsOnlyItsOwnAddressAttemptCount(t *testing.T) {
 	}
 }
 
-// TestLoginAttemptsAgeOutOfTheMap bounds the attempt bookkeeping: a history whose window has passed
-// is dropped from the map, not kept, so a server facing keys that rotate faster than the window —
-// the spoofed forwarding addresses of a brute-force tool — does not grow its memory with every
-// address it ever saw.
+// An attempt history whose window has passed is dropped from the map, so the bookkeeping does not grow
+// with every address the server ever saw.
 func TestLoginAttemptsAgeOutOfTheMap(t *testing.T) {
 	fixture := newLoginFixture()
 
@@ -539,13 +490,8 @@ func TestLoginAttemptsAgeOutOfTheMap(t *testing.T) {
 	}
 }
 
-// TestLoginHandlerLegacyPasswordNeedChangeQuirk pins the legacy login response, which
-// reports that the password needs changing on every successful login whatever the stored
-// option says. The option itself is only reported by the configuration endpoints.
-
-// TestLoginHandlerLegacyPasswordNeedChangeQuirk pins the legacy login response, which
-// reports that the password needs changing on every successful login whatever the stored
-// option says. The option itself is only reported by the configuration endpoints.
+// The login response reports that the password needs changing on every successful login, whatever the
+// stored option says; the option itself is only reported by the configuration endpoints.
 func TestLoginHandlerLegacyPasswordNeedChangeQuirk(t *testing.T) {
 	fixture := newLoginFixture()
 	fixture.options.Stored.AdminPasswordNeedChange = false
@@ -586,15 +532,8 @@ func TestLoginHandlerReportsAFailureWhenNoSessionTokenCanBeIssued(t *testing.T) 
 	}
 }
 
-// TestALoginTheServerCouldNotCheckSaysSo is the sign-in a broken configuration makes impossible. The
-// credential is never examined, because the credential on record is in the options the server could not read,
-// and every sign-in on the deployment fails. The outcome and the error the caller receives are what they were:
-// what was missing was any trace that the server had been asked at all.
-
-// TestALoginTheServerCouldNotCheckSaysSo is the sign-in a broken configuration makes impossible. The
-// credential is never examined, because the credential on record is in the options the server could not read,
-// and every sign-in on the deployment fails. The outcome and the error the caller receives are what they were:
-// what was missing was any trace that the server had been asked at all.
+// A login whose configuration cannot be read is logged as a failure: the credential is never examined,
+// and the log view has to show that the server was asked.
 func TestALoginTheServerCouldNotCheckSaysSo(t *testing.T) {
 	fixture := newLoginFixture()
 	fixture.options.Err = errors.New("no such table: options")
@@ -612,13 +551,7 @@ func TestALoginTheServerCouldNotCheckSaysSo(t *testing.T) {
 	assertOneFailureEntry(t, fixture, "the login attempt could not be checked", fixture.options.Err)
 }
 
-// TestALoginThatCouldNotStartASessionSaysSo is the other step a sign-in depends on: the credential was right,
-// and the server could not mint the token that a session is made of. An operator looking at a log view that
-// says nothing cannot tell this apart from a server nobody tried to sign in to.
-
-// TestALoginThatCouldNotStartASessionSaysSo is the other step a sign-in depends on: the credential was right,
-// and the server could not mint the token that a session is made of. An operator looking at a log view that
-// says nothing cannot tell this apart from a server nobody tried to sign in to.
+// A login whose credential was right but whose session could not be started is logged as a failure.
 func TestALoginThatCouldNotStartASessionSaysSo(t *testing.T) {
 	fixture := newLoginFixture()
 	fixture.tokens.Err = errors.New("signing secret is missing")
@@ -636,11 +569,8 @@ func TestALoginThatCouldNotStartASessionSaysSo(t *testing.T) {
 	assertOneFailureEntry(t, fixture, "the administrator session could not be started", fixture.tokens.Err)
 }
 
-// assertOneFailureEntry is what the two failures above have in common: one entry, filed under the logins, at
-// the level of a server that cannot let anybody in, naming the failure's own text.
-
-// assertOneFailureEntry is what the two failures above have in common: one entry, filed under the logins, at
-// the level of a server that cannot let anybody in, naming the failure's own text.
+// assertOneFailureEntry checks the shape both sign-in failures share: one login entry, at the level of a
+// server that cannot let anybody in, naming the failure's own text.
 func assertOneFailureEntry(t *testing.T, fixture *loginFixture, beginsWith string, failure error) {
 	t.Helper()
 
@@ -700,9 +630,7 @@ func TestLoginHandlerSixthSessionRetiresTheFirstToken(t *testing.T) {
 	}
 }
 
-// TestASuccessfulLoginRenewsAStoredCredentialHashedBelowTheConfiguredCost: the credential is proven, and the stored form is below the cost the
-// deployment is configured for — the login renews it. A deployment that raised its
-// bcrypt cost must not keep answering logins with the cheap hash forever.
+// A proven credential stored below the configured cost is renewed by the login.
 func TestASuccessfulLoginRenewsAStoredCredentialHashedBelowTheConfiguredCost(t *testing.T) {
 	fixture := newLoginFixture()
 
@@ -723,9 +651,8 @@ func TestASuccessfulLoginRenewsAStoredCredentialHashedBelowTheConfiguredCost(t *
 	}
 }
 
-// TestALoginAtTheConfiguredCostWritesNoNewHash: the renewal is
-// an upgrade, not a re-hash on every login — a login whose stored hash is already
-// at the configured cost hashes nothing and writes nothing.
+// A stored hash already at the configured cost is left alone: the renewal is an upgrade, not a
+// re-hash on every login.
 func TestALoginAtTheConfiguredCostWritesNoNewHash(t *testing.T) {
 	fixture := newLoginFixture()
 
@@ -742,10 +669,8 @@ func TestALoginAtTheConfiguredCostWritesNoNewHash(t *testing.T) {
 	}
 }
 
-// TestALoginWhoseRenewalFailsIsStillALoginAndSaysTheFailure:
-// the credential is proven — the login is a login. A renewal that cannot be
-// written is reported in the server log, not answered to the administrator as a
-// failed login.
+// A login whose renewal could not be written is still a login, and the failure is said in the server
+// log.
 func TestALoginWhoseRenewalFailsIsStillALoginAndSaysTheFailure(t *testing.T) {
 	fixture := newLoginFixture()
 

@@ -119,9 +119,8 @@ func TestUploadCallHandlerTakesAnUploadItsCredentialCovers(t *testing.T) {
 	}
 }
 
-// A credential the server does not know is refused, and nothing is stored. The refusal is the whole
-// answer: the legacy server writes no log line for it, because an uploader posting to the wrong server
-// is not an event the server's own log view is for.
+// A credential the server does not know is refused, and nothing is stored: the refusal is the
+// whole answer, with no log entry.
 func TestUploadCallHandlerRefusesAKeyTheServerDoesNotKnow(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -146,8 +145,8 @@ func TestUploadCallHandlerRefusesAKeyTheServerDoesNotKnow(t *testing.T) {
 	}
 }
 
-// A credential that is switched off is found and still refused, which is the same answer as a credential
-// that does not exist and is the answer an uploader gets when an administrator disables it.
+// A credential that is switched off is found and still refused: the same answer as a credential
+// that does not exist.
 func TestUploadCallHandlerRefusesADisabledCredential(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -163,10 +162,8 @@ func TestUploadCallHandlerRefusesADisabledCredential(t *testing.T) {
 	}
 }
 
-// A credential that names the system the upload names covers it. This is the case the legacy server
-// cannot answer at all: it compares the credential against the call's resolved system and talkgroup, and
-// at this boundary neither has been resolved, so a scoped credential dereferences nothing and the
-// connection ends with no reply. Recorded as a preserved quirk, and repaired by the owner's decision.
+// A credential that names the system the upload names covers it, checked against the submitted
+// call before anything is resolved.
 func TestUploadCallHandlerChecksTheReferencesTheUploadNames(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -239,8 +236,8 @@ func TestUploadCallHandlerChecksTheTalkgroupsACredentialNames(t *testing.T) {
 	}
 }
 
-// A submission that is not a call is refused with the reason the server found, because the upload
-// endpoints answer the uploader with what is missing. The four reasons are the legacy server's own words.
+// A submission that is not a call is refused with the reason the server found; the four reasons
+// are the legacy server's own words.
 func TestUploadCallHandlerReportsWhatASubmissionIsMissing(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -297,10 +294,8 @@ func TestUploadCallHandlerReportsWhatASubmissionIsMissing(t *testing.T) {
 	}
 }
 
-// An upload is answered before the server has worked out which system and talkgroup the call belongs to,
-// and an upload the server could not complete is still an upload the uploader was told it made. The
-// legacy server hands the call to its ingest queue and answers success whatever that queue makes of it,
-// and an uploader that was told its call was imported and then found it missing has nothing to work with.
+// An upload is answered before the server has worked out which system and talkgroup the call
+// belongs to, and an upload the server could not complete is still answered as a success.
 func TestUploadCallHandlerAnswersSuccessForAnUploadTheServerCouldNotComplete(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -329,8 +324,8 @@ func TestUploadCallHandlerAnswersSuccessForAnUploadTheServerCouldNotComplete(t *
 	}
 }
 
-// A credential store that cannot be read is a failure and not a refusal, and the difference matters to
-// whoever is posting: a refusal says the credential is wrong, a failure says the server could not tell.
+// A credential store that cannot be read is a failure and not a refusal: a refusal says the
+// credential is wrong, a failure says the server could not tell.
 func TestUploadCallHandlerReportsACredentialStoreItCannotRead(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -352,8 +347,8 @@ func TestUploadCallHandlerReportsACredentialStoreItCannotRead(t *testing.T) {
 	}
 }
 
-// An upload is not a listener: it is not told about the call it posted, and it is not counted as a
-// listener. What it does is put the call where a listener will find it.
+// An upload is not a listener: it is not told about the call it posted, and it is not counted
+// as a listener.
 func TestUploadCallHandlerDeliversTheUploadedCallToTheListenersWatchingIt(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -375,10 +370,8 @@ func TestUploadCallHandlerDeliversTheUploadedCallToTheListenersWatchingIt(t *tes
 	}
 }
 
-// TestUploadCallHandlerRefusesAKeylessUpload: a row stored with no key —
-// saved by an older server, before the apply-time rule — must not answer a keyless upload. The
-// upload endpoint's answer to no credential is the same refusal it gives a credential it does not
-// know.
+// A row stored with no key — saved by an older server, before the apply-time rule — must not
+// answer a keyless upload: the answer to no credential is the refusal for an unknown credential.
 func TestUploadCallHandlerRefusesAKeylessUpload(t *testing.T) {
 	fixture := newUploadFixture()
 

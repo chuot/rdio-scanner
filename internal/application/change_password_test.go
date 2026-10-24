@@ -118,13 +118,8 @@ func TestChangeAdminPasswordRefusesAnEmptyNewCredentialBeforeCheckingAnything(t 
 	}
 }
 
-// TestChangeAdminPasswordChangesTheCredentialWhenNoCurrentCredentialIsOffered pins the preserved quirk
-// that the legacy server compares a credential it was given and skips the comparison
-// entirely for a payload that names none, so an absent field is not the same as an empty one.
-
-// TestChangeAdminPasswordChangesTheCredentialWhenNoCurrentCredentialIsOffered pins the preserved quirk
-// that the legacy server compares a credential it was given and skips the comparison
-// entirely for a payload that names none, so an absent field is not the same as an empty one.
+// A change whose current-credential field is absent skips the comparison entirely; the quirk is that
+// an absent field is not the same as an empty one.
 func TestChangeAdminPasswordChangesTheCredentialWhenNoCurrentCredentialIsOffered(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -149,11 +144,7 @@ func TestChangeAdminPasswordChangesTheCredentialWhenNoCurrentCredentialIsOffered
 	}
 }
 
-// TestChangeAdminPasswordRefusesAnEmptyCurrentCredentialThatIsOffered is the other half of the preserved quirk:
-// an empty credential that was actually offered is compared, and does not match.
-
-// TestChangeAdminPasswordRefusesAnEmptyCurrentCredentialThatIsOffered is the other half of the preserved quirk:
-// an empty credential that was actually offered is compared, and does not match.
+// An empty current credential that was actually offered is compared, and does not match.
 func TestChangeAdminPasswordRefusesAnEmptyCurrentCredentialThatIsOffered(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -232,15 +223,8 @@ func TestChangeAdminPasswordStillReportsTheNeedToChangeForTheDefaultCredential(t
 	}
 }
 
-// TestChangeAdminPasswordSaysWhyTheChangeDidNotHappen replaces TestChangeAdminPasswordLogsTheSameWordsWhateverWentWrong,
-// which pinned the legacy server discarding the reason a change failed and writing one fixed sentence
-// naming the current password. The outcome and the error the caller receives are unchanged; only what the
-// log view holds changes, and it now holds the reason.
-
-// TestChangeAdminPasswordSaysWhyTheChangeDidNotHappen replaces TestChangeAdminPasswordLogsTheSameWordsWhateverWentWrong,
-// which pinned the legacy server discarding the reason a change failed and writing one fixed sentence
-// naming the current password. The outcome and the error the caller receives are unchanged; only what the
-// log view holds changes, and it now holds the reason.
+// A failed change is logged with the reason it failed, not one fixed sentence; the outcome and the
+// error the caller receives are unchanged.
 func TestChangeAdminPasswordSaysWhyTheChangeDidNotHappen(t *testing.T) {
 	cases := []struct {
 		what  string

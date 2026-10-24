@@ -151,9 +151,8 @@ func TestAuthenticateAccessRefusesAnUnknownCodeAndAsksAgain(t *testing.T) {
 	}
 }
 
-// TestAuthenticateAccessLocksAValidCodeArrivingOnTheLastAttempt pins the legacy order: the
-// attempt counter is examined before the code is looked up, and a code that is valid but
-// arrives on the last allowed attempt is refused anyway.
+// The attempt counter is examined before the code is looked up, the legacy order: a code that
+// is valid but arrives on the last allowed attempt is refused anyway.
 func TestAuthenticateAccessLocksAValidCodeArrivingOnTheLastAttempt(t *testing.T) {
 	fixture := newAccessFixture()
 	fixture.addAccess(domain.Access{ID: 1, Code: "dispatch-code", Ident: "dispatch"})
@@ -271,10 +270,8 @@ func TestAuthenticateAccessKeepsTheAttemptsWhenACodeIsRefused(t *testing.T) {
 	}
 }
 
-// TestAuthenticateAccessRefusesTheSixthAttemptFromOneAddressAcrossSessions: the
-// per-session counter alone is bypassable by reconnecting — a tool that guesses codes can open a
-// fresh session for every guess and never spend any session's budget. The attempts of one address
-// are counted across its sessions, in a window that ages like the login budget.
+// One address's attempts are counted across its sessions, in a window that ages like the login
+// budget: a per-session counter alone is bypassable by opening a fresh session per guess.
 func TestAuthenticateAccessRefusesTheSixthAttemptFromOneAddressAcrossSessions(t *testing.T) {
 	fixture := newAccessFixture()
 	fixture.addAccess(domain.Access{ID: 1, Code: "dispatch-code", Ident: "dispatch"})
@@ -306,9 +303,8 @@ func TestAuthenticateAccessRefusesTheSixthAttemptFromOneAddressAcrossSessions(t 
 	}
 }
 
-// TestAuthenticateAccessWarnsAboutAnAddressOncePerWindow: a tool that guesses a hundred codes from
-// one address must not write a hundred lines into the operator's log view and the database behind
-// it. The refused attempts are still refused; the warning is written once per window per address.
+// The warning about guessed codes is written once per window per address; the refused attempts
+// are still refused.
 func TestAuthenticateAccessWarnsAboutAnAddressOncePerWindow(t *testing.T) {
 	fixture := newAccessFixture()
 	fixture.addAccess(domain.Access{ID: 1, Code: "dispatch-code", Ident: "dispatch"})
@@ -533,10 +529,9 @@ func TestAccessGateDoesNotGateAnUnrestrictedServer(t *testing.T) {
 	}
 }
 
-// TestAccessGateKeepsGatingAnAccessThatNamesNoSystems pins a preserved legacy behavior: the
-// gate recognises an unauthenticated session by the absence of a scope, so an access
-// configured without systems stays gated for every command except the access code even
-// after it authenticates.
+// An access configured without systems stays gated for every command except the access code
+// even after it authenticates, because the gate recognises an unauthenticated session by the
+// absence of a scope; the why lives in the access-gating maintainer note.
 func TestAccessGateKeepsGatingAnAccessThatNamesNoSystems(t *testing.T) {
 	fixture := newAccessFixture()
 	fixture.addAccess(domain.Access{ID: 1, Code: "dispatch-code", Ident: "dispatch"})
@@ -561,10 +556,8 @@ func TestAccessGateKeepsGatingAnAccessThatNamesNoSystems(t *testing.T) {
 	}
 }
 
-// TestAuthenticateAccessRefusesACodeWhenTheServerLogCannotBeWritten is the criterion for listener access: the
-// warning about a refused code is a report, and the refusal is the decision. A deployment whose log table is
-// broken must still refuse a code it does not know, must still ask the session again, and must still grant a
-// code it does know.
+// The refusal is the decision and the warning is a report: a broken log table does not stop the
+// server refusing an unknown code, asking the session again, or granting a code it knows.
 func TestAuthenticateAccessRefusesACodeWhenTheServerLogCannotBeWritten(t *testing.T) {
 	fixture := newAccessFixture()
 	fixture.addAccess(domain.Access{ID: 1, Code: "dispatch-code", Ident: "dispatch"})

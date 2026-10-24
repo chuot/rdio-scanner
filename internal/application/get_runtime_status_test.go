@@ -27,7 +27,7 @@ import (
 )
 
 // The status view: what the server is, what it is running, what it recorded lately, and what it
-// complained about lately. One read, one instant, and a shape the view does not have to repair.
+// complained about lately, in one read at one instant.
 
 var statusNow = time.Date(2026, 6, 14, 9, 30, 0, 0, time.UTC)
 
@@ -99,7 +99,7 @@ func (fixture *statusFixture) read(t *testing.T) RuntimeStatus {
 	return status
 }
 
-// TestGetRuntimeStatusReportsWhatTheServerIsAndHowLongItHasBeenUp.
+// The server's identity and uptime are reported.
 func TestGetRuntimeStatusReportsWhatTheServerIsAndHowLongItHasBeenUp(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -123,8 +123,8 @@ func TestGetRuntimeStatusReportsWhatTheServerIsAndHowLongItHasBeenUp(t *testing.
 	}
 }
 
-// TestGetRuntimeStatusReportsWhatTheServerIsRunningRightNow, and not what it was configured to run.
-// Every field here is a count of something that exists at the instant the read ran.
+// The status reports what is running right now, not what was configured to run: every field is a
+// count of something that exists at the instant the read ran.
 func TestGetRuntimeStatusReportsWhatTheServerIsRunningRightNow(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -164,8 +164,7 @@ func TestGetRuntimeStatusReportsWhatTheServerIsRunningRightNow(t *testing.T) {
 	}
 }
 
-// TestGetRuntimeStatusReportsTheDatabaseSizeOnlyWhenThisServerCanKnowIt. A SQLite deployment knows
-// the size of the file it is writing into; the other three do not, and a number that means something
+// The database size is reported only when this server can know it; a number that means something
 // different depending on the backend is worse than nothing.
 func TestGetRuntimeStatusReportsTheDatabaseSizeOnlyWhenThisServerCanKnowIt(t *testing.T) {
 	fixture := newStatusFixture()
@@ -184,10 +183,8 @@ func TestGetRuntimeStatusReportsTheDatabaseSizeOnlyWhenThisServerCanKnowIt(t *te
 	}
 }
 
-// TestGetRuntimeStatusHandsTheViewTwentyFourWholeHourBuckets is the chart's shape. The repository
-// reports only the hours that have calls in them; the view is always handed the whole window, so a
-// quiet deployment shows the quiet hours instead of a chart whose shape depends on what the database
-// happened to contain.
+// The view is handed 24 whole-hour buckets: a quiet deployment shows the quiet hours instead of a
+// chart whose shape depends on what the database happened to contain.
 func TestGetRuntimeStatusHandsTheViewTwentyFourWholeHourBuckets(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -247,10 +244,9 @@ func TestGetRuntimeStatusHandsTheViewTwentyFourWholeHourBuckets(t *testing.T) {
 	}
 }
 
-// TestGetRuntimeStatusCountsTheLocalDayAndTheLastHourOnTheirOwnBounds. Neither is the current calendar
-// bucket, and neither is the window's total: the day starts at the server's own local midnight, the last
-// hour is a rolling hour that can start mid-hour, and the window's own total is the sum of the buckets
-// the view is already handed.
+// The local day and the last hour are counted on their own bounds: the day starts at the server's own
+// local midnight, the last hour is a rolling hour that can start mid-hour, and neither is the window's
+// total.
 func TestGetRuntimeStatusCountsTheLocalDayAndTheLastHourOnTheirOwnBounds(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -291,8 +287,8 @@ func TestGetRuntimeStatusCountsTheLocalDayAndTheLastHourOnTheirOwnBounds(t *test
 	}
 }
 
-// TestGetRuntimeStatusReportsNoUptimeForAServerWhoseStartIsInTheFuture. A clock that moved backwards,
-// or a read taken before the start sequence ran, is not a negative uptime.
+// No uptime is reported for a server whose start is in the future: a clock that moved backwards, or
+// a read taken before the start sequence ran, is not a negative uptime.
 func TestGetRuntimeStatusReportsNoUptimeForAServerWhoseStartIsInTheFuture(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -311,9 +307,8 @@ func TestGetRuntimeStatusReportsNoUptimeForAServerWhoseStartIsInTheFuture(t *tes
 	}
 }
 
-// TestGetRuntimeStatusWithNothingRecordedAnswersZerosAndNoLastCall. A deployment that has recorded
-// nothing is a real state, and it is reported as nothing rather than as a failure or as a missing
-// field the view has to guard against.
+// With nothing recorded the view is answered with zeros and no last call: a deployment that has
+// recorded nothing is a real state, not a failure.
 func TestGetRuntimeStatusWithNothingRecordedAnswersZerosAndNoLastCall(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -362,8 +357,8 @@ func TestGetRuntimeStatusWithNothingRecordedAnswersZerosAndNoLastCall(t *testing
 	}
 }
 
-// TestGetRuntimeStatusTalliesTheLogLevelsIntoErrorsAndWarningsPerSubsystem is the log-health card:
-// the two severities kept apart, and a subsystem named once with both of its numbers.
+// The log levels are tallied into errors and warnings per subsystem: a subsystem named once with
+// both of its numbers.
 func TestGetRuntimeStatusTalliesTheLogLevelsIntoErrorsAndWarningsPerSubsystem(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -419,9 +414,8 @@ func TestGetRuntimeStatusTalliesTheLogLevelsIntoErrorsAndWarningsPerSubsystem(t 
 	}
 }
 
-// TestGetRuntimeStatusReportsNoSnapshotWhenAReadFails. A half-read snapshot presented as current is
-// worse than no snapshot: the view has to be able to say it could not read the status, and the only
-// way it can is for the read to answer nothing.
+// A failed status read answers no snapshot: a half-read snapshot presented as current is worse than
+// no snapshot.
 func TestGetRuntimeStatusReportsNoSnapshotWhenAReadFails(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -451,10 +445,8 @@ func TestGetRuntimeStatusReportsNoSnapshotWhenAReadFails(t *testing.T) {
 	}
 }
 
-// TestGetRuntimeStatusReadsTheNewestCallsAsSummariesAndNotAsCalls is the property that makes a read
-// asked every few seconds safe. The handler is given the activity port and nothing else: the audio a
-// call carries lives behind CallRepository, which this use case is never handed, so the newest rows
-// arrive as the same summaries the call history view is handed.
+// The newest calls arrive as summaries and not as calls: the handler is given the activity port and
+// nothing else, so the audio a call carries is never behind this read.
 func TestGetRuntimeStatusReadsTheNewestCallsAsSummariesAndNotAsCalls(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -481,8 +473,8 @@ func TestGetRuntimeStatusReadsTheNewestCallsAsSummariesAndNotAsCalls(t *testing.
 	}
 }
 
-// TestGetRuntimeStatusCutsTheBusiestTalkgroupsAtTheView'sOwnLimit keeps the list the size the card
-// has room for, so the read never answers more than the page can show.
+// The busiest-talkgroup list is cut at the view's own limit, so the read never answers more than the
+// page can show.
 func TestGetRuntimeStatusCutsTheBusiestTalkgroupsAtTheViewsOwnLimit(t *testing.T) {
 	fixture := newStatusFixture()
 

@@ -26,9 +26,7 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// signingSecretFixture is the signing-secret step together with the server log it reports to and the
-// instant it stamps an entry with. The step writes to the log the way the other startup steps do, so a
-// test of what it decided and a test of what it said are the same fixture.
+// signingSecretFixture is the signing-secret step together with the server log it reports to.
 type signingSecretFixture struct {
 	options *fakes.Options
 	logs    *fakes.Logs
@@ -51,9 +49,7 @@ func newSigningSecretFixture(stored string) *signingSecretFixture {
 	}
 }
 
-// TestEnsureAdminSigningSecretStoresASecretWhenTheServerHasNone is the repaired half of a preserved quirk: a server
-// whose stored configuration holds no secret makes one and puts it on record, so the key it signs with
-// is the key the database holds and the next start finds it.
+// A server with no stored secret makes one and stores it.
 func TestEnsureAdminSigningSecretStoresASecretWhenTheServerHasNone(t *testing.T) {
 	fixture := newSigningSecretFixture("")
 	options := fixture.options
@@ -80,9 +76,7 @@ func TestEnsureAdminSigningSecretStoresASecretWhenTheServerHasNone(t *testing.T)
 	}
 }
 
-// TestEnsureAdminSigningSecretReplacesAStoredSecretTheServerCannotSignWith is the legacy database's
-// case: a stored secret of the wrong length cannot sign a token, and the replacement is written down
-// rather than used once and forgotten.
+// A stored secret the server cannot sign with is replaced and written down.
 func TestEnsureAdminSigningSecretReplacesAStoredSecretTheServerCannotSignWith(t *testing.T) {
 	fixture := newSigningSecretFixture("legacy secret value")
 	options := fixture.options
@@ -101,8 +95,7 @@ func TestEnsureAdminSigningSecretReplacesAStoredSecretTheServerCannotSignWith(t 
 	}
 }
 
-// TestEnsureAdminSigningSecretLeavesAStoredSecretAlone is what makes a token outlive a restart: the
-// secret on record is used as it stands, and nothing is written.
+// A usable stored secret is used as it stands, and nothing is written.
 func TestEnsureAdminSigningSecretLeavesAStoredSecretAlone(t *testing.T) {
 	kept := strings.Repeat("a", domain.SecretLength)
 
@@ -131,8 +124,7 @@ func TestEnsureAdminSigningSecretLeavesAStoredSecretAlone(t *testing.T) {
 	}
 }
 
-// TestEnsureAdminSigningSecretReportsASecretItCouldNotPutOnRecord keeps the failure visible: a secret
-// that was made but not stored is a secret the next start will not find.
+// A secret that was made but not stored is reported as a failure.
 func TestEnsureAdminSigningSecretReportsASecretItCouldNotPutOnRecord(t *testing.T) {
 	fixture := newSigningSecretFixture("")
 	options := fixture.options
@@ -153,8 +145,7 @@ func TestEnsureAdminSigningSecretReportsASecretItCouldNotPutOnRecord(t *testing.
 	}
 }
 
-// TestEnsureAdminSigningSecretReportsOptionsItCouldNotRead is the other way the step can fail before
-// it decides anything.
+// Options that cannot be read fail the step before it decides anything.
 func TestEnsureAdminSigningSecretReportsOptionsItCouldNotRead(t *testing.T) {
 	fixture := newSigningSecretFixture("")
 	options := fixture.options
@@ -171,8 +162,7 @@ func TestEnsureAdminSigningSecretReportsOptionsItCouldNotRead(t *testing.T) {
 	}
 }
 
-// TestEnsureAdminSigningSecretCarriesNoCredential keeps the acknowledgement an acknowledgement: the
-// secret the server signs with never leaves the handler.
+// The acknowledgement carries no credential: the signing secret never leaves the handler.
 func TestEnsureAdminSigningSecretCarriesNoCredential(t *testing.T) {
 	fixture := newSigningSecretFixture("")
 	options := fixture.options
@@ -195,10 +185,7 @@ func TestEnsureAdminSigningSecretCarriesNoCredential(t *testing.T) {
 	}
 }
 
-// TestANewSigningSecretIsRecordedAsTheEndOfEverySessionBeforeIt is the line the legacy server printed on
-// a terminal and never stored. A secret that changes ends every administrator session signed with the
-// previous one, so "everybody was logged out at six thirty" is a question this entry answers — but only if
-// it is in the log the operator can search.
+// A new signing secret is logged as the end of every session signed before it.
 func TestANewSigningSecretIsRecordedAsTheEndOfEverySessionBeforeIt(t *testing.T) {
 	fixture := newSigningSecretFixture("")
 

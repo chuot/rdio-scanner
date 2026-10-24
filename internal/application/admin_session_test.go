@@ -20,9 +20,7 @@ import (
 	"testing"
 )
 
-// Every administrator endpoint asks this question before it does anything else, and asks it of the
-// credential the request carried. It is asked as a query because answering it changes nothing: a session
-// that is refused is not ended, and a session that is accepted is not extended.
+// A session check changes nothing: a refused session is not ended, an accepted one is not extended.
 func TestCheckAdminSessionAcceptsTheTokenAnAdministratorWasJustGiven(t *testing.T) {
 	fixture := newLoginFixture()
 
@@ -40,9 +38,7 @@ func TestCheckAdminSessionAcceptsTheTokenAnAdministratorWasJustGiven(t *testing.
 	}
 }
 
-// A credential the server never issued, a credential that is nothing at all, and a credential that looks
-// like one are all refused. The administrator's own endpoints answer every one of them the same way, and
-// this query has to be able to say so without inventing a distinction the frozen contract does not have.
+// An unknown, empty, or malformed credential is refused like any other.
 func TestCheckAdminSessionRefusesACredentialTheServerDidNotIssue(t *testing.T) {
 	fixture := newLoginFixture()
 
@@ -53,8 +49,7 @@ func TestCheckAdminSessionRefusesACredentialTheServerDidNotIssue(t *testing.T) {
 	}
 }
 
-// Logging out retires the credential that was presented, and the session it stood for is over from that
-// moment — including for the very next request that presents it.
+// A credential stops checking after the logout that retired it.
 func TestCheckAdminSessionRefusesACredentialAfterItHasBeenLoggedOut(t *testing.T) {
 	fixture := newLoginFixture()
 
@@ -72,9 +67,7 @@ func TestCheckAdminSessionRefusesACredentialAfterItHasBeenLoggedOut(t *testing.T
 	}
 }
 
-// The server holds the last five credentials it issued and no more, so a session that is five logins old
-// ends on its own, without anybody logging out. This is the same window the administrator's own browser
-// runs into when it keeps a page open across five logins elsewhere.
+// A session ends on its own once five newer logins have pushed it out of the kept window.
 func TestCheckAdminSessionRefusesTheOldestCredentialOnceTheServerHasIssuedSix(t *testing.T) {
 	fixture := newLoginFixture()
 

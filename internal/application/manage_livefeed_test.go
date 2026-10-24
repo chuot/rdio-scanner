@@ -219,8 +219,7 @@ func TestListenerCountDebouncerCollapsesABurstIntoOneReport(t *testing.T) {
 	}
 }
 
-// One is the count a server reports most often, and it is the count the wording has to survive: "there are
-// 1 listeners" is what a substitution produces and what an operator then distrusts.
+// The count wording stays the approved wording even for a count of one.
 func TestListenerCountReportReadsAsOneListenerWhenThereIsOne(t *testing.T) {
 	fixture := newLivefeedFixture()
 	fixture.options.Stored.ShowListenersCount = true
@@ -275,14 +274,7 @@ func TestListenerCountDebouncerLogsTheCountEvenWhenTheOptionIsOff(t *testing.T) 
 	}
 }
 
-// TestListenerCountReportIsStampedWithTheInstantItWasWritten is the regression for the one log entry this
-// server writes without ever asking the clock what time it is.
-//
-// The legacy `server/listener.go` builds the entry with only a level and a message, so the zero time goes
-// into the column as -62135596800000 — the instant Go calls year one. That is what the five rows in a real
-// deployment's log view that no date search can ever reach are. An entry with no instant is not merely
-// misfiled: the administrator's log view sorts by timestamp and windows by date, so the report disappears
-// from every search that names a day, and it sits at the bottom of an undated search forever.
+// The listener-count report is stamped with the instant it was written.
 func TestListenerCountReportIsStampedWithTheInstantItWasWritten(t *testing.T) {
 	fixture := newLivefeedFixture()
 
@@ -346,10 +338,7 @@ func TestListenerCountDebouncerDoesNotReportBeforeTheDelayHasRun(t *testing.T) {
 	}
 }
 
-// TestListenerCountDebouncerStopsAPendingReportWhenAsked is what a server that is stopping needs. The
-// connections it is about to end are each reported by their own departure, so a count of listeners that no
-// longer exist is not information; and the report is written into the database the stop closes at its end,
-// so a report still pending at that moment is an entry that cannot be written at all.
+// A stopping server cancels the pending listener-count report.
 func TestListenerCountDebouncerStopsAPendingReportWhenAsked(t *testing.T) {
 	fixture := newLivefeedFixture()
 	fixture.options.Stored.ShowListenersCount = true

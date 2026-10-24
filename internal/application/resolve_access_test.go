@@ -26,9 +26,7 @@ import (
 )
 
 // ResolveAccessQueryHandler is the stateless half of the listener access rule: what an access
-// credential entitles a caller to, asked by an HTTP request rather than by a socket session. The
-// socket's own use case keeps its hub, its prompts, and its config push; this one asks the same
-// domain questions and answers nothing about connections.
+// credential entitles a caller to, asked by an HTTP request rather than by a socket session.
 
 var resolveAccessTime = time.Date(2026, 5, 11, 9, 0, 0, 0, time.UTC)
 
@@ -104,9 +102,7 @@ func TestResolveAccessRefusesACodeNoAccessCarries(t *testing.T) {
 	}
 }
 
-// A caller that presents nothing on a restricted server is refused the same way a wrong code is:
-// the server does not explain the difference, and the difference is not something a caller is
-// entitled to know.
+// A caller that presents nothing is refused the same way a wrong code is.
 func TestResolveAccessRefusesACallerThatPresentsNoCode(t *testing.T) {
 	handler, _, _, _ := newResolveAccessFixture(t, resolveAccessList(wildcardResolveScope()))
 
@@ -157,10 +153,7 @@ func TestResolveAccessAcceptsAnAccessWhoseDateHasNotPassed(t *testing.T) {
 	}
 }
 
-// The budget bounds guessing, so it is spent by the codes a caller presents, not by the requests
-// that present nothing. A listener that arrives with no credential and then presents its real code
-// is not locked out by its own arrival, which is what the listener socket's own prompt does not do
-// either: the prompt is free, and each code presented costs an attempt.
+// The budget is spent by codes a caller presents, not by requests that present nothing.
 func TestResolveAccessDoesNotChargeAnAddressForPresentingNoCode(t *testing.T) {
 	handler, _, _, _ := newResolveAccessFixture(t, resolveAccessList(wildcardResolveScope()))
 
@@ -186,9 +179,8 @@ func TestResolveAccessDoesNotChargeAnAddressForPresentingNoCode(t *testing.T) {
 	}
 }
 
-// Guessing an access code over a stateless surface is bounded per address, on the model of the
-// administrator login budget: the attempt at the bound is answered on its merits, and the one past
-// it is refused whatever it carries — the credential is never looked at.
+// Guessing a code is bounded per address, on the model of the administrator login budget: an
+// attempt past the bound is refused whatever it carries.
 func TestResolveAccessRefusesWhatArrivesAfterTheAddressSpentItsBudget(t *testing.T) {
 	handler, _, _, _ := newResolveAccessFixture(t, resolveAccessList(wildcardResolveScope()))
 
@@ -216,8 +208,7 @@ func TestResolveAccessRefusesWhatArrivesAfterTheAddressSpentItsBudget(t *testing
 	}
 }
 
-// The budget belongs to the address that spent it. A second address is not refused for what the
-// first one did.
+// The budget belongs to the address that spent it.
 func TestResolveAccessKeysTheBudgetToTheAddressThatSpentIt(t *testing.T) {
 	handler, _, _, _ := newResolveAccessFixture(t, resolveAccessList(wildcardResolveScope()))
 
@@ -238,12 +229,7 @@ func TestResolveAccessKeysTheBudgetToTheAddressThatSpentIt(t *testing.T) {
 	}
 }
 
-// A code that resolves gives its address its budget back: the budget is a limit on trying, not a
-// punishment that outlives the success.
-//
-// The resolving attempt is the last one the budget answers on its merits. The bound is examined
-// before the credential is looked at, so an attempt past the bound is refused whatever it carries —
-// which is what the budget's own bound test asserts.
+// A code that resolves returns its address's budget; the bound is checked before the credential.
 func TestResolveAccessClearsTheBudgetOfTheAddressThatResolved(t *testing.T) {
 	handler, _, _, _ := newResolveAccessFixture(t, resolveAccessList(wildcardResolveScope()))
 
@@ -270,8 +256,7 @@ func TestResolveAccessClearsTheBudgetOfTheAddressThatResolved(t *testing.T) {
 	}
 }
 
-// The budget is measured over a window. An address that has been quiet for longer than the window
-// has its budget back, which is what makes "three attempts per window" mean what it says.
+// The budget ages out over its window: an address quiet past the window has it back.
 func TestResolveAccessAgesTheBudgetOutOverItsWindow(t *testing.T) {
 	handler, _, _, clock := newResolveAccessFixture(t, resolveAccessList(wildcardResolveScope()))
 
@@ -294,8 +279,7 @@ func TestResolveAccessAgesTheBudgetOutOverItsWindow(t *testing.T) {
 	}
 }
 
-// A code is a credential, and a wrong guess at a credential is not something to keep in a log an
-// operator reads. The refusals name the address, once per window, and never the code.
+// Refusal log entries name the address, once per window, and never the code.
 func TestResolveAccessNeverFilesTheCodeItWasGiven(t *testing.T) {
 	handler, _, logs, _ := newResolveAccessFixture(t, resolveAccessList(wildcardResolveScope()))
 
@@ -335,8 +319,7 @@ func TestResolveAccessWarnsOncePerWindowAboutAnAddressThatIsGuessing(t *testing.
 	}
 }
 
-// The server's own step failed: the access list could not be read. That is a failure, not a
-// refusal, and it is not dressed up as one.
+// An access list that cannot be read is reported as a failure, not dressed as a refusal.
 func TestResolveAccessReportsAFailureWhenTheAccessListCannotBeRead(t *testing.T) {
 	stored := &fakes.Accesses{Err: errResolveAccess}
 	clock := fakes.NewClock(resolveAccessTime)

@@ -241,18 +241,8 @@ func TestUpdateSystemSubSectionReportsAPersistenceFailure(t *testing.T) {
 	}
 }
 
-// TestUpdateSystemSubSectionReportsTheLevelItStoredWhenTheAnnouncementFailed is the same distinction on
-// the save the administration page makes when it saves one level of one system — its sites, its
-// talkgroups, or its units — which shares the configuration saver with the two section saves and fails
-// the same way.
-//
-// The level reached the system repository, so the server is running with the edited level. The
-// announcement that would have told every listener and every open administration connection did not
-// work. Reporting the save as though the level had never been stored describes a state the store is not
-// in, and the operator reading it re-edits a level that is already saved.
-//
-// `tags` is the repository that refuses here: the announcement reads the whole configuration, and this
-// save writes none of it, so the only failure in the run is the announcement's.
+// A subsection save whose announcement failed still reports the level it stored; the failed
+// configuration read-back is the announcement's own, since the save writes none of the configuration.
 func TestUpdateSystemSubSectionReportsTheLevelItStoredWhenTheAnnouncementFailed(t *testing.T) {
 	fixture := newSubSectionFixture()
 

@@ -156,13 +156,7 @@ func TestRemoveAccessUserRemovesEveryAccessUnderTheIdentity(t *testing.T) {
 	}
 }
 
-// TestRemoveAccessUserReportsNothingWasRemoved pins that a removal matching no access stores
-// nothing, announces nothing, logs nothing — and is still answered as a success, which is what
-// the legacy server answers.
-
-// TestRemoveAccessUserReportsNothingWasRemoved pins that a removal matching no access stores
-// nothing, announces nothing, logs nothing — and is still answered as a success, which is what
-// the legacy server answers.
+// A removal matching no access stores, announces, and logs nothing, and still answers as a success.
 func TestRemoveAccessUserReportsNothingWasRemoved(t *testing.T) {
 	fixture := newAdminFixture()
 
