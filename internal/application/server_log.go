@@ -24,12 +24,7 @@ import (
 )
 
 // appendServerLog writes an entry to the server's own log view, naming the part of the server that
-// wrote it.
-//
-// A log entry that cannot be written never changes the decision that has already been taken: the
-// legacy server writes its log entries and ignores the failure, and a use case that turned a
-// failed log write into a failed operation would report a different outcome to the caller than
-// the one it actually produced.
+// wrote it; a failed log write never changes the decision already taken.
 func appendServerLog(ctx context.Context, logs ports.LogRepository, clock ports.Clock, level string, source domain.LogSource, message string) {
 	if err := logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: clock.Now(),
@@ -41,9 +36,7 @@ func appendServerLog(ctx context.Context, logs ports.LogRepository, clock ports.
 	}
 }
 
-// counted is a count in the words an operator reads: "1 call", "3 calls", "0 log entries". A bare
-// substitution gives "1 calls" for the counts a running server reports most often, and a log line that reads
-// like a substitution mistake is the kind of thing this feature exists to remove.
+// counted is a count in the words an operator reads: "1 call", "3 calls", "0 log entries".
 func counted(count int, singular, plural string) string {
 	if count == 1 {
 		return fmt.Sprintf("1 %s", singular)

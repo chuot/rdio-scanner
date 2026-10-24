@@ -46,21 +46,15 @@ type EnsureAdminSigningSecretResult struct {
 	Outcome AdminSigningSecretOutcome
 }
 
-// EnsureAdminSigningSecretCommand asks the server to make sure it has a signing secret worth having.
-//
-// It carries nothing: the secret is the server's own, and nobody outside gets to name it.
+// EnsureAdminSigningSecretCommand asks the server to make sure it has a signing secret worth
+// having. It carries nothing: the secret is the server's own, and nobody outside gets to
+// name it.
 type EnsureAdminSigningSecretCommand struct{}
 
-// EnsureAdminSigningSecretHandler gives the server a signing secret and puts it on record.
-//
-// The legacy server generated a secret inside its options read whenever the stored one was unusable,
-// and never wrote it down: a deployment that had never saved its configuration signed with an empty
-// key, and a legacy database holding a short secret got a different key on every start, killing every
-// token issued before it. The read no longer makes secrets; this step does, once, and stores what it
-// makes.
-//
-// Making one is reported, because it is the fact behind every session that stopped working at that
-// moment: the tokens issued under the secret it replaces no longer verify.
+// EnsureAdminSigningSecretHandler gives the server a signing secret and puts it on record:
+// the legacy read made a new key on every start and never stored it, killing tokens issued
+// before it; this step makes one, once. Making one is reported, because it is the fact
+// behind every session that stopped working at that moment.
 type EnsureAdminSigningSecretHandler struct {
 	options ports.OptionsRepository
 	secrets ports.SigningSecretStore
@@ -84,11 +78,10 @@ func NewEnsureAdminSigningSecretHandler(
 	}
 }
 
-// Handle reads the configuration the server is running with and, when it holds no secret the server
-// can sign with, makes one and puts it on record.
-//
-// Whether a stored secret is usable, and what a usable one looks like, is the options' own rule; this
-// handler only decides what to do about it and coordinates the write.
+// Handle reads the configuration the server is running with and, when it holds no secret
+// the server can sign with, makes one and puts it on record. Whether a stored secret is
+// usable is the options' own rule; this handler decides what to do about it and coordinates
+// the write.
 func (handler *EnsureAdminSigningSecretHandler) Handle(ctx context.Context, cmd EnsureAdminSigningSecretCommand) (EnsureAdminSigningSecretResult, error) {
 	options, err := handler.options.ReadOptions(ctx)
 	if err != nil {

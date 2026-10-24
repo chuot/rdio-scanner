@@ -23,20 +23,13 @@ import (
 )
 
 // GetConfigQuery asks for the configuration the server is running with, which is what an
-// administrator reads before changing it.
-//
-// The whole configuration is read as one thing even though an administrator may ask for one
-// section on its own, because the sections are only meaningful together: the systems a
-// listener may see, the groups and tags those systems' talkgroups are filed under, and the
-// options that say how a call is handled are one state, not eight independent ones.
+// administrator reads before changing it. The whole configuration is read as one thing:
+// the sections are one state, not eight independent ones.
 type GetConfigQuery struct{}
 
-// GetConfigHandler reads the configuration in effect.
-//
-// It returns the configuration itself rather than a projection of it: the administrator's view
-// *is* the configuration, and the shapes the wire carries — the eight-section admin payload,
-// the four-section listener payload, the per-section payloads — belong to the DTO layer,
-// which is where a shape can differ per consumer without the read having to know about it.
+// GetConfigHandler reads the configuration in effect. It returns the configuration
+// itself rather than a projection: the wire shapes belong to the DTO layer, where a
+// shape can differ per consumer without the read knowing about it.
 type GetConfigHandler struct {
 	repos ConfigurationRepositories
 }
@@ -51,9 +44,10 @@ func (handler *GetConfigHandler) Handle(ctx context.Context, query GetConfigQuer
 	return readConfiguration(ctx, handler.repos)
 }
 
-// ConfigurationRepositories are the stores that own each section of the configuration. It is
-// exported because reading the configuration, saving part of it, and telling an administrator
-// about a change all need the same set, and the composition root builds it once.
+// ConfigurationRepositories are the stores that own each section of the configuration. It
+// is exported because reading the configuration, saving part of it, and telling an
+// administrator about a change all need the same set, and the composition root builds it
+// once.
 type ConfigurationRepositories struct {
 	Accesses    ports.AccessRepository
 	Apikeys     ports.ApikeyRepository
@@ -65,10 +59,8 @@ type ConfigurationRepositories struct {
 	Tags        ports.TagRepository
 }
 
-// readConfiguration gathers the configuration in effect.
-//
-// The order the sections are read in is the order the legacy server reports them in, which is
-// the order the administrator's view has always shown them in.
+// readConfiguration gathers the configuration in effect. The sections are read in the
+// order the administrator's view has always shown them in.
 func readConfiguration(ctx context.Context, repos ConfigurationRepositories) (domain.Configuration, error) {
 	var configuration domain.Configuration
 

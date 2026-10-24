@@ -24,19 +24,15 @@ import (
 )
 
 // AddAccessUserCommand adds a listener access, or updates the one already configured under the
-// same access code.
-//
-// The user arrives as an access, because that is what an access user is: a code a listener can
-// present, with an identity, an expiry, a connection limit, and a scope.
+// same access code. The user arrives as an access, because that is what an access user is: a code
+// a listener can present, with an identity, an expiry, a connection limit, and a scope.
 type AddAccessUserCommand struct {
 	User domain.Access
 }
 
-// RemoveAccessUserCommand removes an access user by its identity.
-//
-// The identity is what identifies a user for removal, not the access code — the two are
-// different keys in the legacy server, and an administrator removing a user by name removes every
-// access that carries that name.
+// RemoveAccessUserCommand removes an access user by its identity. The identity, not the access
+// code, identifies a user for removal: removing by name removes every access that carries that
+// name.
 type RemoveAccessUserCommand struct {
 	Ident string
 }
@@ -54,8 +50,8 @@ const (
 	AccessUserSaveFailed ManageAccessUserOutcome = "failed"
 
 	// AccessUserNotRemoved means the removal matched no access. It is reported separately because
-	// the legacy server answers it as a success with nothing done, and the REST layer has
-	// to be able to reproduce that without inventing a status the frozen contract does not have.
+	// the answer for it is a success with nothing done, and the REST layer has to reproduce that
+	// without inventing a status the frozen contract does not have.
 	AccessUserNotRemoved ManageAccessUserOutcome = "not removed"
 )
 
@@ -65,10 +61,9 @@ type ManageAccessUserResult struct {
 }
 
 // AccessUserPorts are what changing an access user needs: the stores that own the configuration,
-// the open administrator connections, the server log, and the clock.
-//
-// The whole configuration is needed rather than just the access list because an administrator
-// connection is told the whole configuration when any part of it changes.
+// the open administrator connections, the server log, and the clock. The whole configuration is
+// needed rather than just the access list because an administrator connection is told the whole
+// configuration when any part of it changes.
 type AccessUserPorts struct {
 	ConfigurationRepositories
 
@@ -96,10 +91,8 @@ func NewAddAccessUserHandler(ports AccessUserPorts) *AddAccessUserHandler {
 }
 
 // Handle stores the access and tells the administrator connections about the configuration that
-// resulted.
-//
-// An access code that is already on the list is updated rather than added, which is what the
-// legacy server does and what the administration interface relies on when an administrator edits a user.
+// resulted. An access code that is already on the list is updated rather than added, which is
+// what the administration interface relies on when an administrator edits a user.
 func (handler *AddAccessUserHandler) Handle(ctx context.Context, cmd AddAccessUserCommand) (ManageAccessUserResult, error) {
 	failed := ManageAccessUserResult{Outcome: AccessUserSaveFailed}
 
@@ -119,7 +112,7 @@ func (handler *AddAccessUserHandler) Handle(ctx context.Context, cmd AddAccessUs
 	}
 
 	// The stored list is read back, because the store is what gives a new access its identifier,
-	// and an administrator connection is told the configuration that the store actually holds.
+	// and an administrator connection is told the configuration the store actually holds.
 	if _, err := handler.repos.Accesses.AllAccesses(ctx); err != nil {
 		handler.reportFailure(ctx, err)
 
@@ -153,12 +146,9 @@ func NewRemoveAccessUserHandler(ports AccessUserPorts) *RemoveAccessUserHandler 
 	}
 }
 
-// Handle removes every access carrying the identity, or reports that none did.
-//
-// A removal that matched nothing stores nothing, announces nothing, and logs nothing — and the
-// legacy server still answers it as a success. That is reproduced here as its own outcome rather
-// than as a failure, because making it a failure would change what the administration interface has always been
-// told.
+// Handle removes every access carrying the identity, or reports that none did. A removal that
+// matched nothing stores nothing, announces nothing, and logs nothing, and is still a success:
+// making it a failure would change what the administration interface has always been told.
 func (handler *RemoveAccessUserHandler) Handle(ctx context.Context, cmd RemoveAccessUserCommand) (ManageAccessUserResult, error) {
 	failed := ManageAccessUserResult{Outcome: AccessUserSaveFailed}
 
@@ -195,11 +185,8 @@ func (handler *RemoveAccessUserHandler) Handle(ctx context.Context, cmd RemoveAc
 	return ManageAccessUserResult{Outcome: AccessUserSaved}, nil
 }
 
-// announce tells the open administrator connections the configuration that resulted.
-//
-// Only the administrator connections are told. Adding or removing an access user does not re-send
-// the configuration to listeners, which is what the legacy server does and which matters: a
-// listener keeps the scope it was given when it connected until it reconnects.
+// announce tells the open administrator connections the configuration that resulted. Only they
+// are told: a listener keeps the scope it was given when it connected until it reconnects.
 func (handler *AddAccessUserHandler) announce(ctx context.Context) error {
 	return announceConfigurationToAdministrators(ctx, handler.repos, handler.admin)
 }
@@ -226,8 +213,8 @@ func announceConfigurationToAdministrators(
 	return nil
 }
 
-// reportFailure records why an access-user change did not complete: what the server was trying to do,
-// then the failure's own text, which is the part that names the statement that failed.
+// reportFailure records why an access-user change did not complete: what the server was trying
+// to do, then the failure's own text, which names the statement that failed.
 func (handler *AddAccessUserHandler) reportFailure(ctx context.Context, err error) {
 	handler.writeLog(ctx, fmt.Sprintf("the administrator user could not be added: %v", err))
 }

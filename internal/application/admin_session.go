@@ -21,21 +21,16 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// CheckAdminSessionQuery asks whether a credential presented to an administrator endpoint stands for a
-// session this server still accepts.
-//
-// The credential arrives exactly as the request carried it: the frozen contract puts it raw in the
-// Authorization header, with no scheme prefix, and nothing strips anything.
+// CheckAdminSessionQuery asks whether a credential presented to an administrator endpoint
+// stands for a session this server still accepts; the credential arrives raw from the
+// Authorization header, exactly as the request carried it.
 type CheckAdminSessionQuery struct {
 	Token string
 }
 
-// CheckAdminSessionHandler answers that question without changing what it asks about.
-//
-// Every administrator endpoint asks it before it does anything else, and asking must be free: a session
-// that is refused is not ended, and a session that is accepted is not used up. An endpoint that answered
-// the question by consuming the credential would end an administrator's session the first time its page
-// asked for anything.
+// CheckAdminSessionHandler answers that question without changing what it asks about: a
+// refused check does not end a session and an accepted one does not use the credential
+// up, so every administrator endpoint can ask it before anything else.
 type CheckAdminSessionHandler struct {
 	tokens ports.TokenIssuer
 }
@@ -45,13 +40,9 @@ func NewCheckAdminSessionHandler(tokens ports.TokenIssuer) *CheckAdminSessionHan
 	return &CheckAdminSessionHandler{tokens: tokens}
 }
 
-// Handle reports whether the credential is one this server still accepts.
-//
-// There is no failure to report, and that is not a shortcut. The credential store says no in several
-// different ways — never issued, retired by the rolling window, ended by a logout, badly signed, signed
-// by something that is not the server's own key — and the legacy server answers every one of them with
-// the same empty 401. Returning the distinction would give the presentation layer a distinction it is
-// not allowed to use.
+// Handle reports whether the credential is one this server still accepts. There is no
+// failure to distinguish: the store refuses a credential in several ways and every one
+// answers the same empty result, which is the only answer the presentation layer may use.
 func (handler *CheckAdminSessionHandler) Handle(ctx context.Context, query CheckAdminSessionQuery) bool {
 	return handler.tokens.Validate(ctx, query.Token) == nil
 }

@@ -23,22 +23,21 @@ import (
 )
 
 // SearchCallsQuery asks for one page of the call history.
+//
+// The search itself is one struct, and the repository's criteria struct mirrors it field
+// for field.
 type SearchCallsQuery struct {
 	// Criteria are the filters the listener submitted, already parsed into values.
 	Criteria domain.CallSearch
 
-	// Scope is what the listener is allowed to see. A listener with no scope named sees
-	// the whole history, which is how an anonymous listener on an unrestricted server
-	// behaves.
+	// Scope is what the listener is allowed to see; an unnamed scope sees the whole history.
 	Scope domain.AccessScope
 }
 
-// SearchCallsQueryHandler resolves a history request into a page of call summaries.
-//
-// Everything the legacy server folded into a SQL string is resolved here instead: the
-// paging, the sort direction, the day bounds, the caller's scope, and the group and tag
-// labels expanded into the concrete systems and talkgroups they stand for. The repository
-// receives resolved criteria and turns them into a parameterized query.
+// SearchCallsQueryHandler resolves a history request into a page of call summaries: the
+// paging, sort direction, day bounds, scope, and the group and tag labels expanded into
+// the concrete systems and talkgroups they stand for. The repository receives resolved
+// criteria and turns them into a parameterized query.
 type SearchCallsQueryHandler struct {
 	calls   ports.CallRepository
 	systems ports.SystemRepository
@@ -88,9 +87,8 @@ func (handler *SearchCallsQueryHandler) Handle(ctx context.Context, query Search
 			return ports.CallSearchPage{}, err
 		}
 
-		// A group or tag label stands for the talkgroups the *listener* can see, not for
-		// every talkgroup the server knows: the legacy server builds these filters from the
-		// configuration it already sent that listener.
+		// A group or tag label stands for the talkgroups the *listener* can see, not every
+		// talkgroup the server knows.
 		view := systems.Scoped(query.Scope, tags)
 
 		if query.Criteria.HasGroup() {

@@ -27,17 +27,14 @@ import (
 // ChangeAdminPasswordCommand replaces the administrator credential.
 type ChangeAdminPasswordCommand struct {
 	// CurrentCredential is the credential the caller offers as the one it is replacing, and
-	// CurrentCredentialGiven says whether the payload named one at all.
-	//
-	// The distinction is not pedantry: the legacy server compares a credential it was given, and
-	// skips the comparison entirely for a payload that named none. An absent field is therefore
-	// not the same as an empty one — an empty credential is checked and refused, while no
-	// credential at all changes the password without checking anything.
+	// CurrentCredentialGiven says whether the payload named one at all. The distinction is
+	// preserved from the legacy server on purpose: an empty credential is checked and
+	// refused, while no credential at all changes the password without checking anything.
 	CurrentCredential      string
 	CurrentCredentialGiven bool
 
-	// NewCredential is the credential the administrator wants on record from now on. The REST
-	// layer has already refused a payload that does not name one as a string.
+	// NewCredential is the credential the administrator wants on record from now on; the
+	// REST layer has already refused a payload that does not name one as a string.
 	NewCredential string
 }
 
@@ -49,20 +46,18 @@ const (
 	// its own log.
 	AdminPasswordChanged ChangeAdminPasswordOutcome = "changed"
 
-	// AdminPasswordRefused means the change did not happen. One outcome covers every reason it
-	// did not — an empty new credential, a current credential that does not match, a credential
-	// that could not be stored — because the legacy server answers all of them the same way and
-	// logs all of them with the same words. Splitting them into separate outcomes would give the
-	// REST layer a distinction to invent a status code for.
+	// AdminPasswordRefused means the change did not happen. One outcome covers every
+	// reason it did not — an empty new credential, a current credential that does not
+	// match, a credential that could not be stored — because the answer and the log words
+	// are the same for all of them, and splitting them would invite the REST layer to
+	// invent a status code per reason.
 	AdminPasswordRefused ChangeAdminPasswordOutcome = "refused"
 )
 
-// ChangeAdminPasswordResult is the acknowledgement the change returns.
-//
-// PasswordNeedChange is what the administrator is told back: whether the credential now on
-// record is one the server thinks should be replaced. It is read from the configuration *after*
-// the change has been re-derived from what is stored, which is where the legacy server reads it
-// from, and not from the credential that was just submitted.
+// ChangeAdminPasswordResult is the acknowledgement the change returns. PasswordNeedChange
+// is what the administrator is told back: whether the credential now on record is one the
+// server thinks should be replaced. It is read from the configuration *after* the change
+// has been re-derived from what is stored, not from the credential that was just submitted.
 type ChangeAdminPasswordResult struct {
 	Outcome            ChangeAdminPasswordOutcome
 	PasswordNeedChange bool
@@ -95,11 +90,10 @@ func NewChangeAdminPasswordHandler(
 	}
 }
 
-// Handle changes the credential, in the order the legacy server does.
-//
-// The order is the behavior: an empty new credential is refused before anything is compared, a
-// current credential is compared only when one was offered, and the options are re-derived from
-// what was stored before the server reports whether the password still needs changing.
+// Handle changes the credential, in the order the legacy server does: an empty new credential
+// is refused before anything is compared, a current credential is compared only when one was
+// offered, and the options are re-derived from what was stored before the server reports
+// whether the password still needs changing.
 func (handler *ChangeAdminPasswordHandler) Handle(ctx context.Context, cmd ChangeAdminPasswordCommand) (ChangeAdminPasswordResult, error) {
 	refused := ChangeAdminPasswordResult{Outcome: AdminPasswordRefused}
 
@@ -131,10 +125,9 @@ func (handler *ChangeAdminPasswordHandler) Handle(ctx context.Context, cmd Chang
 		return handler.reject(ctx, err, refused)
 	}
 
-	// The legacy server reads the options back from what it stored, and that read resets every
-	// option to its default before applying the stored rows. An option stored under a name the
-	// reader does not look for therefore comes back as the default: changing the
-	// administrator password quietly restores the 500 ms duplicate-detection window.
+	// The options are read back from what was stored, and that read resets every option to
+	// its default before applying the stored rows; the reason that quietly restores the
+	// duplicate-detection window lives in the administrator-credential maintainer note.
 	reloaded, err := handler.options.ReloadOptions(ctx)
 	if err != nil {
 		return handler.reject(ctx, err, refused)
@@ -148,11 +141,8 @@ func (handler *ChangeAdminPasswordHandler) Handle(ctx context.Context, cmd Chang
 	}, nil
 }
 
-// reject records a refused change and returns the reason to the caller.
-//
-// The legacy server writes one fixed sentence whatever went wrong, which sends an operator looking at the
-// current password when it was the disk. The reason is what the log now holds, because it is the only thing
-// in the entry that tells anybody what to look at.
+// reject records a refused change and returns its reason to the caller: the log holds the
+// reason, because it is the only part of the entry that tells an operator what to look at.
 func (handler *ChangeAdminPasswordHandler) reject(ctx context.Context, reason error, result ChangeAdminPasswordResult) (ChangeAdminPasswordResult, error) {
 	handler.writeLog(ctx, domain.LogLevelError, fmt.Sprintf("the administrator password was not changed: %v", reason))
 

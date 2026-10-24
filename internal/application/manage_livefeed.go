@@ -24,19 +24,16 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// ListenerCountReportDelay is how long the server holds back its listener-count report.
-//
-// A listener connecting and immediately reconnecting, or a native app cycling its
-// sessions, would otherwise produce a report per event. The legacy server collapses a
-// burst into one report five seconds after the first event, and the clients that display
-// the count depend on that calmness.
+// ListenerCountReportDelay is how long the server holds back its listener-count report: a
+// listener connecting and immediately reconnecting, or a native app cycling its sessions, would
+// otherwise produce a report per event, and the clients that display the count depend on the
+// calmness of one report per burst.
 const ListenerCountReportDelay = 5 * time.Second
 
-// SetLivefeedCommand replaces one listener's live-watch selection: which talkgroups on
-// which systems that listener wants delivered as they happen.
-//
-// The selection replaces the previous one entirely. A listener that submits a selection
-// without a talkgroup that was previously on has switched that talkgroup off.
+// SetLivefeedCommand replaces one listener's live-watch selection: which talkgroups on which
+// systems that listener wants delivered as they happen. The selection replaces the previous one
+// entirely, so a listener that submits a selection without a talkgroup that was previously on has
+// switched that talkgroup off.
 type SetLivefeedCommand struct {
 	ClientID string
 	Livefeed domain.Livefeed
@@ -58,11 +55,9 @@ func NewSetLivefeedHandler(hub ports.Hub) *SetLivefeedHandler {
 	return &SetLivefeedHandler{hub: hub}
 }
 
-// Handle stores the selection and answers the listener with whether anything is switched
-// on, which is the reply the frozen protocol fixes.
-//
-// The selection itself lives on the listener's session, because it is session state: the
-// hub decides whether a live call reaches that session.
+// Handle stores the selection and answers the listener with whether anything is switched on,
+// the reply the frozen protocol fixes. The selection itself lives on the listener's session,
+// because it is session state: the hub decides whether a live call reaches that session.
 func (handler *SetLivefeedHandler) Handle(ctx context.Context, cmd SetLivefeedCommand) (SetLivefeedResult, error) {
 	handler.hub.SetLivefeed(cmd.ClientID, cmd.Livefeed)
 
@@ -73,11 +68,9 @@ func (handler *SetLivefeedHandler) Handle(ctx context.Context, cmd SetLivefeedCo
 	return SetLivefeedResult{Watching: watching}, nil
 }
 
-// ListenerCountDebouncer reports how many listeners are watching, once per burst of
-// joins and leaves rather than once per event.
-//
-// The report is always written to the server log. It is only sent to the listeners when
-// the server option asks for the count to be shown, which is what the legacy server does.
+// ListenerCountDebouncer reports how many listeners are watching, once per burst of joins and
+// leaves rather than once per event. The report always goes to the server log, and to the
+// listeners only when the server option asks for the count to be shown.
 type ListenerCountDebouncer struct {
 	hub       ports.Hub
 	logs      ports.LogRepository
@@ -108,12 +101,9 @@ func NewListenerCountDebouncer(
 	}
 }
 
-// ListenerChanged records that a listener joined or left.
-//
-// Only the first change in a burst schedules a report; the rest are absorbed by the one
-// already pending. The report counts the listeners that are there when it is written, not
-// the ones that were there when it was scheduled — that is what makes collapsing a burst
-// correct rather than merely quieter.
+// ListenerChanged records that a listener joined or left. Only the first change in a burst
+// schedules a report; the report then counts the listeners present when it is written, not when
+// it was scheduled, which is what makes collapsing a burst correct rather than merely quieter.
 func (debouncer *ListenerCountDebouncer) ListenerChanged() {
 	debouncer.mutex.Lock()
 	defer debouncer.mutex.Unlock()
@@ -142,13 +132,9 @@ func (debouncer *ListenerCountDebouncer) Pending() bool {
 	return debouncer.pending != nil
 }
 
-// Cancel drops a report that is scheduled and not yet written.
-//
-// A server that is stopping does not owe a count of listeners: the connections it is about to end are each
-// reported by their own departure, and a count of listeners that no longer exist is not something an
-// operator can act on. And the report is written into the database the stop closes at its end, so a report
-// still pending at that moment is an entry that cannot be written at all — a write that gets half way
-// through is what leaves a database holding a rollback journal.
+// Cancel drops a report that is scheduled and not yet written: a server that is stopping owes
+// no count of listeners, and a pending report would write into a store the stop has already
+// closed.
 func (debouncer *ListenerCountDebouncer) Cancel() {
 	debouncer.mutex.Lock()
 	defer debouncer.mutex.Unlock()
@@ -162,13 +148,10 @@ func (debouncer *ListenerCountDebouncer) Cancel() {
 	debouncer.pending = nil
 }
 
-// report writes the count to the server log and, when the option asks for it, sends it to every listener.
-// The order is the legacy order: the log first, then the listeners.
-//
-// The entry is stamped with the clock at the moment the report is written. The legacy
-// `server/listener.go` builds it with a level and a message and nothing else, so the zero time reaches the
-// timestamp column as -62135596800000 and the log view then drops the row from its results while still
-// counting it — which is what the year-one rows in a deployment's log are.
+// report writes the count to the server log and, when the option asks for it, sends it to
+// every listener, in that order. The entry is stamped with the clock at the moment the report
+// is written; an unstamped entry reaches the timestamp column as a year-one date and the log
+// view then drops it while still counting it.
 func (debouncer *ListenerCountDebouncer) report(ctx context.Context) {
 	count := debouncer.hub.ListenerCount()
 
@@ -191,9 +174,8 @@ func (debouncer *ListenerCountDebouncer) report(ctx context.Context) {
 	}
 }
 
-// listenersCountPhrase is the count in the words an operator reads. "there are 1 listeners" is what the
-// approved wording produces for the most common count there is, and a log line that reads like a
-// substitution mistake is the kind of thing this feature exists to remove.
+// listenersCountPhrase is the count in the words an operator reads, in the approved wording,
+// including its ungrammatical plural at a count of one.
 func listenersCountPhrase(count int) string {
 	if count == 1 {
 		return "there is " + counted(count, "listener", "listeners")

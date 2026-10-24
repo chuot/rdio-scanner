@@ -18,7 +18,7 @@
 // count emitter. Commands return an identifier, status, or acknowledgement; queries
 // return DTOs or projections.
 //
-// Import rule: this package may import internal/domain, internal/application/ports,
-// and the Go standard library. It must never import internal/infrastructure,
-// internal/presentation, or any third-party module.
+// Import rule: this package imports only internal/domain, internal/application/ports,
+// and the Go standard library; internal/infrastructure and internal/presentation are
+// forbidden here and checked by the package import tests.
 package application

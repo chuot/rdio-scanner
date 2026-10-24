@@ -48,20 +48,16 @@ type AdminLogoutResult struct {
 	Outcome AdminLogoutOutcome
 }
 
-// AdminLogoutCommand asks the server to end the administrator session one token stands
-// for.
-//
-// The token arrives exactly as the client sent it: the frozen contract carries it raw in
-// the Authorization header, with no scheme prefix, and the REST layer strips nothing.
+// AdminLogoutCommand asks the server to end the administrator session one token stands for.
+// The token arrives exactly as the client sent it: the frozen contract carries it raw in the
+// Authorization header, with no scheme prefix, and the REST layer strips nothing.
 type AdminLogoutCommand struct {
 	Token string
 }
 
-// AdminLogoutHandler ends an administrator session.
-//
-// Only the presented token is retired. The legacy server keeps a rolling window of the tokens it has
-// issued rather than one session per administrator, so logging out of one browser leaves another
-// browser's session running, and a client that assumes otherwise loses access it still had.
+// AdminLogoutHandler ends an administrator session. Only the presented token is retired: the
+// server keeps a rolling window of the tokens it has issued rather than one session per
+// administrator, so logging out of one browser leaves another browser's session running.
 type AdminLogoutHandler struct {
 	tokens ports.TokenIssuer
 	logs   ports.LogRepository
@@ -74,40 +70,33 @@ func NewAdminLogoutHandler(tokens ports.TokenIssuer, logs ports.LogRepository, c
 	return &AdminLogoutHandler{tokens: tokens, logs: logs, clock: clock}
 }
 
-// Handle retires the presented token, or refuses the request when the server does not
-// accept it.
-//
-// Checking before removing is what the legacy server does, and it is what makes a logout
-// with a token that is no longer accepted a refusal rather than a silent success: the
-// caller finds out that its session is already gone.
+// Handle retires the presented token, or refuses the request when the server does not accept
+// it. Checking before removing is what makes a logout with a token that is no longer accepted a
+// refusal rather than a silent success: the caller finds out its session is already gone.
 func (handler *AdminLogoutHandler) Handle(ctx context.Context, cmd AdminLogoutCommand) (AdminLogoutResult, error) {
 	if err := handler.tokens.Validate(ctx, cmd.Token); err != nil {
 		return AdminLogoutResult{Outcome: AdminLogoutRefused}, nil
 	}
 
 	if err := handler.tokens.Revoke(ctx, cmd.Token); err != nil {
-		// The session is still open, the caller is told, and the log says what the server was trying
-		// to do. An administrator reporting that they cannot log out used to leave nothing behind to
-		// check.
+		// The session is still open, the caller is told, and the log says what the server was
+		// trying to do: an administrator reporting that they cannot log out has something to check.
 		appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, domain.LogSourceLogin,
 			fmt.Sprintf("the administrator session could not be ended: %v", err))
 
 		return AdminLogoutResult{Outcome: AdminLogoutFailed}, err
 	}
 
-	// The legacy server says nothing when an administrator ends their own session, which leaves the
-	// log view with no record of when somebody stopped watching. A sign-out is an ordinary thing for
-	// an operator to want to place in a timeline, so it is written down.
-	//
-	// A refused logout is not written: it ended no session, and the login use case already reports
-	// the attempts that would explain one.
+	// A sign-out is written down, because an operator wants to place it in a timeline. A refused
+	// logout is not written: it ended no session, and the login use case already reports the
+	// attempts that would explain one.
 	handler.logSignedOut(ctx)
 
 	return AdminLogoutResult{Outcome: AdminLogoutAccepted}, nil
 }
 
-// logSignedOut writes the sign-out to the server log. A log entry that cannot be written does not
-// change the fact that the session has ended.
+// logSignedOut writes the sign-out to the server log. A log entry that cannot be written does
+// not change the fact that the session has ended.
 func (handler *AdminLogoutHandler) logSignedOut(ctx context.Context) {
 	if err := handler.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: handler.clock.Now(),

@@ -34,11 +34,9 @@ const (
 	UnitsSubSection      SystemSubSection = "units"
 )
 
-// IsSystemSubSection reports whether a name is one of the three system levels.
-//
-// It belongs here for the same reason IsConfigSection does: the levels are part of
-// the server's vocabulary, and "that is not a level of a system" is a business
-// answer rather than a routing one.
+// IsSystemSubSection reports whether a name is one of the three system levels. It belongs here
+// for the same reason IsConfigSection does: the levels are part of the server's vocabulary, and
+// "that is not a level of a system" is a business answer rather than a routing one.
 func IsSystemSubSection(name string) bool {
 	switch SystemSubSection(name) {
 	case SitesSubSection, TalkgroupsSubSection, UnitsSubSection:
@@ -63,14 +61,12 @@ type UpdateSystemSubSectionCommand struct {
 	Blacklists *domain.Blacklists
 }
 
-// UpdateSystemSubSectionHandler saves one level of one system, then announces the
-// configuration that resulted.
-//
-// It shares the configuration saver with the section save: the directory watchers are
-// bracketed the same way, the full configuration is broadcast the same way, and a
-// failure stops the save and is reported the same way. The level is saved through the
-// system repository, which knows the system it belongs to; a system the store does
-// not have is reported as ErrNotFound, which the REST layer answers with 404.
+// UpdateSystemSubSectionHandler saves one level of one system, then announces the configuration
+// that resulted. It shares the configuration saver with the section save: the directory watchers
+// are bracketed the same way, the full configuration is broadcast the same way, and a failure
+// stops the save and is reported the same way. The level is saved through the system repository,
+// which knows the system it belongs to; a system the store does not have is reported as
+// ErrNotFound, which the REST layer answers with 404.
 type UpdateSystemSubSectionHandler struct {
 	saver configurationSaver
 }
@@ -116,12 +112,10 @@ func (handler *UpdateSystemSubSectionHandler) Handle(ctx context.Context, cmd Up
 	}
 
 	if err := handler.saver.publish(ctx); err != nil {
-		// The level reached the system repository, and reading back the configuration that resulted is what
-		// failed. The server is running with the edited level of that system, so the level is named as
-		// stored and the outcome says the save as a whole did not complete: reporting the pair as a level
-		// that was not stored would describe a store the save did write to, and the operator reading it
-		// would edit a level that is already saved. The reason is filed where the refusal above files its
-		// reason.
+		// The level reached the system repository and the read-back failed, so the level is named as
+		// stored and the outcome says the save as a whole did not complete; that pairing is what an
+		// operator needs to avoid re-editing a saved level, and it lives in the system-subsection
+		// maintainer note.
 		result.Outcome = ConfigurationSaveFailed
 
 		handler.saver.reportFailure(ctx, err)

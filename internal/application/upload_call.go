@@ -22,9 +22,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// UploadCallCommand is one call an outside program posted to the server, and the credential it posted
-// with. The call is already what the server's ingest parsers made of the submission: which fields an
-// uploader names, and what each one means, is a fact about the upload endpoints and not about calls.
+// UploadCallCommand is one call an outside program posted to the server, and the credential it
+// posted with. The call is already what the server's ingest parsers made of the submission:
+// which fields an uploader names is a fact about the upload endpoints, not about calls.
 type UploadCallCommand struct {
 	Call domain.Call
 	Key  string
@@ -34,17 +34,16 @@ type UploadCallCommand struct {
 type UploadCallOutcome string
 
 const (
-	// UploadCallAccepted means the credential covers the call and the server has taken it. It says
-	// nothing about what the server made of the call afterwards, because an uploader is not told that.
+	// UploadCallAccepted means the credential covers the call and the server has taken it. It
+	// says nothing about what the server made of the call afterwards.
 	UploadCallAccepted UploadCallOutcome = "accepted"
 
-	// UploadCallIncomplete means the submission is not a call at all. The reason is returned as the
-	// error, because the upload endpoints answer the uploader with what is missing.
+	// UploadCallIncomplete means the submission is not a call at all; the reason is returned as
+	// the error, because the upload endpoints answer the uploader with what is missing.
 	UploadCallIncomplete UploadCallOutcome = "incomplete"
 
-	// UploadCallRefused means the credential is not one that covers this call. A credential the server
-	// does not know and one that is switched off are the same answer, which is what the legacy server's
-	// single message for both produces.
+	// UploadCallRefused means the credential is not one that covers this call. A credential the
+	// server does not know and one that is switched off are the same answer.
 	UploadCallRefused UploadCallOutcome = "refused"
 
 	// UploadCallFailed means the server could not complete a step it depends on.
@@ -57,17 +56,15 @@ type UploadCallResult struct {
 	CallID  uint64
 }
 
-// UploadCallHandler decides whether this server takes a call an outside program posted.
-//
-// It is a use case of its own rather than a step of the ingest use case, because the two questions are
-// different: the ingest use case decides what a call becomes, and this one decides who may hand the
-// server a call at all. A call found in a watched directory is not asked the second question.
+// UploadCallHandler decides whether this server takes a call an outside program posted. It is
+// a use case of its own rather than a step of the ingest use case: the ingest use case decides
+// what a call becomes, this one decides who may hand the server a call at all, and a call found
+// in a watched directory is not asked that second question.
 type UploadCallHandler struct {
 	apikeys ports.ApikeyRepository
 
-	// ingest is the use case that stores and delivers the call. It is a use case and not a port: the
-	// upload endpoints and the directory watchers reach the same ingest step, and the composition root
-	// has no choice to make between them.
+	// ingest is the use case that stores and delivers the call. It is a use case and not a port:
+	// the upload endpoints and the directory watchers reach the same ingest step.
 	ingest *IngestCallHandler
 }
 
@@ -79,20 +76,11 @@ func NewUploadCallHandler(apikeys ports.ApikeyRepository, ingest *IngestCallHand
 	}
 }
 
-// Handle decides whether the server takes an uploaded call.
-//
-// The order is the legacy order, and it is what an uploader is told. The submission is checked for being
-// a call at all before the credential is looked at, so someone posting a broken call is told what is
-// missing rather than that their credential is wrong. The credential is decided before the call is matched
-// against the server's own configuration, so an uploader is never told anything about the systems and
-// talkgroups the server knows about.
-//
-// What the server makes of the call afterwards is not the uploader's business. The legacy server hands
-// the call to its ingest queue and answers success whatever that queue makes of it: a call naming a system
-// the server does not know, a call already recorded, and a call the owning system refuses are each
-// reported in the server's own log view, and none of them are reported to the uploader. An uploader that
-// was told its call was imported and then cannot find it has nothing to work with, which is why the
-// answer stays success.
+// Handle decides whether the server takes an uploaded call. The order is the legacy order and
+// it is what an uploader is told: the submission is checked for being a call at all before the
+// credential is looked at, and the credential is decided before the call is matched against the
+// server's own configuration. The answer stays success however the ingest step then ends; that
+// is deliberate, and the reason lives in the uploaded-call maintainer note.
 func (handler *UploadCallHandler) Handle(ctx context.Context, cmd UploadCallCommand) (UploadCallResult, error) {
 	if err := cmd.Call.IsValid(); err != nil {
 		return UploadCallResult{Outcome: UploadCallIncomplete}, err
@@ -107,9 +95,8 @@ func (handler *UploadCallHandler) Handle(ctx context.Context, cmd UploadCallComm
 		return UploadCallResult{Outcome: UploadCallRefused}, nil
 	}
 
-	// The ingest outcome is deliberately not carried into the answer. Every way an ingest can end is
-	// already written in the server's log view by the ingest use case itself, and the legacy server
-	// reports none of them to the uploader.
+	// The ingest outcome is deliberately not carried into the answer: every way an ingest can
+	// end is already written in the server's log view by the ingest use case itself.
 	result, _ := handler.ingest.Handle(ctx, IngestCallCommand{Call: cmd.Call})
 
 	return UploadCallResult{

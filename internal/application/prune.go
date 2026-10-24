@@ -33,20 +33,17 @@ const (
 	PruneOldCallsDone PruneOldCallsOutcome = "done"
 
 	// PruneOldCallsSkipped means the retention is switched off, so nothing was touched and
-	// nothing was said about it. The legacy server returns before it even reports that it
-	// is pruning, so a deployment with the retention off shows no pruning notice in its log
-	// view.
+	// nothing was said about it: a deployment with the retention off shows no pruning
+	// notice in its log view.
 	PruneOldCallsSkipped PruneOldCallsOutcome = "skipped"
 
-	// PruneOldCallsFailed means a step the pruning depends on could not be completed. The
-	// legacy scheduler writes it as `scheduler.run: <error>` at the error level, which is
-	// where the scheduler that runs this command records it.
+	// PruneOldCallsFailed means a step the pruning depends on could not be completed; the
+	// scheduler that runs this command records it at the error level.
 	PruneOldCallsFailed PruneOldCallsOutcome = "failed"
 )
 
 // PruneOldCallsResult is the acknowledgement the scheduler gets: what happened and how much
-// went. The legacy pruning reports nothing at all; the counts are here so that the outcome
-// can be tested and so that a later task can report it without reaching into the database.
+// went.
 type PruneOldCallsResult struct {
 	Outcome     PruneOldCallsOutcome
 	CallsPruned int
@@ -54,18 +51,14 @@ type PruneOldCallsResult struct {
 }
 
 // PruneOldCallsCommand asks the server to discard the recorded calls and the recorded log
-// entries that are older than the retention it is configured with.
-//
-// It carries nothing: the retention is a setting the administrator owns, not something the
-// caller gets to choose. The legacy scheduler reads the option when it prunes rather than
-// remembering it, so a change the administrator makes takes effect on the next run.
+// entries that are older than the retention it is configured with. It carries nothing: the
+// retention is a setting the administrator owns, read fresh on every run.
 type PruneOldCallsCommand struct{}
 
 // PruneOldCallsHandler applies the retention to the call history and the server log.
-//
-// Pruning is one command rather than two because the legacy server prunes them together,
-// in that order: the call history goes first, and a history that cannot be pruned leaves
-// the log alone.
+// Pruning is one command rather than two because the two passes run together, in that
+// order: the call history goes first, and a history that cannot be pruned leaves the log
+// alone.
 type PruneOldCallsHandler struct {
 	calls   ports.CallRepository
 	logs    ports.LogRepository
@@ -89,15 +82,9 @@ func NewPruneOldCallsHandler(
 }
 
 // Handle discards everything older than the retention and then reports what it removed.
-//
-// The legacy server writes "database pruning" before it starts, which tells an operator that a pass was
-// attempted and nothing about what it did. The counts the two deletes already return are the part an operator
-// reads: a retention that has stopped removing anything is the failure they need to see before the disk
-// fills, and a pass that removed nothing looks identical in the log view to a pass that never ran.
-//
-// The report is therefore written after the deletes, which is also what makes it possible: the counts do not
-// exist before them. A pass that fails is reported by its own entry, not by a notice written too early to
-// know it would fail.
+// The report is written after the deletes and carries their counts: a retention that has
+// stopped removing anything is the failure an operator needs to see before the disk fills,
+// and the counts do not exist before the deletes.
 func (handler *PruneOldCallsHandler) Handle(ctx context.Context, cmd PruneOldCallsCommand) (PruneOldCallsResult, error) {
 	options, err := handler.options.ReadOptions(ctx)
 	if err != nil {
@@ -110,9 +97,8 @@ func (handler *PruneOldCallsHandler) Handle(ctx context.Context, cmd PruneOldCal
 		return PruneOldCallsResult{Outcome: PruneOldCallsSkipped}, nil
 	}
 
-	// One instant bounds both the call history and the log. The legacy server asks the
-	// clock twice, once for each, which differs by the time it takes to run the first
-	// delete and is not something a client can observe.
+	// One instant bounds both the call history and the log; the legacy server asked the
+	// clock separately for each, which is not something a client can observe.
 	before := options.PruneBefore(handler.clock.Now())
 
 	callsPruned, err := handler.calls.DeleteCallsBefore(ctx, before)
@@ -146,12 +132,9 @@ func retentionReport(callsPruned, logsPruned int) string {
 	)
 }
 
-// reportFailure records the half of the retention the server could not do.
-//
-// The hourly schedule discards this command's error, as the legacy server's scheduler discards it, and until
-// now the pass wrote nothing on a failure either: a deployment whose retention had been broken for a month
-// had a log view that looked healthy. The error still goes back to the caller, because the outcome the
-// caller reads is not this feature's to change.
+// reportFailure records the half of the retention the server could not do: the hourly
+// schedule discards this command's error, so a log entry is the only trace a broken
+// retention leaves.
 func (handler *PruneOldCallsHandler) reportFailure(ctx context.Context, what string, reason error) {
 	appendServerLog(ctx, handler.logs, handler.clock, domain.LogLevelError, domain.LogSourcePrune, fmt.Sprintf("%s: %v", what, reason))
 }

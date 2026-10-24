@@ -23,23 +23,16 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// SearchLogsQuery asks for the server's own log view: the entries the criteria match, and how
-// many entries match in total so the view can page through them.
-//
-// The criteria arrive already parsed. Reading a date out of a payload, deciding what an
-// unparseable date means, and what an absent limit means is the domain's job
-// (domain.ParseLogSearch); this query is what the caller does once it knows them.
+// SearchLogsQuery asks for the server's own log view: the entries the criteria match, and
+// how many match in total so the view can page. The criteria arrive already parsed, by
+// domain.ParseLogSearch.
 type SearchLogsQuery struct {
 	Search domain.LogSearch
 }
 
-// SearchLogsHandler reads the log view.
-//
-// It is a query: it changes nothing about what the log holds. The one thing it does is record its own
-// failure, which is what the legacy server has always done with a log search it could not answer — the
-// notice goes into the very view the search was asked for. That is not the query mutating the log view's
-// contents; it is the server saying out loud that it could not answer, and an administrator shown an
-// empty log view has no other way to learn that the log view is broken.
+// SearchLogsHandler reads the log view; a failed search is recorded as a notice in the
+// same view, which is how an administrator learns the log view is broken rather than
+// seeing an empty one.
 type SearchLogsHandler struct {
 	logs  ports.LogRepository
 	clock ports.Clock
@@ -50,12 +43,9 @@ func NewSearchLogsHandler(logs ports.LogRepository, clock ports.Clock) *SearchLo
 	return &SearchLogsHandler{logs: logs, clock: clock}
 }
 
-// Handle returns the matching entries and the total the criteria matches.
-//
-// A search the store cannot answer is recorded in the same view it was asked for. The failure's own text is
-// kept after the sentence, because it names the statement that failed and that is the part an operator needs;
-// the sentence in front of it is what tells the entry apart from every other failure in the log, and it is
-// what the log view can filter on.
+// Handle returns the matching entries and the total the criteria match. A search the
+// store cannot answer is recorded as a notice in the same view; the notice text names the
+// failed statement, and its fixed sentence is what the log view filters on.
 func (handler *SearchLogsHandler) Handle(ctx context.Context, query SearchLogsQuery) (ports.LogSearchPage, error) {
 	page, err := handler.logs.SearchLogs(ctx, query.Search)
 	if err != nil {

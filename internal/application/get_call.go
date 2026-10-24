@@ -37,11 +37,8 @@ func NewGetCallQueryHandler(calls ports.CallRepository) *GetCallQueryHandler {
 	return &GetCallQueryHandler{calls: calls}
 }
 
-// Handle returns the recorded call, or ports.ErrNotFound.
-//
-// This query returns the aggregate rather than a projection because the listener asked
-// for the whole call, audio included: the call payload is the call. The history search
-// (SearchCallsQuery) is the one that must not load audio, and it returns a projection.
+// Handle returns the recorded call, or ErrNotFound; the listener asked for the whole
+// call, audio included, so this one returns the aggregate rather than a projection.
 func (handler *GetCallQueryHandler) Handle(ctx context.Context, query GetCallByIdQuery) (domain.Call, error) {
 	return handler.calls.GetCall(ctx, query.ID)
 }
