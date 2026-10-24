@@ -23,19 +23,12 @@ import (
 	"testing"
 )
 
-// legacySchema is the schema the legacy server built when it first ran against a fresh database,
-// recorded as the statements it ran. legacyRows are the rows it wrote into that schema: its seeds,
-// its configuration save, and the two calls it ingested through its own upload endpoint. They were
-// taken from a database written entirely by the legacy binary, statement by statement, and they live
-// in the package that consumes them, which is what the requirement asks for: no fixture directory, no binary
-// database file, and nothing outside the test that proves it.
-//
-// The recorded schema and statements are themselves the rebuild: applying them to an empty database
-// writes the database the fixtures were taken from, and the statements are the pinned record.
-//
-// Applying the schema and then the rows to an empty database gives the persistence tests the thing
-// the requirement actually claims — that this code reads a database the other server wrote — instead of
-// proving that it reads a database it wrote itself.
+// legacySchema is the schema the legacy server built on a fresh database, and
+// legacyRows are the rows it wrote into it — seeds, its configuration save, and
+// two calls through its upload endpoint — recorded statement by statement from a
+// database written entirely by the legacy binary. Applying them to an empty
+// database rebuilds it, so a repository test proves it reads what the other
+// server wrote rather than what it wrote itself.
 var legacySchema = []string{
 	`CREATE TABLE "accesses" (
     "accessId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -279,8 +272,8 @@ var legacyRows = []string{
 	`INSERT INTO "sqlite_sequence" VALUES('delayed',1);`,
 }
 
-// openLegacyDatabase builds the database the legacy server wrote, the way the server opens its own
-// database, and hands it back.
+// openLegacyDatabase builds the database the legacy server wrote, opened the
+// way the server opens its own.
 func openLegacyDatabase(t *testing.T) *sql.DB {
 	t.Helper()
 
@@ -306,11 +299,10 @@ func openLegacyDatabase(t *testing.T) *sql.DB {
 	return db
 }
 
-// migratedLegacyDatabase is a database the legacy server wrote, brought up to the shape
-// this server reads and writes: the startup pass has run over it, which is what every
-// deployment runs before it reads or writes a single row. A repository test that reads a
-// legacy-written database is a test of the deployment after its migration, because a
-// deployment that skipped its migration never reaches the repository at all.
+// migratedLegacyDatabase is a legacy-written database after the startup pass has
+// run over it, which is what every deployment runs before touching a row: a
+// repository test reads the deployment after its migration, because one that
+// skipped its migration never reaches the repository.
 func migratedLegacyDatabase(t *testing.T) *sql.DB {
 	t.Helper()
 
@@ -331,9 +323,8 @@ func firstLineOf(statement string) string {
 	return statement
 }
 
-// openEmptyDatabase opens the file a deployment of this server that has never run before gets:
-// nothing in it. Migrate is what puts the tables there, so a test of Migrate must not have applied
-// them first.
+// openEmptyDatabase opens the file a server that has never run gets: nothing in
+// it, so a test of Migrate must not have applied the tables first.
 func openEmptyDatabase(t *testing.T) *sql.DB {
 	t.Helper()
 
@@ -347,7 +338,7 @@ func openEmptyDatabase(t *testing.T) *sql.DB {
 	return db
 }
 
-// openSchemaDatabase opens a database that has the legacy tables and nothing in them, which is what
+// openSchemaDatabase opens the legacy tables with nothing in them, which is what
 // a repository test writes into.
 func openSchemaDatabase(t *testing.T) *sql.DB {
 	t.Helper()
@@ -361,8 +352,8 @@ func openSchemaDatabase(t *testing.T) *sql.DB {
 	return db
 }
 
-// openLegacyDatabaseWithout opens the database the legacy server wrote with the named tables
-// emptied: the legacy schema, the legacy column types, and no rows to trip over.
+// openLegacyDatabaseWithout opens the legacy-written database with the named
+// tables emptied: legacy schema and column types, no rows to trip over.
 func openLegacyDatabaseWithout(t *testing.T, tables ...string) *sql.DB {
 	t.Helper()
 
@@ -379,8 +370,8 @@ func openLegacyDatabaseWithout(t *testing.T, tables ...string) *sql.DB {
 	return db
 }
 
-// countRows reads the row count of a table, for asserting that a test is looking at a fixture
-// that actually contains the thing it claims to read.
+// countRows reads a table's row count, for tests asserting their fixture really
+// contains what they claim to read.
 func countRows(t *testing.T, db *sql.DB, table string) int {
 	t.Helper()
 

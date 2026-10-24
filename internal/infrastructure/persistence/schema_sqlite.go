@@ -15,15 +15,11 @@
 
 package persistence
 
-// sqliteSchema is the schema the legacy server applies to a sqlite database, statement for
-// statement. It is a copy rather than a re-derivation on purpose: the two servers have to agree
-// about the same tables down to the quoted identifiers, the cascade rules, and the odd `integer(1)`
-// and `logs`/`logid` casing the legacy server uses, because a deployment swaps one binary for the
-// other without touching its database.
-//
-// Every statement is idempotent already — `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT
-// EXISTS` — so applying it over a database the legacy server created changes nothing, which is
-// what the requirement asks for and what the test over the recorded legacy schema proves.
+// sqliteSchema is the schema the legacy server applies to a sqlite
+// database, copied statement for statement so a deployment can swap one
+// server's binary for the other's without touching its database; the
+// agreement it preserves lives in the schema-copy-idempotence maintainer
+// note.
 var sqliteSchema = []string{
 	`CREATE TABLE IF NOT EXISTS "accesses" (
     "accessId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,

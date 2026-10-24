@@ -22,25 +22,17 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// Seed writes the groups and tags a fresh server is expected to start with, and is the half of what
-// the legacy server's `NewDatabase` does after migrating: `seedGroups` and then `seedTags`, from
-// `server/seeds.go`, in that order.
+// Seed writes the groups and tags a fresh server is expected to start
+// with, and runs after [Migrate](migrations.go) because a migrated
+// deployment's own rows are already in place for it to find. Each half —
+// groups and tags — decides on its own whether its table is empty, so a
+// deployment that had groups but no tags keeps its groups and gets the
+// default tags.
 //
-// It runs after [Migrate](migrations.go), as the legacy server runs it after `migrate`, and the
-// order is what makes a migrated deployment keep what it had: the migration has already filled
-// `groups` and `tags` with the deployment's own, so the seed finds rows and writes none.
-//
-// Each half decides on its own. Groups are seeded when `groups` is empty and tags when `tags` is
-// empty, so a deployment that had groups but no tags gets the default tags and keeps its groups.
-//
-// A failure is returned, wrapped the way `Database.seed` wrapped it (`database.seed:
-// seeds.seedgroups: …`), including a failure of the count that decides whether to seed at all —
-// unlike a migration, which shrugs off a table it cannot read, a seed that cannot ask how many
-// rows a table holds is an error.
-//
-// The `server/…` names in this file are the legacy server's own files, which are not in this
-// repository. They are named so a reader can see which behavior is being mirrored, and they resolve
-// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542.
+// A seed failure is returned wrapped, and unlike a migration a seed treats
+// a failure of the count that decides whether to seed as a failure; the two
+// postures and the legacy wrapping live in the seed-failure-posture
+// maintainer note.
 func Seed(ctx context.Context, db *sql.DB, dialect Dialect) error {
 	s := newStore(db, dialect)
 
@@ -55,14 +47,11 @@ func Seed(ctx context.Context, db *sql.DB, dialect Dialect) error {
 	return nil
 }
 
-// seedGroups mirrors `seedGroups` in `server/seeds.go`.
-//
-// The count that decides whether to seed is read into an unsigned integer, which is what the legacy
-// server reads it into, and the labels are written in the order the domain lists them with the
-// display order left at its column default of 0. That is the legacy behavior, and it is worth
-// knowing: groups written by the migration are given a display order of 1..n, groups written by the
-// seed are given none, so a fresh server starts with a table whose ordering is decided by identity
-// alone. `TestSeedGroupsLeaveTheirDisplayOrderAtZero` pins it.
+// seedGroups mirrors the legacy server's own seedGroups. Groups written by
+// the seed keep the display order column's default of 0 while groups
+// written by the migration are numbered 1..n, so a fresh server's ordering
+// is decided by identity alone — TestSeedGroupsLeaveTheirDisplayOrderAtZero
+// pins that.
 func seedGroups(ctx context.Context, s store) error {
 	const section, operation = "seeds", "seedgroups"
 

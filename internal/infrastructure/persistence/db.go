@@ -28,9 +28,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Dialect names the database the server was started with. The four names are exactly the four
-// values the `-db_type` flag and the `db_type` ini key accept, so a deployment's configuration
-// means the same thing to both servers.
+// Dialect names the database the server was started with, named exactly as the
+// `-db_type` flag and the `db_type` ini key name it, so a deployment's
+// configuration means the same thing to both servers.
 type Dialect string
 
 const (
@@ -40,13 +40,10 @@ const (
 	DialectPostgresql Dialect = "postgresql"
 )
 
-// Settings are the database choices the server was started with. They are gathered here rather
-// than read from the command-line configuration so that opening a database does not depend on
-// how the server was told what to open.
-//
-// FilePath is only used by the sqlite dialect; Host, Port, Username, Password, and Name are only
-// used by the three server-backed dialects. That is how the legacy server behaves too: a
-// deployment that switches from sqlite to mysql keeps an unused db_file in its ini file.
+// Settings are the database choices the server was started with, gathered here
+// so that opening a database does not depend on how the server was configured.
+// FilePath serves only the sqlite dialect; Host, Port, Username, Password, and
+// Name only the three server-backed dialects, as in the legacy server.
 type Settings struct {
 	Dialect Dialect
 
@@ -59,9 +56,8 @@ type Settings struct {
 	Name     string
 
 	// TLS is the mysql driver's tls parameter (the db_tls ini option): "true",
-	// "skip-verify", "false", or the name of a registered tls config.
-	// Empty — the default — connects in plaintext, exactly as deployments
-	// connect today; the operator opts in.
+	// "skip-verify", "false", or the name of a registered tls config. Empty —
+	// the default — connects in plaintext; the operator opts in.
 	TLS string
 
 	// SslMode is the postgres sslmode parameter (the db_sslmode ini option),
@@ -71,22 +67,17 @@ type Settings struct {
 	SslMode string
 
 	// ConnectTimeout is how long the connection attempt waits (the
-	// db_connect_timeout ini option), in Go's duration form ("5s"). Empty —
-	// the default — leaves the timing to the driver and the operating system,
-	// as it is today.
+	// db_connect_timeout ini option), in Go's duration form. Empty — the
+	// default — leaves the timing to the driver and the operating system.
 	ConnectTimeout string
 }
 
-// Open connects to the database the server was started with and leaves it ready for the
-// repositories built on it.
-//
-// The connection is not verified here, exactly as the legacy server does not verify it: a bad
-// host or an unreadable file is reported when the first query runs, not when the server starts.
-//
-// Unlike the legacy server, an unusable setting is returned as an error rather than written to
-// the process log and followed by a hard exit. Deciding how a failure to open the database ends
-// the process belongs to the composition root, which is the only place that knows the
-// server is starting and not merely being tested.
+// Open connects to the database the server was started with and leaves it ready
+// for the repositories built on it. The connection is not verified here, as in
+// the legacy server: a bad host or unreadable file is reported when the first
+// query runs. An unusable setting is returned as an error rather than logged
+// and exited from; how a failure ends the process belongs to the composition
+// root.
 func Open(settings Settings) (*sql.DB, error) {
 	driver, dsn, err := dataSourceName(settings)
 	if err != nil {
@@ -98,9 +89,8 @@ func Open(settings Settings) (*sql.DB, error) {
 		return nil, fmt.Errorf("database.open: %w", err)
 	}
 
-	// The same pool the legacy server runs with. A deployment that swaps one binary for the
-	// other gets the same number of concurrent connections, which is what the sqlite
-	// busy_timeout above is tuned for.
+	// The same pool the legacy server runs with, which the sqlite busy_timeout
+	// is tuned for.
 	db.SetConnMaxLifetime(time.Minute)
 	db.SetMaxIdleConns(25)
 	db.SetMaxOpenConns(25)
@@ -108,47 +98,34 @@ func Open(settings Settings) (*sql.DB, error) {
 	return db, nil
 }
 
-// dataSourceName picks the driver and the connection string for a dialect.
-//
-// The strings are the ones the legacy server builds, character for character, because a
-// deployment's ini file is not rewritten when it swaps servers and the two must reach the same
-// database the same way. They are connection strings rather than queries, so the rule that every
-// query is parameterized does not apply to them — but it does apply to everything that runs
-// through the connection they produce.
+// dataSourceName picks the driver and the connection string for a dialect. The
+// strings are the ones the legacy server builds, character for character: a
+// deployment's ini file is not rewritten when it swaps servers, and the two
+// must reach the same database the same way. They are connection strings, not
+// queries, so the rule that every query is parameterized does not apply to
+// them — but it does apply to everything that runs through the connections
+// they produce.
 func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 	switch settings.Dialect {
 	case DialectSqlite:
-		// The two pragmas are what make the legacy server's sqlite behavior what it is:
-		// foreign keys enforced, so deleting a system cascades to its talkgroups and calls,
-		// and a busy database waited for rather than failed on.
+		// The pragmas carry the legacy server's sqlite behavior: foreign keys
+		// enforced, so deleting a system cascades to its talkgroups and calls,
+		// and a busy database waited for rather than failed on. The odd `%3d`
+		// in the second pragma is the legacy server's own encoded `=`: the
+		// driver decodes it, and the string is kept because it must read
+		// exactly as the other server writes it.
 		//
-		// The odd `%3d` in the second pragma is what the legacy server writes: an encoded `=`
-		// inside an already-built query string. The driver decodes it, so the pragma arrives as
-		// `busy_timeout=10000`. It is kept because it works, and because a connection string
-		// that differs from the one the other server writes is a difference someone would have
-		// to explain.
+		// `_txlock=immediate` is this server's own addition, and why the saves
+		// need it lives in the sqlite-save-posture maintainer note. A
+		// transaction asked for as read-only is begun without the begin mode,
+		// so reads that only read keep their read lock, and a statement
+		// outside a transaction is not affected by a begin mode at all.
 		//
-		// `_txlock=immediate` is this server's own addition, and it is here for the saves. A
-		// reconciling save reads the rows it is about to replace before it replaces them, and a read
-		// inside a transaction takes the database's read lock; a transaction that holds the read lock
-		// is not allowed to ask for the write lock. So the busy timeout above is a wait such a save
-		// could never make: begun deferred, it is refused the moment it writes, however briefly
-		// whatever else is holding the database means to keep holding it. Beginning immediate takes
-		// the write lock before the read, which turns a busy database into the ten-second wait this
-		// connection string promises rather than into a refusal the save was never allowed to avoid.
-		//
-		// Two things are deliberately outside that. A transaction asked for as read-only is begun
-		// without the begin mode, which is how the reads that only read — a listener fetching one
-		// recorded call, the stored catalog every save announces through — keep their lock; a server
-		// that took the write lock to answer a read would serialize its readers behind its writers,
-		// which is the opposite of what a busy timeout is for. And a statement that runs outside a
-		// transaction is not affected by a begin mode at all: it waits for a busy database exactly as
-		// it always waited.
-		// The path is escaped into the URL the driver reads: the
-		// legacy install lives under "Rdio Scanner", and a path with a space,
-		// a `#`, or a `?` in it is a path, not a query. Escaping is segment by
-		// segment so the separators stay separators, and a plain path escapes
-		// to itself — byte-for-byte the string the legacy server wrote.
+		// The path is escaped into the URL the driver reads: a path with a
+		// space, a `#`, or a `?` in it is a path, not a query. Escaping is
+		// segment by segment so the separators stay separators, and a plain
+		// path escapes to itself — byte-for-byte the string the legacy server
+		// wrote.
 		segments := strings.Split(settings.FilePath, "/")
 
 		for i, segment := range segments {
@@ -159,12 +136,9 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 
 	case DialectMariadb, DialectMysql:
 		// ANSI_QUOTES is what lets the same double-quoted identifiers in the schema work on
-		// MariaDB and MySQL as they do on sqlite and PostgreSQL.
-		//
-		// clientFoundRows is what makes an option update report the row it found rather
-		// than the rows it changed: an update that writes the same value changes nothing,
-		// and the save reads "nothing changed" as "no such row" and inserts a duplicate
-		// for every key.
+		// MariaDB and MySQL as they do on sqlite and PostgreSQL. Why clientFoundRows,
+		// carried on the field below, is on lives in the mysql-connection-string maintainer
+		// note.
 		source := &mysql.Config{
 			User:   settings.Username,
 			Passwd: settings.Password,
@@ -202,11 +176,9 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 		return "mysql", source.FormatDSN(), nil
 
 	case DialectPostgresql:
-		// The URL form escapes the credential: a password with an
-		// `@`, a `/`, or a `%` in it is a password, not a piece of the
-		// connection string, and today's plain interpolation hands it to the
-		// parser as structure. With nothing opted in, the URL reads byte-for-byte
-		// as the string the legacy server wrote.
+		// The URL form escapes the credential: a password with an `@`, a `/` or a
+		// `%` in it stays a password, and with nothing opted in the URL reads as
+		// the string the legacy server wrote.
 		source := &url.URL{
 			Scheme: "postgresql",
 			User:   url.UserPassword(settings.Username, settings.Password),
@@ -235,9 +207,8 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 		return "pgx", source.String(), nil
 
 	default:
-		// The legacy server writes this to the log and exits. Here it is an error, which is
-		// also what fixes the reported failure: the message is produced from the settings that were given, and
-		// not from a configuration that may not be there.
+		// The legacy server logs this and exits; here it is an error reported from
+		// the settings that were given.
 		return "", "", fmt.Errorf("unknown database type %s", settings.Dialect)
 	}
 }

@@ -15,12 +15,13 @@
 
 package persistence
 
-// postgresSchema is the schema the legacy server applies to a PostgreSQL database, statement for
-// statement, for the same reason as sqliteSchema.
-//
-// The differences from the sqlite schema are the ones the legacy server has to make: `bigserial`
-// primaries instead of `integer... AUTOINCREMENT`, `boolean` instead of `integer(1)`, and `double
-// precision` instead of `real`.
+// postgresSchema is the schema the legacy server applies to a PostgreSQL
+// database, statement for statement, for the same reason as sqliteSchema;
+// the agreement it preserves lives in the schema-copy-idempotence
+// maintainer note. The differences from the sqlite schema are the ones the
+// legacy server has to make: `bigserial` primaries instead of
+// `integer... AUTOINCREMENT`, `boolean` instead of `integer(1)`, and
+// `double precision` instead of `real`.
 var postgresSchema = []string{
 	`CREATE TABLE IF NOT EXISTS "accesses" (
     "accessId" bigserial NOT NULL PRIMARY KEY,

@@ -24,8 +24,9 @@ import (
 	"testing"
 )
 
-// legacyTables are the tables the legacy server's schema creates, which both servers have to agree
-// on. sqlite_sequence is not one of them: sqlite maintains it for the AUTOINCREMENT primaries.
+// legacyTables are the tables the legacy server's schema creates, which both
+// servers have to agree on. sqlite_sequence is not one of them: sqlite maintains
+// it for the AUTOINCREMENT primaries.
 var legacyTables = []string{
 	"accesses",
 	"apikeys",
@@ -47,9 +48,8 @@ var legacyTables = []string{
 	"units",
 }
 
-// TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt is the the criterion half that concerns
-// the schema: this server starts against a database the legacy server created and leaves it alone,
-// so the legacy server can still open it afterwards.
+// This server starts against a legacy-created database and leaves it alone, so the
+// legacy server can still open it afterwards.
 func TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -71,8 +71,8 @@ func TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt(t *testing.T)
 		}
 	}
 
-	// The fixture is the legacy server's own work, so a schema apply that changed a table would
-	// have had to rewrite rows to survive; the counts are the cheap proof that it did not.
+	// The fixture is the legacy server's own work, so a schema apply that changed a table
+	// would have had to rewrite rows to survive; the counts are the cheap proof it did not.
 	for _, table := range []string{"systems", "talkgroups", "groups", "tags", "accesses", "apikeys", "dirwatches", "downstreams", "logs", "options", "calls"} {
 		if count := countRows(t, db, table); count == 0 {
 			t.Errorf("%s has no rows: the fixture written by the legacy server is not the one generate.sh produced", table)
@@ -80,8 +80,7 @@ func TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt(t *testing.T)
 	}
 }
 
-// TestApplySchemaTwiceIsTheSameAsOnce covers the startup path the legacy server is on: the schema
-// is applied on every start, including the start after a start.
+// The schema is applied on every start, including the start after a start.
 func TestApplySchemaTwiceIsTheSameAsOnce(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -108,9 +107,9 @@ func TestApplySchemaTwiceIsTheSameAsOnce(t *testing.T) {
 	}
 }
 
-// TestApplySchemaCreatesEveryLegacyTableOnAFreshDatabase is the other direction of the requirement: a
-// database this server creates is one the legacy server can open, so it has to contain every table
-// the legacy server expects, and the index its call history queries are written against.
+// A database this server creates is one the legacy server can open, so it contains
+// every table the legacy server expects, and the index its call history queries
+// are written against.
 func TestApplySchemaCreatesEveryLegacyTableOnAFreshDatabase(t *testing.T) {
 	db, err := Open(Settings{
 		Dialect:  DialectSqlite,
@@ -145,12 +144,12 @@ func TestApplySchemaCreatesEveryLegacyTableOnAFreshDatabase(t *testing.T) {
 	}
 }
 
-// TestEveryDialectSchemaCoversTheSameTables guards the one thing a copy can get wrong: a table
-// present for sqlite and missing for MySQL or PostgreSQL, which would look like a working server
-// until somebody deploys on the backend that lost it.
+// Guards the one thing a copy can get wrong: a table present for sqlite and
+// missing for MySQL or PostgreSQL, which looks like a working server until
+// somebody deploys on the backend that lost it.
 func TestEveryDialectSchemaCoversTheSameTables(t *testing.T) {
-	// Case-insensitive because the legacy server writes the logs table in lowercase, and the copy
-	// keeps it that way.
+	// Case-insensitive because the legacy server writes the logs table in lowercase,
+	// and the copy keeps it that way.
 	declared := regexp.MustCompile(`(?i)CREATE TABLE IF NOT EXISTS "([A-Za-z]+)"`)
 
 	for _, tc := range []struct {
@@ -200,8 +199,8 @@ func TestSchemaForAnUnknownDialectIsTheLegacyFailure(t *testing.T) {
 	}
 }
 
-// readSchemaObjects reads every schema object, definition included, in a stable order, so that two
-// databases can be compared for "identical" rather than for "has the same table names".
+// readSchemaObjects reads every schema object, definition included, in a stable order,
+// so two databases can be compared for "identical" rather than for "same table names".
 func readSchemaObjects(t *testing.T, db *sql.DB) []string {
 	t.Helper()
 
@@ -260,14 +259,13 @@ func readTableNames(t *testing.T, db *sql.DB) []string {
 	return names
 }
 
-// TestEveryDialectSchemaDeclaresTheLogSourceColumn is the log-source half of the same guard the table
-// coverage gives: a log entry names the part of the server that wrote it, and a deployment on the backend
-// whose copy lost the column has a log view that cannot say where its entries came from.
+// A log entry names the part of the server that wrote it, and a deployment on the
+// backend whose copy lost the column has a log view that cannot say where its
+// entries came from.
 //
-// The two log indexes are deliberately not asserted here. ApplySchema's statements are the legacy
-// server's, and TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt requires that applying them
-// to a database the other server wrote changes nothing at all — indexes included. The indexes belong to
-// the migration step that brings an existing database up to this shape.
+// The two log indexes are deliberately not asserted here: they belong to the
+// migration step that brings an existing database up to shape, not to the copied
+// schema statements.
 func TestEveryDialectSchemaDeclaresTheLogSourceColumn(t *testing.T) {
 	for _, tc := range []struct {
 		dialect Dialect
@@ -292,11 +290,10 @@ func TestEveryDialectSchemaDeclaresTheLogSourceColumn(t *testing.T) {
 			t.Fatalf("%s has no logs table to declare a source on", tc.dialect)
 		}
 
-		// MySQL refuses a default on a TEXT column, so the shared MySQL/MariaDB copy declares the
-		// source as a varchar. PostgreSQL and SQLite keep it as text, which is what the rest of their
-		// copies use. What every dialect has to have in common is the NOT NULL and the default: the
-		// default is what lets the legacy server keep inserting into this table without knowing the
-		// column exists.
+		// MySQL refuses a default on a TEXT column, so the shared MySQL/MariaDB copy declares
+		// the source as a varchar; PostgreSQL and SQLite keep it as text. What every dialect
+		// shares is the NOT NULL and the default — the default is what lets the legacy server
+		// keep inserting into this table without knowing the column exists.
 		if !regexp.MustCompile(`(?i)"source"\s+(text|varchar\(\d+\))\s+not\s+null\s+default\s+''`).MatchString(declared) {
 			t.Errorf("%s declares the logs table without a source column carrying a default:\n%s", tc.dialect, declared)
 		}

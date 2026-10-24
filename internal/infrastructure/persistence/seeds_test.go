@@ -21,9 +21,8 @@ import (
 	"testing"
 )
 
-// TestSeedWritesTheDefaultGroupsAndTagsInLegacyOrder is the fresh deployment: the groups and tags
-// the domain lists, written in the order it lists them, each keeping the identity the database gave
-// it.
+// A fresh deployment gets the groups and tags the domain lists, written in the order
+// it lists them, each keeping the identity the database gave it.
 func TestSeedWritesTheDefaultGroupsAndTagsInLegacyOrder(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -67,9 +66,8 @@ func TestSeedWritesTheDefaultGroupsAndTagsInLegacyOrder(t *testing.T) {
 	}
 }
 
-// TestSeedKeepsTheTrailingSpaceInTheEmergencyTag: the legacy server seeded a tag whose label ends
-// in a space, and a deployment that swaps one server for the other has to keep finding it under the
-// same name.
+// The legacy server seeded a tag whose label ends in a space, and a deployment
+// swapping one server for the other keeps finding it under the same name.
 func TestSeedKeepsTheTrailingSpaceInTheEmergencyTag(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -94,11 +92,9 @@ func TestSeedKeepsTheTrailingSpaceInTheEmergencyTag(t *testing.T) {
 	t.Errorf("the seeded tags hold no Emergency tag: %v", rowsOf(t, db, "tags", `"label"`))
 }
 
-// TestSeedGroupsLeaveTheirDisplayOrderAtZero pins a difference a deployment sees on screen: the
-// migration gives the groups it moves a display order of 1..n, the seed gives the groups it writes
-// none at all, so a fresh server's groups are ordered by identity.
-//
-// See the legacy `server/seeds.go`: the insert names only the label.
+// A difference a deployment sees on screen: the migration numbers the groups it
+// moves 1..n, the seed leaves its groups at the display order column's default
+// of zero, so a fresh server's groups are ordered by identity.
 func TestSeedGroupsLeaveTheirDisplayOrderAtZero(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -119,8 +115,8 @@ func TestSeedGroupsLeaveTheirDisplayOrderAtZero(t *testing.T) {
 	}
 }
 
-// TestSeedLeavesATableThatAlreadyHasRowsAloneAndStillSeedsTheOther is the deployment that had
-// groups but no tags: each half decides on its own, and neither touches the other's rows.
+// A database that already has groups but no tags: each half decides on its own,
+// and neither touches the other's rows.
 func TestSeedLeavesATableThatAlreadyHasRowsAloneAndStillSeedsTheOther(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -146,7 +142,7 @@ func TestSeedLeavesATableThatAlreadyHasRowsAloneAndStillSeedsTheOther(t *testing
 	}
 }
 
-// TestSeedTwiceWritesTheDefaultsOnce covers a restart: the second seed finds rows and writes none.
+// The second seed over the same database finds rows and writes none.
 func TestSeedTwiceWritesTheDefaultsOnce(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -169,9 +165,8 @@ func TestSeedTwiceWritesTheDefaultsOnce(t *testing.T) {
 	}
 }
 
-// TestSeedAfterMigratingAV6DatabaseWritesNothing is the reason the seed runs after the migration:
-// the migration has already moved the deployment's own groups and tags, so the defaults never reach
-// a database that came from the other server.
+// The seed runs after the migration for this: the migration has already moved the
+// database's own groups and tags, so the defaults never reach a migrated database.
 func TestSeedAfterMigratingAV6DatabaseWritesNothing(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
@@ -200,9 +195,8 @@ func TestSeedAfterMigratingAV6DatabaseWritesNothing(t *testing.T) {
 	}
 }
 
-// TestSeedReportsAFailureOfTheCountThatDecidesWhetherToSeed is the difference between a seed and a
-// migration: a migration shrugs off a table it cannot query, a seed cannot decide without it and
-// says so, wrapped the way Database.seed wrapped it.
+// Unlike a migration, which shrugs off a table it cannot query, a seed cannot decide
+// without its count and returns that failure, wrapped.
 func TestSeedReportsAFailureOfTheCountThatDecidesWhetherToSeed(t *testing.T) {
 	db := openEmptyDatabase(t)
 

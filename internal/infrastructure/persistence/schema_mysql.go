@@ -15,12 +15,12 @@
 
 package persistence
 
-// mysqlSchema is the schema the legacy server applies to a MariaDB or MySQL database, statement
-// for statement, for the same reason as sqliteSchema.
-//
-// It only works because the connection asks for `sql_mode=ANSI_QUOTES`, which is what the data
-// source in db.go sets: without it MySQL reads the double quotes around every identifier as string
-// literals and the first statement fails.
+// mysqlSchema is the schema the legacy server applies to a MariaDB or MySQL
+// database, statement for statement, idempotent statement for statement
+// like sqliteSchema. It works only because the connection asks for
+// `sql_mode=ANSI_QUOTES`, which the data source in db.go sets; without it
+// MySQL reads the schema's double-quoted identifiers as string literals and
+// the first statement fails.
 var mysqlSchema = []string{
 	`CREATE TABLE IF NOT EXISTS "accesses" (
     "accessId" bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,

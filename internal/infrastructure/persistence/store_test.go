@@ -42,8 +42,8 @@ func TestBindLeavesTheQuestionMarkPlaceholdersAloneExceptForPostgresql(t *testin
 	}
 }
 
-// TestBindDoesNotNumberAQuestionMarkInsideAQuotedLiteral is what makes the scan in bind safe to
-// use: the only `?` it rewrites is one it is standing in for.
+// The only `?` the scan in bind rewrites is one standing outside a quoted
+// literal.
 func TestBindDoesNotNumberAQuestionMarkInsideAQuotedLiteral(t *testing.T) {
 	const query = `SELECT 'what?' FROM "calls" WHERE "audioMime" = ?`
 
@@ -130,9 +130,9 @@ func TestParseScopeReadsBackEveryShapeTheColumnCarries(t *testing.T) {
 	}
 }
 
-// TestScopeTextRoundTripsThroughTheStoredColumn proves the two servers agree on the column: the
-// text this server writes is the text the legacy server wrote in the fixture, and the text the
-// fixture carries reads back as the scope it was written from.
+// The two servers agree on the scope column: the text this server writes is the
+// text the legacy server wrote in the fixture, and it reads back as the scope it
+// was written from.
 func TestScopeTextRoundTripsThroughTheStoredColumn(t *testing.T) {
 	stored := `[{"id":10001,"talkgroups":[1514000,1514001]}]`
 
@@ -175,12 +175,10 @@ func TestOperationErrorNamesTheOperationWithoutInventingAStatement(t *testing.T)
 	}
 }
 
-// TestBindNumbersPlaceholdersAroundAnEscapedQuoteLiteral: the
-// invariant that makes the scan in bind safe, pinned in its sharpest case. SQL
-// writes a quote inside a literal as a doubled quote — 'it”s' — and the scan
-// reads that doubled pair as the end of one quoted span and the start of the
-// next: the literal is copied verbatim, its `?` is the literal's own character
-// and not a placeholder, and the numbering counts only the placeholders outside.
+// The invariant that makes the scan in bind safe, pinned in its sharpest case:
+// SQL writes a quote inside a literal as a doubled quote — 'it”s' — and the
+// scan reads that pair as one quoted span ending and the next starting, copying
+// the literal verbatim and numbering only the placeholders outside literals.
 func TestBindNumbersPlaceholdersAroundAnEscapedQuoteLiteral(t *testing.T) {
 	const query = `SELECT "value" FROM "options" WHERE "key" = ? AND "value" LIKE 'it''s?x' AND "other" = ?`
 
@@ -191,11 +189,11 @@ func TestBindNumbersPlaceholdersAroundAnEscapedQuoteLiteral(t *testing.T) {
 	}
 }
 
-// holdTheWriteLock borrows a connection from the pool the product opened, begins a transaction on it,
-// writes one log row, and leaves that transaction open: the state a save meets when a second connection
-// has written and not committed. The row goes into `logs`, which neither the access save nor either read
-// here touches, so the only thing they contend for is the database's write lock. The holder is rolled
-// back when the test ends.
+// holdTheWriteLock borrows a connection from the pool the product opened, begins a
+// transaction on it, writes one log row, and leaves it open: the state a save meets
+// when a second connection has written and not committed. The row goes into `logs`,
+// which neither the access save nor either read here touches, so the only thing they
+// contend for is the database's write lock; the holder rolls back when the test ends.
 func holdTheWriteLock(t *testing.T, db *sql.DB) {
 	t.Helper()
 
@@ -233,19 +231,17 @@ func holdTheWriteLock(t *testing.T, db *sql.DB) {
 	})
 }
 
-// TestAReconcilingSaveIsRefusedAtItsBeginWhenTheWriteLockIsHeld pins where a writing transaction takes
-// the write lock, because that decides whether a busy database is a wait the server honours.
+// Where a writing transaction takes the write lock decides whether a busy database
+// is a wait the server honours: a reconciling save reads the identities it holds
+// before it replaces them, a read inside a transaction holds the read lock, and a
+// transaction holding the read lock may not wait for the write lock. So the write
+// lock is taken at the begin, and a busy database refuses the save there, naming the
+// transaction, never a statement.
 //
-// A reconciling save reads the identities the store holds before it replaces them, and a read inside a
-// transaction takes the database's read lock. A transaction holding the read lock is not allowed to wait
-// for the write lock, so a save that reads first can never spend the ten-second busy timeout the
-// connection string promises: it is refused the moment it writes, and the report names a statement. The
-// write lock is therefore taken at the begin, before the read, and the refusal a busy database produces
-// names the transaction that could not start.
-//
-// The arrangement is the one a contended whole-suite run produces: a second connection has written and
-// not committed, and the submitted access list is not the list the store holds, so the first thing the
-// save writes is the delete of the row the submission dropped.
+// The arrangement is the one a contended whole-suite run produces: a second
+// connection has written and not committed, and the submitted access list is not
+// the list the store holds, so the first thing the save writes is the delete of the
+// row the submission dropped.
 func TestAReconcilingSaveIsRefusedAtItsBeginWhenTheWriteLockIsHeld(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -300,15 +296,11 @@ func TestAReconcilingSaveIsRefusedAtItsBeginWhenTheWriteLockIsHeld(t *testing.T)
 	}
 }
 
-// TestAReadTransactionIsNotHeldUpByAConnectionHoldingTheWriteLock pins the half of the same rule that
-// keeps the server serving: the write lock belongs to the transactions that write.
-//
-// Both reads here run inside a transaction because the product wants their statements to agree with each
-// other. GetCall reads a call with its audio, its frequencies, its source units and its patches in one
-// transaction, so a listener cannot see the call and then find its frequencies gone; the catalog read
-// brings the systems, talkgroups, sites and units back as the one configuration every save announces.
-// Neither is a save. A read that asked for the write lock at its begin would put every listener's call
-// fetch behind whichever writer is running, and the busy timeout would become the time a listener waits.
+// The half of the same rule that keeps the server serving: the write lock belongs
+// to the transactions that write. Both reads here run inside a transaction so
+// their statements agree with each other — a listener never sees a call and then
+// finds its frequencies gone — but a read that asked for the write lock at its
+// begin would put every listener behind whichever writer is running.
 func TestAReadTransactionIsNotHeldUpByAConnectionHoldingTheWriteLock(t *testing.T) {
 	fixture := newCallsFixture(t)
 

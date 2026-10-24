@@ -41,17 +41,15 @@ func schemaFor(dialect Dialect) ([]string, error) {
 	}
 }
 
-// ApplySchema creates the tables the server works with, on a database that may already have them.
+// ApplySchema creates the tables the server works with, on a database that
+// may already have them: every statement is `IF NOT EXISTS`, so it runs
+// safely on every start and neither server changes the other's schema; why
+// the statements are a copy of the legacy ones lives in the
+// schema-copy-idempotence maintainer note.
 //
-// It is safe to run on every start, which is what lets this server open a database the legacy
-// server created — and lets the legacy server open one this server wrote — without either of them
-// changing the other's schema. Every statement is `IF NOT EXISTS`, so a database that already has
-// the tables is left exactly as it was, down to the definitions themselves.
-//
-// The statements are applied in one transaction, as the legacy server does. On MySQL and MariaDB
-// that is a formality rather than a guarantee: a data-definition statement commits the transaction
-// it runs in, so a failure partway through leaves the earlier tables created on those two backends
-// just as it does in the legacy server.
+// They run in one transaction, as the legacy server applies them — on MySQL
+// and MariaDB a formality, since a data-definition statement commits the
+// transaction it runs in.
 func ApplySchema(ctx context.Context, db *sql.DB, dialect Dialect) error {
 	schema, err := schemaFor(dialect)
 	if err != nil {
@@ -60,9 +58,10 @@ func ApplySchema(ctx context.Context, db *sql.DB, dialect Dialect) error {
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		// The legacy server skips the whole schema here and goes on to fail at its first
-		// migration with a message about a table it was never told to create. A database that
-		// cannot even start a transaction is reported as that, instead.
+		// The legacy server skips the whole schema here and goes on to fail
+		// at its first migration with a message about a table it was never
+		// told to create. A database that cannot even start a transaction is
+		// reported as that, instead.
 		return fmt.Errorf("schema.apply: %w", err)
 	}
 

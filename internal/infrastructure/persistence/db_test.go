@@ -57,12 +57,8 @@ func TestOpenSqliteEnforcesForeignKeysAndWaitsForABusyDatabase(t *testing.T) {
 	}
 }
 
-// TestOpenSqliteUsesTheLegacyConnectionPool pins the pool the legacy server runs with: at most
-// 25 connections, and all of them kept for reuse.
-//
-// The idle half is worth pinning by behavior rather than by reading the setting back: a pool that
-// kept only the default two idle connections would close twenty-three of the twenty-five the
-// legacy server holds ready, and the way that shows up is connections being closed for being idle.
+// The pool matches the legacy server's: twenty-five connections held ready,
+// none closed for being idle.
 func TestOpenSqliteUsesTheLegacyConnectionPool(t *testing.T) {
 	db, err := Open(Settings{
 		Dialect:  DialectSqlite,
@@ -126,11 +122,9 @@ func TestOpenRejectsAnUnknownDatabaseTypeWithoutOpeningAnything(t *testing.T) {
 	}
 }
 
-// TestSqliteDataSourceCarriesTheLegacyPragmasAndTheWritePosture pins the whole sqlite connection
-// string, because a deployment's ini file is not rewritten when it swaps one server for this one. The two
-// pragmas are the legacy server's, kept character for character down to the encoded `=`, and the begin mode
-// is this server's own addition: a save that reads what it is about to replace has to hold the write lock
-// before it reads, or the busy timeout the pragmas promise is a wait it is not allowed to make.
+// The sqlite connection string carries the legacy pragmas character for
+// character, down to the encoded `=`, plus this server's own `_txlock=immediate`
+// save posture.
 func TestSqliteDataSourceCarriesTheLegacyPragmasAndTheWritePosture(t *testing.T) {
 	_, dsn, err := dataSourceName(Settings{Dialect: DialectSqlite, FilePath: "/var/lib/rdio-scanner/rdio-scanner.db"})
 	if err != nil {
@@ -161,11 +155,8 @@ func TestMysqlAndMariadbDataSourcesAreTheLegacyOne(t *testing.T) {
 		t.Errorf("driver = %q, want MariaDB served by the mysql driver, as the legacy server does", driver)
 	}
 
-	// The legacy option set, plus clientFoundRows, written the way the
-	// driver itself writes it: the driver's FormatDSN orders its parameters,
-	// and the set it produces is the legacy set — same user, host, database, sql_mode,
-	// found-rows — with nothing added, so a deployment that opts in to nothing connects
-	// exactly as it connects today.
+	// The DSN is the legacy option set plus clientFoundRows, written in the
+	// driver's own FormatDSN form.
 	const want = "rdio:secret@tcp(db.internal:3306)/rdio-scanner?clientFoundRows=true&sql_mode=ANSI_QUOTES"
 
 	if dsn != want {
@@ -206,10 +197,9 @@ func TestPostgresqlDataSourceIsTheLegacyOne(t *testing.T) {
 	}
 }
 
-// TestMysqlAndMariadbDataSourcesCarryClientFoundRows:
-// the mysql driver reports changed rows, not found rows, so an option update that
-// writes the same value reports nothing and the save inserts a duplicate row for every
-// key. The data source has to ask for found rows.
+// The mysql driver reports changed rows, not found rows, so an option save that
+// writes the same value would insert a duplicate row; the data source asks for
+// found rows.
 func TestMysqlAndMariadbDataSourcesCarryClientFoundRows(t *testing.T) {
 	_, dsn, err := dataSourceName(Settings{
 		Dialect:  DialectMysql,
@@ -233,9 +223,8 @@ func TestMysqlAndMariadbDataSourcesCarryClientFoundRows(t *testing.T) {
 	}
 }
 
-// TestMysqlDataSourceCarriesTheTransportOptionsTheOperatorNames: the operator opts in to TLS and a connect timeout by name; the data source
-// carries them in the form the mysql driver reads them, and a deployment that names
-// nothing carries neither.
+// Transport options the operator names — TLS and a connect timeout — reach the
+// mysql data source in the form the driver reads; naming nothing carries neither.
 func TestMysqlDataSourceCarriesTheTransportOptionsTheOperatorNames(t *testing.T) {
 	_, dsn, err := dataSourceName(Settings{
 		Dialect:        DialectMysql,
@@ -286,7 +275,7 @@ func TestMysqlDataSourceCarriesTheTransportOptionsTheOperatorNames(t *testing.T)
 	}
 }
 
-// TestPostgresqlDataSourceCarriesTheTransportOptionsTheOperatorNames: the postgres twin of the same opt-in, in the form pgx reads.
+// The postgres twin of the same transport opt-in, in the form pgx reads.
 func TestPostgresqlDataSourceCarriesTheTransportOptionsTheOperatorNames(t *testing.T) {
 	_, dsn, err := dataSourceName(Settings{
 		Dialect:        DialectPostgresql,
@@ -325,10 +314,9 @@ func TestPostgresqlDataSourceCarriesTheTransportOptionsTheOperatorNames(t *testi
 	}
 }
 
-// TestSqliteDataSourceEscapesThePathTheOperatorNames: the
-// connection string is a URL, and a database path with a space, a `#`, or a `?` in
-// it — the legacy install lives under "Rdio Scanner" — is a path, not a query. The
-// path is escaped, and the driver reads back the path the operator named.
+// The connection string is a URL, so the database path the operator names —
+// the legacy install lives under "Rdio Scanner" — is escaped, and the driver
+// reads back the path as named.
 func TestSqliteDataSourceEscapesThePathTheOperatorNames(t *testing.T) {
 	const path = "/var/lib/Rdio Scanner/rdio#scanner.db"
 
@@ -351,10 +339,8 @@ func TestSqliteDataSourceEscapesThePathTheOperatorNames(t *testing.T) {
 	}
 }
 
-// TestPostgresqlDataSourceEscapesCredentialsTheOperatorNames:
-// a password with an `@`, a `/`, or a `%` in it is a password, not a piece of the
-// connection string. The URL form escapes it, and the driver reads back the
-// credential the operator named.
+// A password with an `@`, a `/`, or a `%` in it is escaped in the URL, and the
+// driver reads back the credential the operator named.
 func TestPostgresqlDataSourceEscapesCredentialsTheOperatorNames(t *testing.T) {
 	_, dsn, err := dataSourceName(Settings{
 		Dialect:  DialectPostgresql,

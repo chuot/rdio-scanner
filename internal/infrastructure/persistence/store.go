@@ -63,12 +63,13 @@ func (s store) exec(ctx context.Context, query string, args ...any) (sql.Result,
 	return s.db.ExecContext(ctx, s.dialect.bind(query), args...)
 }
 
-// begin starts the single transaction a reconciling save runs in. Every legacy `Write` is one
-// transaction, and a save that left half of a collection stored is one the next save would read
-// back as the configuration.
+// begin starts the single transaction a reconciling save runs in. Every legacy
+// `Write` is one transaction, and a save that left half of a collection stored
+// is one the next save would read back as the configuration.
 //
-// It is begun with the write posture the sqlite connection string carries, which is what a save needs:
-// the write lock is held before the save reads the rows it is about to replace. A read belongs here as
+// It is begun with the write posture the sqlite connection string carries — the
+// write lock is held before the save reads, which is what a save needs; the why
+// lives in the sqlite-save-posture maintainer note. A read belongs here as
 // little as a save belongs in beginRead.
 func (s store) begin(ctx context.Context) (transaction, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -79,18 +80,14 @@ func (s store) begin(ctx context.Context) (transaction, error) {
 	return transaction{tx: tx, store: s}, nil
 }
 
-// beginRead starts the transaction a read runs in — one that reads several tables and needs what it
-// read to agree with itself, and writes nothing.
+// beginRead starts the transaction a read runs in — one that reads several
+// tables, needs what it read to agree with itself, and writes nothing.
 //
-// It asks the driver for a read-only transaction, and the driver begins a transaction asked for that
-// way without the connection string's write posture. That is the whole of the difference: the rule the
-// two share is that a save holds the write lock before it reads, and a read does not ask for the write
-// lock at all. A server that took the write lock to answer a read would put every listener's call fetch
-// behind whichever writer happened to be running, and the busy timeout a busy database is met with would
-// become the time a listener waits.
-//
-// So this is for reads only, and a save that used it would be a save allowed to read before it held the
-// lock — the exact refusal the write posture exists to end.
+// It asks the driver for a read-only transaction, and the driver begins one
+// asked for that way without the connection string's write posture; why that
+// keeps readers out of the write lock lives in the sqlite-save-posture
+// maintainer note. So this is for reads only: a save that used it would be a
+// save allowed to read before it held the write lock.
 func (s store) beginRead(ctx context.Context) (transaction, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
@@ -126,22 +123,16 @@ func (t transaction) rollback() {
 	t.tx.Rollback()
 }
 
-// bind writes one query for the dialect it is about to run on.
+// bind writes one query for the dialect it is about to run on: every query in
+// this package is written once with `?` placeholders, and only PostgreSQL needs
+// them numbered, so an adapter never carries two copies of a statement; why
+// that replaces the legacy server's per-backend `fmt.Sprintf` SQL lives in the
+// placeholder-binding maintainer note.
 //
-// Every query in this package is written once, with `?` placeholders, and only PostgreSQL needs
-// them numbered. Doing the rewrite here means an adapter never has to carry two copies of a
-// statement, which is how the legacy server's `fmt.Sprintf` SQL — a different string per backend,
-// with the values already inside it — stays out of this refactor.
-//
-// It is a scan rather than a parser, and it is safe for the queries this package writes: a `?`
-// inside a quoted identifier or a quoted literal is copied verbatim, and no query here puts a
-// placeholder inside a literal in the first place.
-//
-// The invariant the scan relies on, pinned by a test: SQL writes a quote inside a
-// literal as a doubled quote — `”` — and the scan reads a doubled pair as the end of one quoted
-// span and the start of the next. A literal like `'it”s'` is copied whole, a `?` inside it is
-// copied as the literal's own character, and the numbering counts only the placeholders outside
-// literals.
+// It is a scan rather than a parser, and it relies on one invariant pinned by a
+// test: SQL writes a quote inside a literal as a doubled quote, so a doubled
+// pair ends one quoted span and starts the next — a literal like `it”s?x` is
+// copied whole, and the numbering counts only the placeholders outside literals.
 func (d Dialect) bind(query string) string {
 	if d != DialectPostgresql {
 		return query
@@ -178,12 +169,10 @@ func (d Dialect) bind(query string) string {
 	return out.String()
 }
 
-// statementError reports a statement that failed, in the shape the legacy server's log lines have
-// always had: `section.operation: cause in <statement>`.
-//
-// The statement it names is the parameterized one, which is not the string the legacy server
-// printed — the legacy server printed its values already inside the statement. The operation name
-// and the cause are the same words; only the statement is honest about what was actually run.
+// statementError reports a statement that failed, in the shape the legacy
+// server's log lines always had: `section.operation: cause in <statement>`.
+// The statement named is the parameterized one, not the legacy string with
+// its values already inside it.
 func statementError(section, operation string, err error, query string) error {
 	return fmt.Errorf("%s.%s: %s in %s", section, operation, err, query)
 }
@@ -194,10 +183,9 @@ func operationError(section, operation string, err error) error {
 	return fmt.Errorf("%s.%s: %s", section, operation, err)
 }
 
-// placeholders is the right number of `?` for a list of values. The legacy server built its
-// `IN (...)` lists by marshaling the identifiers into JSON and turning the brackets back into
-// parentheses, which put the values inside the statement; this is the same list with the values
-// kept outside it, bound as parameters.
+// placeholders is the right number of `?` for a list of values bound as
+// parameters; the legacy server put the same list's values inside the
+// statement by turning a JSON array's brackets into parentheses.
 func placeholders(count int) string {
 	return strings.TrimSuffix(strings.Repeat("?, ", count), ", ")
 }
@@ -262,10 +250,9 @@ func parseScope(text string) domain.AccessScope {
 }
 
 // storedIdentities asks the table, in one statement, which of the submitted
-// identities it already holds. The per-row COUNT the legacy server ran
-// inside the save's transaction cost one round trip per submitted row; one IN
-// list costs one. An id of zero is a row the table will assign, so it is not
-// asked about, and a list with no submitted identities costs no statement at all.
+// identities it already holds: one IN list where the legacy server ran one
+// COUNT per submitted row. An id of zero is a row the table will assign, so
+// it is not asked about, and a list with none costs no statement at all.
 func storedIdentities(ctx context.Context, tx transaction, section, operation, table, idColumn string, ids []int64) (map[uint64]bool, error) {
 	stored := map[uint64]bool{}
 
