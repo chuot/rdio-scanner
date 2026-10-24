@@ -27,20 +27,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The migration archive is the table that holds every v6 row the migration pass read and could not
-// carry, so that dropping a v6 table never destroys a row quietly.
-//
-// It lives in the migration pass and not in the dialect schemas for the reason recorded for
-// the log indexes:
-// ApplySchema's statements are the legacy server's, and a database the other server wrote has to come
-// out of them exactly as it went in — a new table included. The step that owns the archive runs after
-// the schema and before any v6 table is read, so every database this server starts on gains it, fresh
-// or inherited, and the legacy server simply never sees a table it does not know.
-//
-// MySQL is the reason the table has three spellings again: it wants a sized column where the index
-// reaches (tableName), and a TEXT column in a unique index needs a prefix length it would rather not
-// have to state. The sized column is the only difference that matters; the row means the same thing
-// on every backend.
+// The migration archive holds every v6 row the migration pass read and could not carry, so that
+// dropping a v6 table never destroys a row quietly. Why the table lives in the migration pass, why
+// it has three spellings, and how its writes behave is in the migration-archives maintainer note.
 const (
 	migrationArchiveTableSqlite = `CREATE TABLE IF NOT EXISTS "migrationArchive" (
     "archiveId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -69,19 +58,15 @@ const (
     "archivedAt" bigint NOT NULL
   )`
 
-	// The unique index is what holds each left-behind row exactly once: a v6 table that survived
-	// because a row of it could not be read is re-read on the next start, and its already-archived
-	// rows archive again as nothing. It is probed rather than asked for, because MySQL has no
-	// `CREATE INDEX IF NOT EXISTS` and the same lines have to work on all four backends.
+	// The unique index holds each left-behind row exactly once across re-reads of a survived v6
+	// table, and is probed rather than asked for because MySQL has no `CREATE INDEX IF NOT EXISTS`.
 	migrationArchiveIndexSqlite   = `CREATE UNIQUE INDEX "migration_archive_table_row" ON "migrationArchive" ("tableName","rowId")`
 	migrationArchiveIndexServer   = `CREATE UNIQUE INDEX "migration_archive_table_row" ON "migrationArchive" ("tableName","rowId")`
 	migrationArchiveIndexPostgres = `CREATE UNIQUE INDEX "migration_archive_table_row" ON "migrationArchive" ("tableName","rowId")`
 )
 
-// ensureMigrationArchive gives the database the table the pass archives into.
-//
-// It is idempotent the way every other step of the startup pass is: the table is asked for with
-// `IF NOT EXISTS`, and the index is probed first, so a start after a start adds nothing.
+// ensureMigrationArchive gives the database the archive table and its unique index, idempotent the
+// way every other step of the startup pass is.
 func ensureMigrationArchive(ctx context.Context, s store) error {
 	table, index := migrationArchiveTableSqlite, migrationArchiveIndexSqlite
 
@@ -140,13 +125,8 @@ func hasMigrationArchiveIndex(ctx context.Context, s store) (bool, error) {
 }
 
 // archiveRow writes one row the pass read and could not carry into the archive, with the reason in
-// the language of the system and the original values as the pass read them.
-//
-// The insert is conflict-tolerant against the (tableName, rowId) index on purpose: a v6 table that
-// survived because a row of it could not be read is re-read on every later start, and its
-// already-archived rows archive again as nothing rather than colliding. A failure the archive itself
-// refuses — a missing table, a value that will not bind — is returned, not swallowed: quietly losing
-// the record of a lost row is the exact defect this feature exists to end.
+// the language of the system and the original values as the pass read them. The conflict tolerance
+// and the refuse-or-return posture are in the migration-archives maintainer note.
 func archiveRow(ctx context.Context, tx transaction, tableName string, rowId int64, reason string, contents any) error {
 	statement := archiveInsertStatement(tx.store.dialect)
 
@@ -174,9 +154,8 @@ func archiveInsertStatement(dialect Dialect) string {
 	}
 }
 
-// archiveContents is the original row as JSON, exactly as the pass read it. Binary columns — the v6
-// call's audio is the one that matters — arrive base64-encoded, which is what makes an archived call
-// recoverable from the contents column alone.
+// archiveContents is the original row as JSON, exactly as the pass read it; the contents fidelity
+// is in the migration-archives maintainer note.
 func archiveContents(row any) string {
 	b, err := json.Marshal(row)
 	if err != nil {
@@ -188,15 +167,8 @@ func archiveContents(row any) string {
 	return string(b)
 }
 
-// migrationArchiver is one migration's record of the rows it read and could not carry.
-//
-// Every row goes into the archive table inside the transaction the migration is already in, so that the
-// record of a lost row commits or rolls back together with the rows the migration carried — which is the
-// reason the archive is written by the pass rather than after it.
-//
-// The lines are held until the table's rows have all been read, because the summary names a count the
-// migration only knows at the end, and an operator reading the log needs the count before the list: the
-// shape the startup damage report uses.
+// migrationArchiver is one migration's record of the rows it read and could not carry. Its
+// transaction posture and summary reporting are in the migration-archives maintainer note.
 type migrationArchiver struct {
 	ctx      context.Context
 	tx       transaction
@@ -214,17 +186,10 @@ func archiving(ctx context.Context, tx transaction, progress Progress, table, on
 }
 
 // skip keeps the record of one v6 row the migration read and could not carry: the row goes into the
-// archive with the reason the migration has for it, and the same reason is held for the operator at warn
-// level so that the log view names it.
-//
-// `named` is the row in the language of the system — `talkgroup 204 "Orphan"`, `call 705`,
-// `the config row "options"` — and `reason` is the tail of that sentence, which is also what the
-// archive's reason column holds.
-//
-// An archive the database itself refuses is returned rather than reported and carried on. The
-// alternative is the defect this pass exists to end: the v6 table dropped with the row in it and no
-// record left behind. Returning rolls the table's transaction back, so the v6 table survives intact,
-// the pass stops, and the server says why it will not start.
+// archive with the reason, and the reason is held for the operator at warn level. `named` is the row
+// in the language of the system — `talkgroup 204 "Orphan"`, `call 705` — and `reason` is the tail of
+// that sentence, which is also what the archive's reason column holds. The refuse-and-rollback
+// posture is in the migration-archives maintainer note.
 func (a *migrationArchiver) skip(rowId int64, named, reason string, contents any) error {
 	if err := archiveRow(a.ctx, a.tx, a.table, rowId, reason, contents); err != nil {
 		return err
