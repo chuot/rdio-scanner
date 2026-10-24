@@ -25,14 +25,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestAppendLogStoresAMessageContainingSingleQuotes is a preserved quirk, the one defect this task is allowed to
-// fix.
-//
-// The legacy `server/log.go` `LogEvent` interpolates the message into its `INSERT` with `fmt.Sprintf`, so a
-// message containing a single quote produces broken SQL. Every line that names a failed statement
-// contains the statement, and therefore contains quotes: the insert fails, `LogEvent` returns the
-// error, and every caller discards it — so the administrator's log view is missing exactly the
-// entries that explain a failed save. The parameterized insert stores them.
+// A message containing single quotes stores: the legacy insert interpolated the
+// message raw, so every line naming a failed statement produced broken SQL and the
+// error was discarded.
 func TestAppendLogStoresAMessageContainingSingleQuotes(t *testing.T) {
 	db := openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options")
 	logs := NewLogs(db, DialectSqlite)
@@ -62,9 +57,7 @@ func TestAppendLogStoresAMessageContainingSingleQuotes(t *testing.T) {
 	}
 }
 
-// TestAppendLogStoresAMessageContainingSingleQuotesAgainstALegacyDatabase runs the same fix over a
-// database the legacy server wrote, which is the case the requirement is about: the log view a deployment
-// already has, and the line that has never been able to appear in it.
+// The same quote fix over a database the legacy server wrote.
 func TestAppendLogStoresAMessageContainingSingleQuotesAgainstALegacyDatabase(t *testing.T) {
 	db := openMigratedLegacyDatabase(t)
 	logs := NewLogs(db, DialectSqlite)
@@ -147,8 +140,7 @@ func TestSearchLogsReturnsTheEntriesTheLegacyServerStored(t *testing.T) {
 	}
 }
 
-// TestAppendLogReadsBackTheInstantItStored pins the millisecond rule: every timestamp in this
-// schema is Unix milliseconds, and an entry's own instant is what is stored.
+// The entry's own instant reads back as Unix milliseconds.
 func TestAppendLogReadsBackTheInstantItStored(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
@@ -295,9 +287,7 @@ func TestSearchLogsStartsAtTheRequestedOffset(t *testing.T) {
 	}
 }
 
-// TestSearchLogsReturnsNoRowsForAnExplicitZeroLimit pins the paging rule the fakes carry: a limit
-// of zero asks for no rows at all, which is what the stored query does with it, while the count is
-// still the whole match.
+// An explicit zero limit selects no rows; the count is still the whole match.
 func TestSearchLogsReturnsNoRowsForAnExplicitZeroLimit(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
@@ -359,8 +349,8 @@ func TestSearchLogsKeepsOnlyTheRequestedLevel(t *testing.T) {
 	}
 }
 
-// TestSearchLogsAppliesTheAscendingDateWindow pins the window `domain.LogSearch` models: the
-// submitted instant truncated to the minute, running forward a full day.
+// The ascending date window: the submitted instant truncated to the minute, running
+// forward a full day.
 func TestSearchLogsAppliesTheAscendingDateWindow(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
@@ -400,8 +390,8 @@ func TestSearchLogsAppliesTheAscendingDateWindow(t *testing.T) {
 	}
 }
 
-// TestSearchLogsAppliesTheDescendingDateWindow pins the other half of the asymmetry: a day back,
-// and then back again by the submitted hour and minute.
+// The descending date window: a day back, then back again by the submitted hour and
+// minute.
 func TestSearchLogsAppliesTheDescendingDateWindow(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
@@ -442,10 +432,8 @@ func TestSearchLogsAppliesTheDescendingDateWindow(t *testing.T) {
 	}
 }
 
-// TestSearchLogsCountsARowTheLegacyServerLeftOutOfTheResults pins a legacy read rule rather than a
-// fix: `server/log.go` `Search` counts every row the criteria matches, and then drops from the
-// results any row that carries no identity, no level, no message, or a timestamp that is not a
-// real instant.
+// Legacy read rule kept: a row with no identity, no level, no message, or an
+// unrealistic timestamp is dropped from the results while the count still includes it.
 func TestSearchLogsCountsARowTheLegacyServerLeftOutOfTheResults(t *testing.T) {
 	db := openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options")
 	logs := NewLogs(db, DialectSqlite)
@@ -584,14 +572,9 @@ func TestDeleteLogsBeforeReportsTheLegacyFailureShape(t *testing.T) {
 	}
 }
 
-// TestSearchLogsReportsTheSpanOfEverythingTheCriteriaMatch is what the administrator's log view asks
-// the server for: the earliest and latest instants among everything the criteria match, and not merely
-// the ends of the page that was shown. Paging is how an administrator moves through that span, so a
-// span taken from the page would move its ends every time the page changed.
-//
-// The legacy server reads the span with two queries of its own — the matching timestamps ascending and
-// descending — before it counts or pages anything, and this server asks the same three questions in the
-// same order.
+// The span is the earliest and latest instants of everything the criteria match, not
+// the ends of the page; the legacy reads it ascending then descending before counting or
+// paging, and the same three questions come in the same order here.
 func TestSearchLogsReportsTheSpanOfEverythingTheCriteriaMatch(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t), DialectSqlite)
 
@@ -621,16 +604,13 @@ func TestSearchLogsReportsTheSpanOfEverythingTheCriteriaMatch(t *testing.T) {
 		t.Errorf("the span stops at %v, want %v: the latest entry the criteria match, not the latest entry on this page", first.DateStop, whole.DateStop)
 	}
 
-	// The span is the whole match and not the page, so the ends of the span are not the ends of the
-	// entries that were returned.
+	// The ends of the span are not the ends of the returned page.
 	if first.DateStart.Equal(first.DateStop) {
 		t.Errorf("the span of five entries is a single instant %v, want the ends of everything the criteria match", first.DateStart)
 	}
 }
 
-// TestSearchLogsReportsTheSpanOfTheEntriesThatMatchTheLevelFilter pins the span against the same
-// criteria the log view submits, because the span belongs to the filtered set: an administrator who
-// asks for warnings only is shown the span of the warnings, and paging moves through those.
+// The span belongs to the filtered set: a level filter narrows it.
 func TestSearchLogsReportsTheSpanOfTheEntriesThatMatchTheLevelFilter(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t), DialectSqlite)
 
@@ -654,10 +634,7 @@ func TestSearchLogsReportsTheSpanOfTheEntriesThatMatchTheLevelFilter(t *testing.
 	}
 }
 
-// TestSearchLogsWithNothingToReportLeavesTheSpanUnset pins the shape an empty log view is answered
-// with. The legacy server leaves both ends at the zero time when nothing matches — and not at the Unix
-// epoch, which is what its call search leaves behind — and the administrator's log view shows that
-// instant.
+// With nothing to report both span ends stay at the zero time, not the Unix epoch.
 func TestSearchLogsWithNothingToReportLeavesTheSpanUnset(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t), DialectSqlite)
 
@@ -675,8 +652,7 @@ func TestSearchLogsWithNothingToReportLeavesTheSpanUnset(t *testing.T) {
 	}
 }
 
-// The log table stores which part of the server wrote an entry, and the log view can be filtered by
-// it and by a substring of the message.
+// Searching by the source column and by a substring of the message.
 func TestAppendLogStoresTheSourceAndTheSearchReadsItBack(t *testing.T) {
 	db := openMigratedLegacyDatabase(t, "logs")
 	logs := NewLogs(db, DialectSqlite)
@@ -704,8 +680,7 @@ func TestAppendLogStoresTheSourceAndTheSearchReadsItBack(t *testing.T) {
 	}
 }
 
-// TestSearchLogsBySource is the filter the feature exists to give an operator: everything one subsystem
-// said, and nothing another one said.
+// A source filter returns everything one subsystem said and nothing another one said.
 func TestSearchLogsBySource(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
 
@@ -739,12 +714,8 @@ func TestSearchLogsBySource(t *testing.T) {
 	}
 }
 
-// TestSearchLogsByTextMatchesASubstringOfTheMessage is the other half of diagnosing by subsystem: the one
-// path, call sign or URL the operator is chasing.
-//
-// The match is case-insensitive, and the % and _ of the submitted text match themselves: an operator
-// searching a directory mask or a talkgroup wildcard is looking for those characters, not asking the
-// database to interpret them.
+// A text search matches a substring of the message, case-insensitively, and the % and _
+// of the submitted text match themselves.
 func TestSearchLogsByTextMatchesASubstringOfTheMessage(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
 
@@ -787,9 +758,8 @@ func TestSearchLogsByTextMatchesASubstringOfTheMessage(t *testing.T) {
 	}
 }
 
-// TestSearchLogsCombinesTheCriteriaTheOperatorActuallySubmits is the shape of a real diagnosis: this
-// subsystem, this day, this bad, containing this word. Each row drops one criterion from the row above it,
-// so a criterion that silently matched nothing shows up as a count that did not move.
+// Combined criteria: subsystem, day, level, text. Each row drops one criterion from the
+// row above it, so a criterion that silently matched nothing shows as a count that did not move.
 func TestSearchLogsCombinesTheCriteriaTheOperatorActuallySubmits(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
 
@@ -806,8 +776,7 @@ func TestSearchLogsCombinesTheCriteriaTheOperatorActuallySubmits(t *testing.T) {
 		}
 	}
 
-	// The ascending window runs forward a full day from the submitted instant, so 15 March 09:00 covers
-	// the last two entries and not the first two.
+	// The ascending window runs forward a full day from the submitted instant.
 	at, _ := time.Parse(time.RFC3339, "2026-03-15T09:00:00Z")
 
 	for _, tc := range []struct {
@@ -848,9 +817,7 @@ func TestSearchLogsCombinesTheCriteriaTheOperatorActuallySubmits(t *testing.T) {
 	}
 }
 
-// TestAppendLogRefusesASourceThatIsNotANameOfThisServer keeps the vocabulary closed at the boundary the
-// entries are written through. Every writer reaches the vocabulary through a domain constant, so arriving
-// here with a name that is not one means a writer was added with a misspelling.
+// A source that is a name this server does not have is refused at the write boundary.
 func TestAppendLogRefusesASourceThatIsNotANameOfThisServer(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
 
@@ -870,10 +837,7 @@ func TestAppendLogRefusesASourceThatIsNotANameOfThisServer(t *testing.T) {
 	}
 }
 
-// Every entry this server writes names the part of the server that wrote it. The store is the one boundary
-// every writer reaches, so refusing an entry that names nothing is where the vocabulary is enforced: a writer
-// added later without a source fails at the write instead of quietly producing a row the log view can only
-// file under legacy.
+// An entry naming no source at all is refused at the write.
 func TestAppendLogRefusesAnEntryThatNamesNoPartOfTheServer(t *testing.T) {
 	db := openMigratedLegacyDatabase(t, "logs")
 	logs := NewLogs(db, DialectSqlite)
@@ -902,14 +866,12 @@ func TestAppendLogRefusesAnEntryThatNamesNoPartOfTheServer(t *testing.T) {
 	}
 }
 
-// A row the other server writes is not a refusal. Its insert names the columns it knows and never mentions
-// this one, so rows with no source exist permanently in a database this server inherited, and the read side
-// files them under legacy — which is exactly what an operator filtering for legacy is trying to find.
+// A row the other server writes names no source; the read side files it under legacy.
 func TestTheLogViewReadsBackARowWrittenWithoutTheSourceColumnAsLegacy(t *testing.T) {
 	db := openMigratedLegacyDatabase(t, "logs")
 	logs := NewLogs(db, DialectSqlite)
 
-	// The legacy server's own insert, which does not know the column exists.
+	// The legacy server's insert, which does not know the column exists.
 	if _, err := db.Exec(`INSERT INTO "logs" ("level", "message", "timestamp") VALUES (?, ?, ?)`,
 		"warn", "written by the other server", int64(1760000000000)); err != nil {
 		t.Fatalf("the legacy server's insert: %v", err)
@@ -933,15 +895,9 @@ func TestTheLogViewReadsBackARowWrittenWithoutTheSourceColumnAsLegacy(t *testing
 	}
 }
 
-// TestSearchLogsCannotReachAnEntryStoredWithNoInstant is the consequence of writing an entry without
-// asking the clock what time it is, which is what the legacy listener-count report does.
-//
-// The zero time reaches the column as -62135596800000, the instant Go calls year one. Two things then
-// happen to that entry in the log view, and both were observed while capturing the wire protocol: the
-// search drops it from the results, because the legacy read skips a row whose timestamp is not a real
-// instant, while the count it reports still includes it; and the span of the matching entries it does
-// show reaches back to year one, which is what makes a deployment's log view say the log begins in 1 AD.
-// Those are the rows an operator sees a count for and cannot find.
+// An entry written without asking the clock stores the zero time as -62135596800000, the
+// instant Go calls year one: the search drops it from the results while the count still
+// includes it, and the span of the entries it does show reaches back to year one.
 func TestSearchLogsCannotReachAnEntryStoredWithNoInstant(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
 
@@ -969,8 +925,7 @@ func TestSearchLogsCannotReachAnEntryStoredWithNoInstant(t *testing.T) {
 		t.Fatalf("an entry with no instant stores %d, want the year-one timestamp the deployments have", got)
 	}
 
-	// A search for the day the report was written cannot reach it at all: the window is a day, and the
-	// entry is not in any day.
+	// A day-window search cannot reach it at all: the entry is not in any day.
 	at, _ := time.Parse(time.RFC3339, "2026-03-14T09:00:00Z")
 
 	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{
@@ -988,8 +943,8 @@ func TestSearchLogsCannotReachAnEntryStoredWithNoInstant(t *testing.T) {
 		t.Errorf("the search for 14 March returned %q, want the stamped entry and not the report", page.Results[0].Message)
 	}
 
-	// An undated search counts both entries and shows one. The report is in the log and not on the screen,
-	// and the span the log view reports begins in year one.
+	// An undated search counts both entries and shows one, and the span begins in
+	// year one.
 	page, err = logs.SearchLogs(context.Background(), domain.LogSearch{Limit: domain.DefaultLogSearchLimit, Ascending: true})
 	if err != nil {
 		t.Fatalf("SearchLogs: %v", err)
@@ -1008,15 +963,9 @@ func TestSearchLogsCannotReachAnEntryStoredWithNoInstant(t *testing.T) {
 	}
 }
 
-// TestSearchLogsCountsTheEntriesOfEverySourceTheCriteriaMatch is the per-subsystem count the log view
-// offers the operator: where the noise is, before narrowing to it.
-//
-// The counts describe everything the criteria match and not the page that was returned, because the log
-// view pages through 200 entries at a time and the counts have to stay the same while the page moves. And
-// the source criterion does not restrict them: asking "how many of each" while already filtered to one
-// source answers one row, which is true and useless. So the search reports two totals — the narrowed match
-// the page is paged through, and the wider match the counts describe — and they are the same number
-// whenever no subsystem filter is submitted.
+// The per-source counts describe everything the criteria match and not the page, and the
+// source criterion does not restrict them; the search reports the narrowed total and the
+// wider total, the same number whenever no subsystem filter is submitted.
 func TestSearchLogsCountsTheEntriesOfEverySourceTheCriteriaMatch(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
 
@@ -1040,8 +989,8 @@ func TestSearchLogsCountsTheEntriesOfEverySourceTheCriteriaMatch(t *testing.T) {
 		what   string
 		search domain.LogSearch
 		want   []ports.LogSourceCount
-		// wantCount is the narrowed match the page is paged through; wantSum is the total of the match
-		// the counts describe. They are the same number whenever no subsystem filter is submitted.
+		// wantCount is the narrowed match; wantSum is the total of the wider match the
+		// counts describe.
 		wantCount uint64
 		wantSum   uint64
 	}{
@@ -1117,20 +1066,15 @@ func TestSearchLogsCountsTheEntriesOfEverySourceTheCriteriaMatch(t *testing.T) {
 	}
 }
 
-// TestSearchLogsReportsAContextCancelledMidIteration: a log search
-// whose read is cancelled while it is running is a search that did not complete. Today
-// the page loop treats the cancelled read as rows that had nothing to show — the scan
-// failure is skipped as a damaged row — and the administrator is answered a short page
-// with a success, as if the log held exactly that many entries.
+// A log search whose read is cancelled mid-iteration is a search that did not
+// complete, not a short page answered as a success.
 func TestSearchLogsReportsAContextCancelledMidIteration(t *testing.T) {
 	db := openSchemaDatabase(t)
 
 	defer db.Close()
 
-	// Enough entries that the cancellation lands while the page is being read: two
-	// hundred-odd thousand rows take hundreds of milliseconds to scan, the count
-	// and the source counts take milliseconds, and the cancel lands in between.
-	// The table is filled by doubling — one statement per doubling.
+	// Enough entries that the cancellation lands while the page is being read;
+	// the table is filled by doubling, one statement per doubling.
 	if _, err := db.Exec(`INSERT INTO "logs" ("level", "source", "message", "timestamp") VALUES ('info', 'server', 'entry under the cancelled search', 1791288000000)`); err != nil {
 		t.Fatalf("seeding the log entries: %v", err)
 	}
@@ -1144,10 +1088,8 @@ func TestSearchLogsReportsAContextCancelledMidIteration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go func() {
-		// The search counts the entries before it reads the page: the cancellation
-		// has to land while the page is being read, not on the count. The count of
-		// this table takes milliseconds; reading the twenty thousand entries the page
-		// was asked for takes hundreds — the cancel lands in between, mid-iteration.
+		// The search counts before it reads the page, so the cancellation lands
+		// mid-iteration and not on the count.
 		time.Sleep(50 * time.Millisecond)
 
 		cancel()

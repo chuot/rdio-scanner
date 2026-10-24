@@ -25,13 +25,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// Options is the server's options, held as the configuration in effect.
-//
-// `ReadOptions` answers with what the server is running with, not with what the `options` table
-// holds; `WriteOptions` replaces what the server runs with and then stores it; and
-// `ReloadOptions` is the legacy server's `Options.Read` — the re-derivation the administrator
-// password change runs, which resets the options to their defaults and applies the stored rows
-// on top.
+// Options is the server's options, held as the configuration in effect: `ReadOptions`
+// answers with what the server runs with, not what the `options` table holds, and
+// `WriteOptions` replaces what it runs with and then stores it, per the live configuration
+// in effect maintainer note.
 type Options struct {
 	store store
 
@@ -39,9 +36,8 @@ type Options struct {
 	loaded bool
 	live   domain.Options
 
-	// initialCredential is the credential the server accepts when the stored configuration has none,
-	// supplied by the composition root because making it is bcrypt's job and not this package's. See
-	// StoreInitialCredential.
+	// initialCredential is the credential the server accepts when the stored configuration has
+	// none, supplied by the composition root because making it is bcrypt's job.
 	initialCredential string
 }
 
@@ -53,10 +49,9 @@ const (
 	optionsInsertQuery = `INSERT INTO "options" ("key", "value") VALUES (?, ?)`
 )
 
-// optionRow is one stored option, with its value already decoded out of the JSON the table
-// carries. Option values are stored JSON-marshaled — `branding` is `"Fixture Dispatch"` with its
-// quotes and `adminPassword` is a quoted bcrypt hash — so they are read as JSON values and not
-// as raw text.
+// optionRow is one stored option, its value already decoded out of the JSON the table
+// carries: option values are stored JSON-marshaled, so they are read as JSON values and
+// not as raw text.
 type optionRow struct {
 	key   string
 	value any
@@ -67,19 +62,10 @@ func NewOptions(db *sql.DB, dialect Dialect) *Options {
 	return &Options{store: newStore(db, dialect)}
 }
 
-// StoreInitialCredential records the credential the server accepts when its stored configuration has
-// none, and keeps it in memory only.
-//
-// The legacy server generates a fresh hash of the default administrator password at every startup and
-// puts it in place before the stored rows are applied. It never writes that hash: a deployment that has
-// not changed the password has no adminPassword row at all, and the signing secret it generates at the
-// same time is regenerated at the next startup as well, so a session started before a restart does not
-// survive it. Writing the initial credential to make this easier would write the secret with it, and the
-// server would start keeping sessions across restarts the legacy server does not keep.
-//
-// The credential is supplied rather than computed here because bcrypt belongs to the password adapter:
-// this package can decide when a server needs a credential and hold the one it is given, but it cannot
-// make one.
+// StoreInitialCredential records the credential the server accepts when its stored
+// configuration has none, and keeps it in memory only: writing it would persist the signing
+// secret with it, per the live configuration in effect maintainer note. The credential is
+// supplied rather than computed because bcrypt belongs to the password adapter.
 func (options *Options) StoreInitialCredential(credential string) {
 	options.mutex.Lock()
 	defer options.mutex.Unlock()
@@ -90,11 +76,9 @@ func (options *Options) StoreInitialCredential(credential string) {
 // ReadOptions returns the options the server is currently running with. The first call is the
 // startup read: the defaults with the stored rows applied on top.
 func (options *Options) ReadOptions(ctx context.Context) (domain.Options, error) {
-	// The cache answers under the mutex, and the read that fills an empty cache
-	// runs outside it: the login handler, the retention pass, and the
-	// signing secret all read through here, and holding the mutex across the
-	// fetch of the stored rows stops the server's own configuration reads for
-	// the length of every statement.
+	// The cache answers under the mutex, and the fetch that fills an empty cache
+	// runs outside it: holding the mutex across stored-row statements stops the
+	// server's own configuration reads for the length of every statement.
 	options.mutex.Lock()
 
 	if options.loaded {
@@ -120,12 +104,9 @@ func (options *Options) ReadOptions(ctx context.Context) (domain.Options, error)
 	return next, nil
 }
 
-// WriteOptions makes the given options the ones the server runs with and then stores them.
-//
-// Nothing is read back afterwards, which is what the legacy server does with this one section:
-// `ConfigHandler` does `FromMap` then `Write` and never `Read`, so what the administrator is
-// answered after a save is what they submitted — including the duplicate-detection window the
-// stored rows cannot give back.
+// WriteOptions makes the given options the ones the server runs with and then stores them,
+// and the save answers with what was submitted: this section is never read back, per the
+// live configuration in effect maintainer note.
 func (options *Options) WriteOptions(ctx context.Context, next domain.Options) error {
 	// The submitted options take effect under the mutex; the rows are written
 	// outside it, as in `Accesses.SaveAccesses`.
@@ -141,10 +122,9 @@ func (options *Options) WriteOptions(ctx context.Context, next domain.Options) e
 	return nil
 }
 
-// ReloadOptions re-derives the options from what is stored and makes that what the server runs
-// with. It is the legacy `Options.Read`, and it is not a no-op: the re-derivation resets the
-// options to their defaults before it applies the stored rows, so an option stored under a name
-// the reader does not look for comes back as the default. The reload reset is about exactly this.
+// ReloadOptions re-derives the options from what is stored and makes that what the server
+// runs with: the re-derivation resets to the defaults before applying the stored rows, so
+// an option stored under a name the reader does not look for comes back as the default.
 func (options *Options) ReloadOptions(ctx context.Context) (domain.Options, error) {
 	// The re-derivation reads the stored rows outside the mutex;
 	// the options it produces take effect under it.
@@ -165,8 +145,8 @@ func (options *Options) ReloadOptions(ctx context.Context) (domain.Options, erro
 	return next, nil
 }
 
-// rederive is the legacy `Options.Read`: reset, then apply the stored rows in the order the
-// table returns them.
+// rederive reproduces the legacy `Options.Read`: reset, then apply the stored rows in the
+// order the table returns them.
 func (options *Options) rederive(ctx context.Context, from domain.Options) (domain.Options, error) {
 	rows, err := options.fetch(ctx)
 	if err != nil {
@@ -184,12 +164,9 @@ func (options *Options) rederive(ctx context.Context, from domain.Options) (doma
 	return next, nil
 }
 
-// fetch reads the stored options.
-//
-// A row that cannot be scanned, or whose value is not JSON, is skipped rather than failed, as
-// the legacy `Read` skips it: its loop `continue`s on a scan error and its unmarshal failures
-// are discarded inside each `case`, and the function returns nil whatever happened. Only the
-// query itself can fail the read.
+// fetch reads the stored options: a row that cannot be scanned, or whose value is not JSON,
+// is skipped rather than failed, as the legacy `Read` skips it. Only the query itself can
+// fail the read.
 func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 	rows, err := options.store.query(ctx, optionsSelectQuery)
 	if err != nil {
@@ -204,10 +181,9 @@ func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 		var key, value sql.NullString
 
 		if err := rows.Scan(&key, &value); err != nil {
-			// A row whose scan fails is skipped as the legacy skips a damaged row —
-			// unless the read itself failed: a cancelled context is felt at the scan,
-			// and a re-derivation over the rows that happened to survive is options
-			// nobody stored.
+			// A damaged row is skipped as the legacy skips it, but a cancelled
+			// context is not: re-deriving over the rows that happened to survive
+			// is options nobody stored.
 			if readErr := rows.Err(); readErr != nil {
 				return nil, statementError("options", "read", readErr, optionsSelectQuery)
 			}
@@ -232,10 +208,9 @@ func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 		out = append(out, optionRow{key: key.String, value: decoded})
 	}
 
-	// A read that ended early is not a table with fewer rows: the
-	// re-derivation applies defaults to every key the read did not reach, and the
-	// server ends up running with options nobody stored. The scan skips a damaged row
-	// the way the legacy does; the read's own failure is the caller's to hear.
+	// A read that ended early is not a table with fewer rows: the re-derivation
+	// would apply defaults to every key the read did not reach, so the read's own
+	// failure is the caller's to hear.
 	if err := rows.Err(); err != nil {
 		return nil, statementError("options", "read", err, optionsSelectQuery)
 	}
@@ -243,20 +218,11 @@ func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 	return out, nil
 }
 
-// resetOptions reproduces the reset `Options.Read` performs before it applies the stored rows.
-//
-// The legacy reset covers every option it has a default for except two: `branding` and `email`
-// are left alone, and so is the secret. A stored row replaces them in every database the legacy
-// server wrote, so the difference only shows when a row is missing — and then the legacy server
-// keeps the value it was already running with, which is what this does too. (`time12hFormat` was
-// in that leave-alone list too; the option is retired, so it is gone from the reset as well.)
-//
-// One value is deliberately not produced here: the legacy reset puts a freshly generated bcrypt
-// hash of the default administrator password in place before the stored rows are applied, so a
-// server whose options table has no `adminPassword` row still accepts the default password. bcrypt
-// belongs to the password adapter and not to this package, so the reset leaves the
-// credential empty and the re-derivation puts in whatever the composition root supplied through
-// StoreInitialCredential.
+// resetOptions reproduces the reset the legacy `Options.Read` performs before it applies
+// the stored rows: every option it has a default for is reset, except `branding`, `email`,
+// and the secret, which keep what the server was already running with. The credential stays
+// empty here — bcrypt belongs to the password adapter — and the re-derivation puts in what
+// StoreInitialCredential supplied, per the live configuration in effect maintainer note.
 func resetOptions(live domain.Options) domain.Options {
 	next := domain.DefaultOptions()
 
@@ -304,9 +270,9 @@ func applyOptionRow(options domain.Options, row optionRow) domain.Options {
 
 	// Retired options: `dimmerDelay`, `duplicateDetectionTimeframe`,
 	// `playbackGoesLive` and `time12hFormat` rows in a migrated legacy database are
-	// read and dropped. The dimmer delay lives in the scanner webapp, the duplicate
-	// window is the domain constant, playback always goes live, and the browser locale
-	// decides the time format.
+	// read and dropped — the scanner webapp owns the dimmer delay and the browser
+	// locale the time format, the duplicate window is the domain constant, and
+	// playback always goes live.
 
 	case "email":
 		if v, ok := row.value.(string); ok {
@@ -329,12 +295,9 @@ func applyOptionRow(options domain.Options, row optionRow) domain.Options {
 		}
 
 	case "secret":
-		// A stored secret is taken only at the length the server signs with, and a value that fails
-		// that rule is not taken at all. The legacy reader generated a fresh secret for anything
-		// unusable and never wrote it down, so a deployment that had never saved its configuration
-		// signed with an empty key and a legacy database holding an unusable secret got a different
-		// key on every start. Making a secret and putting it on record is now the startup use case's
-		// job.
+		// A stored secret is taken only at the length the server signs with, and a
+		// value that fails that rule is not taken at all: the reader no longer
+		// invents a secret, per the live configuration in effect maintainer note.
 		if v, ok := row.value.(string); ok {
 			options = options.AcceptSecret(v)
 		}
@@ -354,9 +317,8 @@ func applyOptionRow(options domain.Options, row optionRow) domain.Options {
 }
 
 // write stores the options the way the legacy `Options.Write` does: one transaction, and for
-// each key an update that becomes an insert when no row carries that key. The keys and their
-// order are the legacy ones, and `setOptionRow` is where the legacy helper's silence stops being
-// the contract's silence.
+// each key an update that becomes an insert when no row carries that key, in the legacy key
+// order. `setOptionRow` is where the legacy helper's silence stops being the contract's.
 func (options *Options) write(ctx context.Context, next domain.Options) error {
 	tx, err := options.store.begin(ctx)
 	if err != nil {
@@ -378,11 +340,9 @@ func (options *Options) write(ctx context.Context, next domain.Options) error {
 	return nil
 }
 
-// StoreSecret puts the signing secret the server issues its administrator sessions with on record.
-//
-// It writes the one option row and nothing else: saving the whole configuration as a side effect of
-// starting the server would persist values nobody asked to save. The legacy server had no such write,
-// which is why the secret it generated for an unusable stored one existed only until the process ended.
+// StoreSecret puts the signing secret the server issues its administrator sessions with on
+// record, writing the one option row and nothing else: saving the whole configuration as a
+// side effect of starting would persist values nobody asked to save.
 func (options *Options) StoreSecret(ctx context.Context, secret string) error {
 	const section, operation = "options", "storeSecret"
 
@@ -401,9 +361,8 @@ func (options *Options) StoreSecret(ctx context.Context, secret string) error {
 		return operationError(section, operation, err)
 	}
 
-	// The options this adapter reports are the ones the server runs with, so the secret it just put
-	// on record is the secret it reports from here on. Without this, a server that stored a secret at
-	// startup would keep signing with the empty one it had already read.
+	// The adapter reports the options the server runs with, so the secret just put
+	// on record is the secret it reports from here on.
 	options.mutex.Lock()
 	defer options.mutex.Unlock()
 
@@ -412,12 +371,9 @@ func (options *Options) StoreSecret(ctx context.Context, secret string) error {
 	return nil
 }
 
-// setOptionRow updates one option row and inserts it when no row carries that key, which is the shape
-// the legacy `set` helper had.
-//
-// The legacy helper reported nothing: a failed update was dropped and a failed insert was only printed,
-// so the legacy save answered success for options it never stored. The port contract is the opposite —
-// a failed persist is returned — which is what the fakes' `SaveErr` knob models and the configuration-in-effect rule requires.
+// setOptionRow updates one option row and inserts it when no row carries that key, the shape
+// the legacy `set` helper had, but unlike it a failed persist is returned: the legacy save
+// answered success for options it never stored, and the port contract is the opposite.
 func setOptionRow(ctx context.Context, tx transaction, operation, key string, value any) error {
 	const section = "options"
 
@@ -447,14 +403,9 @@ func setOptionRow(ctx context.Context, tx transaction, operation, key string, va
 	return nil
 }
 
-// optionRows is the key list the legacy `Options.Write` stores, in its order, plus the one key its
-// reader was looking for.
-//
-// The legacy list held sixteen keys and `Options.Read` looked for a stored `audioConversion` row among
-// them, so the audio-conversion mode the administrator chose was never on record: every re-derivation —
-// a restart, or the re-derivation a password change runs — answered the default mode. It is stored here
-// as the JSON number the reader already reads it as, in the alphabetical slot the legacy list's own
-// ordering gives it. Repaired rather than preserved by the owner's decision.
+// optionRows is the key list the legacy `Options.Write` stores, in its order, plus
+// `audioConversion`, which the legacy reader looked for but the legacy writer never stored —
+// its mode was never on record. Repaired rather than preserved by the owner's decision.
 func optionRows(options domain.Options) []optionRow {
 	return []optionRow{
 		{"adminPassword", options.AdminPasswordHash},

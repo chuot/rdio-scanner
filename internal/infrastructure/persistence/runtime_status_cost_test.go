@@ -22,18 +22,14 @@ import (
 	"time"
 )
 
-// The status view is a page an operator leaves open: the administration interface reads it again every
-// few seconds while the operator is looking at it, and stops when they are not. What one read costs is
-// therefore not one operator's cost — it is that cost multiplied by every open administration page on
-// the server, all day.
-//
-// These are the statements the read costs against the history, counted by the same driver wrapper the
-// package counts a save's round trips with. The live block of the same read costs nothing here at all:
-// it reads counters the server already holds, which is why it is not in this test.
+// The status view is a page an operator leaves open, so what one read costs is multiplied
+// by every open administration page on the server. These statements are counted by the same
+// driver wrapper the package counts a save's round trips with; the live block costs nothing
+// here because it reads counters the server already holds.
 
-// TestStatusReadCostsOneStatementPerTally names the whole read: two headline counts, the 24 hours, the
-// busiest talkgroups, the newest calls, and the log tally. Six tallies, six statements, whatever the
-// history holds.
+// The whole status read costs one statement per tally — two headline counts, the day
+// window, the busiest talkgroups, the newest calls, and the log tally: six tallies, six
+// statements, whatever the history holds.
 func TestStatusReadCostsOneStatementPerTally(t *testing.T) {
 	db, counted := openCountedSchemaDatabase(t)
 
@@ -50,8 +46,8 @@ func TestStatusReadCostsOneStatementPerTally(t *testing.T) {
 
 	base := time.Date(2026, 5, 11, 9, 0, 0, 0, time.UTC)
 
-	// A history with something in every hour of the window and on more than one talkgroup, so no tally
-	// here is measuring an empty table.
+	// A history with something in every hour of the window and on more than one
+	// talkgroup, so no tally measures an empty table.
 	for hour := 0; hour < 24; hour++ {
 		at := base.Add(-time.Duration(hour) * time.Hour)
 
@@ -60,8 +56,8 @@ func TestStatusReadCostsOneStatementPerTally(t *testing.T) {
 		}
 	}
 
-	// One call still waiting out its hold. Every tally here is built on the join that leaves held calls
-	// out of the history, and the read costs the same statements whether or not a hold is in the way.
+	// One call still waiting out its hold: every tally is built on the join that leaves
+	// held calls out, and the read costs the same statements either way.
 	held := fixture.storeCall(t, 10001, 1514000, base.Add(10*time.Minute))
 
 	fixture.delay(t, held.ID, base.Add(90*time.Minute))
@@ -99,8 +95,8 @@ func TestStatusReadCostsOneStatementPerTally(t *testing.T) {
 		t.Fatalf("TallyLogLevels: %v", err)
 	}
 
-	// The whole read, and each tally named on its own so that a read which grows says which one grew
-	// rather than leaving an operator to find it in a diff.
+	// The whole read, and each tally named on its own: a read that grows says which
+	// tally grew.
 	if total := counted.total(); total != 6 {
 		t.Errorf("one status read costs %d statements against the history, want 6: the read answers six tallies, and a page an operator leaves open must not cost more round trips than the figures it answers with", total)
 	}
@@ -122,9 +118,8 @@ func TestStatusReadCostsOneStatementPerTally(t *testing.T) {
 	}
 }
 
-// TestStatusReadCostsTheSameStatementsOnAnEmptyHistory is the same read against a server that has
-// recorded nothing: the shape of the read does not depend on how much the history holds, so a quiet
-// deployment is not cheaper in a way that hides what a busy one costs.
+// The same read against a server that has recorded nothing costs the same statements: the
+// shape of the read does not depend on how much the history holds.
 func TestStatusReadCostsTheSameStatementsOnAnEmptyHistory(t *testing.T) {
 	db, counted := openCountedSchemaDatabase(t)
 

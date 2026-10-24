@@ -26,21 +26,11 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// Systems is the stored system catalog: the repository adapter that owns a system and everything
-// hanging off it — its talkgroups, the talkgroupGroups rows that say which groups a talkgroup
-// belongs to, its sites, and its units — because the legacy server writes all of it inside one
-// system transaction (`server/system.go` `Systems.Write`, calling
-// `Sites.WriteTx`, `Talkgroups.WriteTx`, and `Units.WriteTx`).
-//
-// It is the configuration the server is running with, not a view of the tables: the catalog is
-// loaded once, `SaveSystems` replaces it with what was submitted before it stores anything, and a
-// save that stored successfully is followed by reading the stored rows back — which is how the
-// legacy server hands the identifiers its tables assigned to the next save and to the
-// configuration broadcast.
-//
-// The `server/…` names in this file are the legacy server's own files, which are not in this
-// repository. They are named so a reader can see which behavior is being mirrored, and they resolve
-// at git tree 02ae33d4651fee4c46a93bdcf574d0aead89e542.
+// Systems is the adapter for the stored system catalog: a system and everything under it —
+// talkgroups, their group memberships, sites, and units — all saved inside one system
+// transaction, per the systems aggregate transaction maintainer note. The catalog is the
+// configuration in effect: loaded once, replaced with what was submitted before storing, and
+// read back after a save that persisted.
 type Systems struct {
 	store store
 
@@ -59,8 +49,7 @@ func NewSystems(db *sql.DB, dialect Dialect) *Systems {
 }
 
 // AllSystems returns the systems the server is running with, with their talkgroups, sites, and
-// units loaded. The catalog is read from the database once and kept; a later read answers from
-// what is in effect, exactly as the legacy server answers from `Systems.List`.
+// units; the catalog is read once and later reads answer from what is in effect.
 func (systems *Systems) AllSystems(ctx context.Context) (domain.Systems, error) {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
@@ -80,13 +69,10 @@ func (systems *Systems) AllSystems(ctx context.Context) (domain.Systems, error) 
 	return loaded, nil
 }
 
-// SaveSystems reconciles the stored systems with the given ones and leaves the reconciled result
-// as what the server runs with.
-//
-// The submitted catalog becomes the live one before anything is stored, so a save that could not
-// be persisted is still in effect for the rest of the run, the legacy server's order of operations.
-// After a save that did persist, the stored rows are read back and cached: that re-read is what
-// assigns the identities the next save and the configuration broadcast use.
+// SaveSystems reconciles the stored systems with the given ones and leaves the
+// reconciled result as what the server runs with: the submitted catalog is live
+// before anything is stored, and a persisted save is followed by reading the
+// stored rows back, per the reconciling saves maintainer note.
 func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) error {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
@@ -100,9 +86,8 @@ func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) er
 
 	loaded, err := readSystems(ctx, systems.store)
 	if err != nil {
-		// The legacy server logs a failed re-read and carries on with whatever the partial read
-		// left in the list. Here the failure is reported to the caller, and what stays in effect
-		// is what was submitted.
+		// The legacy server logs a failed re-read and carries on with the partial read;
+		// here the failure is reported and what stays in effect is what was submitted.
 		return err
 	}
 
@@ -111,15 +96,14 @@ func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) er
 	return nil
 }
 
-// SaveSystemSites replaces the sites of one system: the submitted rows are renumbered
-// 1-based and reconciled with the stored rows, exactly as the whole-systems save does
-// them, and a system the store does not have is reported as ErrNotFound.
+// SaveSystemSites replaces the sites of one system, renumbered 1-based and reconciled
+// with the stored rows as the whole-catalog save does them; a system the store does not
+// have is reported as ErrNotFound.
 func (systems *Systems) SaveSystemSites(ctx context.Context, systemID uint64, sites domain.Sites) error {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
-	// The renumbering below is this save's own work, not a service to the caller:
-	// the submitted slice stays untouched.
+	// The renumbering below is this save's own work: the submitted slice stays untouched.
 	sites = append(domain.Sites{}, sites...)
 
 	for i := range sites {
@@ -143,14 +127,9 @@ func (systems *Systems) SaveSystemSites(ctx context.Context, systemID uint64, si
 	return nil
 }
 
-// SaveSystemSettings reconciles the systems table with the given systems and leaves the reconciled
-// result as what the server runs with, exactly as the whole-catalog save does, and writes nothing
-// under a system.
-//
-// The sites, talkgroups, and units under a system are written by the save of that level, for the
-// system that level shows. A save of the Systems section carries the system row's own fields and
-// leaves every level as the store holds it, so the section cannot answer for a level the operator
-// changed somewhere else — and cannot store back the rows that level deleted.
+// SaveSystemSettings reconciles the systems table alone — the same reconcile the
+// whole-catalog save performs — and writes nothing under a system, because the level
+// saves keep the rows the store holds for them.
 func (systems *Systems) SaveSystemSettings(ctx context.Context, next domain.Systems) error {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
@@ -173,16 +152,14 @@ func (systems *Systems) SaveSystemSettings(ctx context.Context, next domain.Syst
 }
 
 // SaveSystemTalkgroups replaces the talkgroups of one system, renumbering their order
-// and reconciling their group memberships. The blacklist the talkgroups section edits beside its
-// rows is stored in the same transaction: the save that drops a talkgroup stores the entry that
-// refuses it. A save that names no blacklist — the sites and units levels, and a talkgroups save
-// that did not touch the field — leaves the stored text alone.
+// and reconciling their group memberships. The blacklist edited beside the rows is stored in
+// the same transaction, so the save that drops a talkgroup also stores the entry that
+// refuses it; a save naming no blacklist leaves the stored text alone.
 func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint64, talkgroups domain.Talkgroups, blacklists *domain.Blacklists) error {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
-	// The renumbering is this save's own work: the caller's slice stays untouched
-	//.
+	// The renumbering is this save's own work: the caller's slice stays untouched.
 	talkgroups = append(domain.Talkgroups{}, talkgroups...)
 
 	for i := range talkgroups {
@@ -214,8 +191,7 @@ func (systems *Systems) SaveSystemUnits(ctx context.Context, systemID uint64, un
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
 
-	// The renumbering is this save's own work: the caller's slice stays untouched
-	//.
+	// The renumbering is this save's own work: the caller's slice stays untouched.
 	units = append(domain.Units{}, units...)
 
 	for i := range units {
@@ -240,7 +216,7 @@ func (systems *Systems) SaveSystemUnits(ctx context.Context, systemID uint64, un
 }
 
 // saveSystemLevel performs the shared part of the three per-level saves: one
-// transaction that checks the system exists, writes the level's rows, and commits. A
+// transaction that checks the system exists, writes the level's rows, and commits; a
 // system the table does not have is reported as ErrNotFound, which the REST layer
 // answers with 404.
 func saveSystemLevel(ctx context.Context, s store, systemID uint64, write func(transaction) error) error {
@@ -269,14 +245,10 @@ func saveSystemLevel(ctx context.Context, s store, systemID uint64, write func(t
 	return tx.commit()
 }
 
-// readSystems is the legacy `Systems.Read`: one transaction that reads the catalog and then reads
-// each system's sites, talkgroups, and units through the same transaction, and hands back the
-// result sorted by display order.
-//
-// That transaction is asked for as read-only. The catalog is what every configuration save announces
-// through, so this read runs on the path of every save and on the path of every page that shows the
-// configuration: asking for the write lock here would queue the catalog behind whichever save was running
-// and make the busy timeout the price of reading.
+// readSystems is the legacy `Systems.Read`: one transaction that reads the catalog and each
+// system's sites, talkgroups, and units through it, returning the result sorted by display
+// order; the transaction is asked for as read-only, per the systems aggregate transaction
+// maintainer note.
 func readSystems(ctx context.Context, s store) (domain.Systems, error) {
 	tx, err := s.beginRead(ctx)
 	if err != nil {
@@ -333,10 +305,9 @@ func readSystems(ctx context.Context, s store) (domain.Systems, error) {
 	return out.Ordered(), nil
 }
 
-// readSites is the legacy `Sites.ReadTx`. The stored `systemId` is what the query filters on, and
-// the site is given the system it was found under; the legacy server leaves its in-memory
-// `Site.SystemId` at zero because its read never names the column, which the legacy admin payload
-// then reports as `"systemId": 0`.
+// readSites is the legacy `Sites.ReadTx`: the stored `systemId` filters the query and the site
+// is given the system it was found under, per the patched systems catalog reads maintainer
+// note.
 func readSites(ctx context.Context, tx transaction, systemID uint64) (domain.Sites, error) {
 	const query = `SELECT "siteId", "label", "order", "siteRef" FROM "sites" WHERE "systemId" = ?`
 
@@ -369,12 +340,9 @@ func readSites(ctx context.Context, tx transaction, systemID uint64) (domain.Sit
 }
 
 // readTalkgroups is the legacy `Talkgroups.ReadTx`: the talkgroup columns plus its group
-// memberships aggregated out of `talkgroupGroups` in the same row.
-//
-// The two keys this read has to keep apart are `order` and `talkgroupRef`: the legacy server
-// marshals the display order out under the JSON key `"talkgroup"` while the table
-// column is `"order"`, and the reference clients identify the talkgroup by the column
-// `"talkgroupRef"`. Both are read from the column they are stored in, never from each other.
+// memberships aggregated out of `talkgroupGroups` in the same row; `order` and `talkgroupRef`
+// are read from the columns they are stored in, never from each other, per the patched systems
+// catalog reads maintainer note.
 func readTalkgroups(ctx context.Context, tx transaction, dialect Dialect, systemID uint64) (domain.Talkgroups, error) {
 	query := talkgroupsReadQuery(dialect)
 
@@ -442,10 +410,10 @@ func readUnits(ctx context.Context, tx transaction, systemID uint64) (domain.Uni
 	return out.Ordered(), nil
 }
 
-// talkgroupsReadQuery is the one statement in this file that has to be spelled two ways, because
-// the aggregate that folds a talkgroup's group rows into one value is named differently by the
-// backends — the same two constants the legacy `Talkgroups.ReadTx` switches between. The choice is
-// between constants this package owns; the value the query is filtered by is always a placeholder.
+// talkgroupsReadQuery is the one statement in this file spelled two ways: the aggregate that
+// folds a talkgroup's group rows into one value is named differently by the backends, per the
+// patched systems catalog reads maintainer note. The value the query is filtered by is always a
+// placeholder.
 func talkgroupsReadQuery(dialect Dialect) string {
 	aggregate := `GROUP_CONCAT(COALESCE(tg."groupId", 0))`
 
@@ -472,8 +440,8 @@ func parseGroupIDs(text string) []uint64 {
 
 // writeSystems is the legacy `Systems.Write`: one transaction that selects the stored identifiers,
 // deletes the ones the submitted list no longer names, and inserts or updates the rest — each
-// system together with its sites, talkgroups, and units. A failure anywhere in the aggregate
-// discards the whole systems section.
+// system together with its sites, talkgroups, and units; a failure anywhere discards the whole
+// section, per the systems aggregate transaction maintainer note.
 func writeSystems(ctx context.Context, s store, next domain.Systems) error {
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -487,10 +455,9 @@ func writeSystems(ctx context.Context, s store, next domain.Systems) error {
 		return err
 	}
 
-	// Deleting a system takes its talkgroups, sites, units, and recorded calls with it: every one
-	// of those tables references "systems" ON DELETE CASCADE, and the connection is opened with
-	// the pragma that enforces it. The legacy server names the child tables in its own delete
-	// statements, which the cascade has already emptied.
+	// Deleting a system takes its talkgroups, sites, units, and recorded calls with it:
+	// every one of those tables references "systems" ON DELETE CASCADE, which the
+	// connection's foreign-keys pragma enforces.
 	if removed := droppedIdentifiers(idsOfSystems(next), stored); len(removed) > 0 {
 		query := `DELETE FROM "systems" WHERE "systemId" IN (` + placeholders(len(removed)) + `)`
 
@@ -525,9 +492,8 @@ func writeSystems(ctx context.Context, s store, next domain.Systems) error {
 	return nil
 }
 
-// writeSystemSettings is the systems-section save: the same reconcile of the systems table that
-// the whole-catalog save performs, and nothing under a system. The levels keep the rows the store
-// holds for them, which is what the level sections write.
+// writeSystemSettings is the systems-section save: the same reconcile of the systems table
+// the whole-catalog save performs, and nothing under a system.
 func writeSystemSettings(ctx context.Context, s store, next domain.Systems) error {
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -616,9 +582,8 @@ func writeSystemBlacklists(ctx context.Context, tx transaction, systemID uint64,
 	return nil
 }
 
-// writeSites is the legacy `Sites.WriteTx`: the same reconcile, then insert or update, with the
-// system the save is writing for — not the one the submitted site happens to carry — stored as the
-// site's own.
+// writeSites is the legacy `Sites.WriteTx`: the same reconcile, then insert or update, with
+// the system being saved stored as the site's own — not the one the submitted site carries.
 func writeSites(ctx context.Context, tx transaction, systemID uint64, sites domain.Sites) error {
 	const storedQuery = `SELECT "siteId" FROM "sites" WHERE "systemId" = ?`
 
@@ -668,12 +633,9 @@ func writeSites(ctx context.Context, tx transaction, systemID uint64, sites doma
 	return nil
 }
 
-// writeTalkgroups is the legacy `Talkgroups.WriteTx`: reconcile the system's talkgroups, then
-// insert or update each one, then reconcile the `talkgroupGroups` rows that carry its groups.
-//
-// The update deliberately does not write `systemId`, exactly as the legacy update does: a submitted
-// talkgroup whose identifier is already stored under another system is updated where it already
-// lives instead of moved.
+// writeTalkgroups is the legacy `Talkgroups.WriteTx`: reconcile the system's talkgroups, insert
+// or update each one, then reconcile the `talkgroupGroups` rows that carry its groups; the update
+// never writes `systemId`, per the talkgroup save repairs maintainer note.
 func writeTalkgroups(ctx context.Context, tx transaction, dialect Dialect, systemID uint64, talkgroups domain.Talkgroups) error {
 	const storedQuery = `SELECT "talkgroupId" FROM "talkgroups" WHERE "systemId" = ?`
 
@@ -731,15 +693,9 @@ func writeTalkgroups(ctx context.Context, tx transaction, dialect Dialect, syste
 	return nil
 }
 
-// writeTalkgroupGroups reconciles one talkgroup's group memberships: the stored memberships the
+// writeTalkgroupGroups reconciles one talkgroup's group memberships: stored memberships the
 // submitted list does not name are removed, and a pair is inserted only when it is not already
-// stored, so a membership that did not change is left alone.
-//
-// The legacy `Talkgroups.WriteTx` reads the join rows as `"groupId", "talkgroupGroupId"` and then
-// tests the submitted group identifiers against `talkgroupGroupId` — the join row's own number
-// rather than the group it names — so removing a membership removed whichever join row happened to
-// be numbered like a group the save kept. This server compares against `groupId`, which is the column
-// the comparison means;
+// stored; the comparison uses `groupId`, per the talkgroup save repairs maintainer note.
 func writeTalkgroupGroups(ctx context.Context, tx transaction, talkgroupID uint64, groupIDs []uint64) error {
 	const storedQuery = `SELECT "groupId" FROM "talkgroupGroups" WHERE "talkgroupId" = ?`
 
@@ -860,15 +816,8 @@ func readColumnIDs(ctx context.Context, tx transaction, section, operation, quer
 	return out, nil
 }
 
-// droppedIdentifiers returns the stored identifiers the submitted collection does not name.
-//
-// This is the reconcile the legacy server intended and only the talkgroups actually got: the
-// legacy `Systems.Write`, `Groups.Write`, `Tags.Write`, `Sites.WriteTx`, `Units.WriteTx`,
-// `Accesses.Write`, `Apikeys.Write`, `Dirwatches.Write`, and `Downstreams.Write` each stop their
-// scan at the first submitted entry that has no identity yet, so a save that adds something new
-// silently removes nothing. This server repairs that rule for every section, which is the one place
-// where it deliberately behaves unlike the legacy server, and note that a system or talkgroup deleted by a corrected save
-// takes its recorded calls with it through `ON DELETE CASCADE`.
+// droppedIdentifiers returns the stored identifiers the submitted collection does not name,
+// the repaired keep-rule every section saves with, per the reconciling saves maintainer note.
 func droppedIdentifiers(submitted, stored []uint64) []uint64 {
 	out := []uint64{}
 
@@ -891,9 +840,8 @@ func droppedIdentifiers(submitted, stored []uint64) []uint64 {
 	return out
 }
 
-// insertAssignedID runs an insert and reports the identifier the table assigned, which is what the
-// rows written below a system or a talkgroup are keyed by. PostgreSQL is the one backend whose
-// driver cannot report it, so the statement asks for it back, exactly as the legacy server does.
+// insertAssignedID runs an insert and reports the identifier the table assigned. PostgreSQL
+// is the one backend whose driver cannot report it, so the statement asks for it back.
 func insertAssignedID(ctx context.Context, tx transaction, dialect Dialect, query string, returning string, args ...any) (uint64, error) {
 	if dialect == DialectPostgresql {
 		var id uint64

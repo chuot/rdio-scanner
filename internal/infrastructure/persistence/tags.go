@@ -24,11 +24,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// Tags is the stored set of talkgroup tags.
-//
-// It is the configuration in effect, in the same sense the systems catalog and the groups are:
-// loaded once, replaced by what a save submits, and re-read from the stored rows after a save that
-// persisted.
+// Tags is the stored set of talkgroup tags, and the configuration in effect like
+// the systems catalog and the groups are: loaded once and re-read after a save
+// persisted, per the live configuration in effect maintainer note.
 type Tags struct {
 	store store
 
@@ -65,11 +63,10 @@ func (tags *Tags) AllTags(ctx context.Context) (domain.Tags, error) {
 	return loaded, nil
 }
 
-// SaveTags reconciles the stored tags with the given ones and leaves the reconciled result as what
-// the server runs with, including when the store could not be written at all.
-//
-// Dropping a tag drops the talkgroups that name it: `talkgroups.tagId` references `tags` ON DELETE
-// CASCADE, which is what the legacy server relies on too.
+// SaveTags reconciles the stored tags with the given ones and leaves the reconciled
+// result as what the server runs with, including when the store could not be written
+// at all. Dropping a tag drops the talkgroups that name it: `talkgroups.tagId`
+// references `tags` ON DELETE CASCADE.
 func (tags *Tags) SaveTags(ctx context.Context, next domain.Tags) error {
 	tags.mutex.Lock()
 	defer tags.mutex.Unlock()
@@ -91,8 +88,8 @@ func (tags *Tags) SaveTags(ctx context.Context, next domain.Tags) error {
 	return nil
 }
 
-// readTags is the legacy `Tags.Read`, stored rows sorted by display order. Labels are read exactly
-// as they are stored, including the trailing space the seeded "Emergency " label carries.
+// readTags reads the stored rows sorted by display order, labels exactly as stored —
+// trailing spaces included.
 func readTags(ctx context.Context, s store) (domain.Tags, error) {
 	const query = `SELECT "tagId", "alert", "label", "led", "order" FROM "tags"`
 
@@ -122,8 +119,8 @@ func readTags(ctx context.Context, s store) (domain.Tags, error) {
 	return out.Ordered(), nil
 }
 
-// writeTags is the legacy `Tags.Write`: select the stored identifiers, delete the ones the
-// submitted list no longer names, insert or update the rest, in one transaction.
+// writeTags performs the reconcile: select the stored identifiers, delete the ones
+// the submitted list no longer names, insert or update the rest, in one transaction.
 func writeTags(ctx context.Context, s store, next domain.Tags) error {
 	tx, err := s.begin(ctx)
 	if err != nil {

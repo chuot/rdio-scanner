@@ -29,9 +29,7 @@ import (
 )
 
 // Logs is the server's own event log: the entries the administrator's log view reads.
-//
-// Unlike the configuration repositories, it holds nothing in memory. Every call goes to the
-// table, because the log is not a configuration the server runs on.
+// It holds nothing in memory: the log is not a configuration the server runs on.
 type Logs struct {
 	store store
 }
@@ -42,13 +40,11 @@ var _ ports.LogRepository = (*Logs)(nil)
 // The vocabulary is owned by the Domain; this is the boundary the entries are written through.
 var errUnknownLogSource = errors.New("the log entry names no part of this server")
 
-// The legacy server's statements, with the values taken out of them.
-//
-// `Logs.LogEvent` builds its insert with `fmt.Sprintf` and puts the message in raw, so a message
-// containing a single quote — which is every line that names a failed statement — produces broken
-// SQL, the insert fails, and the error is discarded by every caller. That is a preserved quirk, and the
-// parameterized insert here is its fix: those lines are stored, and the administrator's log view
-// shows them.
+// The legacy server's statements, parameterized: the legacy insert was built with
+// `fmt.Sprintf` and put the message in raw, so a message with a single quote — every
+// line naming a failed statement — produced broken SQL, the insert failed, and the
+// error was discarded. Parameterizing is the fix: those lines are stored and the log
+// view shows them, per the log statement construction maintainer note.
 const (
 	logInsertQuery = `INSERT INTO "logs" ("level", "source", "message", "timestamp") VALUES (?, ?, ?, ?)`
 	logDeleteQuery = `DELETE FROM "logs" WHERE "timestamp" < ?`
@@ -59,27 +55,14 @@ func NewLogs(db *sql.DB, dialect Dialect) *Logs {
 	return &Logs{store: newStore(db, dialect)}
 }
 
-// AppendLog records one entry. The entry's own timestamp is what is stored, in the Unix
-// milliseconds the column carries, and so is the part of the server that wrote it.
+// AppendLog records one entry: the entry's own timestamp in the Unix milliseconds the
+// column carries, and the part of the server that wrote it.
 //
-// A source that is a name this server does not have is refused. The vocabulary is owned by the Domain and
-// every writer reaches it through a constant, so arriving here with a name that is not one means a writer
-// was added with a misspelling, and a log table holding a misspelling is exactly the state this feature
-// exists to remove.
-//
-// An entry with no source at all is filed under legacy rather than stored as a blank. That is the state the
-// writers are in while this feature is being built — the repository gained the column before they gained
-// their sources — and it is the state a row the other server writes is in permanently, because its insert
-// names the columns it knows and never mentions this one. The guard that makes a writer without a source a
-// failure is the one that lands once every writer names itself.
-// Every entry this server writes names the part of the server that wrote it, and this is the one boundary
-// every writer reaches. An entry that names nothing is refused rather than filed under legacy: a writer added
-// later without a source fails at the write instead of quietly producing a row the log view can only call
-// old.
-//
-// A row the *other* server writes is not a refusal and cannot be one. Its insert names the columns it knows
-// and never mentions this one, so rows with no source exist permanently in a database this server inherited;
-// the read side files them under legacy, which is what an operator filtering for legacy is looking for.
+// A source that is a name this server does not have is refused: the vocabulary is owned
+// by the Domain and every writer reaches it through a constant. Rows with no source
+// exist permanently — the other server's insert never mentions the column — and the
+// read side files them under legacy, per the log-source write and read posture
+// maintainer note.
 func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
 	if !domain.IsKnownLogSource(entry.Source) {
 		return operationError("logs", "logevent", fmt.Errorf("%w: %q", errUnknownLogSource, entry.Source))
@@ -92,17 +75,12 @@ func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
 	return nil
 }
 
-// SearchLogs is the legacy `Logs.Search`: the total the criteria matches and the page of entries
-// the criteria selects, in the requested order, from the requested offset.
-//
-// The criteria is already resolved by the query handler and the date window is already the one
-// `domain.LogSearch` models — the ascending window runs forward a full day from the submitted
-// instant truncated to the minute, the descending one runs back a day and then back again by the
-// submitted hour and minute.
-//
-// The filter is assembled from fixed fragments and placeholders. The only text joined into the
-// statement is the sort direction, chosen from two constants, exactly as the legacy server
-// chooses it.
+// SearchLogs returns the total the criteria match and the page of entries they select,
+// in the requested order from the requested offset. The criteria is already resolved by
+// the query handler, and the date window is the one `domain.LogSearch` models. The
+// filter is assembled from fixed fragments and placeholders; the only text joined into
+// the statement is the sort direction, chosen from two constants, per the log statement
+// construction maintainer note.
 func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (ports.LogSearchPage, error) {
 	where := []string{`TRUE`}
 	args := []any{}
@@ -112,9 +90,9 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		args = append(args, search.Level)
 	}
 
-	// The message search is a substring, matched case-insensitively, with the submitted text escaped so
-	// that a % or an _ in what the operator typed matches itself. lower on both sides is what makes the
-	// same statement case-insensitive on PostgreSQL, where LIKE is not.
+	// The message search is a case-insensitive substring with the submitted text escaped so
+	// a % or an _ matches itself; lower on both sides keeps the statement case-insensitive
+	// on backends where LIKE is not, per the log statement construction maintainer note.
 	if search.HasText() {
 		where = append(where, `lower("message") LIKE ? ESCAPE '!'`)
 		args = append(args, "%"+escapeLikeText(strings.ToLower(search.Text))+"%")
@@ -127,16 +105,15 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		args = append(args, millisOf(from), millisOf(to))
 	}
 
-	// The per-source counts are computed from the criteria as submitted except for the source itself:
-	// asking "how many of each" while already filtered to one source answers one row, which is true and
-	// useless. The log view offers the narrowing from these counts, so they have to describe the whole
-	// match while the operator is still choosing.
+	// The per-source counts are computed from the criteria as submitted except for the
+	// source itself: they have to describe the whole match while the operator is still
+	// choosing, per the log search page posture maintainer note.
 	countsWhere := append([]string{}, where...)
 	countsArgs := append([]any{}, args...)
 
 	if search.HasSource() {
-		// A row stored without a source — the other server's insert, which never mentions the column — is
-		// the same thing the log view calls legacy, so asking for legacy has to find both spellings.
+		// A row stored without a source is the same thing the log view calls legacy, so
+		// asking for legacy finds both spellings.
 		if search.Source == domain.LogSourceLegacy {
 			where = append(where, `("source" = '' OR "source" = ?)`)
 		} else {
@@ -155,9 +132,10 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 
 	page := ports.LogSearchPage{}
 
-	// The span of everything the criteria match is read first, in the order the legacy server reads
-	// it: the matching timestamps ascending, then descending, then the count, then the page. The two
-	// ends belong to the whole match and not to the page, because the log view pages through them.
+	// The span of everything the criteria match is read first, in the legacy read order:
+	// matching timestamps ascending, then descending, then the count, then the page. The
+	// two ends belong to the whole match, not the page, per the log search page posture
+	// maintainer note.
 	startQuery := `SELECT "timestamp" FROM "logs" WHERE ` + filter + ` ORDER BY "timestamp" ASC`
 
 	if at, ok, err := logs.searchInstant(ctx, startQuery, args); err != nil {
@@ -187,8 +165,9 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 	// silence.
 	page.Count = clampNonNegative(count)
 
-	// The per-subsystem counts are read over the whole match and not over the page, so they stay the same
-	// while the log view pages through 200 entries at a time.
+	// The per-subsystem counts are read over the whole match and not over the page, so
+	// they stay the same while the log view pages, per the log search page posture
+	// maintainer note.
 	countsQuery := `SELECT "source", COUNT(*) FROM "logs" WHERE ` + strings.Join(countsWhere, " AND ") + ` GROUP BY "source"`
 
 	countRows, err := logs.store.query(ctx, countsQuery, countsArgs...)
@@ -210,9 +189,9 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 			continue
 		}
 
-		// The two spellings a row without a source can carry — the blank the other server's insert
-		// leaves, and the name this server files it under — are one group in the log view, so they are
-		// one group here.
+		// The two spellings a row without a source can carry — the blank the other
+		// server's insert leaves, and the name this server files it under — are one
+		// group in the log view, so they are one group here.
 		counts[logSourceOf(source)] += uint64(n)
 	}
 
@@ -224,8 +203,8 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 		page.SourceCounts = append(page.SourceCounts, ports.LogSourceCount{Source: source, Count: n})
 	}
 
-	// Where the noise is, first. Ties are broken by the name so the same search always answers the same
-	// list.
+	// Where the noise is, first. Ties are broken by the name so the same search always
+	// answers the same list.
 	sort.Slice(page.SourceCounts, func(i, j int) bool {
 		if page.SourceCounts[i].Count != page.SourceCounts[j].Count {
 			return page.SourceCounts[i].Count > page.SourceCounts[j].Count
@@ -254,9 +233,9 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 
 		if err := rows.Scan(&id, &level, &source, &message, &timestamp); err != nil {
 			// A row whose scan fails is dropped as the legacy drops a damaged row —
-			// unless the read itself failed. A cancelled context is felt at the scan
-			// and not at the iterator, and a short page answered as a success is how
-			// a cancelled search goes unnoticed.
+			// unless the read itself failed, per the damaged log row parity
+			// maintainer note: a cancelled context is felt at the scan and not at
+			// the iterator, and a short page answered as a success hides that.
 			if readErr := rows.Err(); readErr != nil {
 				return ports.LogSearchPage{}, statementError("logs", "search", readErr, rowsQuery)
 			}
@@ -268,10 +247,10 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 			continue
 		}
 
-		// The legacy server drops a row that carries nothing to show — no identity, no level,
-		// no message, or a timestamp that is not a real instant — from the results, while the
-		// count it reports still includes it. Reproduced, because a log table written by the
-		// other server is not guaranteed to have none of those.
+		// A row that carries nothing to show — no identity, no level, no message, or
+		// a timestamp that is not a real instant — is dropped from the results while
+		// the count still includes it, as the legacy does, per the damaged log row
+		// parity maintainer note.
 		if !id.Valid {
 			continue
 		}
@@ -309,12 +288,9 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 	return page, nil
 }
 
-// logSourceOf reads the source a row carries. A row written without one — by the legacy server, which
-// inserts into this table by named columns and never mentions a column it does not know — is filed under
-// legacy, so the log view never shows a blank and a filter on legacy finds those rows.
-//
-// This is a read-side mapping and not a write: this server does not rewrite rows another server is
-// writing.
+// logSourceOf reads the source a row carries. A row written without one is filed under
+// legacy — a read-side mapping, never a rewrite of another server's rows, per the
+// log-source write and read posture maintainer note.
 func logSourceOf(source sql.NullString) domain.LogSource {
 	if !source.Valid || source.String == "" {
 		return domain.LogSourceLegacy
@@ -323,11 +299,9 @@ func logSourceOf(source sql.NullString) domain.LogSource {
 	return domain.LogSource(source.String)
 }
 
-// escapeLikeText prepares submitted text for a LIKE comparison so that the characters the operator typed
-// match themselves: a directory mask, a talkgroup wildcard, an underscore in a filename.
-//
-// The escape character is `!` rather than a backslash because MySQL reads a backslash as an escape inside a
-// string literal, and `ESCAPE '\'` is not the same statement on every backend this server supports.
+// escapeLikeText prepares submitted text for a LIKE comparison so the characters the
+// operator typed match themselves, escaping with `!` because `ESCAPE '\'` is not one
+// statement on every backend, per the log statement construction maintainer note.
 func escapeLikeText(text string) string {
 	out := strings.Builder{}
 
@@ -343,12 +317,9 @@ func escapeLikeText(text string) string {
 	return out.String()
 }
 
-// searchInstant reads one instant out of the entries the criteria match, which is how the two ends of
-// the log view's span are found: the same filter, ordered from one end, and the first row is the end.
-//
-// A search that matches nothing is not a failure and is reported as one: the legacy server tolerates
-// the no-rows answer here and leaves that end of the span unset, so an empty log view is an empty log
-// view rather than an error the administrator is answered with a status code.
+// searchInstant reads one instant out of the entries the criteria match — the same
+// filter ordered from one end, so the first row is the span end. A search that matches
+// nothing leaves that end unset rather than failing, as the legacy tolerates here.
 func (logs *Logs) searchInstant(ctx context.Context, query string, args []any) (time.Time, bool, error) {
 	var timestamp sql.NullInt64
 
@@ -367,9 +338,8 @@ func (logs *Logs) searchInstant(ctx context.Context, query string, args []any) (
 	return instantOf(timestamp.Int64), true, nil
 }
 
-// DeleteLogsBefore is the prune: remove the entries older than the given instant and report how
-// many went. The legacy `Logs.Prune` reports nothing, so the prune's own log entry has always
-// been written without knowing how many entries it removed.
+// DeleteLogsBefore removes the entries older than the given instant and reports how many
+// went — the legacy prune reported nothing, so its own log entry never knew the count.
 func (logs *Logs) DeleteLogsBefore(ctx context.Context, before time.Time) (int, error) {
 	res, err := logs.store.exec(ctx, logDeleteQuery, millisOf(before))
 	if err != nil {

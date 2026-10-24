@@ -30,8 +30,8 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestAllSystemsReadsTheSystemsTheLegacyServerWrote is the the requirement half that concerns the systems
-// table: every column the legacy `Systems.Write` stored is read back into the field it belongs to.
+// Every column of the systems table the legacy `Systems.Write` stored reads back into the field
+// it belongs to.
 func TestAllSystemsReadsTheSystemsTheLegacyServerWrote(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -78,16 +78,15 @@ func TestAllSystemsReadsTheSystemsTheLegacyServerWrote(t *testing.T) {
 		}
 	}
 
-	// The legacy Read sorts the catalog by display order, and the fixture stores it in that order
-	// already; the sort is what keeps it there when an administrator reorders the list.
+	// The legacy Read sorts the catalog by display order; the fixture stores it in that order
+	// already, so the sort is what keeps it there when an administrator reorders the list.
 	if systems[0].Order > systems[1].Order {
 		t.Errorf("the catalog comes back out of display order: %d before %d", systems[0].Order, systems[1].Order)
 	}
 }
 
-// TestAllSystemsReadsTheBooleanTheLegacyServerStored pins the boolean columns: the legacy server
-// writes a Go %t straight into an integer(1) column, which sqlite stores as the integer 1 or 0, and
-// the read has to accept that shape.
+// The boolean columns hold the integers a Go %t written into an integer(1) column produced, and
+// the read accepts that shape.
 func TestAllSystemsReadsTheBooleanTheLegacyServerStored(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -132,10 +131,8 @@ func TestAllSystemsReadsTheBooleanTheLegacyServerStored(t *testing.T) {
 	}
 }
 
-// TestAllSystemsReadsTalkgroupOrderAndTalkgroupRefFromTheirOwnColumns pins the key drift the
-// legacy server carries: it emits the talkgroup display order under the JSON key "talkgroup" while
-// the column is "order", and the reference clients identify a talkgroup by is the column
-// "talkgroupRef". The read takes each from its own column, never from the other.
+// `order` and `talkgroupRef` are read from the columns they are stored in, never from each other:
+// the legacy server marshals the display order out under the JSON key "talkgroup".
 func TestAllSystemsReadsTalkgroupOrderAndTalkgroupRefFromTheirOwnColumns(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -197,9 +194,8 @@ func TestAllSystemsReadsTalkgroupOrderAndTalkgroupRefFromTheirOwnColumns(t *test
 	}
 }
 
-// TestAllSystemsReadsATalkgroupsGroupsFromTheJoinTable covers the join rows: a talkgroup's groups
-// are `talkgroupGroups` rows, and a talkgroup with none gets an empty list rather than the zero the
-// left join aggregates.
+// A talkgroup's groups come from its `talkgroupGroups` rows, and a talkgroup with none gets an
+// empty list rather than the zero the left join aggregates.
 func TestAllSystemsReadsATalkgroupsGroupsFromTheJoinTable(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -306,9 +302,8 @@ func TestAllSystemsReadsEachSystemsSitesAndUnits(t *testing.T) {
 	}
 }
 
-// TestAllSystemsIsReadFromTheDatabaseOnce is the configuration-in-effect half of the rule: the catalog is
-// loaded once, and what the server answers with afterwards is what it is running with, not whatever
-// the tables happen to hold.
+// The systems the server answers with are the ones it is running with: the catalog is read from
+// the database once.
 func TestAllSystemsIsReadFromTheDatabaseOnce(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -333,8 +328,7 @@ func TestAllSystemsIsReadFromTheDatabaseOnce(t *testing.T) {
 	}
 }
 
-// TestAllSystemsReportsTheLegacyFailureShapeWhenTheDatabaseCannotBeRead keeps the log lines the
-// shape the legacy server's have.
+// A database that cannot be read fails with the log lines and shape the legacy server's had.
 func TestAllSystemsReportsTheLegacyFailureShapeWhenTheDatabaseCannotBeRead(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -352,9 +346,8 @@ func TestAllSystemsReportsTheLegacyFailureShapeWhenTheDatabaseCannotBeRead(t *te
 	}
 }
 
-// TestSaveSystemsStoresANewSystemAndCachesTheStoredRows is the re-read after a successful write:
-// the identifiers the tables assigned are what the next read, the next save, and the configuration
-// broadcast work from.
+// The re-read after a write that persisted gives the identities the tables assigned, which the
+// next read, the next save, and the configuration broadcast work from.
 func TestSaveSystemsStoresANewSystemAndCachesTheStoredRows(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -415,8 +408,7 @@ func TestSaveSystemsStoresANewSystemAndCachesTheStoredRows(t *testing.T) {
 	}
 }
 
-// TestSaveSystemsRoundTripsEverySystemColumn writes every column the legacy `Systems.Write` writes
-// and reads it back.
+// Every column the legacy `Systems.Write` writes round-trips through the save and the read.
 func TestSaveSystemsRoundTripsEverySystemColumn(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -456,9 +448,8 @@ func TestSaveSystemsRoundTripsEverySystemColumn(t *testing.T) {
 	}
 }
 
-// TestSaveSystemsWritesABooleanTheLegacyServerStoresTheSameWay is the other direction of the
-// boolean columns: what this adapter writes is the integer the legacy server's own write produced,
-// so the legacy server can read the row back.
+// What this adapter writes for a boolean is the integer the legacy server's own write produced, so
+// the legacy server can read the row back.
 func TestSaveSystemsWritesABooleanTheLegacyServerStoresTheSameWay(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -499,8 +490,8 @@ func TestSaveSystemsWritesABooleanTheLegacyServerStoresTheSameWay(t *testing.T) 
 	}
 }
 
-// TestSaveSystemsUpdatesAStoredSystemInPlace covers the update half of the reconcile: the same
-// identifier is written again, not stored a second time.
+// A stored system keeps its identifier through a save: the row is updated in place, not inserted
+// a second time.
 func TestSaveSystemsUpdatesAStoredSystemInPlace(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -538,9 +529,8 @@ func TestSaveSystemsUpdatesAStoredSystemInPlace(t *testing.T) {
 	}
 }
 
-// TestSaveSystemsRemovesAStoredSystemTheSubmittedListOmits is the reconcile the port promises, and
-// the cascade the frozen schema defines: dropping a system drops its talkgroups, sites, units, and
-// recorded calls with it.
+// A whole-catalog save that drops a system drops it from the table, and the cascade takes its
+// talkgroups, sites, units, and recorded calls with it.
 func TestSaveSystemsRemovesAStoredSystemTheSubmittedListOmits(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -577,13 +567,10 @@ func TestSaveSystemsRemovesAStoredSystemTheSubmittedListOmits(t *testing.T) {
 	}
 }
 
-// TestSaveSystemsRemovesAStoredSystemEvenWhenTheSubmittedListNamesANewOne pins the one place where
-// This server deliberately behaves unlike the legacy server.
-//
-// The legacy `server/system.go` `Systems.Write` tests `system.Id == 0 || system.Id == systemId` for every stored
-// identifier, so the scan stops at the first system that has no identity yet and a save that adds a
-// system silently keeps every system the list removed. This server repairs the rule for every
-// configuration section: the list you save is the list you get.
+// A save that adds a new system still removes the stored system the submitted list dropped: the
+// legacy `Systems.Write` tested `system.Id == 0 || system.Id == systemId` for every stored
+// identifier, so a save that adds a system silently kept every system the list removed, and this
+// server repairs that rule for every configuration section.
 func TestSaveSystemsRemovesAStoredSystemEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -621,10 +608,9 @@ func TestSaveSystemsRemovesAStoredSystemEvenWhenTheSubmittedListNamesANewOne(t *
 	}
 }
 
-// TestSaveSystemsRemovalTakesTheRecordedCallsWithIt is the consequence the repair carries: the
-// calls table's systemId is `ON DELETE CASCADE` and foreign_keys is on, so a save that removes a system removes
-// the calls recorded against it. The legacy server hid this behind the broken scan — the same save never
-// deleted anything — so this is the risk the owner accepted when choosing to repair the rule.
+// A save that removes a system removes the calls recorded against it: the calls table references
+// the systems table ON DELETE CASCADE and foreign_keys is on, the risk accepted with the repaired
+// keep-rule, which the legacy server's broken scan hid.
 func TestSaveSystemsRemovalTakesTheRecordedCallsWithIt(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -658,9 +644,8 @@ func TestSaveSystemsRemovalTakesTheRecordedCallsWithIt(t *testing.T) {
 	}
 }
 
-// TestSaveSystemsDiscardsTheWholeSystemsSectionWhenATalkgroupIsRejected is the all-or-nothing rule
-// the frozen schema imposes: talkgroups.tagId is a foreign key, and the systems save is one
-// transaction, so a rejected talkgroup takes the systems written before it down with it.
+// One transaction and the talkgroups foreign key make a rejected talkgroup take the systems
+// written before it down with it.
 func TestSaveSystemsDiscardsTheWholeSystemsSectionWhenATalkgroupIsRejected(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -703,8 +688,8 @@ func TestSaveSystemsDiscardsTheWholeSystemsSectionWhenATalkgroupIsRejected(t *te
 	}
 }
 
-// TestSaveSystemsLeavesTheSubmittedSystemsInEffectWhenTheSaveFails is a preserved quirk: the submitted
-// configuration is what the server runs with even when it could not be stored.
+// A save that could not be stored still leaves the submitted configuration in effect, the quirk
+// kept from the legacy server.
 func TestSaveSystemsLeavesTheSubmittedSystemsInEffectWhenTheSaveFails(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -739,9 +724,8 @@ func TestSaveSystemsLeavesTheSubmittedSystemsInEffectWhenTheSaveFails(t *testing
 	}
 }
 
-// TestSaveSystemsWritesSitesAndUnitsUnderTheSystemBeingSaved pins that the aggregate's identity,
-// not whatever the submitted part happens to carry, is what the child rows are keyed by — which is
-// what lets a configuration payload round-trip a site or unit whose system is not named in it.
+// The aggregate's identity, not whatever the submitted part happens to carry, is what the child
+// rows are keyed by.
 func TestSaveSystemsWritesSitesAndUnitsUnderTheSystemBeingSaved(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -779,8 +763,8 @@ func TestSaveSystemsWritesSitesAndUnitsUnderTheSystemBeingSaved(t *testing.T) {
 	}
 }
 
-// TestSaveSystemsRoundTripsSiteAndUnitColumns writes and reads back every column the legacy
-// `Sites.WriteTx` and `Units.WriteTx` write.
+// Every site and unit column the legacy `Sites.WriteTx` and `Units.WriteTx` write round-trips
+// through the save and the read.
 func TestSaveSystemsRoundTripsSiteAndUnitColumns(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -840,8 +824,8 @@ func TestSaveSystemsRoundTripsSiteAndUnitColumns(t *testing.T) {
 	}
 }
 
-// TestSaveSystemsRemovesAStoredSiteOrUnitTheSubmittedListOmits is the same reconcile the systems
-// themselves get, applied to the parts the aggregate owns.
+// A site or unit the submitted list omits is removed: the systems reconcile applies to the parts
+// the aggregate owns.
 func TestSaveSystemsRemovesAStoredSiteOrUnitTheSubmittedListOmits(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -878,8 +862,8 @@ func TestSaveSystemsRemovesAStoredSiteOrUnitTheSubmittedListOmits(t *testing.T) 
 	}
 }
 
-// TestSaveTalkgroupsReplacesATalkgroupsGroupsMembership is the join-table half of a save: the
-// memberships the submitted talkgroup no longer names are gone and the one it names is stored.
+// A saved talkgroup's `talkgroupGroups` rows are the memberships the submitted list names: the
+// ones it no longer names are gone.
 func TestSaveTalkgroupsReplacesATalkgroupsGroupsMembership(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -918,8 +902,8 @@ func TestSaveTalkgroupsReplacesATalkgroupsGroupsMembership(t *testing.T) {
 	}
 }
 
-// TestSaveTalkgroupsDoesNotStoreAGroupMembershipTwice covers the insert-only-when-absent half of the
-// legacy join-row handling: repeating a save does not accumulate duplicate memberships.
+// A group membership is inserted only when it is not already stored: repeating a save does not
+// accumulate duplicate memberships.
 func TestSaveTalkgroupsDoesNotStoreAGroupMembershipTwice(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -946,14 +930,9 @@ func TestSaveTalkgroupsDoesNotStoreAGroupMembershipTwice(t *testing.T) {
 	}
 }
 
-// TestSaveTalkgroupsRemovesAGroupMembershipTheSubmittedListOmits pins the repaired membership
-// reconcile.
-//
-// The legacy `Talkgroups.WriteTx` reads the join rows as `"groupId", "talkgroupGroupId"` and then
-// tests the submitted group identifiers against `talkgroupGroupId` — the join row's own number, not
-// the group it names. A talkgroup in groups 2 and 1, saved as group 2 alone, therefore lost the join
-// row numbered 2 (the one naming group 2) and kept the one naming the dropped group 1. This server
-// compares against `groupId`, so the membership the list drops is the membership that goes.
+// A talkgroup in groups 2 and 1 saved as group 2 alone loses the membership that named the dropped
+// group: the legacy `Talkgroups.WriteTx` tested the submitted identifiers against the join row's own
+// number, and this server compares against `groupId`.
 func TestSaveTalkgroupsRemovesAGroupMembershipTheSubmittedListOmits(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -997,10 +976,8 @@ func TestSaveTalkgroupsRemovesAGroupMembershipTheSubmittedListOmits(t *testing.T
 	}
 }
 
-// TestSaveTalkgroupsRemovesATalkgroupTheSubmittedListOmitsEvenWhenANewOneIsAdded pins the half of
-// the legacy reconcile that the systems, groups, tags, sites, and units reconciles do not have:
-// Talkgroups.WriteTx tests the stored identifier against zero, not the submitted one, so a new
-// talkgroup in the same save does not protect the stored ones.
+// A new talkgroup in a save does not protect the stored talkgroups the list dropped: the legacy
+// `Talkgroups.WriteTx` tested the stored identifier against zero, not the submitted one.
 func TestSaveTalkgroupsRemovesATalkgroupTheSubmittedListOmitsEvenWhenANewOneIsAdded(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -1032,10 +1009,9 @@ func TestSaveTalkgroupsRemovesATalkgroupTheSubmittedListOmitsEvenWhenANewOneIsAd
 	}
 }
 
-// TestSaveTalkgroupsUpdatesATalkgroupWhereItIsStoredInsteadOfMovingIt reproduces a legacy defect
-// rather than fixing it: the talkgroup update never names systemId, and the exists-check is not
-// scoped to the system being saved, so a talkgroup identifier already stored under another system
-// is updated where it already lives.
+// A talkgroup identifier already stored under another system is updated where it lives rather than
+// moved: the legacy update never names `systemId` and its exists-check is not scoped to the system
+// being saved, a defect kept rather than fixed.
 func TestSaveTalkgroupsUpdatesATalkgroupWhereItIsStoredInsteadOfMovingIt(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -1077,9 +1053,8 @@ func TestSaveTalkgroupsUpdatesATalkgroupWhereItIsStoredInsteadOfMovingIt(t *test
 	}
 }
 
-// TestSaveSystemsStoresAQuoteInAStoredValueAsText is what parameterizing every statement buys: a
-// label or blacklist containing a quote is stored as the text it is, and the statement around it is
-// still one statement.
+// Parameterizing every statement stores a quote inside a label or blacklist as the text it is, and
+// the statement around it stays one statement.
 func TestSaveSystemsStoresAQuoteInAStoredValueAsText(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -1175,9 +1150,8 @@ func containsID(ids []uint64, want uint64) bool {
 	return false
 }
 
-// TestSaveSystemSitesReplacesTheSitesOfOneSystem pins the per-level save: the submitted
-// rows are renumbered 1-based, an existing row is updated, a new row is inserted, and the
-// other system keeps its sites.
+// The per-level sites save renumbers the submitted rows 1-based, updates what is stored, inserts
+// what is new, and leaves the other system's sites alone.
 func TestSaveSystemSitesReplacesTheSitesOfOneSystem(t *testing.T) {
 	db := openLegacyDatabase(t)
 	repo := NewSystems(db, DialectSqlite)
@@ -1225,8 +1199,7 @@ func TestSaveSystemSitesReplacesTheSitesOfOneSystem(t *testing.T) {
 	}
 }
 
-// TestSaveSystemSitesRemovesTheRowsNotSubmitted pins the reconciliation: a site the save
-// does not name is removed from the system.
+// The per-level sites save removes a site the submitted list does not name.
 func TestSaveSystemSitesRemovesTheRowsNotSubmitted(t *testing.T) {
 	db := openLegacyDatabase(t)
 	repo := NewSystems(db, DialectSqlite)
@@ -1252,8 +1225,7 @@ func TestSaveSystemSitesRemovesTheRowsNotSubmitted(t *testing.T) {
 	}
 }
 
-// TestSaveSystemSitesReportsAnUnknownSystem pins the 404 half of the contract: a system the
-// store does not have is reported as ErrNotFound, and nothing is written.
+// Saving sites for a system the store does not have reports ErrNotFound and writes nothing.
 func TestSaveSystemSitesReportsAnUnknownSystem(t *testing.T) {
 	db := openLegacyDatabase(t)
 	repo := NewSystems(db, DialectSqlite)
@@ -1278,8 +1250,8 @@ func TestSaveSystemSitesReportsAnUnknownSystem(t *testing.T) {
 	}
 }
 
-// TestSaveSystemTalkgroupsReplacesTheTalkgroupsOfOneSystem pins the per-level talkgroup
-// save, including the group memberships the submitted rows carry.
+// The per-level talkgroups save replaces one system's talkgroups, including the group memberships
+// the submitted rows carry.
 func TestSaveSystemTalkgroupsReplacesTheTalkgroupsOfOneSystem(t *testing.T) {
 	db := openLegacyDatabase(t)
 	repo := NewSystems(db, DialectSqlite)
@@ -1361,11 +1333,8 @@ func TestSaveSystemUnitsReplacesTheUnitsOfOneSystem(t *testing.T) {
 	}
 }
 
-// TestSaveSystemLevelSavesLeaveTheCallersSliceUntouched: the
-// per-system saves renumber the submitted rows' display order and stamp the system
-// identity into them — and they did it to the caller's own slice. A caller that
-// keeps the list it submitted for its own view, or re-sends it, finds its rows
-// renumbered by a save it already answered for. The save renumbers a copy.
+// The per-system saves renumber the submitted rows' display order and stamp the system identity
+// into a copy, never the caller's own slice.
 func TestSaveSystemLevelSavesLeaveTheCallersSliceUntouched(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -1419,11 +1388,8 @@ func TestSaveSystemLevelSavesLeaveTheCallersSliceUntouched(t *testing.T) {
 	}
 }
 
-// TestSaveSystemSettingsWritesTheSystemRowAndLeavesTheLevels is the per-section save of the Systems
-// section: it writes the system row's own columns. The sites, talkgroups, and units under a system
-// are written by the save of that level, for the system that level shows. A save of the Systems
-// section leaves them as the store holds them — including a row the level deleted after the page
-// loaded its copy, which writing the whole aggregate used to put back.
+// The Systems-section save writes the system row's own columns and leaves every level under the
+// system as the store holds it, including a row the level deleted after the page loaded its copy.
 func TestSaveSystemSettingsWritesTheSystemRowAndLeavesTheLevels(t *testing.T) {
 	db := openLegacyDatabase(t)
 	repo := NewSystems(db, DialectSqlite)
@@ -1497,9 +1463,9 @@ func TestSaveSystemSettingsWritesTheSystemRowAndLeavesTheLevels(t *testing.T) {
 	}
 }
 
-// TestSaveSystemTalkgroupsStoresTheBlacklistWithTheRows: the Talkgroups section saves the rows and
-// the system's blacklist together. The blacklist is what the server compares a recording's talkgroup
-// reference against, so the save that drops the row has to store the entry that refuses it.
+// The Talkgroups section saves its rows and the system's blacklist together: the server compares a
+// recording's talkgroup reference against that text, so the save that drops a row stores the entry
+// that refuses it.
 func TestSaveSystemTalkgroupsStoresTheBlacklistWithTheRows(t *testing.T) {
 	db := openLegacyDatabase(t)
 	repo := NewSystems(db, DialectSqlite)
@@ -1541,9 +1507,7 @@ func TestSaveSystemTalkgroupsStoresTheBlacklistWithTheRows(t *testing.T) {
 	}
 }
 
-// TestSaveSystemTalkgroupsLeavesTheStoredBlacklistWhenTheSaveNamesNone: a level save that carries
-// rows only leaves the system's stored blacklist where it is. The sites and units levels never carry
-// a blacklist, and a talkgroups save without one is one of them.
+// A level save that carries rows only leaves the system's stored blacklist where it is.
 func TestSaveSystemTalkgroupsLeavesTheStoredBlacklistWhenTheSaveNamesNone(t *testing.T) {
 	db := openLegacyDatabase(t)
 	repo := NewSystems(db, DialectSqlite)
@@ -1573,10 +1537,8 @@ func TestSaveSystemTalkgroupsLeavesTheStoredBlacklistWhenTheSaveNamesNone(t *tes
 	}
 }
 
-// TestSaveSystemSettingsKeepsTheStoredBlacklistTextAcrossAStart: the blacklist text a system
-// already stores survives a systems-section save that says nothing about it, and is read back by
-// the next start over the same database. The text the store holds is not the systems section's to
-// rewrite when the operator changed only the system's own fields.
+// A systems-section save that says nothing about the blacklist keeps the text the store holds, and
+// the next start over the same database reads it back.
 func TestSaveSystemSettingsKeepsTheStoredBlacklistTextAcrossAStart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "rdio-scanner.db")
 

@@ -23,9 +23,7 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestAllTagsReadsTheTagsTheLegacyServerWrote is the tags half of the requirement. The trailing space of the
-// seeded "Emergency " label is part of the label, and reading it back trimmed would change which
-// talkgroups a search for that label finds.
+// The trailing space of a stored label is part of the label and reads back as stored.
 func TestAllTagsReadsTheTagsTheLegacyServerWrote(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -58,7 +56,7 @@ func TestAllTagsReadsTheTagsTheLegacyServerWrote(t *testing.T) {
 	}
 }
 
-// TestAllTagsIsReadFromTheDatabaseOnce is the configuration-in-effect rule for this section.
+// Tags are read from the database once.
 func TestAllTagsIsReadFromTheDatabaseOnce(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -83,8 +81,7 @@ func TestAllTagsIsReadFromTheDatabaseOnce(t *testing.T) {
 	}
 }
 
-// TestAllTagsReportsTheLegacyFailureShapeWhenTheDatabaseCannotBeRead keeps the log lines the shape
-// the legacy server's have.
+// A failed tags read keeps the legacy failure shape.
 func TestAllTagsReportsTheLegacyFailureShapeWhenTheDatabaseCannotBeRead(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -102,7 +99,7 @@ func TestAllTagsReportsTheLegacyFailureShapeWhenTheDatabaseCannotBeRead(t *testi
 	}
 }
 
-// TestSaveTagsStoresANewTagAndCachesTheStoredRow is the re-read after a successful write.
+// A successful save re-reads and caches the stored row.
 func TestSaveTagsStoresANewTagAndCachesTheStoredRow(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -120,7 +117,7 @@ func TestSaveTagsStoresANewTagAndCachesTheStoredRow(t *testing.T) {
 		t.Fatalf("AllTags: %v", err)
 	}
 
-	// The stored collection comes back sorted by display order, as the legacy `Tags.Read` sorts it.
+	// The stored collection comes back sorted by display order.
 	want := domain.Tags{
 		{ID: 2, Label: "Interop", Order: 1},
 		{ID: 1, Alert: "alert1", Label: "Fire Dispatch", LED: "red", Order: 2},
@@ -137,7 +134,7 @@ func TestSaveTagsStoresANewTagAndCachesTheStoredRow(t *testing.T) {
 	}
 }
 
-// TestSaveTagsUpdatesAStoredTagInPlace covers the update half of the reconcile.
+// A save updates a stored tag in place.
 func TestSaveTagsUpdatesAStoredTagInPlace(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -175,9 +172,7 @@ func TestSaveTagsUpdatesAStoredTagInPlace(t *testing.T) {
 	}
 }
 
-// TestSaveTagsRemovesAStoredTagAndCascadesTheTalkgroupsThatNameIt pins what dropping a tag costs:
-// talkgroups.tagId is a foreign key ON DELETE CASCADE, so a talkgroup whose tag went with it goes
-// too, and its memberships go with the talkgroup.
+// Dropping a tag cascades to the talkgroups that name it and their memberships.
 func TestSaveTagsRemovesAStoredTagAndCascadesTheTalkgroupsThatNameIt(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -208,9 +203,8 @@ func TestSaveTagsRemovesAStoredTagAndCascadesTheTalkgroupsThatNameIt(t *testing.
 	}
 }
 
-// TestSaveTagsRemovesAStoredTagEvenWhenTheSubmittedListNamesANewOne pins the repaired reconcile: `server/tag.go` `Tags.Write` tests
-// `tag.Id == 0 || tag.Id == tagId`, so one submitted tag with no identity yet keeps every stored
-// tag. This server deletes what the list removed.
+// Repaired reconcile: the legacy write kept every stored tag when a submitted tag had no
+// identity, testing `tag.Id == 0 || tag.Id == tagId`; this server deletes what the list removed.
 func TestSaveTagsRemovesAStoredTagEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -243,7 +237,7 @@ func TestSaveTagsRemovesAStoredTagEvenWhenTheSubmittedListNamesANewOne(t *testin
 	}
 }
 
-// TestSaveTagsLeavesTheSubmittedTagsInEffectWhenTheStoreCannotBeWritten is a preserved quirk.
+// A save that cannot write still leaves the submitted tags in effect.
 func TestSaveTagsLeavesTheSubmittedTagsInEffectWhenTheStoreCannotBeWritten(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -274,9 +268,8 @@ func TestSaveTagsLeavesTheSubmittedTagsInEffectWhenTheStoreCannotBeWritten(t *te
 	}
 }
 
-// TestSaveTagsStoresAQuoteInALabelAsText is what parameterizing every statement buys. The seeded
-// "Emergency " label already shows the legacy server stores labels verbatim; a quote is where its
-// own `fmt.Sprintf` construction went wrong.
+// A quote in a label stores as text: every statement is parameterized, where the legacy
+// string-built SQL went wrong.
 func TestSaveTagsStoresAQuoteInALabelAsText(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

@@ -65,9 +65,8 @@ func TestReadOptionsReportsTheOptionsTheLegacyServerStored(t *testing.T) {
 	}
 }
 
-// TestReadOptionsReadsTheStoredValuesAsJSONValues pins the fixture fact the options repository
-// exists to get right: every value in the `options` table is the JSON encoding of the option, so
-// `branding` is stored with its quotes and must be read out of them.
+// Every value in the `options` table is the JSON encoding of the option: `branding` is stored
+// with its quotes and must be read out of them.
 func TestReadOptionsReadsTheStoredValuesAsJSONValues(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -116,12 +115,8 @@ func TestReadOptionsAnswersFromTheLoadedValueRatherThanFromTheDatabase(t *testin
 	}
 }
 
-// TestReloadOptionsRestoresTheConstantDuplicateDetectionWindow is a preserved quirk proven against a database the
-// legacy server wrote.
-//
-// The legacy fixture stores the window as 750 under `duplicateDetectionTimeFrame`. The option is
-// retired: the re-derivation ignores the stored row, the server runs on the 500 ms domain constant,
-// and the legacy row is left on record untouched.
+// A retired stored window row is ignored: the re-derivation runs on the 500 ms domain
+// constant and leaves the legacy `duplicateDetectionTimeFrame` row untouched.
 func TestReloadOptionsRestoresTheConstantDuplicateDetectionWindow(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -143,15 +138,8 @@ func TestReloadOptionsRestoresTheConstantDuplicateDetectionWindow(t *testing.T) 
 	}
 }
 
-// TestReloadOptionsGeneratesAFreshSecretAndLeavesTheStoredOneAlone pins the fixture's secret.
-//
-// The legacy `Read` accepts a stored secret only at its full length and generates a fresh random
-// one otherwise — and a legacy database stores the empty string. The regenerated secret is never
-// written back, so the secret that signs administrator tokens is not the one on record.
-// TestReloadOptionsLeavesNoSecretOnRecordWhenNoneIsUsable is the repaired half of a preserved quirk: the reader no
-// longer invents a secret. A stored secret the server cannot sign with leaves the options without one,
-// and the stored row stays where it was — putting a usable secret on record is the startup use case's
-// job, not the reader's.
+// A stored secret the server cannot sign with leaves the options without one and the stored
+// row untouched: the reader no longer invents a secret.
 func TestReloadOptionsLeavesNoSecretOnRecordWhenNoneIsUsable(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -173,12 +161,8 @@ func TestReloadOptionsLeavesNoSecretOnRecordWhenNoneIsUsable(t *testing.T) {
 	}
 }
 
-// TestReloadOptionsAcceptsAStoredSecretOnlyAtItsFullLength keeps the legacy reader's length rule and
-// drops what the legacy reader did with a value that failed it.
-//
-// The legacy server generated a fresh secret for anything unusable and never wrote it down, so every
-// start signed with a different key and every token issued before it was dead. Here an unusable value
-// is simply not taken, and the options are left without a secret for the startup use case to fill.
+// The legacy reader's length rule is kept and its replacement dropped: a stored secret is
+// taken only at its full length, and an unusable value is simply not taken.
 func TestReloadOptionsAcceptsAStoredSecretOnlyAtItsFullLength(t *testing.T) {
 	kept := strings.Repeat("a", domain.SecretLength)
 
@@ -213,8 +197,8 @@ func TestReloadOptionsAcceptsAStoredSecretOnlyAtItsFullLength(t *testing.T) {
 	}
 }
 
-// TestStoreSecretPutsTheSigningSecretOnRecord is the write the legacy server never had: one option row,
-// written on its own, so the secret the server signs with is the secret the database holds.
+// Storing the signing secret writes the one option row on its own: the secret the server
+// signs with is the secret the database holds.
 func TestStoreSecretPutsTheSigningSecretOnRecord(t *testing.T) {
 	ctx := context.Background()
 
@@ -256,9 +240,8 @@ func TestStoreSecretPutsTheSigningSecretOnRecord(t *testing.T) {
 	}
 }
 
-// TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith pins the configuration-in-effect rule for this section:
-// a save replaces what the server runs with, and nothing is read back. The duplicate window is the
-// domain constant, so a save cannot move it, and the retired window key is no longer stored.
+// A save replaces what the server runs with and nothing is read back; the duplicate window
+// is a domain constant a save cannot move, and the retired window key is no longer stored.
 func TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	options := NewOptions(db, DialectSqlite)
@@ -298,8 +281,8 @@ func TestWriteOptionsMakesTheSubmittedOptionsTheOnesTheServerIsRunningWith(t *te
 	}
 }
 
-// TestWriteOptionsStoresEveryOptionAsTheJSONTheLegacyServerStores pins the stored shape, key by
-// key, against the legacy server's own key list, plus the one key the legacy list was missing.
+// Every option is stored as the JSON the legacy key list stored, key by key, plus the one
+// key the legacy list was missing.
 func TestWriteOptionsStoresEveryOptionAsTheJSONTheLegacyServerStores(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 
@@ -339,13 +322,8 @@ func TestWriteOptionsStoresEveryOptionAsTheJSONTheLegacyServerStores(t *testing.
 	}
 }
 
-// TestWriteOptionsStoresTheAudioConversionMode is the repaired half of a preserved quirk.
-//
-// The legacy `Options.Write` stored sixteen keys and `Options.Read` looked for a stored
-// `audioConversion` row among them, so the conversion mode the administrator chose applied until the
-// next thing that re-read the options — a restart, or the re-derivation a password change runs — and
-// then reverted to the default. Storing the mode is what makes the reader's lookup find something.
-// Storing the mode is what makes the reader's lookup find something.
+// The audio-conversion mode is stored, the repaired half of a preserved quirk: the legacy
+// writer never stored it, so every re-derivation answered the default mode.
 func TestWriteOptionsStoresTheAudioConversionMode(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	options := NewOptions(db, DialectSqlite)
@@ -388,8 +366,7 @@ func TestWriteOptionsStoresTheAudioConversionMode(t *testing.T) {
 	}
 }
 
-// TestReloadOptionsResetsTheOptionsTheLegacyServerResets is the reload-reset half that is not the missing-key default: the
-// re-derivation starts from the defaults and only the stored rows pull the values back up.
+// The re-derivation starts from the defaults and only the stored rows pull the values back up.
 func TestReloadOptionsResetsTheOptionsTheLegacyServerResets(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	options := NewOptions(db, DialectSqlite)
@@ -428,14 +405,8 @@ func TestReloadOptionsResetsTheOptionsTheLegacyServerResets(t *testing.T) {
 	}
 }
 
-// TestReloadOptionsKeepsTheBrandingAndEmailTheServerIsRunningWith pins the part of the legacy
-// reset that is not a reset.
-//
-// The legacy `server/options.go` `Read` resets every option it has a default for except `branding`
-// and `email` — and not the secret either. (`time12hFormat` was in that leave-alone list too; the
-// option is retired.) A stored row replaces them in every database the legacy server wrote; when
-// the row is missing, the value the server was already running with survives the re-derivation
-// instead of falling back to the default.
+// `branding`, `email`, and the secret are the part of the legacy reset that is not a reset:
+// with their stored row missing, the running value survives the re-derivation.
 func TestReloadOptionsKeepsTheBrandingAndEmailTheServerIsRunningWith(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	options := NewOptions(db, DialectSqlite)
@@ -506,8 +477,8 @@ func TestReloadOptionsIgnoresAStoredValueOfTheWrongType(t *testing.T) {
 	}
 }
 
-// TestReloadOptionsReportsTheNeedToChangeFromTheStoredRow is where the administrator's answer
-// comes from after a password change: the re-derived configuration, not the submitted one.
+// After a password change the administrator's answer comes from the re-derived
+// configuration, not the submitted one.
 func TestReloadOptionsReportsTheNeedToChangeFromTheStoredRow(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 	options := NewOptions(db, DialectSqlite)
@@ -538,15 +509,8 @@ func TestReloadOptionsReportsTheNeedToChangeFromTheStoredRow(t *testing.T) {
 	}
 }
 
-// TestReloadOptionsLeavesNoCredentialOnRecordWhenNoneIsStored records a deviation rather than a
-// parity rule.
-//
-// The legacy `Read` puts a freshly generated bcrypt hash of the default administrator password in
-// place before it applies the stored rows, so a server whose options table has no `adminPassword`
-// row still accepts the default password. bcrypt belongs to the password adapter and not to
-// this package, so this server leaves the credential empty and the composition root has to
-// store the initial one. Every database the legacy server wrote has the row, including the
-// fixture, so this only shows on a database with no options at all.
+// No credential is left on record when none is stored: bcrypt belongs to the password
+// adapter, so the composition root stores the initial one — a deviation, not a parity rule.
 func TestReloadOptionsLeavesNoCredentialOnRecordWhenNoneIsStored(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 
@@ -658,10 +622,9 @@ func countOptionRowsForKey(t *testing.T, db *sql.DB, key string) int {
 	return count
 }
 
-// The legacy server puts a freshly generated hash of the default administrator password in place at
-// every startup, before it applies the stored rows, and writes nothing. A deployment that has never
-// changed the password has no adminPassword row at all, and its signing secret is regenerated at every
-// startup as well — which is why the initial credential has to stay out of the database.
+// The legacy startup generated the default-password hash and wrote nothing, so a deployment
+// that never changed the password has no adminPassword row — which is why the initial
+// credential stays out of the database.
 func TestStoreInitialCredentialIsWhatTheServerAcceptsUntilAStoredCredentialArrives(t *testing.T) {
 	db := openSchemaDatabase(t)
 	options := NewOptions(db, DialectSqlite)
@@ -709,9 +672,8 @@ func TestStoreInitialCredentialYieldsToTheCredentialInTheStoredConfiguration(t *
 	}
 }
 
-// The password change re-derives the options from what is stored, and the initial credential is part
-// of that reset rather than a one-time patch: a server that has not chosen a credential still needs
-// one after the re-derivation.
+// The initial credential is part of the re-derivation's reset rather than a one-time patch:
+// a server that has not chosen a credential still needs one after it.
 func TestStoreInitialCredentialSurvivesTheReDerivationAPasswordChangeRuns(t *testing.T) {
 	db := openSchemaDatabase(t)
 	options := NewOptions(db, DialectSqlite)
@@ -743,11 +705,8 @@ func countOptionRows(t *testing.T, db *sql.DB) int {
 	return rows
 }
 
-// TestWriteOptionsTwiceLeavesOneRowPerKey: saving the
-// configuration is an update of the stored rows, not a fresh copy of them. On MySQL the
-// update reports no changed rows when the value is unchanged, the insert fires for
-// every key, and the table ends up with two rows per key — the failure this repair removes. On every
-// dialect the table holds exactly one row per key after two saves.
+// Saving the configuration updates the stored rows rather than re-copying them: two saves
+// leave exactly one row per key, the repair for the MySQL double-insert failure.
 func TestWriteOptionsTwiceLeavesOneRowPerKey(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 
@@ -773,11 +732,8 @@ func TestWriteOptionsTwiceLeavesOneRowPerKey(t *testing.T) {
 	}
 }
 
-// TestReloadOptionsReportsAContextCancelledMidRead: re-deriving
-// the options reads every stored row. A read cancelled mid-iteration is a read that
-// did not finish; today the fetch loop skips the rows whose scan failed and the
-// re-derivation answers success with defaults where stored values were dropped — the
-// server ends up running with options nobody stored.
+// A read cancelled mid-iteration is a read that did not finish: the re-derivation must not
+// answer success with defaults where stored values were dropped.
 func TestReloadOptionsReportsAContextCancelledMidRead(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "accesses", "apikeys", "logs", "options")
 
@@ -811,10 +767,8 @@ func TestReloadOptionsReportsAContextCancelledMidRead(t *testing.T) {
 	}
 }
 
-// TestReadOptionsAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase: the options cache answers the server's own reads — the login
-// handler, the retention pass, the signing secret — and today a configuration
-// save holds the cache's mutex across the thirteen rows it writes. The cache
-// answers while the save is in flight.
+// The options cache answers the server's own reads — login, retention, the signing secret —
+// and answers while a configuration save is still walking the database.
 func TestReadOptionsAnswersFromTheCacheWhileASaveIsStillWalkingTheDatabase(t *testing.T) {
 	db, counted := openCountedSchemaDatabase(t)
 
