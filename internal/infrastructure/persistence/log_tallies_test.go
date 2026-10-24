@@ -25,9 +25,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The tally the status view's log-health card is built from. It is kept apart from the log view's
-// search: the search pages and filters entries for an operator reading them, and this counts what the
-// server complained about for an operator watching a page.
+// The tally the status view's log-health card is built from, kept apart from the log view's
+// search: the search pages and filters entries for an operator reading them, and this counts
+// what the server complained about for an operator watching a page.
 
 func TestTallyLogLevelsKeepsTheLevelsApartAndGroupsThemBySubsystem(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
@@ -73,7 +73,7 @@ func TestTallyLogLevelsKeepsTheLevelsApartAndGroupsThemBySubsystem(t *testing.T)
 		}
 	}
 
-	// A subsystem that wrote at two levels is two tallies and not one merged total, because the view
+	// A subsystem that wrote at two levels is two tallies and not one merged total: the view
 	// shows the errors and the warnings as the two different things they are.
 	if len(tallies) != 4 {
 		t.Errorf("TallyLogLevels returned %d tallies, want the 4 the four level-and-subsystem pairs make: %v", len(tallies), tallies)
@@ -93,8 +93,8 @@ func TestTallyLogLevelsKeepsTheLevelsApartAndGroupsThemBySubsystem(t *testing.T)
 	}
 }
 
-// TestTallyLogLevelsNeverTalliesTheEntriesThatComplainAboutNothing. The status view reports trouble,
-// not volume: an hour of ordinary notices is not a reason to say a subsystem needs attention.
+// The entries that complain about nothing are never tallied: an hour of ordinary notices is
+// not a reason to say a subsystem needs attention.
 func TestTallyLogLevelsNeverTalliesTheEntriesThatComplainAboutNothing(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
@@ -121,9 +121,8 @@ func TestTallyLogLevelsNeverTalliesTheEntriesThatComplainAboutNothing(t *testing
 	}
 }
 
-// TestTallyLogLevelsLeavesOutASubsystemThatWroteNeither is what the status view reads as: an absent
-// subsystem is a subsystem that had nothing to complain about, and listing all sixteen of them with a
-// zero each would bury the one that did.
+// An absent subsystem is a subsystem that had nothing to complain about, and listing all
+// sixteen of them with a zero each would bury the one that did.
 func TestTallyLogLevelsLeavesOutASubsystemThatWroteNeither(t *testing.T) {
 	logs := NewLogs(openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options"), DialectSqlite)
 
@@ -172,18 +171,17 @@ func TestTallyLogLevelsWithNothingInTheWindowAnswersEmpty(t *testing.T) {
 	}
 }
 
-// TestTallyLogLevelsReportsARowWrittenWithoutASubsystemAsTheLogViewReportsIt. The log view files a row
-// that names no subsystem under `legacy`, and the tally has to agree with it: the same entry counted
-// one way on the status page and another way on the log page is two numbers the operator cannot
-// reconcile.
+// A row written without a subsystem is tallied as the log view reports it, under `legacy`: the
+// same entry counted one way on the status page and another way on the log page is two numbers
+// the operator cannot reconcile.
 func TestTallyLogLevelsReportsARowWrittenWithoutASubsystemAsTheLogViewReportsIt(t *testing.T) {
 	db := openMigratedLegacyDatabase(t, "accesses", "apikeys", "logs", "options")
 	logs := NewLogs(db, DialectSqlite)
 
 	base := time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC)
 
-	// The two spellings a nameless row carries: the blank another server's insert leaves, and the
-	// column the row never had at all.
+	// The two spellings a nameless row carries: the blank another server's insert leaves, and
+	// the column the row never had at all.
 	if _, err := db.Exec(`INSERT INTO "logs" ("level", "source", "message", "timestamp") VALUES (?, ?, ?, ?)`,
 		string(domain.LogLevelError), "", "a row written without a subsystem", base.UnixMilli()); err != nil {
 		t.Fatalf("storing the blank-sourced entry: %v", err)

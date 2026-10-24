@@ -48,9 +48,8 @@ func openDownstreamTestDatabase(t *testing.T) *sql.DB {
 	return db
 }
 
-// TestAllDownstreamsReadsWhatTheLegacyServerStored is the the criterion half for this adapter: the
-// downstream the legacy server stored through its own configuration endpoint reads back field for
-// field, including the scope it stored as JSON text.
+// The downstream the legacy server stored through its own configuration endpoint reads back
+// field for field, including the scope it stored as JSON text.
 func TestAllDownstreamsReadsWhatTheLegacyServerStored(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -102,9 +101,8 @@ func TestAllDownstreamsReadsWhatTheLegacyServerStored(t *testing.T) {
 	}
 }
 
-// TestSaveDownstreamsWritesTheStoredScopeBackAsTheSameText proves the two servers agree about the
-// `systems` column: the scope read out of the legacy-written row is written back as the exact text
-// the legacy server wrote.
+// The scope read out of a legacy-written row is written back as the exact text the legacy
+// server wrote, so the two servers agree about the `systems` column.
 func TestSaveDownstreamsWritesTheStoredScopeBackAsTheSameText(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -142,16 +140,15 @@ func TestSaveDownstreamsWritesTheStoredScopeBackAsTheSameText(t *testing.T) {
 	}
 }
 
-// TestAllDownstreamsReadsTheFlagsTheLegacyServerStored pins the boolean column in both directions
-// of what the legacy server writes: the fixture's row holds the integer 1, and a row written with
-// the bare `true`/`false` tokens Go's `%t` produces holds the same.
+// The flag column holds the integer the fixture's row stores, and a row written with the bare
+// `true`/`false` tokens Go's `%t` produces holds the same.
 func TestAllDownstreamsReadsTheFlagsTheLegacyServerStored(t *testing.T) {
 	db := openLegacyDatabase(t)
 
-	// The legacy server's own INSERT, with the `%t` slot resolved to the bare `false` token it
-	// produces, and the scope it marshalled — the wildcard arrives as the JSON text `"*"`. The
-	// statement is a constant reproduced from `server/downstream.go` Downstreams.Write; no Go value
-	// is interpolated into it.
+	// The legacy server's own INSERT, reproduced from `server/downstream.go`
+	// `Downstreams.Write`, with the `%t` slot resolved to the bare `false` token it produces and
+	// the scope it marshalled — the wildcard arrives as the JSON text `"*"`. No Go value is
+	// interpolated into it.
 	const legacyRow = `INSERT INTO "downstreams" ("apikey", "disabled", "order", "systems", "url") VALUES ('enabled-downstream', false, 9, '"*"', 'http://127.0.0.1:4000/api/call-upload')`
 
 	if _, err := db.Exec(legacyRow); err != nil {
@@ -188,9 +185,9 @@ func TestAllDownstreamsReadsTheFlagsTheLegacyServerStored(t *testing.T) {
 	}
 }
 
-// TestSaveDownstreamsWritesRowsTheLegacyServerReadsBack is the the criterion half for this adapter: the
-// row this server writes is read by the legacy server's own read statement, scanning into the field
-// types its Downstream has, and the flag lands with the storage class its rows have.
+// The row this server writes is read by the legacy server's own read statement, scanning into
+// the field types its Downstream has, and the flag lands with the storage class its rows
+// have.
 func TestSaveDownstreamsWritesRowsTheLegacyServerReadsBack(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
 
@@ -259,8 +256,8 @@ func TestSaveDownstreamsWritesRowsTheLegacyServerReadsBack(t *testing.T) {
 	}
 }
 
-// TestAllDownstreamsReadsAnEmptyScopeColumnAsNoScopeSupplied pins the state the legacy server leaves
-// behind for a downstream whose payload named no systems: an empty column, which forwards nothing.
+// A downstream whose payload named no systems leaves an empty column, and that reads as a
+// downstream that forwards nothing.
 func TestAllDownstreamsReadsAnEmptyScopeColumnAsNoScopeSupplied(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
 
@@ -290,10 +287,8 @@ func TestAllDownstreamsReadsAnEmptyScopeColumnAsNoScopeSupplied(t *testing.T) {
 	}
 }
 
-// TestSaveDownstreamsStoresANoScopeDownstreamSoTheLegacyServerReadsItAsNone covers the other
-// direction. This server writes the shared scope text, which names a scope that was never supplied as
-// `null` rather than the empty string the legacy server writes; the legacy server's own read rule
-// turns that into the same thing it stores.
+// This server writes the shared scope text, which names a scope that was never supplied as
+// `null`: the legacy server's own read rule turns that into the same thing it stores.
 func TestSaveDownstreamsStoresANoScopeDownstreamSoTheLegacyServerReadsItAsNone(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
 
@@ -361,7 +356,7 @@ func TestAllDownstreamsReturnsTheDownstreamsInTheirDisplayOrder(t *testing.T) {
 	}
 }
 
-// TestAllDownstreamsReportsTheConfigurationInEffectAndNotTheStoredRows is the configuration-in-effect rule.
+// The collection the server answers with is the one it is running with.
 func TestAllDownstreamsReportsTheConfigurationInEffectAndNotTheStoredRows(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
 
@@ -396,7 +391,8 @@ func TestAllDownstreamsReportsTheConfigurationInEffectAndNotTheStoredRows(t *tes
 	}
 }
 
-// TestSaveDownstreamsLeavesTheSubmittedDownstreamsInEffectWhenTheSaveFails is a preserved quirk.
+// The submitted list is in effect before anything is stored, so a save that cannot write still
+// leaves the server running on the submitted downstreams.
 func TestSaveDownstreamsLeavesTheSubmittedDownstreamsInEffectWhenTheSaveFails(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
 
@@ -442,8 +438,7 @@ func TestSaveDownstreamsLeavesTheSubmittedDownstreamsInEffectWhenTheSaveFails(t 
 	}
 }
 
-// TestSaveDownstreamsRemovesTheDownstreamsTheSubmittedListNoLongerNames is the reconciling half of
-// the save.
+// A whole-collection save that drops a downstream drops it from the table too.
 func TestSaveDownstreamsRemovesTheDownstreamsTheSubmittedListNoLongerNames(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
 
@@ -482,13 +477,9 @@ func TestSaveDownstreamsRemovesTheDownstreamsTheSubmittedListNoLongerNames(t *te
 	}
 }
 
-// TestSaveDownstreamsRemovesAStoredDownstreamEvenWhenTheSubmittedListAddsANewOne pins the repaired
-// reconcile.
-//
-// `server/downstream.go` `Downstreams.Write` decides whether a stored downstream is still named by
-// scanning the submitted list and stopping at the first entry whose identifier is zero or equal — so
-// one new, identifier-less downstream keeps every stored one, and a save that adds a downstream and
-// drops another leaves the dropped one stored.
+// A save that adds a new downstream still removes the stored downstream the submitted list
+// dropped: the legacy `server/downstream.go` `Downstreams.Write` stopped at the first submitted
+// entry with no identity of its own, so it deleted nothing, and this server repairs that rule.
 func TestSaveDownstreamsRemovesAStoredDownstreamEvenWhenTheSubmittedListAddsANewOne(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
 
@@ -533,8 +524,8 @@ func TestSaveDownstreamsRemovesAStoredDownstreamEvenWhenTheSubmittedListAddsANew
 	}
 }
 
-// TestSaveDownstreamsUpdatesTheDownstreamThatCarriesTheStoredIdentifier pins the update half of the
-// save.
+// A submitted downstream whose identifier is already stored replaces that row rather than
+// adding one.
 func TestSaveDownstreamsUpdatesTheDownstreamThatCarriesTheStoredIdentifier(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
 
@@ -577,8 +568,7 @@ func TestSaveDownstreamsUpdatesTheDownstreamThatCarriesTheStoredIdentifier(t *te
 	}
 }
 
-// TestSaveDownstreamsStoresAUrlContainingAQuote is the the requirement half of this adapter: the values go
-// in as parameters, so a URL that names a quote is stored exactly as submitted.
+// The values go in as parameters, so a URL that names a quote is stored exactly as submitted.
 func TestSaveDownstreamsStoresAUrlContainingAQuote(t *testing.T) {
 	db := openDownstreamTestDatabase(t)
 

@@ -25,10 +25,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// Downstreams is the stored downstream-server configuration.
-//
-// Like the directory watches, it is the configuration the server is running with rather than a
-// view of the table: the list is read once, kept in memory, and replaced by what a save submits.
+// Downstreams is the stored downstream-server configuration: the configuration in
+// effect, not a view of the `downstreams` table — read once, kept in memory, and
+// replaced by what a save submits. The posture, including a save that takes effect
+// before it is stored, is the live configuration in effect maintainer note.
 type Downstreams struct {
 	store store
 
@@ -69,10 +69,9 @@ func (downstreams *Downstreams) AllDownstreams(ctx context.Context) (domain.Down
 	return downstreams.live, nil
 }
 
-// SaveDownstreams makes the given downstreams what the server runs with and then stores them.
-//
-// The submitted list is in effect before anything is written, so a downstream save that fails to
-// persist still forwards to the submitted servers for the rest of the run.
+// SaveDownstreams makes the given downstreams what the server runs with and then
+// stores them. The submitted list is in effect before anything is written, so a
+// downstream save that fails to persist still forwards to the submitted servers.
 func (downstreams *Downstreams) SaveDownstreams(ctx context.Context, next domain.Downstreams) error {
 	downstreams.mutex.Lock()
 	defer downstreams.mutex.Unlock()
@@ -118,9 +117,9 @@ func (downstreams *Downstreams) read(ctx context.Context) (domain.Downstreams, e
 			return nil, statementError("downstreams", "read", err, query)
 		}
 
-		// The scope is stored as JSON text. An empty column, a `null`, and text that is not JSON
-		// all mean the same thing they mean in the legacy server: no scope was supplied, which is
-		// the state that forwards nothing.
+		// The scope is stored as JSON text. An empty column, a `null`, and text
+		// that is not JSON all mean no scope was supplied, which is the state
+		// that forwards nothing.
 		downstream.Scope = parseScope(systems)
 
 		out = append(out, downstream)
@@ -130,8 +129,8 @@ func (downstreams *Downstreams) read(ctx context.Context) (domain.Downstreams, e
 		return nil, operationError("downstreams", "read", err)
 	}
 
-	// The legacy server sorts the list it read by `order`; `Downstreams.Ordered` is that rule, and
-	// it is stable where the legacy `sort.Slice` is not.
+	// The legacy server sorts the list it read by `order`; `Downstreams.Ordered`
+	// is that rule, stable where the legacy `sort.Slice` was not.
 	return out.Ordered(), nil
 }
 
@@ -238,11 +237,11 @@ func (downstreams *Downstreams) selectObsolete(ctx context.Context, tx transacti
 	return obsolete, nil
 }
 
-// downstreamNamed reports whether the submitted list still names a stored downstream.
-//
-// The legacy `Downstreams.Write` stops its scan at the first submitted downstream whose id is zero,
-// so a save that adds a downstream silently keeps every downstream the list removed. This server
-// repairs that rule;
+// downstreamNamed reports whether the submitted list still names a stored
+// downstream. The legacy write stops its scan at the first submitted downstream
+// whose id is zero, so a save that adds a downstream silently keeps every
+// downstream the list removed; this server repairs that rule, as recorded in the
+// reconciling-saves maintainer note.
 func downstreamNamed(next domain.Downstreams, id uint64) bool {
 	for _, downstream := range next {
 		if downstream.ID == id {
@@ -253,11 +252,9 @@ func downstreamNamed(next domain.Downstreams, id uint64) bool {
 	return false
 }
 
-// downstreamValues are the downstream's columns in the order both statements list them.
-//
-// The scope is written as the JSON text the column carries, through the same helper the accesses
-// and apikeys use, so a scope read out of a legacy-written row is written back as the text the
-// legacy server wrote.
+// downstreamValues are the downstream's columns in the order both statements list
+// them. The scope is written as the JSON text the column carries, through the same
+// helper the accesses and apikeys use.
 func downstreamValues(downstream domain.Downstream) []any {
 	return []any{
 		downstream.Apikey,

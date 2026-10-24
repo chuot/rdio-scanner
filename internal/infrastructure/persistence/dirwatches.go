@@ -26,26 +26,23 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// Dirwatches is the stored directory-watch configuration.
-//
-// It is the configuration the server is running with, not a view of the table: the watches are
-// read from the database once, kept in memory, and replaced by what a save submits — exactly as
-// the legacy server holds its `Dirwatches.List` in process memory and treats the database as its
-// persistence. Re-querying on every read would answer the administrator with the stored
-// configuration instead of the live one.
+// Dirwatches is the stored directory-watch configuration: the configuration in
+// effect, not a view of the `dirwatches` table — read once, kept in memory, and
+// replaced by what a save submits. The posture, including a save that takes
+// effect before it is stored, is the live configuration in effect maintainer note.
 type Dirwatches struct {
 	store store
 
-	// mutex guards the live watches. The legacy server guards its list with a mutex too,
-	// because a configuration save and a running watcher read the same list.
+	// mutex guards the live watches: a configuration save and a running
+	// watcher read the same list.
 	mutex sync.Mutex
 
-	// live is the set of watches in effect. After a save that persisted, it is what the table
-	// holds; after one that did not, it is what was submitted.
+	// live is the set of watches in effect. After a save that persisted, it
+	// is what the table holds; after one that did not, it is what was submitted.
 	live domain.Dirwatches
 
-	// liveIsKnown reports whether the live watches have been read yet. The first read is the
-	// startup read the legacy server does in `Controller.Start`.
+	// liveIsKnown says whether the live watches have been read yet; the first
+	// read is the startup read.
 	liveIsKnown bool
 }
 
@@ -75,12 +72,11 @@ func (dirwatches *Dirwatches) AllDirwatches(ctx context.Context) (domain.Dirwatc
 	return dirwatches.live, nil
 }
 
-// SaveDirwatches makes the given watches what the server runs with and then stores them.
-//
-// The order is not a detail: the legacy server replaces its in-memory list before it writes, so
-// a save that cannot be persisted still leaves the submitted directories being watched for the
-// rest of the run. A store that cannot be reached at all is reported as the failure it is, and
-// the submitted watches stay in effect either way.
+// SaveDirwatches makes the given watches what the server runs with and then stores
+// them. The submitted watches take effect before the store is reached, so a save
+// that cannot be persisted still leaves the submitted directories being watched;
+// why that order is the parity behavior lives in the live configuration in effect
+// maintainer note.
 func (dirwatches *Dirwatches) SaveDirwatches(ctx context.Context, next domain.Dirwatches) error {
 	dirwatches.mutex.Lock()
 	defer dirwatches.mutex.Unlock()
@@ -92,8 +88,8 @@ func (dirwatches *Dirwatches) SaveDirwatches(ctx context.Context, next domain.Di
 		return err
 	}
 
-	// A save that persisted is normalized through the stored rows, which is what gives a newly
-	// added watch the identifier the table assigned it.
+	// A save that persisted is normalized through the stored rows, which gives a
+	// newly added watch the identifier the table assigned it.
 	loaded, err := dirwatches.read(ctx)
 	if err != nil {
 		return err
@@ -150,12 +146,10 @@ func (dirwatches *Dirwatches) read(ctx context.Context) (domain.Dirwatches, erro
 		return nil, operationError("dirwatches", "read", err)
 	}
 
-	// The legacy server sorts the list it read by `order` rather than asking the database for it,
-	// and the two servers have to agree about the order the administrator arranged.
-	//
-	// The legacy sort is `sort.Slice`, which is not stable, so watches sharing an order come out
-	// in an arbitrary sequence. Sorting stably is the same rule made repeatable; which watch comes
-	// first among equal orders is not something a deployment can observe as a rule.
+	// The legacy server sorts the list it read by `order` rather than asking the
+	// database for it, and the two servers have to agree about the order the
+	// administrator arranged. The legacy sort was unstable; sorting stably is the
+	// same rule made repeatable.
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].Order < out[j].Order
 	})
@@ -181,8 +175,7 @@ func (dirwatches *Dirwatches) write(ctx context.Context, next domain.Dirwatches)
 	}
 
 	if len(obsolete) > 0 {
-		// The identifiers go in as parameters, one placeholder each. The legacy server built this
-		// by marshalling the ids to JSON and swapping the brackets for parentheses.
+		// The identifiers go in as parameters, one placeholder each.
 		placeholders := make([]string, 0, len(obsolete))
 		args := make([]any, 0, len(obsolete))
 
@@ -268,10 +261,10 @@ func (dirwatches *Dirwatches) selectObsolete(ctx context.Context, tx transaction
 	return obsolete, nil
 }
 
-// dirwatchNamed reports whether the submitted list still names a stored watch.
-//
-// The legacy `Dirwatches.Write` stops its scan at the first submitted watch whose id is zero, so a
-// save that adds a watch silently keeps every watch the list removed. This server repairs that rule.
+// dirwatchNamed reports whether the submitted list still names a stored watch. The
+// legacy write stops its scan at the first submitted watch whose id is zero, so a
+// save that adds a watch silently keeps every watch the list removed; this server
+// repairs that rule, as recorded in the reconciling-saves maintainer note.
 func dirwatchNamed(next domain.Dirwatches, id uint64) bool {
 	for _, dirwatch := range next {
 		if dirwatch.ID == id {

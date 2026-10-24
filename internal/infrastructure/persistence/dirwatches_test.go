@@ -25,9 +25,8 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// openDirwatchTestDatabase opens an empty database with the legacy schema applied, for the tests
-// that write. It is named after this adapter rather than given a package-wide name so that the
-// other persistence adapters' tests can bring their own.
+// openDirwatchTestDatabase opens an empty database with the legacy schema applied, for the
+// tests that write.
 func openDirwatchTestDatabase(t *testing.T) *sql.DB {
 	t.Helper()
 
@@ -48,9 +47,8 @@ func openDirwatchTestDatabase(t *testing.T) *sql.DB {
 	return db
 }
 
-// TestAllDirwatchesReadsWhatTheLegacyServerStored is the the criterion half for this adapter: the
-// directory watch the legacy server stored through its own configuration endpoint reads back
-// field for field.
+// The directory watch the legacy server stored through its own configuration endpoint reads
+// back field for field.
 func TestAllDirwatchesReadsWhatTheLegacyServerStored(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -94,16 +92,15 @@ func TestAllDirwatchesReadsWhatTheLegacyServerStored(t *testing.T) {
 	}
 }
 
-// TestAllDirwatchesReadsTheFlagsTheLegacyServerStored pins the boolean columns. The legacy server
-// writes Go's `%t` into `integer(1)` columns, which reaches sqlite as the bare tokens `true` and
-// `false` — and sqlite reads those as the integers 1 and 0, which is what the fixture's rows hold.
-// The read accepts both that and the text a `true`/`false` written as a string would leave behind.
+// The boolean columns hold the integers sqlite stores from the bare `true` and `false` tokens
+// Go's `%t` produces, and the read accepts both that and the text a `true`/`false` written as
+// a string leaves behind.
 func TestAllDirwatchesReadsTheFlagsTheLegacyServerStored(t *testing.T) {
 	db := openLegacyDatabase(t)
 
-	// The legacy server's own INSERT, with the `%t` slots already resolved to the bare `true`
-	// and `false` tokens it produces. Nothing here is a Go value interpolated into SQL: the
-	// statement is a constant, reproduced from `server/dirwatch.go` Dirwatches.Write.
+	// The legacy server's own INSERT, reproduced from `server/dirwatch.go`
+	// `Dirwatches.Write`, with the `%t` slots already resolved to the bare `true` and `false`
+	// tokens it produces.
 	const legacyRow = `INSERT INTO "dirwatches" ("delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (2000, true, '/spool/legacy-flags', false, '.mp3', 0, '', 9, 0, 0, 0, 'default')`
 
 	if _, err := db.Exec(legacyRow); err != nil {
@@ -141,9 +138,8 @@ func TestAllDirwatchesReadsTheFlagsTheLegacyServerStored(t *testing.T) {
 	}
 }
 
-// TestSaveDirwatchesWritesRowsTheLegacyServerReadsBack is the the criterion half for this adapter: the
-// row this server writes is read by the legacy server's own read statement, scanning into the field
-// types its Dirwatch has, and lands with the same storage class its rows have.
+// The row this server writes is read by the legacy server's own read statement, scanning into
+// the field types its Dirwatch has, and lands with the same storage class its rows have.
 func TestSaveDirwatchesWritesRowsTheLegacyServerReadsBack(t *testing.T) {
 	db := openDirwatchTestDatabase(t)
 
@@ -210,9 +206,8 @@ func TestSaveDirwatchesWritesRowsTheLegacyServerReadsBack(t *testing.T) {
 			siteID, systemID, talkgroupID, kind, want.SiteID, want.SystemID, want.TalkgroupID, want.Kind)
 	}
 
-	// The legacy server's own rows hold the two flags as integers, which is what a `true`/`false`
-	// token becomes. A row this server writes has to land the same way, or the two servers disagree
-	// about what the column holds.
+	// The legacy server's own rows hold the two flags as integers, which is what a
+	// `true`/`false` token becomes: a row this server writes has to land the same way.
 	var deleteAfterType, disabledType string
 
 	if err := db.QueryRow(`SELECT typeof("deleteAfter"), typeof("disabled") FROM "dirwatches"`).Scan(&deleteAfterType, &disabledType); err != nil {
@@ -294,9 +289,8 @@ func TestAllDirwatchesReturnsTheWatchesInTheirDisplayOrder(t *testing.T) {
 	}
 }
 
-// TestAllDirwatchesReportsTheConfigurationInEffectAndNotTheStoredRows is the configuration-in-effect rule: the watches
-// are read from the database once and then held, because what the administrator is shown and what
-// the watchers run on is what the server is running with.
+// The watches are read from the database once and then held: what the administrator is shown
+// and what the watchers run on is what the server is running with.
 func TestAllDirwatchesReportsTheConfigurationInEffectAndNotTheStoredRows(t *testing.T) {
 	db := openDirwatchTestDatabase(t)
 
@@ -333,9 +327,8 @@ func TestAllDirwatchesReportsTheConfigurationInEffectAndNotTheStoredRows(t *test
 	}
 }
 
-// TestSaveDirwatchesLeavesTheSubmittedWatchesInEffectWhenTheSaveFails is a preserved quirk: the submitted
-// configuration is in effect before anything is stored, so a section that could not be persisted is
-// still what the server runs on.
+// The submitted configuration is in effect before anything is stored, so a section that could
+// not be persisted is still what the server runs on.
 func TestSaveDirwatchesLeavesTheSubmittedWatchesInEffectWhenTheSaveFails(t *testing.T) {
 	db := openDirwatchTestDatabase(t)
 
@@ -385,8 +378,7 @@ func TestSaveDirwatchesLeavesTheSubmittedWatchesInEffectWhenTheSaveFails(t *test
 	}
 }
 
-// TestSaveDirwatchesRemovesTheWatchesTheSubmittedListNoLongerNames is the reconciling half of the
-// save: a whole-collection save that drops a watch drops it from the table too.
+// A whole-collection save that drops a watch drops it from the table too.
 func TestSaveDirwatchesRemovesTheWatchesTheSubmittedListNoLongerNames(t *testing.T) {
 	db := openDirwatchTestDatabase(t)
 
@@ -438,15 +430,9 @@ func TestSaveDirwatchesRemovesTheWatchesTheSubmittedListNoLongerNames(t *testing
 	}
 }
 
-// TestSaveDirwatchesRemovesAStoredWatchEvenWhenTheSubmittedListAddsANewOne pins the repaired
-// reconcile.
-//
-// `server/dirwatch.go` `Dirwatches.Write` decides whether a stored watch is still named by scanning
-// the submitted list and stopping at the first entry whose identifier is zero or equal — so one new,
-// identifier-less watch keeps every stored watch, and a save that adds a watch and drops another
-// leaves the dropped one stored until a later save that adds nothing. The same shape is in
-// Systems.Write, Groups.Write, Tags.Write, Accesses.Write, and Apikeys.Write, and this server repairs
-// all of them.
+// A save that adds a new watch still removes the stored watch the submitted list dropped: the
+// legacy `server/dirwatch.go` `Dirwatches.Write` stopped at the first submitted entry with no
+// identity of its own, so it deleted nothing, and this server repairs that rule.
 func TestSaveDirwatchesRemovesAStoredWatchEvenWhenTheSubmittedListAddsANewOne(t *testing.T) {
 	db := openDirwatchTestDatabase(t)
 
@@ -489,8 +475,8 @@ func TestSaveDirwatchesRemovesAStoredWatchEvenWhenTheSubmittedListAddsANewOne(t 
 	}
 }
 
-// TestSaveDirwatchesUpdatesTheWatchThatCarriesTheStoredIdentifier pins the update half of the save:
-// a submitted watch whose identifier is already stored replaces that row rather than adding one.
+// A submitted watch whose identifier is already stored replaces that row rather than adding
+// one.
 func TestSaveDirwatchesUpdatesTheWatchThatCarriesTheStoredIdentifier(t *testing.T) {
 	db := openDirwatchTestDatabase(t)
 
@@ -535,8 +521,8 @@ func TestSaveDirwatchesUpdatesTheWatchThatCarriesTheStoredIdentifier(t *testing.
 	}
 }
 
-// TestSaveDirwatchesGivesANewWatchTheIdentifierTheTableAssignedIt pins why a saved section is read
-// back: the watch the administrator added has no identifier until the table gives it one.
+// The watch the administrator added has no identifier until the table gives it one, which is
+// why a saved section is read back.
 func TestSaveDirwatchesGivesANewWatchTheIdentifierTheTableAssignedIt(t *testing.T) {
 	db := openDirwatchTestDatabase(t)
 
@@ -558,10 +544,9 @@ func TestSaveDirwatchesGivesANewWatchTheIdentifierTheTableAssignedIt(t *testing.
 	}
 }
 
-// TestSaveDirwatchesStoresADirectoryContainingAQuote is the the requirement half of this adapter: the legacy
-// `Dirwatches.Write` interpolates the directory into the statement with no escaping at all, so a
-// directory naming a quote breaks the statement and the whole save fails. The values go in as
-// parameters here.
+// The legacy `Dirwatches.Write` interpolates the directory into the statement with no escaping
+// at all, so a directory naming a quote breaks the statement and the whole save fails: the
+// values go in as parameters here.
 func TestSaveDirwatchesStoresADirectoryContainingAQuote(t *testing.T) {
 	db := openDirwatchTestDatabase(t)
 
@@ -606,9 +591,8 @@ func TestAllDirwatchesReportsAnUnreachableStore(t *testing.T) {
 	}
 }
 
-// TestSaveDirwatchesOnADatabaseTheLegacyServerWroteKeepsTheStoredWatch is the direction a
-// deployment actually takes over: this server saves the configuration it just read out of a
-// legacy-written database and the legacy-written row is still there afterwards.
+// This server saves the configuration it just read out of a legacy-written database, and the
+// legacy-written row is still there afterwards.
 func TestSaveDirwatchesOnADatabaseTheLegacyServerWroteKeepsTheStoredWatch(t *testing.T) {
 	db := openLegacyDatabase(t)
 

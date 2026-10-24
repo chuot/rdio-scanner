@@ -24,18 +24,14 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The log source column and the two indexes the log search runs against.
-//
-// They are not in the dialect schemas' `logs` statement for the indexes, and not only there for the
-// column. ApplySchema's statements are the legacy server's, every one of them `IF NOT EXISTS`, and its
-// contract is that a database the other server wrote comes out exactly as it went in — which
-// TestApplySchemaLeavesALegacyWrittenDatabaseExactlyAsItFoundIt checks object by object, indexes included.
-// So everything this feature changes about a database that already exists happens here, in the migration
-// pass, after the schema has been applied and before any v6 table is read.
-//
-// MySQL is the reason the column has two spellings: it refuses a default on a TEXT column, and the default
-// is the part that lets the legacy server keep inserting into this table without knowing the column exists.
-// It is the reason the index by source has two as well, for the opposite trouble with the same column.
+// The log source column and the two indexes the log search runs against. All
+// three arrive through the migration pass, not the dialect schemas: the schema
+// statements are the legacy server's, and a database the other server wrote
+// has to come out of this server exactly as it went in, so everything that
+// changes a database that already exists happens here, after the schema has
+// been applied and before any v6 table is read. MySQL is why the column and
+// the source index each have two spellings, and the migration-pass posture is
+// the log-source migration pass maintainer note.
 const (
 	logSourceColumnSqlite     = `ALTER TABLE "logs" ADD COLUMN "source" text NOT NULL DEFAULT ''`
 	logSourceColumnServer     = `ALTER TABLE "logs" ADD COLUMN "source" varchar(255) NOT NULL DEFAULT ''`
@@ -43,29 +39,26 @@ const (
 	logSourceIndexBySource    = `CREATE INDEX "logs_source_idx" ON "logs" ("source", "level", "timestamp")`
 	logSourceIndexByTimestamp = `CREATE INDEX "logs_time_idx" ON "logs" ("timestamp")`
 
-	// logSourceIndexBySourceServer is the same index spelled for the backend that cannot build the other
-	// one. `level` is a TEXT column there, and MySQL only indexes a prefix of a TEXT column: asked for
-	// the whole thing it refuses the statement — "Specified key was too long; max key length is 3072
-	// bytes" — and a deployment on MariaDB ends its startup in this step. The prefix is the index the log
-	// search needs, because a level is one of a handful of short words and never the long part of a row.
+	// logSourceIndexBySourceServer is the same index spelled for the backend
+	// that cannot build the other one: `level` is a TEXT column there, and
+	// MySQL indexes only a prefix of a TEXT column, so this spelling names the
+	// prefix that keeps the statement buildable. A level is one of a handful
+	// of short words, so that prefix is the index the log search needs.
 	logSourceIndexBySourceServer = `CREATE INDEX "logs_source_idx" ON "logs" ("source", "level"(255), "timestamp")`
 )
 
 // ensureLogSourceColumn gives the log table the column that says which part of the server wrote each
-// entry, and the indexes the log search is written against.
-//
-// It is idempotent in the way every other step of the startup pass is: it asks the database what it
-// already has and adds only what is missing. A `logs` table that is not there at all ends the step with
-// nothing said and nothing done, which is how each v6 migration already answers the same question.
+// entry, and the indexes the log search is written against. The step is idempotent like every other
+// step of the startup pass: it asks what the database already has and adds only what is missing, and
+// a `logs` table that is not there at all ends the step with nothing said and nothing done.
 func ensureLogSourceColumn(ctx context.Context, s store) error {
 	columns, err := logTableColumns(ctx, s)
 	if err != nil {
 		return operationError("migration", "ensureLogSource", err)
 	}
 
-	// No columns means no table. This server creates the table in ApplySchema, so the case this reaches
-	// is a database that was opened before its schema was applied — and a migration step is not the place
-	// to decide that a table should exist.
+	// No columns means no table: this server creates the table in ApplySchema,
+	// and a migration step is not the place to decide that a table should exist.
 	if len(columns) == 0 {
 		return nil
 	}
@@ -104,19 +97,13 @@ func ensureLogSourceColumn(ctx context.Context, s store) error {
 		{"logs_time_idx", logSourceIndexByTimestamp},
 	}
 
-	// A missing index is the sign of a pass that died before creating it — and of
-	// a backfill that died halfway. The fill used to belong to the run
-	// that added the column and to no other, so the rows that run never reached
-	// stayed nameless for good, and the deployment's log view kept showing blank
-	// rows no filter could ever find.
-	//
-	// The fill belongs to the run that adds the column and to the runs that find
-	// the indexes missing, and to no other run. A deployment's log is read and
-	// filtered for months, and re-deciding on every start what an old entry meant
-	// is not something an operator can rely on — least of all when the operator,
-	// or a legacy server sharing the database, has already re-filed a row by hand.
-	// A row that already names a source keeps it, which is what makes running the
-	// fill again over a complete log change nothing.
+	// A missing index is the sign of a pass that died before creating it — and
+	// of a backfill that died halfway. The fill belongs to the run that adds
+	// the column and to the runs that find the indexes missing, and to no
+	// other run; it files only rows that still name no source, so a row an
+	// operator or a legacy server already re-filed keeps what it was given.
+	// Why the fill belongs to no other run is the log-source backfill
+	// maintainer note.
 	missing := false
 
 	for _, index := range indexes {
@@ -146,8 +133,8 @@ func ensureLogSourceColumn(ctx context.Context, s store) error {
 			continue
 		}
 
-		// MySQL is the dialect that has no `CREATE INDEX IF NOT EXISTS`, which is why the index is probed
-		// rather than asked for, and why the same three lines work on all four backends.
+		// MySQL has no `CREATE INDEX IF NOT EXISTS`, so the index is probed rather
+		// than asked for, which is what lets the same lines work on all backends.
 		if _, err := s.exec(ctx, index.statement); err != nil {
 			return statementError("migration", "ensureLogSource", err, index.statement)
 		}
@@ -156,10 +143,8 @@ func ensureLogSourceColumn(ctx context.Context, s store) error {
 	return nil
 }
 
-// logTableColumns reads the columns the log table has, from the database's own description of itself.
-//
-// A table that is not there answers with no rows on every dialect: SQLite's pragma over a missing table is
-// an empty result rather than an error, and the two catalog queries simply match nothing.
+// logTableColumns reads the columns the log table has, from the database's own description of
+// itself. A table that is not there answers with no rows on every dialect.
 func logTableColumns(ctx context.Context, s store) ([]string, error) {
 	query := `SELECT "name" FROM pragma_table_info("logs")`
 
@@ -229,14 +214,10 @@ func hasColumn(columns []string, want string) bool {
 }
 
 // logSourceBackfill is the mapping from the prefix an existing message carries to the part of the server
-// that wrote it. It is the inventory of every prefix the server has ever written, and it is only
-// ever applied to rows written before the column existed.
-//
-// Two of its rules are the ones that matter. Longer prefixes are applied before shorter ones that are a
-// prefix of them, so downstream.send: is a downstream line and not something else. And a message that maps
-// to nothing is filed under legacy rather than left blank: an operator filtering by subsystem on a database
-// that predates this feature has to be able to tell "this happened before the log knew" from "nothing
-// happened".
+// that wrote it, applied only to rows written before the column existed. Longer prefixes are applied
+// before shorter ones that are a prefix of them, and a message that maps to nothing is filed under
+// legacy rather than left blank: an operator filtering an old database has to be able to tell "this
+// happened before the log knew" from "nothing happened".
 var logSourceBackfill = []struct {
 	prefix string
 	source domain.LogSource

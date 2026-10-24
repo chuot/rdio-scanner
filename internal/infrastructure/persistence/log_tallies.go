@@ -25,20 +25,17 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The tally the status view's log-health card is built from. It is kept apart from the log view's
-// search: the search pages and filters entries for an operator reading them, and this counts what the
-// server complained about for an operator watching a page.
-//
-// Only the two severities that mean trouble are tallied. An hour of ordinary notices is not a reason to
-// say a subsystem needs attention, and a card that counted everything would say it about every
-// deployment there is.
+// The tally the status view's log-health card is built from, kept apart from the
+// log view's search: the search pages and filters entries for an operator reading
+// them, this counts what the server complained about for an operator watching a
+// page. Why only error and warning severities are tallied is the log health tally
+// posture maintainer note.
 
 var _ ports.LogTallyRepository = (*Logs)(nil)
 
-// TallyLogLevels counts the error and warning entries written at or after the given instant, per
-// severity and per subsystem. A subsystem that wrote neither is not one of the tallies: an absent
-// subsystem is a subsystem that had nothing to complain about, and listing every part of the server
-// with a zero each would bury the one that did.
+// TallyLogLevels counts the error and warning entries written at or after the
+// given instant, per severity and per subsystem. A subsystem that wrote neither is
+// not one of the tallies.
 func (logs *Logs) TallyLogLevels(ctx context.Context, from time.Time) ([]ports.LogLevelTally, error) {
 	query := `SELECT "level", "source", COUNT(*) FROM "logs"` +
 		` WHERE "timestamp" >= ? AND "level" IN (?, ?)` +
@@ -51,10 +48,10 @@ func (logs *Logs) TallyLogLevels(ctx context.Context, from time.Time) ([]ports.L
 
 	defer rows.Close()
 
-	// The two spellings a row without a subsystem can carry — the blank another server's insert
-	// leaves, and the column the row never had at all — are one group in the log view, so they are one
-	// group here. The same entry counted one way on the status page and another way on the log page is
-	// two numbers an operator cannot reconcile.
+	// The two spellings a row without a subsystem can carry — the blank another
+	// server's insert leaves, and the column the row never had at all — are one
+	// group in the log view, so they are one group here: the same entry never
+	// counts two ways on two pages.
 	counted := map[string]map[domain.LogSource]uint64{}
 
 	for rows.Next() {
@@ -90,9 +87,8 @@ func (logs *Logs) TallyLogLevels(ctx context.Context, from time.Time) ([]ports.L
 		}
 	}
 
-	// The grouping comes back in whatever order the backend chose. The status view sorts its own card,
-	// and a tally list that changed order between two polls of the same window would be read as the
-	// server changing when nothing did.
+	// The grouping comes back in whatever order the backend chose; the tally list
+	// is sorted so two polls of the same window read as the same card.
 	sort.Slice(tallies, func(i, j int) bool {
 		if tallies[i].Count != tallies[j].Count {
 			return tallies[i].Count > tallies[j].Count

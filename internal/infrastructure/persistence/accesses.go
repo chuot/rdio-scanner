@@ -264,9 +264,9 @@ func (accesses *Accesses) write(ctx context.Context, list domain.Accesses) error
 		return statementError("accesses", "write", err, accessSelectIDsQuery)
 	}
 
-	// The cursor closes on the way out of the function, whatever the way out is
-	//: the manual closes this loop used to have were two of them, and
-	// a function that gains a third exit keeps the table open.
+	// The cursor closes on the way out of the function, whatever the way out is: the
+	// manual closes this loop used to have were two of them, and a function that gains a
+	// third exit keeps the table open.
 	defer rows.Close()
 
 	stale := []uint64{}

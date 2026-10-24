@@ -23,9 +23,8 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestAllGroupsReadsTheGroupsTheLegacyServerWrote is the groups half of the requirement: every column the
-// legacy `Groups.Write` stored, read back into the field it belongs to, in the display order the
-// legacy `Groups.Read` sorts into.
+// Every column the legacy `Groups.Write` stored reads back into the field it belongs to, in
+// the display order the legacy `Groups.Read` sorts into.
 func TestAllGroupsReadsTheGroupsTheLegacyServerWrote(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -56,8 +55,8 @@ func TestAllGroupsReadsTheGroupsTheLegacyServerWrote(t *testing.T) {
 	}
 }
 
-// TestAllGroupsIsReadFromTheDatabaseOnce is the configuration-in-effect rule for this section: the collection the server answers
-// with is the one it is running with.
+// The groups the server answers with are the ones it is running with: the collection is read
+// from the database once.
 func TestAllGroupsIsReadFromTheDatabaseOnce(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -101,8 +100,8 @@ func TestAllGroupsReportsTheLegacyFailureShapeWhenTheDatabaseCannotBeRead(t *tes
 	}
 }
 
-// TestSaveGroupsStoresANewGroupAndCachesTheStoredRow is the re-read after a successful write: the
-// identifier the table assigned is what the next save and the configuration broadcast work from.
+// The read-back after a successful write gives the identities the table assigned, which the
+// next save and the configuration broadcast work from.
 func TestSaveGroupsStoresANewGroupAndCachesTheStoredRow(t *testing.T) {
 	db := openSchemaDatabase(t)
 
@@ -136,7 +135,7 @@ func TestSaveGroupsStoresANewGroupAndCachesTheStoredRow(t *testing.T) {
 	}
 }
 
-// TestSaveGroupsUpdatesAStoredGroupInPlace covers the update half of the reconcile.
+// A submitted group whose identifier is already stored replaces that row in place.
 func TestSaveGroupsUpdatesAStoredGroupInPlace(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -176,8 +175,8 @@ func TestSaveGroupsUpdatesAStoredGroupInPlace(t *testing.T) {
 	}
 }
 
-// TestSaveGroupsRemovesAStoredGroupTheSubmittedListOmits is the reconcile the port promises, and it
-// reaches the memberships too: talkgroupGroups references groups ON DELETE CASCADE.
+// A whole-collection save that drops a group drops it from the table too, and
+// `talkgroupGroups` references groups `ON DELETE CASCADE`, so the memberships go with it.
 func TestSaveGroupsRemovesAStoredGroupTheSubmittedListOmits(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -207,9 +206,9 @@ func TestSaveGroupsRemovesAStoredGroupTheSubmittedListOmits(t *testing.T) {
 	}
 }
 
-// TestSaveGroupsRemovesAStoredGroupEvenWhenTheSubmittedListNamesANewOne pins the repaired reconcile: `server/group.go` `Groups.Write` tests
-// `group.Id == 0 || group.Id == groupId`, so one submitted group with no identity yet keeps every
-// stored group and a save that adds a group deletes none. This server deletes what the list removed.
+// A save that adds a new group still removes the stored group the submitted list dropped: the
+// legacy `server/group.go` `Groups.Write` tested `group.Id == 0 || group.Id == groupId`, so one
+// group with no identity yet kept every stored group, and this server repairs that rule.
 func TestSaveGroupsRemovesAStoredGroupEvenWhenTheSubmittedListNamesANewOne(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -242,8 +241,7 @@ func TestSaveGroupsRemovesAStoredGroupEvenWhenTheSubmittedListNamesANewOne(t *te
 	}
 }
 
-// TestSaveGroupsLeavesTheSubmittedGroupsInEffectWhenTheStoreCannotBeWritten is a preserved quirk: the
-// submitted section is what the server runs with even when it could not be stored.
+// The submitted section is what the server runs with even when it could not be stored.
 func TestSaveGroupsLeavesTheSubmittedGroupsInEffectWhenTheStoreCannotBeWritten(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -274,8 +272,8 @@ func TestSaveGroupsLeavesTheSubmittedGroupsInEffectWhenTheStoreCannotBeWritten(t
 	}
 }
 
-// TestSaveGroupsStoresAQuoteInALabelAsText is what parameterizing every statement buys: the legacy
-// `Groups.Write` reached for this by doubling the quote inside an interpolated statement.
+// Every statement is parameterized, so a quote in a label is stored as text: the legacy
+// `Groups.Write` reached for that by doubling the quote inside an interpolated statement.
 func TestSaveGroupsStoresAQuoteInALabelAsText(t *testing.T) {
 	db := openSchemaDatabase(t)
 

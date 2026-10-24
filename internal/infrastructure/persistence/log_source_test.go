@@ -24,11 +24,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-//: the migration step that owns every change this feature makes to a database that already exists.
-//
-// ApplySchema cannot do any of it — every one of its statements is `IF NOT EXISTS`, so on a `logs` table
-// that is already there they change nothing — and it must not try: its contract is that a database the
-// legacy server wrote comes out exactly as it went in.
+// The migration pass owns every change to a database that already exists: ApplySchema
+// cannot make them — its statements are all `IF NOT EXISTS` — and must not, because its contract
+// is that a legacy-written database comes out exactly as it went in.
 
 func TestMigrateAddsTheLogSourceColumnToADatabaseThatAlreadyHasTheTable(t *testing.T) {
 	db := openLegacyDatabase(t)
@@ -60,9 +58,8 @@ func TestMigrateAddsTheLogSourceColumnToADatabaseThatAlreadyHasTheTable(t *testi
 	}
 }
 
-// TestMigrateBringsTheLogSourceColumnUpTwiceIsTheSameAsOnce is the startup an existing deployment is on:
-// the migration pass runs on every start, and the second start must not re-add the column, re-run the
-// backfill, or change a row.
+// The migration pass runs on every start: the second start must not re-add the column,
+// re-run the backfill, or change a row.
 func TestMigrateAddingTheLogSourceColumnTwiceIsTheSameAsOnce(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -102,9 +99,8 @@ func TestMigrateAddingTheLogSourceColumnTwiceIsTheSameAsOnce(t *testing.T) {
 	}
 }
 
-// TestEnsureLogSourceColumnOnADatabaseWithNoLogsTable says what the probe does when the table the step is
-// here to change is not there: it says nothing and does nothing, which is how every v6 migration in this
-// file already answers the same question.
+// A database with no `logs` table at all: the probe says nothing and does nothing, as every
+// v6 migration in the file already answers the same question.
 func TestEnsureLogSourceColumnOnADatabaseWithNoLogsTable(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -121,9 +117,8 @@ func TestEnsureLogSourceColumnOnADatabaseWithNoLogsTable(t *testing.T) {
 	}
 }
 
-// TestEnsureLogSourceColumnOnAnEmptyLogsTable covers the database this server itself created and then
-// emptied: the table is there, it holds nothing, and the step still gives it the column and the indexes,
-// because a log table without them is a log view that cannot be filtered.
+// The table is there and empty, and the step still gives it the column and the indexes: a
+// log table without them is a log view that cannot be filtered.
 func TestEnsureLogSourceColumnOnAnEmptyLogsTable(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "logs")
 
@@ -142,8 +137,8 @@ func TestEnsureLogSourceColumnOnAnEmptyLogsTable(t *testing.T) {
 	}
 }
 
-// TestEnsureLogSourceColumnAddsTheIndexesWithoutAColumnToAdd covers the start after the start, on a
-// database that already has the column: the indexes are still ensured, and nothing else moves.
+// A database that already has the column: the indexes are still ensured, and nothing else
+// moves.
 func TestEnsureLogSourceColumnEnsuresTheIndexesOnADatabaseThatAlreadyHasTheColumn(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -214,8 +209,8 @@ func logIndexes(t *testing.T, db *sql.DB) []string {
 	return names
 }
 
-// readLogRows reads the whole log table in order, so a migration that quietly rewrote or lost a row is a
-// failing test rather than a difference nobody looked at.
+// readLogRows reads the whole log table in order, so a migration that quietly rewrote or
+// lost a row is a failing test rather than a difference nobody looked at.
 func readLogRows(t *testing.T, db *sql.DB) []string {
 	t.Helper()
 
@@ -271,8 +266,8 @@ func itoa(v int64) string {
 	return digits
 }
 
-// logIndexDefinition reads back what the database says one of its own indexes is, so a test can name the
-// object it expects without pasting the statement the migration ran.
+// logIndexDefinition reads back what the database says one of its own indexes is, so a test
+// can name the object it expects without pasting the statement the migration ran.
 func logIndexDefinition(t *testing.T, db *sql.DB, name string) string {
 	t.Helper()
 
@@ -293,14 +288,14 @@ func logSchemaDefinition(t *testing.T, db *sql.DB, kind, name string) string {
 	return definition
 }
 
-// isLogsTable and isLogIndex name a schema object by its kind and its name, which is the first two words
-// of the string readSchemaObjects builds.
+// isLogsTable and isLogIndex name a schema object by its kind and its name, the first two
+// words of the string readSchemaObjects builds.
 func isLogsTable(object string) bool {
 	return strings.HasPrefix(object, "table logs ")
 }
 
-// isCallsTable names the calls table the same way: the startup pass gives it the audioLength
-// column, so it is the other object allowed to read differently after the pass.
+// isCallsTable names the calls table the same way: the startup pass gives it the
+// audioLength column, so it is the other object allowed to read differently after the pass.
 func isCallsTable(object string) bool {
 	return strings.HasPrefix(object, "table calls ")
 }
@@ -309,12 +304,10 @@ func isLogIndex(object string, name string) bool {
 	return strings.HasPrefix(object, "index "+name+" ")
 }
 
-// TestBackfillLogSourcesFilesEveryExistingRowByItsPrefix is the criterion: a row written before the column
-// existed is given a source by reading the prefix its message carries, and a row whose prefix maps to
-// nothing is stored as legacy rather than left blank or guessed at.
-//
-// The messages are the ones the server actually wrote, including the persistence prefixes that reach
-// the log because a caller stored err.Error with nothing added.
+// A row written before the column existed is filed by reading the prefix its message
+// carries, and a row whose prefix maps to nothing is stored as legacy rather than left blank or
+// guessed at. The messages are the ones the server actually wrote, including the persistence
+// prefixes that reach the log because a caller stored err.Error with nothing added.
 func TestBackfillLogSourcesFilesEveryExistingRowByItsPrefix(t *testing.T) {
 	cases := []struct {
 		message string
@@ -413,8 +406,7 @@ func TestBackfillLogSourcesFilesEveryExistingRowByItsPrefix(t *testing.T) {
 	}
 }
 
-// TestBackfillLogSourcesFilesTheLegacyFixtureOwnRows is the deployment that actually exists: the five
-// entries the legacy server wrote into the fixture.
+// The five entries the legacy server wrote into the fixture are filed like any other rows.
 func TestBackfillLogSourcesFilesTheLegacyFixtureOwnRows(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -463,9 +455,9 @@ func TestBackfillLogSourcesFilesTheLegacyFixtureOwnRows(t *testing.T) {
 	}
 }
 
-// TestBackfillLogSourcesRunsOnce says why the backfill is tied to the run that added the column: a
-// deployment's log is read and filtered for months, and re-deciding what an old entry meant on every start
-// is not something an operator can rely on.
+// The backfill is tied to the run that added the column: a deployment's log is read and
+// filtered for months, and re-deciding what an old entry meant on every start is not something
+// an operator can rely on.
 func TestBackfillLogSourcesRunsOnce(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "logs")
 
@@ -477,8 +469,8 @@ func TestBackfillLogSourcesRunsOnce(t *testing.T) {
 		t.Fatalf("ensureLogSourceColumn: %v", err)
 	}
 
-	// An operator, or another server sharing the database, re-files the entry. The next start must leave
-	// that decision alone.
+	// An operator, or another server sharing the database, re-files the entry. The next
+	// start must leave that decision alone.
 	if _, err := db.Exec(`UPDATE "logs" SET "source" = 'legacy'`); err != nil {
 		t.Fatalf("re-filing the entry: %v", err)
 	}
@@ -498,11 +490,9 @@ func TestBackfillLogSourcesRunsOnce(t *testing.T) {
 	}
 }
 
-// TestEverySourceTheBackfillReachesIsOneTheServerHas holds the mapping and the vocabulary together in both
-// directions. A prefix that files a row under a name the log view does not offer is a row an operator cannot
-// find; and a name the vocabulary records as one only the backfill reaches is a name the backfill has to be
-// able to produce, because the backfill is the only thing that can ever put it in a row. calls is that name,
-// and it is reachable because the legacy server's call repository stamped its lines calls.
+// The mapping and the vocabulary hold together in both directions: a prefix that files a
+// row under a name the log view does not offer is a row an operator cannot find, and a name the
+// vocabulary records as one only the backfill reaches must be one the backfill can produce.
 func TestEverySourceTheBackfillReachesIsOneTheServerHas(t *testing.T) {
 	reaches := map[domain.LogSource]bool{}
 
@@ -532,13 +522,10 @@ func TestEverySourceTheBackfillReachesIsOneTheServerHas(t *testing.T) {
 	}
 }
 
-// openMigratedLegacyDatabase opens the database the legacy server wrote and brings it through the same
-// startup pass this server runs: the schema, the log source column and its indexes, and the v6 migrations,
-// which find nothing to migrate in this fixture.
-//
-// The log repository is only ever reached after that pass — cmd/rdio-scanner/server.go builds it from a
-// database the migration has already finished with — so a test that reaches it without the pass is testing
-// a state the server cannot be in.
+// openMigratedLegacyDatabase opens the legacy-written database and brings it through the
+// same startup pass this server runs: the schema, the log source column and its indexes, and the
+// v6 migrations. The log repository is only ever reached after that pass, so a test that reaches
+// it without the pass is testing a state the server cannot be in.
 func openMigratedLegacyDatabase(t *testing.T, tables ...string) *sql.DB {
 	t.Helper()
 
@@ -551,12 +538,9 @@ func openMigratedLegacyDatabase(t *testing.T, tables ...string) *sql.DB {
 	return db
 }
 
-// TestBackfillLogSourcesRunsWhenTheIndexIsMissing: the shape a
-// crashed pass leaves — the source column is there, the indexes the pass was
-// building when it died are not, and the rows the crashed run never reached sit
-// nameless forever, because the fill used to belong to the run that added the
-// column and to no other. The missing index is the sign; the fill runs again, and
-// the rows that already name a source keep it.
+// A crashed pass leaves the source column there, the indexes it was building not, and the
+// rows the crashed run never reached sit nameless forever. The missing index is the sign; the
+// fill runs again, and the rows that already name a source keep it.
 func TestBackfillLogSourcesRunsWhenTheIndexIsMissing(t *testing.T) {
 	db := openLegacyDatabaseWithout(t, "logs")
 
@@ -570,8 +554,8 @@ func TestBackfillLogSourcesRunsWhenTheIndexIsMissing(t *testing.T) {
 		t.Fatalf("storing the second entry: %v", err)
 	}
 
-	// The crashed run: the column is added, the fill starts, and the pass dies
-	// before its indexes — one row left nameless, no indexes.
+	// The crashed run: the column is added, the fill starts, and the pass dies before
+	// its indexes — one row left nameless, no indexes.
 	if err := ensureLogSourceColumn(context.Background(), newStore(db, DialectSqlite)); err != nil {
 		t.Fatalf("the crashed run: %v", err)
 	}

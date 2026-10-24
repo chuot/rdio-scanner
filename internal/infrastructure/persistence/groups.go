@@ -24,12 +24,12 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// Groups is the stored set of talkgroup groups.
-//
-// Like the systems catalog, it is the configuration in effect rather than a view of the `groups`
-// table: it is loaded once, a save replaces it before storing it, and a save that stored is
-// followed by reading the stored rows back so that the identifiers the table assigned are what the
-// next save and the configuration broadcast work from.
+// Groups is the stored set of talkgroup groups: the configuration in effect, not a
+// view of the `groups` table — loaded once, and a save replaces it before storing
+// it. A save that stored is followed by reading the stored rows back so that the
+// identifiers the table assigned are what the next save and the configuration
+// broadcast work from. That posture, including a save that takes effect before it
+// is stored, is the live configuration in effect maintainer note.
 type Groups struct {
 	store store
 
@@ -119,11 +119,12 @@ func readGroups(ctx context.Context, s store) (domain.Groups, error) {
 	return out.Ordered(), nil
 }
 
-// writeGroups is the legacy `Groups.Write`: select the stored identifiers, delete the ones the
-// submitted list no longer names, insert or update the rest, in one transaction.
-//
-// The reconcile is the legacy one, including its keep rule: a submitted group that has no identity
-// yet keeps every stored group.
+// writeGroups reconciles the stored groups with the given ones in one
+// transaction: select the stored identifiers, delete the ones the submitted list
+// no longer names, insert or update the rest. A submitted group with no identity
+// yet is inserted without the existence check. The delete check carries the
+// repaired keep rule — a submitted zero id does not shield stored rows — as
+// recorded in the reconciling-saves maintainer note.
 func writeGroups(ctx context.Context, s store, next domain.Groups) error {
 	tx, err := s.begin(ctx)
 	if err != nil {
