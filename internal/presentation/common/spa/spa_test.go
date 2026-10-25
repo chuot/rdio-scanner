@@ -122,9 +122,9 @@ func TestJavaScriptIsServedAsTextJavaScriptWithoutACharset(t *testing.T) {
 		t.Errorf("status = %d, want the embedded service worker", status)
 	}
 
-	// No charset, exactly: Go's mime table answers text/javascript; charset=utf-8 for
-	//.js, and the legacy server hardcodes the extensionless form because of that
-	// (https://github.com/golang/go/issues/32350).
+	// No charset, exactly: Go's mime table answers text/javascript with a
+	// charset for .js, and the legacy server hardcodes the bare form
+	// because of that.
 	if ct, _ := wireContentType(header); ct != "text/javascript" {
 		t.Errorf("Content-Type = %q, want text/javascript with no charset", ct)
 	}
@@ -187,9 +187,9 @@ func TestUnknownExtensionIsServedWithAnEmptyContentType(t *testing.T) {
 		t.Errorf("status = %d, want the embedded manifest", status)
 	}
 
-	// Present but empty, not absent: mime.TypeByExtension answers the empty string for
-	// an extension Go does not know, the legacy handler sets that as the header, and Go
-	// then does not sniff the body. The wire carries `Content-Type:` with no value.
+	// Present but empty, not absent: the mime table answers the empty
+	// string for an extension Go does not know, that is set as the header,
+	// and Go then does not sniff the body.
 	ct, present := wireContentType(header)
 
 	if !present {
@@ -217,8 +217,8 @@ func TestUppercaseJavaScriptExtensionIsServedWithTheMimeTableContentType(t *test
 		t.Errorf("status = %d, want the embedded file", status)
 	}
 
-	// The hardcoded text/javascript is a comparison against the lowercase extension, so
-	// an uppercase one takes the mime-table branch and does carry a charset.
+	// The hardcoded text/javascript compares the lowercase extension, so an
+	// uppercase one takes the mime-table branch and carries a charset.
 	if ct, _ := wireContentType(header); ct != "text/javascript; charset=utf-8" {
 		t.Errorf("Content-Type = %q, want the mime table's type for .JS, charset included", ct)
 	}
@@ -245,14 +245,10 @@ func TestMissingRouteServesTheApplicationShell(t *testing.T) {
 	}
 }
 
-// TestFallbackContentTypeComesFromTheBodyNotTheExtension pins the half of the fallback
-// that is easy to lose: the legacy handler never sets a Content-Type on it, so Go
-// sniffs. The same bytes therefore reach the client under a different header than the
-// same bytes served as bundle/index.html.
-//
-// The shell here is plain text rather than HTML on purpose. With a real HTML shell the
-// sniffed type and the mime table's type for.html happen to be the same string, and
-// the difference would be invisible on the wire.
+// TestFallbackContentTypeComesFromTheBodyNotTheExtension: no Content-Type
+// is set on the fallback, so Go sniffs the body and the header differs
+// from the same file served as a bundle entry. see the
+// single-page-app-serving-rules-kept-from-legacy maintainer note.
 func TestFallbackContentTypeComesFromTheBodyNotTheExtension(t *testing.T) {
 	files := fstest.MapFS{
 		"bundle/index.html": &fstest.MapFile{Data: []byte(shellText)},
@@ -274,9 +270,9 @@ func TestFallbackContentTypeComesFromTheBodyNotTheExtension(t *testing.T) {
 	}
 }
 
-// TestMissingRouteEndingInSlashServesTheApplicationShell pins the legacy condition as
-// it is written, `url[:len(url)-1] != "/"`, rather than as it reads: a route that ends
-// with a slash takes the fallback, not the 404.
+// TestMissingRouteEndingInSlashServesTheApplicationShell pins the
+// legacy url[:len(url)-1] condition as written: a route ending in /
+// takes the fallback, not the 404.
 func TestMissingRouteEndingInSlashServesTheApplicationShell(t *testing.T) {
 	files := fstest.MapFS{
 		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
@@ -331,9 +327,9 @@ func TestDirectoryRequestServesTheApplicationShell(t *testing.T) {
 	}
 }
 
-// TestTrailingSlashOnAnEmbeddedFileServesItWithAnEmptyContentType pins a consequence of
-// resolving the request with path.Join: the slash is cleaned away, so the file is found,
-// but path.Ext has already been taken from the uncleaned path and is empty.
+// TestTrailingSlashOnAnEmbeddedFileServesItWithAnEmptyContentType: path
+// .Join cleans the trailing slash away so the file is found, while
+// path.Ext was already taken from the uncleaned path.
 func TestTrailingSlashOnAnEmbeddedFileServesItWithAnEmptyContentType(t *testing.T) {
 	files := fstest.MapFS{
 		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
@@ -380,9 +376,9 @@ func TestDotDotCannotReadOutsideTheBundle(t *testing.T) {
 	}
 }
 
-// TestDotDotResolvesAgainstTheBundleRoot pins where the cleaned path lands: joining
-// resolves `..` against the bundle prefix, so the file it reaches is still inside the
-// bundle.
+// TestDotDotResolvesAgainstTheBundleRoot pins where the cleaned path
+// lands: .. resolves against the bundle prefix, so the file it reaches
+// stays inside the bundle.
 func TestDotDotResolvesAgainstTheBundleRoot(t *testing.T) {
 	files := fstest.MapFS{
 		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
@@ -440,9 +436,9 @@ func TestMissingApplicationShellAnswersFourOhFourForTheRoot(t *testing.T) {
 	}
 }
 
-// TestFourOhFourCarriesNoBodyAndNoContentType pins the one path the legacy handler does
-// answer with a 404 while a shell is present: a request whose path is a slash plus one
-// more character, which is the only shape the legacy condition rejects.
+// TestFourOhFourCarriesNoBodyAndNoContentType pins the one shape the
+// legacy condition rejects, a slash plus one more character: an empty
+// 404 with no Content-Type.
 func TestFourOhFourCarriesNoBodyAndNoContentType(t *testing.T) {
 	files := fstest.MapFS{
 		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
@@ -479,9 +475,9 @@ func TestDoubleSlashServesTheApplicationShell(t *testing.T) {
 	}
 }
 
-// TestUpgradeRequestIsServedAsAFileNotAnUpgrade pins the boundary between this handler
-// and the composition root: the legacy catch-all upgraded websocket requests itself,
-// this one does not look at the upgrade header at all.
+// TestUpgradeRequestIsServedAsAFileNotAnUpgrade pins the boundary with
+// the composition root: this handler never reads the upgrade header,
+// so an upgrade request gets the file the path names.
 func TestUpgradeRequestIsServedAsAFileNotAnUpgrade(t *testing.T) {
 	files := fstest.MapFS{
 		"bundle/index.html": &fstest.MapFile{Data: []byte(shellHTML)},
@@ -522,9 +518,9 @@ func adminBundle() fstest.MapFS {
 	}
 }
 
-// TestMountedBundleServesItsOwnFilesUnderTheMount is the reason the mount exists: a request
-// for /admin/main.AAA.js is answered from bundle/main.AAA.js, so the bundle stays flat and
-// holds no copy of the prefix inside itself.
+// TestMountedBundleServesItsOwnFilesUnderTheMount is why the mount
+// exists: /admin/main.AAA.js is answered from bundle/main.AAA.js, so
+// the bundle stays flat with no copy of the prefix inside it.
 func TestMountedBundleServesItsOwnFilesUnderTheMount(t *testing.T) {
 	status, header, body := getMounted(t, adminBundle(), "/admin", "/admin/main.AAA.js", nil)
 
@@ -541,10 +537,9 @@ func TestMountedBundleServesItsOwnFilesUnderTheMount(t *testing.T) {
 	}
 }
 
-// TestMountedBundleCannotBeLeftByRelativePath is the mount-level half of the dot-dot rule.
-// Every one of these paths is cleaned or rejected inside the bundle, and the answer is the
-// mounted application's own shell — never a file from the other bundle, and never a file
-// above the bundle.
+// TestMountedBundleCannotBeLeftByRelativePath is the mount-level half
+// of the dot-dot rule: every path is cleaned or rejected inside the
+// bundle, and the answer is the mounted application's own shell.
 func TestMountedBundleCannotBeLeftByRelativePath(t *testing.T) {
 	files := adminBundle()
 
@@ -565,9 +560,9 @@ func TestMountedBundleCannotBeLeftByRelativePath(t *testing.T) {
 	}
 }
 
-// TestMountedBundleRefusesAPathOutsideItsMount is the other half of the mount: a handler
-// mounted at /admin answers for /admin and nothing else, so a path that merely starts with
-// the prefix is not its request to answer.
+// TestMountedBundleRefusesAPathOutsideItsMount is the mount's other
+// half: a handler mounted at /admin answers for /admin and nothing
+// else.
 func TestMountedBundleRefusesAPathOutsideItsMount(t *testing.T) {
 	files := adminBundle()
 
