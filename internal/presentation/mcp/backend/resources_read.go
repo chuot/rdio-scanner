@@ -44,9 +44,8 @@ const (
 	callURITemplate = "rdio-scanner://calls/{systemRef}/{talkgroupRef}{?date}"
 )
 
-// registerReadResources adds the two resources the read-only tier reaches.
-// The administrator reads the same two, unscoped, and gains the
-// configuration resources beside them.
+// registerReadResources adds the two resources the read-only tier reaches. The administrator
+// reads the same two, unscoped, and gains the configuration resources beside them.
 func registerReadResources(target *mcp.Server, deps Deps) {
 	target.AddResource(&mcp.Resource{
 		URI:      systemsURI,
@@ -110,9 +109,8 @@ func registerReadResources(target *mcp.Server, deps Deps) {
 	})
 }
 
-// parseHistorySlice reads the system, the talkgroup, and the optional day
-// out of a slice URI. The second answer says whether the URI named two
-// real numbers at all.
+// parseHistorySlice reads the system, the talkgroup, and the optional day out of a slice URI.
+// The second answer says whether the URI named two real numbers at all.
 func parseHistorySlice(uri string) (domain.CallSearch, bool) {
 	parsed, err := url.Parse(uri)
 	if err != nil {
