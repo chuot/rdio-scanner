@@ -22,27 +22,24 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// AdminLoginReply is what a login is answered with: the credential that stands for the new session, and
-// whether the password on record still needs changing.
-//
-// The flag is carried and not decided here. The use case reports it as true on every accepted login,
-// whatever the stored option says, because that is what the legacy server has always answered at login;
-// the option itself is only ever reported by the configuration endpoints.
+// AdminLoginReply is what a login is answered with: the session
+// credential and the needs-changing flag. The flag is carried, not
+// decided here: the use case reports it true on every accepted login,
+// as the legacy server always answered at login.
 type AdminLoginReply struct {
 	PasswordNeedChange bool   `json:"passwordNeedChange"`
 	Token              string `json:"token"`
 }
 
-// AdminPasswordReply is what a password change is answered with, and it is the same single flag the
-// configuration endpoints report: what the administrator's page does next depends on it.
+// AdminPasswordReply is what a password change is answered with: the
+// same single flag the configuration endpoints report; the page acts on it.
 type AdminPasswordReply struct {
 	PasswordNeedChange bool `json:"passwordNeedChange"`
 }
 
-// AlertsPayload is the nine alert sequences the server carries.
-//
-// They are not configuration: no option and no administrator changes them. The administrator's endpoint
-// is where a client that shows alerts fetches them, and every client reads the same nine.
+// AlertsPayload is the nine alert sequences the server carries. They
+// are not configuration and no option changes them: every alert client
+// reads the same nine from the administrator's endpoint.
 type AlertsPayload map[string][]Tone
 
 // Alerts returns the nine alert sequences.
@@ -50,18 +47,10 @@ func Alerts() AlertsPayload {
 	return AlertsPayload(alertTones)
 }
 
-// AdminLogsPagePayload is the log view's answer.
-//
-// The count is the total the criteria matches and not the number of entries on this page, because the log
-// view pages by resubmitting the same criteria further along. The span is the same: it belongs to
-// everything the criteria match, and it stays where it is while the page moves.
-//
-// The criteria are echoed back as they were submitted, so that the view can ask again for the next page
-// without remembering anything of its own.
-//
-// The per-subsystem counts are answered on every search and not only on one that asks for them: they are
-// what the view offers the operator before they narrow to anything, and they describe everything the
-// criteria match except the subsystem filter itself.
+// AdminLogsPagePayload is the log view's answer. Count and span cover
+// the whole match, not this page, and the criteria are echoed so the
+// view can page again; subsystem counts accompany every search.
+// see the call-search-echoes-and-status-shortcuts maintainer note.
 type AdminLogsPagePayload struct {
 	Count     uint64            `json:"count"`
 	DateStart time.Time         `json:"dateStart"`
@@ -78,10 +67,9 @@ type AdminLogSource struct {
 }
 
 // AdminLogEntry is one recorded server event, as the log view shows it.
-//
-// The source is the part of the server that wrote the entry, which is what the log view narrows on. It
-// comes from the search, which reports a row written without one as `legacy` — this payload does not
-// decide that, and a row written by another server is not this server's to refile.
+// The source names the part of the server that wrote the entry, which
+// is what the log view narrows on.
+// see the call-search-echoes-and-status-shortcuts maintainer note.
 type AdminLogEntry struct {
 	ID       uint64    `json:"id"`
 	DateTime time.Time `json:"dateTime"`
@@ -90,16 +78,10 @@ type AdminLogEntry struct {
 	Message  string    `json:"message"`
 }
 
-// AdminLogsPage builds the log view's answer from the page the query returned and the criteria the
-// request carried.
-//
-// The criteria are echoed from the request and not from the parsed search, because the two are not the
-// same thing: a limit larger than the most the search will ever return is used as the smaller number and
-// echoed as the number that was asked for.
-//
-// The per-subsystem counts are passed through in the order the search reported them, most first. Deciding
-// what they count is the search's business — it is the search that knows the criteria as submitted except
-// for the subsystem — and this function does not recompute or reorder them.
+// AdminLogsPage builds the log view's answer from the query's page and
+// the request's criteria: the echo comes from the request, not the
+// parsed search, and subsystem counts pass through in the search's order.
+// see the call-search-echoes-and-status-shortcuts maintainer note.
 func AdminLogsPage(page ports.LogSearchPage, criteria map[string]any) AdminLogsPagePayload {
 	logs := []AdminLogEntry{}
 
@@ -113,8 +95,8 @@ func AdminLogsPage(page ports.LogSearchPage, criteria map[string]any) AdminLogsP
 		})
 	}
 
-	// An empty list and not a null: a log view that matches nothing has no subsystems in it, and the view
-	// reads this list to build what it offers.
+	// sources stays an empty list, not a null: a matchless search has no subsystems.
+	// see the call-search-echoes-and-status-shortcuts maintainer note.
 	sources := []AdminLogSource{}
 
 	for _, count := range page.SourceCounts {
@@ -131,11 +113,10 @@ func AdminLogsPage(page ports.LogSearchPage, criteria map[string]any) AdminLogsP
 	}
 }
 
-// logSearchCriteria is the submitted criteria, echoed back. A field is written only when the request named
-// it and the server understood it: a criterion that was not submitted is not invented, and one that did
-// not parse is not claimed.
-//
-// The seven fields are written in this order, and the order is what the log view reads.
+// logSearchCriteria is the submitted criteria, echoed back. A field is
+// written only when the request named it and the server understood it;
+// the seven fields keep the order the log view reads.
+// see the call-search-echoes-and-status-shortcuts maintainer note.
 type logSearchCriteria struct {
 	Date   any `json:"date,omitempty"`
 	Level  any `json:"level,omitempty"`
@@ -146,11 +127,10 @@ type logSearchCriteria struct {
 	Sort   any `json:"sort,omitempty"`
 }
 
-// echoLogSearch reads the criteria back out of the submitted request, with the same rules the search
-// itself uses to read them, so that what is echoed is what the search actually ran with.
-//
-// The limit is echoed as submitted. Clamping it to the most the search will return is the search's
-// business, and the log view is shown what it asked for.
+// echoLogSearch reads the criteria out of the submitted request under
+// the search's own reading rules, so the echo is what the search ran
+// with, and the limit is echoed as submitted, not clamped.
+// see the call-search-echoes-and-status-shortcuts maintainer note.
 func echoLogSearch(criteria map[string]any) logSearchCriteria {
 	echo := logSearchCriteria{}
 
@@ -164,10 +144,10 @@ func echoLogSearch(criteria map[string]any) logSearchCriteria {
 		echo.Level = v
 	}
 
-	// A subsystem is read through the vocabulary, as the search reads it. A name that is not in it applied
-	// no filter, and echoing it would be the answer claiming a criterion the search did not run with.
-	// The endpoint refuses such a request outright, so what is left here is the shape of an answer that
-	// never gets sent.
+	// A subsystem is read through the vocabulary, as the search reads it.
+	// A name outside it applied no filter, so echoing it would claim a
+	// criterion the search never ran with.
+	// see the call-search-echoes-and-status-shortcuts maintainer note.
 	if named, ok := criteria["source"]; ok {
 		if source, valid := domain.ParseLogSource(named); valid {
 			echo.Source = string(source)
