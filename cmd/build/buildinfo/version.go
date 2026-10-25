@@ -13,10 +13,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// Package buildinfo is the build tool's own version rule: the core a repository declares in
-// VERSION.txt, and the pre-release state of the commit being built. It knows nothing about
-// processes, and nothing in the application layers imports it — the tool asks it what version to
-// inject, and the tests that hold the wire contract ask it what version that would have been.
+// Package buildinfo holds the build tool's version rule: the core
+// declared in VERSION.txt and the state of the commit being built;
+// it starts no processes and no application layer imports it.
 package buildinfo
 
 import (
@@ -27,21 +26,18 @@ import (
 	"strings"
 )
 
-// assumedCore is what a repository that has never said what version it is gets: a version no
-// release ever had, which no client mistakes for one.
+// assumedCore is what a repository that never declared a version
+// gets: a version no release ever had, so no client mistakes it.
 const assumedCore = "0.0.0"
 
-// corePattern is a semantic versioning core and nothing else: three dot-separated numbers, each
-// either a zero or a run of digits that does not start with one. A prerelease, build metadata, a
-// leading v, or a second version on the next line is not a core.
+// corePattern is a semantic versioning core and nothing else: three
+// dot-separated numbers with no leading zeros; no prerelease,
+// metadata, leading v, or second line.
 var corePattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
-// ReadCore reads the core version out of the file a repository declares it in.
-//
-// A file that is not there is a repository that has not said, and resolves to 0.0.0. A file that is
-// there and holds something else is a mistake somebody made while meaning well, and is refused: a
-// build that repaired "v8.0.0" into 8.0.0 would be shipping a version the repository never wrote
-// down.
+// ReadCore reads the core version out of the file a repository
+// declares it in. A file that is not there resolves to 0.0.0; a
+// file holding anything else is refused rather than repaired.
 func ReadCore(path string) (string, error) {
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {

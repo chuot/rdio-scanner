@@ -161,9 +161,7 @@ export const adminConfig = {
 };
 
 function cleanOutdir(config) {
-    // The output directory is a tracked directory in the repository: the server keeps a placeholder in it so
-    // its binary compiles before the client has ever been built. Cleaning the built files must not delete
-    // that placeholder.
+    // the output directory is tracked with a placeholder so the server binary
     const placeholder = existsSync(join(config.outDir, '.gitkeep')) ? readFileSync(join(config.outDir, '.gitkeep')) : null;
 
     rmSync(config.outDir, { recursive: true, force: true });
@@ -289,10 +287,7 @@ function buildOptions(config) {
         },
         entryNames: production ? '[name].[hash]' : '[name]',
         entryPoints: config.entryPoints,
-        // Both spellings of an asset URL are left exactly as written. The absolute form is what the
-        // listener has always emitted; the relative form is what the shared stylesheet now uses, so the
-        // same CSS resolves against whichever bundle serves it. Without the relative pattern esbuild
-        // would try to open `assets/fonts/…` from the stylesheet's own directory and fail the build.
+        // both spellings of an asset URL are left exactly as written: the absolute
         external: ['/assets/*', 'assets/*'],
         format: 'esm',
         legalComments: 'none',
@@ -334,13 +329,10 @@ async function buildApp(config) {
     return result;
 }
 
-// The build runs when this file is run. A test imports resolveOutDir and the two configs from it, and
-// importing it must not rebuild the webapp.
+// the build runs only when this file is run: a test imports the config
 const runThisBuild = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-// `--scanner` or `--admin` builds one application; with neither, the build produces both. The Go build
-// tool runs one application per step, so each bundle is built by the step that names it and the run says
-// which one it built.
+// --scanner or --admin builds one application, with neither the build
 const only = args.includes('--scanner') ? 'scanner' : args.includes('--admin') ? 'admin' : null;
 
 if (runThisBuild) {

@@ -26,8 +26,8 @@ import (
 	"rdio-scanner/cmd/build/buildinfo"
 )
 
-// source is what the repository says about the build being asked for: the core it declared in
-// VERSION.txt and whether it declared one at all, and what git says about the commit being built.
+// source is what the repository says about the build being asked
+// for: the core declared in VERSION.txt, if any, and git's account of the commit.
 type source struct {
 	core     string
 	declared bool
@@ -35,13 +35,13 @@ type source struct {
 	commit   string
 	dirty    bool
 
-	// changed is the work git says is not in the commit: the paths a release run names when it refuses
-	// to release a tree that is not committed.
+	// changed is the work git says is not in the commit: the paths a
+	// release run names when it refuses an uncommitted tree.
 	changed []string
 }
 
-// readSource asks the repository those questions. Every git call is an argument array, so a version
-// string never meets a shell that could read it as an option.
+// readSource asks the repository those questions; every git call is
+// an argument array, so a version string never meets a shell.
 func readSource(repo string) (source, error) {
 	path := filepath.Join(repo, versionFile)
 
@@ -55,8 +55,8 @@ func readSource(repo string) (source, error) {
 		return source{}, err
 	}
 
-	// A commit no tag names is a development build, and git says so by failing. A repository that
-	// cannot answer at all has already been returned as an error.
+	// a commit no tag names is a development build, and git says so by
+	// failing; a repository that cannot answer at all is already an error.
 	tag, _ := git(repo, "describe", "--tags", "--exact-match")
 
 	status, err := git(repo, "status", "--porcelain")
@@ -76,11 +76,10 @@ func readSource(repo string) (source, error) {
 	}, nil
 }
 
-// changedPaths reads the paths out of git's porcelain status: the work that is not in the commit the
-// release is named for. A rename names the file it became, and git quotes a path that needs quoting.
-// The status characters are the first two characters of the line after the leading space git pads them
-// with, and the tool reads git's output trimmed, which takes that space off the first line — so the
-// status is skipped from the left, not counted from the start.
+// changedPaths reads the paths out of git's porcelain status: the work
+// not in the commit the release is named for. git quotes a renamed
+// path by the file it became, and status characters are skipped left.
+// see the version-changed-paths maintainer note.
 func changedPaths(status string) []string {
 	var paths []string
 
@@ -102,13 +101,10 @@ func changedPaths(status string) []string {
 	return paths
 }
 
-// git runs one git command in one directory and returns its trimmed output.
-//
-// git's own complaint is kept. git says why a tree cannot answer — it is not a repository, the
-// ownership looks dubious, the commit no tag names — and an error that says only "exit status 128"
-// sends the operator to run git themselves to learn what the tool already knew. The program, the
-// command, and the directory the tool asked in are named, because the directory the tool asked in is
-// not always the directory the operator is standing in.
+// git runs one git command in one directory and returns its trimmed
+// output, keeping git's own complaint: an error that says only exit
+// status 128 sends the operator to run git to learn what the tool knew.
+// see the version-git-errors maintainer note.
 func git(repo string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repo
@@ -130,8 +126,8 @@ func git(repo string, args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// explain says where the resolved version came from, because a version nobody can explain is the
-// drift this tool replaced with a file.
+// explain says where the resolved version came from, because a
+// version nobody can explain is the drift this tool replaced.
 func explain(src source, pre string) string {
 	parts := []string{}
 

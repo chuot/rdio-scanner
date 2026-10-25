@@ -31,20 +31,17 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg"
 )
 
-// command runs one program with its arguments, hands it a recording on its input, and hands back what
-// it wrote. It is how the ffmpeg check reaches a binary it cannot run itself: the compiled ffmpeg
-// lives inside the build container, and the check reaches it through the container program the run
-// resolved.
+// command runs one program, hands it a recording on its input, and returns what it
+// wrote. It is how the check reaches a compiled ffmpeg through the build container.
 type command func(argv []string, stdin []byte) ([]byte, error)
 
-// checkPrograms are the two compiled programs the check runs, each as the arguments that start
-// it: the container, the interpreter when that container cannot run the architecture on its own, and
-// the program.
+// checkPrograms are the two compiled programs the check runs, each as the arguments
+// that start it: the container, the interpreter, and the program.
 type checkPrograms struct {
 	FFmpeg  []string
 	FFProbe []string
 
-	// Work is where the container sees the recordings the check writes out, which is the same
+	// Work is where the container sees the recordings the check writes out, the same
 	// directory the build writes them into on the host.
 	Work string
 }
@@ -58,8 +55,8 @@ var theRecordingMetadata = ports.AudioMetadata{
 	Title:  "Call",
 }
 
-// theRecordingTags are the tags the server writes into a converted recording, read the way the
-// converter writes them, and the ones the check asks the converted recording back for.
+// theRecordingTags are the tags the server writes into a converted recording, read
+// the way the converter writes them, and the ones the check asks back for.
 var theRecordingTags = map[string]string{
 	"album":  fmt.Sprintf("%v", theRecordingMetadata.Album),
 	"artist": fmt.Sprintf("%v", theRecordingMetadata.Artist),
@@ -68,25 +65,24 @@ var theRecordingTags = map[string]string{
 	"title":  fmt.Sprintf("%v", theRecordingMetadata.Title),
 }
 
-// conversionLevel is one of the levels a server is configured with, and what that level does to the
-// length of the recording it converts.
+// conversionLevel is one of the levels a server is configured with, and what it does
+// to the length of the recording it converts.
 type conversionLevel struct {
 	Name   string
 	Mode   uint
 	Padded bool
 }
 
-// theConversionLevels are the levels a compiled ffmpeg is checked against. The disabled level is not
-// among them: it converts without running ffmpeg at all, so there is nothing in a compiled ffmpeg for
-// it to check.
+// theConversionLevels are the levels a compiled ffmpeg is checked against. The
+// disabled level is absent: it converts without running ffmpeg at all.
 var theConversionLevels = []conversionLevel{
 	{Name: "enabled", Mode: domain.AudioConversionEnabled},
 	{Name: "norm", Mode: domain.AudioConversionEnabledNorm, Padded: true},
 	{Name: "loudnorm", Mode: domain.AudioConversionEnabledLoudNorm, Padded: true},
 }
 
-// thePaddedLength is what apad=whole_dur=3s pads a recording to, and the shortest converted recording
-// the filters are allowed to produce.
+// thePaddedLength is what apad=whole_dur=3s pads a recording to, and the shortest
+// converted recording the filters are allowed to produce.
 const thePaddedLength = 3.0
 
 // checkInput is one recording the check feeds ffmpeg.
@@ -99,8 +95,8 @@ type checkInput struct {
 //go:embed assets/tone.mp3
 var toneMP3 []byte
 
-// checkInputs are the recordings the dirwatch hands the converter: the same one-second tone, as
-// a WAV and as an MP3, because the trimmed build has to demux and decode both.
+// checkInputs are the recordings the dirwatch hands the converter: the same
+// one-second tone as a WAV and as an MP3, so the trimmed build decodes both.
 func checkInputs() []checkInput {
 	return []checkInput{
 		{Name: "wav", Mime: "audio/wav", Body: aToneWAV()},
@@ -114,27 +110,25 @@ type checkReport struct {
 	Shortest    float64
 	Longest     float64
 
-	// Codecs is what the program registers: the codecs it can decode and encode. The check is the one
-	// gate every ffmpeg binary passes through, so this is where it is proved to be the audio-only program
-	// the recipe says it is.
+	// Codecs is what the program registers: the codecs it can decode and encode, the
+	// audio-only promise the check proves at its one gate.
 	Codecs codecRegistry
 
-	// Productions is what each conversion produced, in the order the check ran them. The build prints
-	// the shortest and the longest of them; the run that adopts binaries records every one, because the
-	// run is the only evidence anybody has that binaries the build did not compile convert.
+	// Productions is what each conversion produced, in the order the check ran them.
+	// The build prints the shortest and the longest; the report keeps every one.
+	// see the ffmpeg-check-shipping-gate maintainer note.
 	Productions []production
 }
 
-// codecRegistry is what a compiled ffmpeg registers: the codecs it can decode and encode, named. A
-// program that registers a video codec is not the program this project ships, and a program that
-// registers audio codecs is what the converter's argument list asks of it.
+// codecRegistry is what a compiled ffmpeg registers: the codecs it can decode and
+// encode, named. A program registering a video codec is not this project's program.
 type codecRegistry struct {
 	Audio []string `json:"audio"`
 	Video []string `json:"video"`
 }
 
-// production is one converted recording: what went in, which level of the converter made it, how big
-// the server's recording came out, and how long the bundled ffprobe says it is.
+// production is one converted recording: what went in, which level made it, how
+// big it came out, and how long the bundled ffprobe says it is.
 type production struct {
 	Input    string `json:"input"`
 	Mode     string `json:"mode"`
@@ -142,13 +136,10 @@ type production struct {
 	Duration string `json:"duration"`
 }
 
-// ffmpegCheck runs a compiled ffmpeg through the argument list the converter actually uses, and
-// reads what comes back the way the server's audio endpoints read it: an m4a, of the length the
-// filters ask for, carrying the tags the server writes.
-//
-// It is the proof that a trimmed build left nothing the converter needs out. Every way it fails stops
-// the build, because a bundle that cannot do the job is worse than no bundle: it is a deployment that
-// quietly stores the wrong audio.
+// ffmpegCheck runs a compiled ffmpeg through the converter's own argument list and
+// reads what comes back as the server's audio endpoints read it: an m4a, padded
+// to the length the filters ask for, carrying the server's tags.
+// see the ffmpeg-check-shipping-gate maintainer note.
 func ffmpegCheck(execute command, programs checkPrograms, dir string) (checkReport, error) {
 	metadata := &theRecordingMetadata
 
@@ -203,10 +194,9 @@ func ffmpegCheck(execute command, programs checkPrograms, dir string) (checkRepo
 		}
 	}
 
-	// The conversions prove the binaries do the job. What they *are* is the other half of the promise,
-	// and it is asked here, on the machine that can run them, because this is the gate every ffmpeg
-	// binary passes through: the compiled ones inside the container that can run them, and the adopted
-	// ones on the host that compiled them.
+	// Ask here what the program registers: the conversions prove the binaries do the
+	// job, the registry proves what they are.
+	// see the ffmpeg-check-shipping-gate maintainer note.
 	codecs, err := theCodecsTheProgramRegisters(execute, programs)
 	if err != nil {
 		return report, err
@@ -224,13 +214,10 @@ func ffmpegCheck(execute command, programs checkPrograms, dir string) (checkRepo
 	return report, nil
 }
 
-// theCodecsTheProgramRegisters asks the program what it registers. `ffmpeg -codecs` prints its legend,
-// a separator, and one line per codec: six flag columns — decoding, encoding, the type, intra-only,
-// lossy, lossless — and then the codec's name.
-//
-// A line with neither the decoding nor the encoding column set is a codec descriptor: the format-layer
-// metadata every ffmpeg carries, which decodes and encodes nothing. It is not a codec the program
-// registers, and it is not what the audio-only promise is about.
+// theCodecsTheProgramRegisters asks the program what it registers: `ffmpeg -codecs`
+// prints a legend, a separator, then six flag columns and a codec name per line.
+// A line with neither the decoding nor the encoding column set is a codec descriptor,
+// format metadata that decodes and encodes nothing, not a registered codec.
 func theCodecsTheProgramRegisters(execute command, programs checkPrograms) (codecRegistry, error) {
 	body, err := execute(starts(programs.FFmpeg, "-hide_banner", "-codecs"), nil)
 	if err != nil {
@@ -291,16 +278,16 @@ func theCodecsTheProgramRegisters(execute command, programs checkPrograms) (code
 	return codecs, nil
 }
 
-// codecFlagColumns is how many columns ffmpeg prints before every codec: decoding, encoding, the type,
-// intra-only, lossy, lossless. codecFlagAlphabet is the character each of those columns can hold.
+// codecFlagColumns counts the columns ffmpeg prints before every codec: decoding,
+// encoding, the type, intra-only, lossy, lossless; codecFlagAlphabet is their alphabet.
 const (
 	codecFlagColumns  = 6
 	codecFlagAlphabet = "D.EVASTIL"
 )
 
-// aCodecLine reads one line of the codec list: the six flag columns and the codec's name. The legend
-// lines name one flag column and carry an `=` where a codec name would be, so they are not codec
-// lines, and a line whose flags are not flags is not one either.
+// aCodecLine reads one codec line: six flag columns and a name. A legend line names
+// a flag column and carries an `=` where a name would be, and a line whose flags
+// are not flags is not a codec line either.
 func aCodecLine(line string) (flags string, name string, ok bool) {
 	fields := strings.Fields(line)
 
@@ -321,8 +308,8 @@ func aCodecLine(line string) (flags string, name string, ok bool) {
 	return fields[0], fields[1], true
 }
 
-// firstLineOf is the first line of what a program printed, which is what a refusal quotes when the
-// answer is not the answer the check asked for.
+// firstLineOf is the first line of what a program printed, which a refusal quotes
+// when the answer is not the answer the check asked for.
 func firstLineOf(body []byte) string {
 	line, _, _ := strings.Cut(string(body), "\n")
 
@@ -333,8 +320,8 @@ func firstLineOf(body []byte) string {
 	return "(nothing)"
 }
 
-// theCheckConfirms the converted recording is the recording the server would have stored: the tags are
-// all there, and the length is the one this level of conversion produces.
+// theCheckConfirms the converted recording is the one the server would have stored:
+// the tags are all there, and the length is the one this level produces.
 func theCheckConfirms(format probedFormat, level conversionLevel, in checkInput, name string) (float64, error) {
 	duration, err := strconv.ParseFloat(format.Duration, 64)
 	if err != nil || duration <= 0 {
@@ -362,8 +349,8 @@ func theCheckConfirms(format probedFormat, level conversionLevel, in checkInput,
 	return duration, nil
 }
 
-// probedRecording is what the bundled ffprobe says about a converted recording. The recipe enables the
-// json muxer for exactly this.
+// probedRecording is what the bundled ffprobe says about a converted recording, and
+// the recipe enables the json muxer for exactly this.
 type probedRecording struct {
 	Format probedFormat `json:"format"`
 }
@@ -373,9 +360,8 @@ type probedFormat struct {
 	Tags     map[string]string `json:"tags"`
 }
 
-// probe asks the bundled ffprobe what it knows about one converted recording. It is given a file and
-// not the pipe: ffprobe cannot get a duration from a stream it cannot seek, which is the thing the
-// recording-duration feature has to know.
+// probe asks the bundled ffprobe what it knows about one converted recording. It
+// gets a file, not a pipe: ffprobe gets no duration from an unseekable stream.
 func probe(execute command, programs checkPrograms, path string) (probedFormat, error) {
 	argv := starts(programs.FFProbe,
 		"-v", "error",
@@ -397,8 +383,8 @@ func probe(execute command, programs checkPrograms, path string) (probedFormat, 
 	return probed.Format, nil
 }
 
-// starts is one program's arguments followed by what it is being asked to do, without touching the
-// program's own arguments.
+// starts is one program's arguments followed by what it is asked to do, without
+// touching the program's own arguments.
 func starts(program []string, args ...string) []string {
 	argv := make([]string, 0, len(program)+len(args))
 
@@ -407,8 +393,8 @@ func starts(program []string, args ...string) []string {
 	return append(argv, args...)
 }
 
-// isM4A reports whether what ffmpeg wrote is the recording format the server stores, which is what the
-// ipod muxer puts in the first box.
+// isM4A reports whether what ffmpeg wrote is the recording format the server stores,
+// the tag the ipod muxer puts in the first box.
 func isM4A(body []byte) bool {
 	if len(body) < 12 {
 		return false
@@ -417,8 +403,8 @@ func isM4A(body []byte) bool {
 	return string(body[4:8]) == "ftyp"
 }
 
-// aToneWAV is one second of the tone the recordings are made of, written the way the server's own
-// conversion tests write it: 8 kHz, one channel, 16-bit PCM.
+// aToneWAV is one second of the tone the recordings are made of: 8 kHz, one channel,
+// 16-bit PCM, the shape the server's own conversion tests write.
 func aToneWAV() []byte {
 	const (
 		samples   = 8000

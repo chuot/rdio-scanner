@@ -15,9 +15,9 @@
 
 package main
 
-// build.go is the orchestrator: the tool, the run that calls the phases in order — the web
-// applications, then the ffmpeg, then the server that carries both — and the shared primitives
-// every phase asks the tree. The web applications are in webapps.go, the ffmpeg is in ffmpeg.go.
+// build.go is the orchestrator: the tool, the run calling the phases in order
+// - webapps, ffmpeg, then the server that carries both - and the shared
+// primitives every phase asks the tree. Webapps are in webapps.go, ffmpeg in ffmpeg.go.
 
 import (
 	"bytes"
@@ -38,12 +38,12 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// versionFile is the file the release declares its core version in. The version a server binary
-// reports is stamped from it, so the binary is built from it.
+// versionFile is the file the release declares its core version in.
+// The version a binary reports is stamped from it.
 const versionFile = "VERSION.txt"
 
-// tool is the build tool: where the repository is, how it asks that repository what it says about
-// its own version, and how it runs one step. Everything it decides is decided before anything runs.
+// tool is the build tool: the repository it works in, how it asks that
+// repository about its version, and how it runs one step, all decided before anything runs.
 type tool struct {
 	repo      string
 	read      func(string) (source, error)
@@ -51,9 +51,8 @@ type tool struct {
 	installed func(string) bool
 	execute   func(step) error
 
-	// errout is the operator's own standard error. The run's lines go to the writer the run was given,
-	// and a failure goes here: the line that says the run stopped has to reach the operator even when
-	// the run's progress is being written somewhere else.
+	// errout is the operator's own standard error:
+	// a failure has to reach the operator even when the run's progress goes elsewhere.
 	errout io.Writer
 
 	// archive writes the release archive. It is not an external command.
@@ -62,56 +61,46 @@ type tool struct {
 	// clean removes what a clean run removes. It is not an external command.
 	clean func(repo string) ([]string, error)
 
-	// state is what the tree says about what has already been built. It reads the tree, so the stand-in
-	// answers it: what the checks do is tested in build_test.go.
+	// state is what the tree says about what has already been built;
+	// a stand-in answers it, and build_test.go tests the checks.
 	state func(repo string, o options) (planState, error)
 
-	// releaseFiles reads what the archive carries, including the program the run wrote to. It reads the
-	// tree, so the stand-in answers it: what it does is tested in archive_test.go.
+	// releaseFiles reads what the archive carries, including the program this run wrote;
+	// a stand-in answers it, and archive_test.go tests what it does.
 	releaseFiles func(repo string, tr releaseTarget, output string) ([]archiveFile, error)
 
-	// ffmpeg produces the ffmpeg a server binary built here is going to carry. It is not one external
-	// command: it fetches a pinned release, checks it, compiles it in a container, runs what it produced
-	// through the converter's own argument list, and puts it where the server embeds it.
-	//
-	// It reports the target it wrote no ffmpeg for, because a target with no ffmpeg to embed writes no
-	// archive, and a release run asked for the whole matrix ships the archives whose ffmpeg it did produce
-	// rather than stopping at the first target it could not fill. A target whose compile reads a sysroot the
-	// operator has not prepared is such a target on a release run, and the release run's summary names it.
+	// ffmpeg produces the ffmpeg the server binary built here embeds: fetch, check,
+	// compile in a container, prove what it produced, and cache it for embedding.
+	// It reports the target it wrote no ffmpeg for, and the run carries on without it.
+	// see the ffmpeg-cross-build maintainer note.
 	ffmpeg func(options, io.Writer) (bool, error)
 
-	// prove is the gate the ffmpeg binaries pass before anything adopts them: the version line the
-	// programs say, the conversions the build runs them through, and the codecs they register. It runs
-	// them on the machine standing here, which is the machine that compiled them, and it records nothing.
-	// The target's record comes along because a program the machine can run is held to the same reads the
-	// build would have read a compiled pair through, on the targets where a run is the proof.
+	// prove is the gate the ffmpeg binaries pass before anything adopts them:
+	// version line, conversions through the converter's own argument list, and codecs.
+	// see the ffmpeg-cross-build maintainer note.
 	prove func(target string, record bundle.Target, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error)
 
-	// source is the ffmpeg release the manifest pins arriving in the build's cache and being recognised
-	// as that release: the fetch when the tree does not have it, and the digest that says it is. Every
-	// compile passes through it, in a container and on a target's own host alike, because the source is
-	// the one input both of them fetch over the network.
+	// source is the ffmpeg release the manifest pins arriving in the build's cache
+	// and being recognised by its digest: every compile route fetches that source.
 	source func(ffmpegSource, bundle.Manifest) error
 
-	// theRun is one program run here, handed a recording on its input, answering with what it wrote. It
-	// is how the build runs the ffmpeg binaries it compiled: the container targets run them inside the
-	// container that can run them, and the binaries a target's own host compiled run on that host.
+	// theRun runs one program here on a recording and answers with what it wrote;
+	// the build runs its compiled ffmpeg binaries through it, where each can run.
 	theRun command
 
-	// machine is the platform the build is running on, and it is what decides which route a target's ffmpeg
-	// takes: compiled with the host's own compiler, linker, and signer on the machine that is the platform
-	// the binaries run on, and compiled in a container on every other. The plan the run composes is composed
-	// with it, and the run asks it of the machine rather than reading it in the middle of the plan.
+	// machine is the platform the build runs on, and it decides which route
+	// a target's ffmpeg takes: native toolchain on that platform, container elsewhere.
+	// see the ffmpeg-cross-build maintainer note.
 	machine func() host
 
-	// now is the moment the run is making the container image. The image's build time is a fact the run
-	// knows and the Containerfile cannot, and a test that reads the command line the run composes has to
-	// be told what the clock said.
+	// now is the moment the run is making the container image: the image's build
+	// time is a fact the run knows and the Containerfile cannot, so the run supplies it.
+	// see the container-image-build-time maintainer note.
 	now func() time.Time
 }
 
-// theMachine is the platform the build is standing on. A tool assembled without it — a test that asks one
-// phase and names no machine — stands on this one, which is the answer the field would give.
+// theMachine is the platform the build is standing on; a tool assembled without
+// it - a test asking one phase - stands on this one, the answer the field would give.
 func (t tool) theMachine() host {
 	if t.machine == nil {
 		return thisMachine()
@@ -120,13 +109,9 @@ func (t tool) theMachine() host {
 	return t.machine()
 }
 
-// newTool is the tool the build command runs with: the tree it works in, and every part the phases ask
-// of it.
-//
-// The parts the phases ask for are wired before the phases themselves are bound, because taking a method
-// value of the tool captures the tool as it is at that moment: a phase bound first carries the copy made
-// before the fields after it were set, and the panic is in the phase, on the machine the operator is
-// standing on, where no test runs.
+// newTool is the tool the build command runs with: the tree it works in,
+// and every part the phases ask of it, wired in a fixed order.
+// see the tool-wiring-order maintainer note.
 func newTool(repo string) tool {
 	t := tool{
 		repo:         repo,
@@ -139,9 +124,9 @@ func newTool(repo string) tool {
 		state:        buildState,
 		releaseFiles: archiveFiles,
 
-		// The machine standing here and the way one program is run on it are wired with the fields,
-		// before any phase is bound: the run that adopts a drop asks the machine what it ran, and a
-		// phase bound now would carry the copy made before them.
+		// the machine and the way programs run on it are wired with the fields,
+		// before any phase is bound, so every bound phase carries them.
+		// see the tool-wiring-order maintainer note.
 		machine: thisMachine,
 		theRun:  onThisMachine(),
 		now:     time.Now,
@@ -160,10 +145,8 @@ func newTool(repo string) tool {
 func (t tool) run(args []string, stdout io.Writer) int {
 	o, err := parseArgs(args)
 	if err != nil {
-		// A command line the tool does not accept is a failure, and a failure reaches the operator's
-		// standard error. The word that was refused and the line naming the commands the tool has are
-		// the explanation of that failure, not a line of the run's progress, and a refused command line
-		// builds nothing: the writer the run was given carries no progress at all.
+		// a refused command line is a failure reaching the operator's standard
+		// error with the refused word and the usage line, and it builds nothing.
 		fmt.Fprintf(t.errout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch] [--all] [--allow-dirty]|container|test|clean|version] [--pre <name>] [-o <path>, for the runs that write a server binary]\n", err)
 
 		return 2
@@ -191,23 +174,22 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		fmt.Fprintln(stdout, "note   working tree is dirty; the version does not say so")
 	}
 
-	// The release is built from a commit, and the archive a release writes is named for it. A tree with
-	// uncommitted work in it is not that commit, and the person who downloads the archive cannot tell
-	// which of the two the binary came from. The refusal comes before anything is built, so a release
-	// run asked to release an uncommitted tree builds nothing.
+	// a release is built from a commit, and its archive is named for it:
+	// a dirty tree is refused before anything is built, so an archive
+	// is never built from work a reader cannot check out.
+	// see the release-from-commit maintainer note.
 	if o.sub == subDist && src.dirty && !o.allowDirty {
 		return fail(t.errout, fmt.Errorf("dist releases the tree as it is committed, and this tree has uncommitted work: %s\ncommit it, or say --allow-dirty to release the tree as it stands", strings.Join(src.changed, ", ")))
 	}
 
-	// The override is a maintainer releasing work in progress, and the log says so on every run that
-	// used it: an archive built from a tree that is not the commit it names is only honest when the run
-	// that wrote it said so out loud.
+	// the override is a maintainer releasing work in progress,
+	// and the log says so out loud on every run that used it.
 	if o.sub == subDist && src.dirty && o.allowDirty {
 		fmt.Fprintln(stdout, "note   dist --allow-dirty: this release is built from an uncommitted tree")
 	}
 
-	// A clean run removes what a release and a client build leave behind, and builds nothing. It needs
-	// no npm, no ffmpeg, and no compiler, so it ends the run where it started.
+	// a clean run removes what a release and a client build leave behind and builds
+	// nothing; it needs no npm, no ffmpeg, and no compiler, and ends where it started.
 	if o.sub == subClean {
 		removed, err := t.clean(t.repo)
 		if err != nil {
@@ -221,10 +203,8 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		return 0
 	}
 
-	// The verification run runs the suites and builds nothing: the command a developer runs before
-	// pushing is the command a release is gated on, and a run that built something first reported the
-	// build's result and not the suites'. It needs no build output, no installed client dependencies,
-	// and no container program: the suites read the sources.
+	// the verification run runs the suites and builds nothing: it is the command
+	// a release is gated on, and the suites read the sources, so it needs no build
 	if o.sub == subTest {
 		return t.runTest(o, stdout)
 	}
@@ -234,37 +214,36 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		return fail(t.errout, err)
 	}
 
-	// The web applications come first: the server embeds both bundles, so a bundle built in this
-	// run has to be on disk before the binary that embeds it is compiled.
+	// the web applications come first: the server embeds both bundles,
+	// so each bundle has to be on disk before the binary that embeds it is compiled.
 	if err := t.runWebapps(o, version, stdout, state); err != nil {
 		return fail(t.errout, err)
 	}
 
-	// The release matrix builds the applications once, because the bundles are the same for every
-	// target, and then each target's ffmpeg before the server that embeds it.
+	// the release matrix builds the applications once:
+	// the bundles are the same for every target.
 	if o.sub == subDist {
 		return t.runDist(o, version, stdout)
 	}
 
-	// The ffmpeg is produced before the server is compiled, because the server embeds it: a server built
-	// before the ffmpeg its target carries exists is a server that quietly ships without one.
+	// the ffmpeg is produced before the server is compiled: the server embeds it,
+	// and one built too early quietly ships without one.
 	if o.buildsFFmpeg() {
 		skipped, err := t.ffmpeg(o, stdout)
 		if err != nil {
 			return fail(t.errout, fmt.Errorf("%s: %w", subFFmpeg, err))
 		}
 
-		// The ffmpeg phase says it wrote no ffmpeg for this target. A server compiled now would embed no
-		// ffmpeg and convert with whatever the host happens to have, which is not what this target releases,
-		// so the run ends here, and compiles no binary.
+		// the ffmpeg phase wrote no ffmpeg for this target, so the run ends here:
+		// a binary compiled now would convert with whatever the host happens to have.
 		if skipped {
 			return 0
 		}
 	}
 
-	// The container image compiles its own server, so the run that prepares it ends with the container
-	// program: the applications and the ffmpeg the image's architecture embeds are what the Containerfile
-	// needs on disk, and a server binary built here is one the image throws away.
+	// the container image compiles its own server, so this run ends with the
+	// container program: the image needs the applications and ffmpeg on disk,
+	// and throws away a server built here.
 	if o.sub == subContainer {
 		program, err := resolveContainerProgram(t.resolve, os.LookupEnv)
 		if err != nil {
@@ -291,9 +270,8 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	return 0
 }
 
-// runTest runs the two suites this project's verification is made of. A suite that fails ends the run,
-// and names the suite that failed: the release is gated on this command, and a run that carried on past
-// a failing suite would report success to whatever gates on it.
+// runTest runs the two suites this project's verification is made of; a failing
+// suite ends the run naming itself, because the release is gated on this command.
 func (t tool) runTest(o options, stdout io.Writer) int {
 	for _, s := range testSteps(o, t.repo) {
 		if _, err := t.resolve(s.name); err != nil {
@@ -310,11 +288,9 @@ func (t tool) runTest(o options, stdout io.Writer) int {
 	return 0
 }
 
-// runServer compiles the server binary for the target the run is building for. The server embeds
-// both bundles and the ffmpeg, so the state is asked again after the phases that write them: the
-// bundles built in this run are newer than the binary built before them, and a run that rebuilt a
-// bundle and left the binary standing ships the bundles the binary was built before. A binary that
-// is current is not compiled again.
+// runServer compiles the server binary for the target being built. The server
+// embeds both bundles and the ffmpeg, so the tree's state is asked again after
+// those phases write them, and a binary that is current is not compiled again.
 func (t tool) runServer(o options, version buildinfo.Version, stdout io.Writer) error {
 	state, err := t.state(t.repo, o)
 	if err != nil {
@@ -336,29 +312,20 @@ func (t tool) runServer(o options, version buildinfo.Version, stdout io.Writer) 
 	return nil
 }
 
-// runDist builds the release for the targets the run was asked for: the platform it is standing on, the
-// whole matrix when the whole matrix was asked for, or the one target the operator named. Each target's
-// ffmpeg is produced before the server that embeds it, for the same reason a single run produces its
-// ffmpeg first.
-//
-// A target whose ffmpeg fails ends the run and names the target it stopped at. A half matrix is not a
-// release, and a run that carried on would leave an archive directory with a server in it and no ffmpeg
-// to embed.
-//
-// A target the ffmpeg phase wrote no ffmpeg for is not a failure of the run that was asked for the whole
-// matrix: it writes no archive, the run ships the archives whose ffmpeg it did produce, and its last line names
-// the targets that wrote none and says, by its exit status, that the release it was asked for is not the release
-// it wrote. A run that stopped for the first target it could not fill would ship nothing at all.
+// runDist builds the release for the targets asked for: this platform, the whole
+// matrix, or the named target, each target's ffmpeg before the server that embeds it.
+// A failed ffmpeg ends the run; a skipped target writes no archive and the run carries on.
+// see the dist-target-selection maintainer note.
 func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) int {
-	// The list is decided once, before any of it runs, so that a run asked for the machine it is
-	// standing on is refused before a single application is built, and not after the first archive.
+	// the target list is decided once, before any of it runs,
+	// so an impossible request is refused before a single application is built.
 	targets, err := distTargets(o, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return fail(t.errout, err)
 	}
 
-	// A run asked for one target writes one target's lines, and those lines need no owner: the log of a
-	// matrix run is written by several targets, and every line of it has to say which one it is about.
+	// a single target's log needs no prefix;
+	// every line of a matrix run has to name the target it is about.
 	prefix := len(targets) > 1
 
 	var mu sync.Mutex
@@ -371,14 +338,14 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 		return &theReleaseLog{mu: &mu, target: target, out: stdout}
 	}
 
-	// The run keeps what it wrote and what wrote none, because the release's last line is the answer to
-	// the question the operator asked: is the release I asked for the release I have.
+	// the run keeps what it wrote and what wrote none,
+	// so its last line answers whether the release asked for is the release it has.
 	var written []string
 	var none []string
 
-	// The ffmpeg phase stays serial: it builds container images, runs qemu and wine checks, and already
-	// saturates the machine inside one target. It finishes before any server compile starts, so the log
-	// that records what was adopted is one target's block of lines at a time.
+	// the ffmpeg phase stays serial and finishes before any server compile starts,
+	// so the log records one target's block of lines at a time.
+	// see the dist-run-scheduling maintainer note.
 	ready := make([]releaseTarget, 0, len(targets))
 
 	for _, tr := range targets {
@@ -390,8 +357,8 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 			return fail(t.errout, fmt.Errorf("%s for %s: %w", subFFmpeg, o.target, err))
 		}
 
-		// The ffmpeg phase says this target wrote no ffmpeg. The run carries on to the targets whose ffmpeg
-		// it can produce, and says at the end which targets wrote none.
+		// this target wrote no ffmpeg: the run carries on to targets it can produce,
+		// and says at the end which targets wrote none.
 		if skipped {
 			none = append(none, o.target)
 
@@ -406,9 +373,9 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 		return fail(t.errout, err)
 	}
 
-	// The server compiles and the archive writes run at once. Each target's binary is a different file,
-	// built from the same sources, sharing only Go's own build cache, which is safe under concurrent
-	// use, and each target's archive is read from the path its own compile wrote to.
+	// server compile and archive write run at once for each ready target:
+	// each touches only files its own step wrote.
+	// see the dist-run-scheduling maintainer note.
 	work := make([]theWorkOfOneTarget, len(ready))
 
 	var wg sync.WaitGroup
@@ -424,24 +391,24 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			// The target each worker is building for is written into the options the server step and
-			// the archive path are read from, because each target's binary is a different file.
+			// each worker writes the target it is building into its own options,
+			// because each target's binary is a different file.
 			per := o
 			per.target = tr.targetWord()
 			per.output = defaultOutputPath(per.target)
 
 			out := log(per.target)
 
-			// The binary for this target is current when it is newer than every file it is built from,
-			// and the bundles the client steps built are among them.
+			// the binary is current when newer than every file it was built from,
+			// the bundles included.
 			if err := t.runServer(per, version, out); err != nil {
 				work[i] = theWorkOfOneTarget{target: per.target, err: fmt.Errorf("%s for %s: %w", subServer, per.target, err)}
 
 				return
 			}
 
-			// The archive carries the binary this run wrote, the documentation as the files it is
-			// written in, and the ffmpeg licence when the target carries an ffmpeg.
+			// the archive carries this run's binary, the documents as written,
+			// and the ffmpeg licence when the target carries an ffmpeg.
 			files, err := t.releaseFiles(t.repo, tr, per.output)
 			if err != nil {
 				work[i] = theWorkOfOneTarget{target: per.target, err: fmt.Errorf("%s for %s: %w", subArchive, per.target, err)}
@@ -465,9 +432,8 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 
 	wg.Wait()
 
-	// The release reports what it wrote in the order the matrix lists the targets, whichever order the
-	// workers finished in: the summary is the answer to the question the operator asked, and the answer
-	// is the same answer however the work was scheduled.
+	// the release reports what it wrote in the matrix's target order,
+	// whichever order the workers finished in.
 	for _, w := range work {
 		if w.err != nil {
 			return fail(t.errout, w.err)
@@ -476,8 +442,8 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 		written = append(written, w.path)
 	}
 
-	// The release folder is the set to upload, so the archives of the versions this run did not release
-	// are removed as soon as its own are written, and each removal is named.
+	// the release folder is the set to upload, so other versions' archives
+	// are removed as soon as this run's are written, and each removal is named.
 	pruned, err := pruneReleaseFolder(t.repo, version.String())
 	if err != nil {
 		return fail(t.errout, err)
@@ -487,10 +453,8 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 		fmt.Fprintf(stdout, "%-7s removed %s\n", subDist, path)
 	}
 
-	// The release says what it wrote, and what it wrote none for, and its exit status says whether the
-	// release it was asked for is the release it wrote. Writing the archives whose ffmpeg it produced is the
-	// run doing its job; it is an incomplete release, which is a fact a script has to be able to tell from a
-	// step that broke.
+	// the exit status says whether the release asked for is the release written:
+	// an incomplete release is a fact a script has to tell from a broken step.
 	if len(none) == 0 {
 		fmt.Fprintf(stdout, "%-7s %s written\n", subDist, archivesWord(len(written)))
 
@@ -503,17 +467,16 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 	return 3
 }
 
-// theWorkOfOneTarget is what one worker of a release run has to say when it finishes: the archive it
-// wrote, or the failure the run stops on, named for the target the work was for.
+// theWorkOfOneTarget is what one release worker says when it finishes:
+// the archive it wrote, or the failure it stopped on, named for its target.
 type theWorkOfOneTarget struct {
 	target string
 	path   string
 	err    error
 }
 
-// theReleaseLog is the output a target's work writes to in a matrix run: every line arrives as one
-// whole line naming the target that produced it. The lines are written under one lock, because a log
-// that interleaves half a line of one target with half a line of another names nothing.
+// theReleaseLog is a target's output in a matrix run: every line arrives whole,
+// naming its target, and the lines are written under one lock so none interleaves.
 type theReleaseLog struct {
 	mu      *sync.Mutex
 	target  string
@@ -546,16 +509,10 @@ func (l *theReleaseLog) Write(p []byte) (int, error) {
 // buildJobsEnv names the bound an operator sets on the server compiles of a release run.
 const buildJobsEnv = "RDIO_BUILD_JOBS"
 
-// distWorkers is how many server compiles a release run runs at once: the cores the machine has, the
-// targets it is ready to build, and the bound the operator named, whichever is the fewest. The compiles
-// are independent — each target's binary is a different file, built from the same sources, sharing only
-// Go's own build cache — so the bound is about the machine's memory and the log's readability, not
-// about correctness: a release run on a small machine giving every core a server compile at once is a run
-// that trades the release for a machine that stops responding.
-//
-// A value that is not a count of work is refused, because a run that quietly ignored the bound the
-// operator named would be a run doing more than the operator said. A variable set to nothing says
-// nothing, and the machine's own bound stands.
+// distWorkers is how many server compiles a release run runs at once: cores,
+// ready targets, and the operator's bound, whichever is fewest. A bound that
+// is not a count of work is refused; an empty variable leaves the machine's bound standing.
+// see the dist-run-scheduling maintainer note.
 func distWorkers(ready int, lookup func(string) (string, bool)) (int, error) {
 	if ready == 0 {
 		return 0, nil
@@ -582,8 +539,8 @@ func distWorkers(ready int, lookup func(string) (string, bool)) (int, error) {
 	return workers, nil
 }
 
-// archivesWord and targetsWord say a count and its noun the way the release log reads: one archive,
-// two archives, one target, two targets.
+// archivesWord and targetsWord say a count and its noun
+// the way the release log reads: one archive, two archives.
 func archivesWord(n int) string {
 	if n == 1 {
 		return "1 archive"
@@ -607,8 +564,8 @@ func fail(errout io.Writer, err error) int {
 	return 1
 }
 
-// repositoryRoot is the directory the tool builds. git knows it, and a tree without git is built
-// where the operator stood, which is where go run stood too.
+// repositoryRoot is the directory the tool builds: git knows it,
+// and a tree without git is built where the operator stood, as go run was.
 func repositoryRoot() (string, error) {
 	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	if err == nil {
@@ -618,8 +575,8 @@ func repositoryRoot() (string, error) {
 	return os.Getwd()
 }
 
-// resolveExecutable finds a program the tool has to run. npm is npm.cmd on Windows, and naming the
-// name that was looked for is the difference between "npm is not installed" and a confusing failure.
+// resolveExecutable finds a program the tool has to run: npm is npm.cmd on
+// Windows, and a failure names the program that was looked for.
 func resolveExecutable(name string) (string, error) {
 	if runtime.GOOS == "windows" {
 		if path, err := exec.LookPath(name + ".cmd"); err == nil {
@@ -642,18 +599,10 @@ func directoryExists(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-// cleanTree removes what a clean run removes: the release output, the client dependencies, the contents
-// of both bundles, and the ffmpeg phase's disposable scratch — the configured source trees it compiled
-// in, the tarball it extracted them from, the container context it built in, and the working copy of the
-// binaries it ran. It leaves the compiled ffmpeg standing, because every later build reads it, and
-// prunes it to the entries the manifest the build reads can produce, because an entry no target computes
-// is an entry no build reads.
-//
-// The `.gitkeep` file in each bundle is left standing, because it is the placeholder that keeps a plain
-// go build compiling: the bundle directory has to exist for the Go package that embeds it, and the
-// contents are what a build puts there.
-//
-// The run names what it removed, so a tree that was already clean says so by naming nothing.
+// cleanTree removes what a clean run removes: the release output, the client
+// dependencies, the bundle contents, and the ffmpeg phase's disposable scratch.
+// It leaves the compiled ffmpeg standing and prunes the ffmpeg cache.
+// see the clean-run-scope maintainer note.
 func cleanTree(repo string) ([]string, error) {
 	targets := []string{filepath.Join(repo, "dist"), filepath.Join(repo, presentationDir, "node_modules")}
 
@@ -664,7 +613,7 @@ func cleanTree(repo string) ([]string, error) {
 
 		entries, err := os.ReadDir(bundle)
 		if err != nil {
-			// A tree that has never been built has no bundle contents to remove.
+			// a tree that has never been built has no bundle contents to remove
 			if os.IsNotExist(err) {
 				continue
 			}
@@ -707,10 +656,9 @@ func cleanTree(repo string) ([]string, error) {
 	return removed, nil
 }
 
-// serverSources is every file the server binary is built from: the Go files, the contents of both
-// bundles, which the server embeds, the file the release declares its core version in, and the module
-// files its dependencies are resolved from. A binary that is newer than every one of those files is a
-// binary that reports the version the release ships and carries the bundles it was built with.
+// serverSources is every file the server binary is built from: the Go files,
+// both bundle contents, the declared core version file, and the module files.
+// see the server-build-sources maintainer note.
 func serverSources(repo string) ([]string, error) {
 	var files []string
 
@@ -736,10 +684,9 @@ func serverSources(repo string) ([]string, error) {
 		}
 	}
 
-	// The version a binary reports is stamped from the declared core, and the dependency set is
-	// resolved from the module files: a binary compiled before either of them moved reports and carries
-	// what moved. A tree with no version file says nothing about its version, which the version
-	// derivation answers by itself, and a file that is not there has no date newer than a binary.
+	// the reported version is stamped from the declared core and the dependencies
+	// resolve from the module files, so a binary predating either is not current;
+	// a missing file has no date newer than a binary.
 	for _, name := range []string{versionFile, "go.mod", "go.sum"} {
 		path := filepath.Join(repo, name)
 
@@ -762,8 +709,8 @@ func serverSources(repo string) ([]string, error) {
 	return files, nil
 }
 
-// walkFiles calls visit for every file under a directory. A directory that is not there has no files,
-// which is what a tree that has never been built is.
+// walkFiles calls visit for every file under a directory;
+// a directory that is not there has no files.
 func walkFiles(root string, visit func(path string)) error {
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -784,8 +731,8 @@ func walkFiles(root string, visit func(path string)) error {
 	return err
 }
 
-// serverIsCurrent reports whether the server binary is newer than every file it is built from. A binary
-// that is not there is not current.
+// serverIsCurrent reports whether the binary is newer than every file it is
+// built from; a binary that is not there is not current.
 func serverIsCurrent(repo string, output string) (bool, error) {
 	return newerThan(repo, filepath.Join(repo, output), serverSources)
 }
@@ -821,9 +768,8 @@ func newerThan(repo string, built string, sources func(string) ([]string, error)
 	return true, nil
 }
 
-// buildState is what the tree says about what has already been built. The checks are made only for the
-// phases the run is going to run: a run asked to build one application is not asked what it thinks about
-// the server binary.
+// buildState is what the tree says about what has already been built,
+// checked only for the phases this run is going to run.
 func buildState(repo string, o options) (planState, error) {
 	state := planState{}
 
@@ -854,8 +800,8 @@ func buildState(repo string, o options) (planState, error) {
 	return state, nil
 }
 
-// runStep runs one step, with its own directory and its extra environment, and lets whatever the
-// program says reach the operator.
+// runStep runs one step in its own directory with its extra environment,
+// and lets whatever the program says reach the operator.
 func runStep(s step) error {
 	cmd := exec.Command(s.name, s.args...)
 	cmd.Dir = s.dir

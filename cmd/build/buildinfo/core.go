@@ -21,14 +21,9 @@ import (
 )
 
 // CoreOf takes the release out of a version a build carries.
-//
-// A prerelease says the release has not happened yet, and a commit hash says which build of it this
-// was; neither makes it a different release. So a version somebody hands over can be compared with a
-// pinned one by its core, and a build that carries 8.0.0-beta1+gdb79311 satisfies a contract pinned
-// to 8.0.0 while one that carries 9.0.0 does not.
-//
-// Something with no core at its start is refused rather than answered with an empty string: a
-// comparison between two empty strings looks exactly like a pass.
+// A prerelease or commit hash says which build of a release this
+// is, never a different release, so a pinned contract compares cores,
+// and text with no core at its start is refused.
 func CoreOf(version string) (string, error) {
 	core := version
 

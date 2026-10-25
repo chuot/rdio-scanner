@@ -21,12 +21,10 @@ import (
 	"strings"
 )
 
-// Version is the version one build carries. It is built once, by Derive, and it prints itself, so
-// nothing downstream assembles a version out of parts and gets the order of them wrong.
-//
-// The core is the release. The prerelease says the release has not happened yet. The commit says
-// which build this was when no tag said it. Only the core is what a pinned wire contract compares
-// against, which is why Core is readable on its own instead of being taken back out of a string.
+// Version is the version one build carries, assembled once by
+// Derive and printed through one method, so nothing downstream
+// orders the parts by hand; only the core is what a pinned
+// contract compares against.
 type Version struct {
 	core   string
 	pre    string
@@ -43,9 +41,9 @@ func (v Version) Pre() string { return v.pre }
 // which release it is.
 func (v Version) Commit() string { return v.commit }
 
-// String is the version in the form a client reads and a build line passes along: a core, an
-// optional prerelease, and optional build metadata naming the commit. No part of it holds a space,
-// so it survives a command line without quoting.
+// String is the version in the form a client reads: a core, an
+// optional prerelease, and optional build metadata naming the
+// commit, with no spaces, so it survives a command line unquoted.
 func (v Version) String() string {
 	out := strings.Builder{}
 	out.WriteString(v.core)
@@ -67,11 +65,9 @@ func (v Version) String() string {
 // without a leading zero or a run that carries at least one letter or hyphen.
 var prereleasePattern = regexp.MustCompile(`^(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*$`)
 
-// ValidatePre reports whether a name is a prerelease this version grammar accepts. An empty name is
-// not a prerelease at all and is accepted: it is the absence of one, not a bad one.
-//
-// A command line can ask before a build starts, so this is exported for the tool to refuse a name it
-// cannot honour before it has spent a build finding that out.
+// ValidatePre reports whether a name is a prerelease this grammar
+// accepts; empty is the absence of one, not a bad one, and it is
+// exported so the tool can refuse a bad name before a build starts.
 func ValidatePre(pre string) error {
 	if pre == "" {
 		return nil
@@ -84,19 +80,14 @@ func ValidatePre(pre string) error {
 	return nil
 }
 
-// tagPattern is a whole version as a tag names it: an optional v, a core, and an optional
-// prerelease. Build metadata is not part of it, because a tag names a release and a release does not
-// have a build.
+// tagPattern is a whole version as a tag names it: an optional v, a
+// core, and an optional prerelease; build metadata is not part of it.
 var tagPattern = regexp.MustCompile(`^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$`)
 
-// Derive decides the version one build carries.
-//
-// core is what the repository declared. tag is the tag naming the commit being built, or empty when
-// no tag names it. commit is that commit's short hash. pre is a prerelease the operator asked for.
-//
-// A tag decides whether the commit appears and may carry a prerelease; it never decides the version.
-// A tag that names a different core than the declared one is two sources disagreeing about the same
-// commit, and the build stops rather than picking a side.
+// Derive decides the version one build carries from the declared
+// core, the tag naming the commit if any, its short hash, and a
+// prerelease the operator asked for. A tag may add a prerelease and
+// says whether the commit appears, never the version.
 func Derive(core, tag, commit, pre string) (Version, error) {
 	if !corePattern.MatchString(core) {
 		return Version{}, fmt.Errorf("%q is not a core version in the form X.Y.Z", core)
@@ -132,9 +123,9 @@ func Derive(core, tag, commit, pre string) (Version, error) {
 	return Version{core: core, pre: pre, commit: commit}, nil
 }
 
-// readTag takes the core and the prerelease out of a tag name, and refuses a tag that is not a
-// version at all: treating "release-2026" as "some tag" would suppress the commit hash for a reason
-// nobody chose.
+// readTag takes the core and prerelease out of a tag name, and
+// refuses a tag that is not a version at all rather than letting it
+// suppress the commit hash.
 func readTag(tag string) (core string, pre string, err error) {
 	matches := tagPattern.FindStringSubmatch(tag)
 	if matches == nil {

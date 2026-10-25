@@ -14,10 +14,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
 // Command build compiles this project: the scanner webapp, then the administration
-// application, then the server that carries both. It resolves the version the build carries from
-// VERSION.txt and from git, and injects it into the binary through the linker and into the bundles
-// through the environment, so that no source file has to be edited to say what version is being
-// built.
+// application, then the server that carries both bundles.
+// see the buildinfo-version-derivation maintainer note.
 package main
 
 import (
@@ -28,9 +26,8 @@ import (
 func main() {
 	repo, err := repositoryRoot()
 	if err != nil {
-		// The line that says the run stopped reaches the operator's standard error: a tree the tool cannot
-		// even locate is a failure, and a failure written where the progress goes is a failure a log of the
-		// build reads as progress.
+		// the stop notice goes to standard error: a failure written where the progress
+		// goes is a failure a log of the build reads as progress.
 		fmt.Fprintf(os.Stderr, "error  %v\n", err)
 		os.Exit(1)
 	}

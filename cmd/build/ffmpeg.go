@@ -34,12 +34,9 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// runtimeTarget is the target this build is running on, which is the target an operator who named none
-// is building for. It is named by the release target the machine belongs to, because the manifest, the
-// output path, and the messages an operator reads all name the target by the name the release uses: the
-// operator on the Mac that the macOS ffmpeg binaries are built on is asked about macos-arm64, the
-// target the manifest
-// records, and not about the name go builds a macOS binary for.
+// runtimeTarget is the release target of the machine running this build,
+// the target an operator who named none is building for. It is named the
+// way the release names it, not the way go names that machine.
 func runtimeTarget() string {
 	return releaseTargetWordFor(runtime.GOOS, runtime.GOARCH)
 }
@@ -58,11 +55,10 @@ type ffmpegState struct {
 	// finds it out.
 	nativeTools map[string]string
 
-	// sysrootTree is the directory of the SDK tree a record pins, when this machine has that tree prepared, and
-	// empty when it does not. sysrootLookedIn is where the run looked for it either way: the directory the
-	// operator named with RDIO_FFMPEG_DARWIN_SDK, or the cache directory the record's SDK version names. Only a
-	// compile that reads another operating system's headers, libraries and startup files out of a tree the operator
-	// prepared is asked, and the plan that needs a tree this machine does not have is refused.
+	// sysrootTree is the directory of the SDK tree a record pins, when this
+	// machine has that tree prepared, and empty when it does not.
+	// sysrootLookedIn is where the run looked either way: the directory named
+	// with RDIO_FFMPEG_DARWIN_SDK, or the cache directory the SDK version names.
 	sysrootTree     string
 	sysrootLookedIn string
 
@@ -85,16 +81,10 @@ func thisMachine() host {
 	return host{goos: runtime.GOOS, goarch: runtime.GOARCH}
 }
 
-// canCompile says whether this machine can produce one target's ffmpeg binaries with its own toolchain, which
-// is one host and one pair of targets: a Mac compiling a macOS target.
-//
-// Apple ships one toolchain that produces both macOS architectures — the Command Line Tools' clang takes
-// -arch x86_64 on an Apple Silicon Mac and -arch arm64 on an Intel Mac, the macOS SDK carries the libraries of
-// both, and codesign signs a program of either architecture on either machine — so the host's own architecture
-// is not part of the answer. Every other target this project ships an ffmpeg for is compiled in a container
-// wherever the build runs, the Linux targets of a Linux host among them: what a container carries is the
-// compiler and the headers, libraries and startup files of the operating system the target runs on, and a
-// host's own toolchain carries only its own.
+// canCompile says whether this machine can build a target's ffmpeg with its
+// own toolchain: only a Mac building a macOS target, either architecture
+// from either Mac. Every other target is compiled in a container.
+// see the targets-and-platforms maintainer note.
 func (h host) canCompile(target string) bool {
 	if h.goos != "darwin" {
 		return false
@@ -186,12 +176,10 @@ type ffmpegPlan struct {
 	// compile runs its own binaries through.
 	Adopts bool
 
-	// WritesNone says this plan produces no ffmpeg binaries for its target at all: the machine running the
-	// build cannot start the compile the record describes, because an input the record pins is not there to
-	// read. Says carries the sentence that names what is missing and where to prepare it. A release run asked
-	// for several archives reports such a target as one it wrote no archive for and ships the rest; a run
-	// asked for that one target's ffmpeg is refused instead, because the thing it was asked for is the thing
-	// it cannot produce.
+	// WritesNone says this plan produces no ffmpeg binaries for its target:
+	// an input the record pins is not there to read. Says carries the sentence
+	// naming what is missing and where to prepare it. A release run reports
+	// such a target as one it wrote no archive for and ships the rest.
 	WritesNone bool
 
 	Source ffmpegSource
@@ -236,11 +224,10 @@ func sourceDir(manifest bundle.Manifest) string {
 	return strings.TrimSuffix(sourceName(manifest), ".tar.xz")
 }
 
-// ffmpegScratch is what the ffmpeg phase writes and no later build reads: the configured source trees it
-// compiles in, the tarball it extracted them from, the container context it built in, and the working
-// copy of the binaries it ran. The cache beside them is what every later build reads, and a clean run
-// leaves it standing: the scratch is the bulk that is worth a rebuild and nothing else, and the cache is
-// the part that turns a rebuild into a copy.
+// ffmpegScratch is what the ffmpeg phase writes and no later build reads:
+// its configured trees, extracted tarball, container context, and working
+// binaries. The cache beside them is what later builds read, and a clean
+// run leaves it standing.
 func ffmpegScratch(repo string) []string {
 	root := filepath.Join(repo, ".build", "ffmpeg")
 
@@ -255,15 +242,10 @@ func ffmpegScratch(repo string) []string {
 	return paths
 }
 
-// pruneFFMpegCache removes the cache entries the manifest the build reads cannot produce. The cache key
-// is a digest of the release, the pinned source, the target, the recipe, the toolchain, and the check
-// environment, so an entry whose key no target the manifest records computes is an entry the manifest as
-// it is now cannot ask for, and removing it costs nothing a build would have reused. An age rule guesses
-// about an entry a build is about to read, and the cost of a wrong guess is a full compile of a target.
-//
-// The cache is kept under the directory named for the release the manifest pins. A directory under the
-// cache root named for another release is the whole cache of a manifest that no longer exists, and goes
-// with it.
+// pruneFFMPEGCache removes the cache entries the manifest as it is now
+// cannot ask for, keyed off release, source, target, recipe, toolchain and
+// check environment, plus whole cache directories of old releases.
+// see the ffmpeg-cache-pruning maintainer note.
 func pruneFFMpegCache(repo string) ([]string, error) {
 	manifest := bundle.ReadManifest()
 
@@ -330,30 +312,10 @@ func pruneFFMpegCache(repo string) ([]string, error) {
 	return removed, nil
 }
 
-// cacheKey is what has to be the same for a compiled ffmpeg to be reused: the release, the source this
-// project pinned, the target, the configure recipe, and that target's toolchain and check environment — the
-// image it compiles in and the digest that image is pinned at, what gets installed in it, the file that image
-// is built from, the image a sysroot is copied out of and its digest when the target's operating system is not
-// the container's own, the compiler the record names, what makes the compile cross, the flags it links with,
-// and where its programs are checked and at what digest that container is pinned.
-//
-// The source digest is in here and not only in the run that proves the binaries after compiling, because a
-// cache hit skips that run: without it, a manifest whose pinned source was changed would quietly reuse
-// what the old source compiled.
-//
-// The digests a record pins its images at sit beside the names, for the same reason. A record pinned at
-// another digest describes another toolchain, and an entry warmed under the old one holds binaries built with
-// compilers nobody named — under the same target name, in the same release.
-//
-// A record that names a sysroot somebody prepared outside the repositories keys on that tree — the SDK
-// version, its digest, and the tool that prepared it — because those are the headers and libraries the compile
-// read. Its mount path is not in the key: the record spells that path into its cc, cflags, and ldflags, which
-// the key already carries, and a mount path disagreeing with them is one record contradicting itself rather
-// than a second input.
-//
-// A record that names a host compile keys on that compile's flags and make program as well: the two compiles
-// of a macOS target land in one entry, and the inputs of either one move it. A record naming neither keys
-// exactly as it keyed before, so a manifest gaining these fields does not invalidate a warm cache.
+// cacheKey is what has to be the same for a compiled ffmpeg to be reused:
+// the release, the pinned source, the target, the configure recipe, and
+// that target's toolchain and check environment as its record names them.
+// see the ffmpeg-cache-key-inputs maintainer note.
 func cacheKey(manifest bundle.Manifest, target string) string {
 	record := manifest.Targets[target]
 
@@ -373,11 +335,10 @@ func cacheKey(manifest bundle.Manifest, target string) string {
 		strings.Join(record.Conformance.Run, " "),
 	}
 
-	// The digest a record pins an image at belongs in the key beside the name of that image, because a record
-	// pinned at another digest describes another toolchain and an entry warmed under the old one holds binaries
-	// built with compilers nobody named. A record naming no digest keys exactly as it keyed before the field
-	// landed, which is the rule the records naming no sysroot and no extra compiler already follow: the manifest
-	// gaining a field moves the entries of the records that gained it, and nothing else.
+	// The digest a record pins an image at belongs in the key beside the name:
+	// another digest is another toolchain, and an entry warmed under the old
+	// one holds binaries built with compilers nobody named. A record naming no
+	// digest keys exactly as it keyed before.
 	if record.ContainerDigest != "" {
 		parts = append(parts, record.ContainerDigest)
 	}
@@ -465,18 +426,10 @@ func ffmpegTarget(o options) string {
 	return runtimeTarget()
 }
 
-// planFFmpeg decides what the ffmpeg phase does for one target.
-//
-// A target the manifest has no record for is not a failure: it is a platform this project does not
-// compile an ffmpeg for at all, and the phase says so and builds nothing. A target the manifest does
-// have a record for is a promise, and a build that cannot keep it says so instead of quietly producing a
-// server that will do without.
-//
-// The machine is part of the decision for one reason: a macOS target's ffmpeg is compiled with the toolchain
-// of a Mac when the build is standing on one, because that is the only host whose own compiler, linker, and
-// signer can produce it, and an operator who asked for the ffmpeg of the machine they are on gets the compile
-// and not the container. Every other target's compile carries another operating system's headers, libraries
-// and startup files, and travels with the container that carries them.
+// planFFmpeg decides what the ffmpeg phase does for one target: a target
+// with no record is not a failure, and one with a record is a promise a
+// build that cannot keep it says so about.
+// see the targets-and-platforms maintainer note.
 func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegState, machine host) (ffmpegPlan, error) {
 	target := ffmpegTarget(o)
 
@@ -529,12 +482,10 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		return theRefusalAnswered(o, target, theRefusalOfAnUnpreparedSysroot(target, record, state.sysrootLookedIn))
 	}
 
-	// A tree standing where the pinned tree is kept is the pinned tree only when the digest its preparation
-	// recorded beside it is the digest the record names. Nothing in the tree says which tree it is, and the pair
-	// compiled from it would be cached, licensed and released under the pinned digest whether or not the tree
-	// deserved that name: a directory swapped in under the pinned version's name, and a tree assembled by hand
-	// without the record its preparation writes, are both a release whose provenance is a story. The refusal is the
-	// same answer a release run gives to a tree that is not there at all.
+	// A tree standing where the pinned tree is kept is the pinned tree only
+	// when the digest its preparation recorded beside it is the digest the
+	// record names: a swapped or hand-assembled tree would let a release carry
+	// a provenance that is a story. The refusal matches the absent tree's.
 	if record.Sysroot != (bundle.Sysroot{}) && state.sysrootTree != "" && state.sysrootDigest != record.Sysroot.SHA256 {
 		return theRefusalAnswered(o, target, theRefusalOfASysrootThatIsNotThePinnedTree(target, record, state.sysrootTree, state.sysrootDigest))
 	}
@@ -641,12 +592,10 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		args:   makeArgs,
 	})
 
-	// The tree the container compiled in belongs to whatever uid the container was given, which is not
-	// a uid this build can name: rootless podman maps it into a subuid range, and the ownership ffmpeg's
-	// own tarball carries lands somewhere else again. Chasing the uid is a dead end — the numbers differ
-	// between rootless and rootful podman, and a wrong one leaves a tree the next build cannot even
-	// open. Making the tree readable, writable and traversable by everybody in it is what the build
-	// actually needs, and it does not depend on which uid turned out to be which.
+	// The tree the container compiled in belongs to a uid this build cannot
+	// name, so it is made readable, writable and traversable by everybody in
+	// it rather than chasing which uid turned out to be which.
+	// see the container-run-ownership maintainer note.
 	plan.Steps = append(plan.Steps, step{
 		label:  "chmod",
 		result: paths.scratch,
@@ -662,18 +611,10 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 	return plan, nil
 }
 
-// planHostFFmpeg decides what the ffmpeg phase does with the ffmpeg of a target whose host is the machine
-// standing under this build.
-//
-// Two machines can produce those binaries. The maintainer's own build does, and drops them in the bundle
-// directory for this build to adopt; the build standing on that same platform does it itself, with the source,
-// digest, recipe, and flags the manifest already carries. Binaries the maintainer dropped win over the compile
-// every time: the drop is what he built and tested, and compiling over it would throw it away.
-//
-// The plan holds a drop to the reads that target's record names, which are the same rules the build holds a pair
-// it compiled to: the drop is adopted into the release, so it is admitted on the release's own standard and not on
-// a weaker one. The run that adopts them runs them, on the machine standing here, through the same gate a compile
-// runs its own binaries through.
+// planHostFFmpeg decides the ffmpeg of a target whose host is this
+// machine. Dropped binaries win over a fresh compile every time, and a
+// drop is held to the same reads, gate and run as a compiled pair.
+// see the native-run-boundaries maintainer note.
 func planHostFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState, machine host) (ffmpegPlan, error) {
 	// The cache key is the manifest's record and the target, so a warm cache is the entry this machine's
 	// own run published, and the drop is not needed again: it has already been consumed out of this
@@ -721,18 +662,10 @@ func planHostFFmpeg(repo string, manifest bundle.Manifest, target string, record
 	}, nil
 }
 
-// planNativeFFmpeg decides what the compile of the ffmpeg binaries looks like when the build is standing on a
-// host of the operating system they run on.
-//
-// It is the same trimmed build the container targets make, from the same source the manifest pins, with the
-// same recipe, and with the record's host flags reaching configure the way the record's own flags do there.
-// What it does not have is a container: the host's own compiler, linker, stripper, make program, and signer are
-// the toolchain, and the binaries come out of it as the platform's own programs — which is the whole reason a
-// macOS ffmpeg is compiled here when a Mac is standing under the build, and in a container against Apple's SDK
-// when anything else is.
-//
-// Stripping comes before signing, and the order is not a style: strip rewrites the binary, and a signature
-// computed over the bytes strip removed is a signature macOS refuses to run.
+// planNativeFFmpeg decides the compile of the ffmpeg binaries when the
+// build stands on a host of the operating system they run on: the same
+// trimmed build, with the host's own tools as the toolchain. Stripping
+// comes before signing: a signature over bytes strip removed is refused.
 func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState, machine host) (ffmpegPlan, error) {
 	if err := checkNativeToolchain(record, target, state); err != nil {
 		return ffmpegPlan{}, err
@@ -856,12 +789,10 @@ func nativeProgramsAre(record bundle.Target, target string) []string {
 	return programs
 }
 
-// checkNativeToolchain is the host's own build tools, asked before a step runs.
-//
-// A machine missing one of them cannot start the compile, and finding that out from configure's output,
-// after the source was fetched and unpacked, is a minute of work spent to learn what could have been said
-// at once. The refusal names the program and where it comes from: the only host compile this build has is the
-// one a Mac runs for a macOS pair, and the tools it runs are the ones Apple's Command Line Tools install.
+// checkNativeToolchain asks for the host's own build tools before a step
+// runs and names the missing program and where it comes from, so the
+// build never spends a minute finding out what it could say at once.
+// see the native-run-boundaries maintainer note.
 func checkNativeToolchain(record bundle.Target, target string, state ffmpegState) error {
 	for _, name := range nativeProgramsAre(record, target) {
 		if state.nativeTools[name] == "" {
@@ -885,17 +816,10 @@ func suppliedDropFor(paths ffmpegPaths, target string) map[string]string {
 	return drop
 }
 
-// adoptSuppliedFFmpeg consumes the drop: the binaries move out of the directory a server binary embeds and
-// into this build's own cache, gzipped, with the licence text the run wrote beside them.
-//
-// The binaries have to leave that directory. //go:embed all: takes every file in it, so a raw program left
-// sitting next to the gzipped one is embedded as well, and every server built for that target carries
-// about ten megabytes of program it will never use. The gzipped binaries in the cache are the same
-// programs: gzip is lossless, and the ad-hoc code signature signed macOS programs carry is a hash over
-// these bytes.
-//
-// The licence text goes into the cache entry for the same reason the binaries do: the entry is what a
-// reusing run reads, and the words a run wrote about the binaries it ran belong with them.
+// adoptSuppliedFFmpeg consumes the drop: the binaries move out of the
+// directory a server binary embeds and into this build's cache. They have
+// to leave because go:embed takes every file: a raw program left there is
+// embedded too.
 func adoptSuppliedFFmpeg(paths ffmpegPaths, target string, licence string) error {
 	if err := os.MkdirAll(paths.cached, 0755); err != nil {
 		return fmt.Errorf("the build cannot prepare %s: %w", paths.cached, err)
@@ -941,15 +865,10 @@ func theLicenceInTheCache(paths ffmpegPaths, manifest bundle.Manifest, target st
 	return suppliedFFMpegLicence(manifest, target, theRunOfTheBinaries{}), nil
 }
 
-// buildImageArgs prepares the container one target is compiled or checked in. The build context is an
-// empty directory on purpose: the image is a toolchain, and nothing of this repository belongs in it.
-//
-// Which file the image is built from and which image a sysroot is copied out of both come from the target's
-// record, and both arrive as the name its record writes at the digest its record pins: that is the reference
-// the container program resolves, and it is what makes tomorrow's pull the same toolchain as today's.
-// A compile that reads another operating system's headers, libraries and startup files gets them
-// from an image the build copies out of and never runs; a target that needs none is built from the shared
-// file and names no sysroot at all.
+// buildImageArgs prepares the container one target is compiled or checked
+// in, from an empty context: the image is a toolchain, and nothing of this
+// repository belongs in it.
+// see the container-image-build-contract maintainer note.
 func buildImageArgs(image string, file string, base string, sysrootImage string, packages []string) []string {
 	args := []string{
 		"build",
@@ -984,12 +903,10 @@ func theContainerfileFor(record bundle.Target) string {
 	return sharedContainerfile
 }
 
-// theImageTheRecordNames is the reference the build hands the container program for an image its record names:
-// the name the record writes, at the digest its record pins that name to. The tag alone is a name the registry
-// can point somewhere else tomorrow, and a compile asked of wherever it points then is another toolchain
-// wearing this target's name, cached and published under this target's release. A digest is what the container
-// program resolves instead of a name, and a record that names none hands over the tag: which is what the
-// manifest's own test refuses for a target it compiles.
+// theImageTheRecordNames is the reference the build hands the container
+// program: the name the record writes, at the digest it pins. The tag
+// alone can point somewhere else tomorrow, and a compile asked of wherever
+// it points is another toolchain wearing this target's name.
 func theImageTheRecordNames(name string, digest string) string {
 	if digest == "" {
 		return name
@@ -1003,12 +920,10 @@ func theImageTheRecordNames(name string, digest string) string {
 // container mounts.
 const darwinSysrootVariable = "RDIO_FFMPEG_DARWIN_SDK"
 
-// thePreparedSysrootFor answers where the sysroot tree a record pins is on the machine running the build. The
-// record names an SDK version, and the tree of that version sits in the operator's cache directory — outside both
-// repositories, because the tree carries Apple's headers and libraries and belongs in neither — unless the operator
-// named another directory. The tree is reported only when its directory carries the library a macOS link reads: an
-// empty directory, a half-prepared one, and a directory of the wrong level are one answer to the build and one
-// sentence to the operator. Where the build looked is reported either way, because a refusal has to name it.
+// thePreparedSysrootFor answers where the sysroot tree a record pins is
+// on this machine: the cache directory for the pinned SDK version, or the
+// operator named one. It is reported only when the directory carries the
+// see the macos-sdk-tree-lookup maintainer note.
 func thePreparedSysrootFor(record bundle.Target, look func(string) (string, bool), homeDir string) (tree string, lookedIn string) {
 	lookedIn, named := look(darwinSysrootVariable)
 
@@ -1024,16 +939,15 @@ func thePreparedSysrootFor(record bundle.Target, look func(string) (string, bool
 	return lookedIn, lookedIn
 }
 
-// theSysrootDigestFile is the name the preparation of a sysroot tree records its digest under, in the directory that
-// holds the tree. It is the same file the preparation re-reads the tree against, and the only thing beside the tree
-// that says which tree it is supposed to be.
+// theSysrootDigestFile is the name the preparation of a sysroot tree
+// records its digest under, beside the tree itself.
+// see the macos-sdk-digest-mismatch maintainer note.
 const theSysrootDigestFile = "sha256"
 
-// theSysrootDigestRecordedBeside answers what the preparation of a sysroot tree recorded for it. The tree is a
-// directory somebody outside both repositories produced, and nothing inside it names the tree it is: the preparation
-// writes the tree and records its sha256 in a file named sha256 in the directory holding the tree, and re-reads the
-// tree against that record whenever it is run again. A tree with nothing recorded beside it has no measured digest,
-// and the answer is empty rather than invented, because a digest this build made up would be a pin of its own.
+// theSysrootDigestRecordedBeside answers what the preparation of a sysroot
+// tree recorded for it. Nothing inside the tree names it, and a tree with
+// nothing recorded beside it has no measured digest: empty, not invented.
+// see the macos-sdk-digest-mismatch maintainer note.
 func theSysrootDigestRecordedBeside(tree string) string {
 	if tree == "" {
 		return ""
@@ -1047,12 +961,10 @@ func theSysrootDigestRecordedBeside(tree string) string {
 	return strings.TrimSpace(string(body))
 }
 
-// theRefusalOfAnUnpreparedSysroot is what the build says instead of compiling a pair against a tree it does not
-// have. It names the target, the SDK version the record pins, the directory the build looked in, and the way to
-// name another one: a build that only said "no sysroot" would send the operator looking for a fact it already knew.
-// The run that plans a compile asks this machine where its tree is kept before it plans, so the directory is known
-// whenever a compile is refused; a plan composed without asking says which directory that left out rather than
-// naming nothing.
+// theRefusalOfAnUnpreparedSysroot is what the build says instead of
+// compiling a pair against a tree it does not have. It names the target,
+// the SDK version the record pins, the directory it looked in, and how to
+// see the macos-sdk-tree-lookup maintainer note.
 func theRefusalOfAnUnpreparedSysroot(target string, record bundle.Target, lookedIn string) error {
 	where := "the cache directory of the machine running the build"
 
@@ -1064,12 +976,10 @@ func theRefusalOfAnUnpreparedSysroot(target string, record bundle.Target, looked
 		target, record.Sysroot.SDK, where, darwinSysrootVariable)
 }
 
-// theRefusalOfASysrootThatIsNotThePinnedTree is what the build says instead of compiling a pair against a tree that
-// is standing where the pinned tree is kept and is not that tree. A tree whose recorded digest is another tree's, and
-// a tree with nothing recorded beside it at all, are both a release whose binaries would be cached, licensed and
-// published under a digest nothing read. What the operator has to do is the same either way, so the two sentences
-// name the same four things: the target, the directory, the digest the record pins, and what the tree records instead
-// of it — including recording nothing.
+// theRefusalOfASysrootThatIsNotThePinnedTree is what the build says
+// instead of compiling against a tree standing where the pinned tree is
+// kept and not that tree: both a wrong digest and no digest would let
+// binaries ship under a digest nothing read, so both are refused.
 func theRefusalOfASysrootThatIsNotThePinnedTree(target string, record bundle.Target, tree, recorded string) error {
 	if recorded == "" {
 		return fmt.Errorf("the ffmpeg for %s is compiled against the macOS %s SDK its record pins, and the tree at %s has no digest recorded beside it, where its preparation records one in a file named %s, and the digest its record names for that tree is %s: re-prepare that tree, or name the directory you keep it in with %s",
@@ -1080,12 +990,10 @@ func theRefusalOfASysrootThatIsNotThePinnedTree(target string, record bundle.Tar
 		target, record.Sysroot.SDK, tree, recorded, record.Sysroot.SHA256, darwinSysrootVariable)
 }
 
-// theRefusalAnswered hands one refusal of a compile to the run that has to answer it, in the shape that run can
-// answer. A release run was asked for the archives of several targets, and this is one of them it cannot write: it
-// says so about this target, in the sentence the refusal names, and carries on to the archives whose compile it can
-// start — a release run that stopped at the first target missing an input would ship nothing at all, on the host that
-// produces every archive this project publishes. A run asked for this one target's ffmpeg is refused outright,
-// because the one thing it was asked for is the thing it cannot produce, and exit 0 for it would say otherwise.
+// theRefusalAnswered hands a refusal of a compile to the run that has to
+// answer it, in the shape that run can. A release run reports this target
+// as one it wrote no archive for and carries on to the rest; a run asked
+// for this one target's ffmpeg is refused outright, not exit 0.
 func theRefusalAnswered(o options, target string, refusal error) (ffmpegPlan, error) {
 	if o.sub == subDist {
 		return ffmpegPlan{Target: target, Says: refusal.Error(), WritesNone: true}, nil
@@ -1094,10 +1002,10 @@ func theRefusalAnswered(o options, target string, refusal error) (ffmpegPlan, er
 	return ffmpegPlan{}, refusal
 }
 
-// sysrootMount is how a prepared sysroot reaches the container that compiles against it: the tree the operator
-// prepared, mounted where the record says the compiler looks for it, read-only. The compile reads headers,
-// libraries and startup files out of that tree and writes nothing to it, and a mount keeps the tree one copy on the
-// machine instead of a layer of every toolchain image the build makes.
+// sysrootMount is how a prepared sysroot reaches the container that
+// compiles against it: mounted where the record says the compiler looks,
+// read-only. The compile writes nothing to it, and a mount keeps the tree
+// one copy on the machine instead of a layer of every toolchain image.
 func sysrootMount(record bundle.Target, tree string) []string {
 	if tree == "" || record.Sysroot == (bundle.Sysroot{}) {
 		return nil
@@ -1117,15 +1025,10 @@ func whatTheCompileProduced(record bundle.Target, target string) string {
 	return "ffmpeg and ffprobe for " + target
 }
 
-// configureStep is the trimmed build asked of the source: the recipe, then what makes the compile cross
-// to this target, then the flags that link it statically for the target's word size.
-//
-// --enable-cross-compile and ffmpeg's own win32 and win64 operating-system names are what the manifest
-// records, because both mistakes surface as a Makefile error rather than as a cross-compile error.
-//
-// The tree a record pins is mounted for this step, because configure is where a compiler is asked to make a test
-// program, and a compiler with no sysroot mounted answers with its own complaint instead of naming the tree the
-// operator was meant to prepare.
+// configureStep is the trimmed build asked of the source: the recipe, then
+// what makes the compile cross to this target, then the flags that link it
+// statically.
+// see the ffmpeg-cross-build maintainer note.
 func configureStep(repo string, paths ffmpegPaths, image string, manifest bundle.Manifest, record bundle.Target, program theContainerProgram, sysroot string) step {
 	args := append(program.run(), "-v", paths.scratch+":/work")
 
@@ -1192,9 +1095,9 @@ func programSuffix(target string) string {
 	return ""
 }
 
-// checkSource is the integrity anchor of this feature. ffmpeg.org signs its releases with GPG and
-// publishes no checksum, so the digest recorded in the manifest when the release was chosen is what
-// every fetch is checked against, and a mismatch stops the build.
+// checkSource is the integrity anchor of this feature: the digest
+// the manifest recorded is what every fetch checks against.
+// see the ffmpeg-source-digest-anchor maintainer note.
 func checkSource(path string, manifest bundle.Manifest) error {
 	file, err := os.Open(path)
 	if err != nil {
@@ -1221,9 +1124,9 @@ func checkSource(path string, manifest bundle.Manifest) error {
 	return nil
 }
 
-// fetchSource puts the release tarball in the build cache. It is fetched by the tool rather than by a
-// program the operator has to install, so that a container program is the only new prerequisite this
-// build adds.
+// fetchSource puts the release tarball in the build cache, fetched by
+// the tool itself, so a container program stays the only prerequisite.
+// see the container-image-build-contract maintainer note.
 func fetchSource(src ffmpegSource) error {
 	client := &http.Client{Timeout: 10 * time.Minute}
 
@@ -1262,13 +1165,10 @@ func fetchSource(src ffmpegSource) error {
 	return nil
 }
 
-// runFFmpeg produces the ffmpeg a server binary built on this machine is going to carry.
-//
-// It reports whether it produced nothing for the target, which is the answer the release run asks: a target
-// that wrote no ffmpeg writes no archive, and the caller decides what that means for the run. The plans that say
-// it are the ones this machine cannot start — a record whose compile reads a tree the operator has not prepared,
-// on a run that was asked for more than that one target — and such a plan names the missing tree in the line it
-// prints before it reports writing none.
+// runFFmpeg produces the ffmpeg a server binary built on this machine
+// carries. It reports whether it produced nothing for the target, which
+// is the answer the release run asks: a target that wrote no ffmpeg
+// writes no archive, and the plan says what input was missing.
 func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	manifest := bundle.ReadManifest()
 
@@ -1410,8 +1310,8 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 		}
 	}
 
-	// A compiled ffmpeg and a reused one end the same way, so that what the server embeds and what the
-	// release archive carries do not depend on whether the cache was warm.
+	// A compiled ffmpeg and a reused one end the same way, so the server
+	// embed and the release archive do not depend on a warm cache.
 	if covered {
 		if err := publishFFmpeg(plan.Paths, manifest, target, ffmpegLicence(manifest, target)); err != nil {
 			return false, err
@@ -1423,14 +1323,10 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	return false, nil
 }
 
-// readTheCompiledPair reads out of the two programs the container produced everything their target's record says
-// proves them, and starts neither of them. It answers with the first refusal, and the build caches, licenses, and
-// publishes nothing after one.
-//
-// Which reader reaches a pair is decided by the operating system the target runs, and not by anything the record
-// names: the container that compiles a macOS target's pair uses that machine's own linker, and every other
-// target's container uses the linker of the operating system that target runs. A record cannot name its way into
-// the other format's reader, because the format is what the toolchain the plan tells the container to use writes.
+// readTheCompiledPair reads out of the container's pair everything
+// their record says proves them, answering with the first refusal.
+// The target's operating system picks the reader, never the record.
+// see the ffmpeg-read-vs-run-gate maintainer note.
 func readTheCompiledPair(paths ffmpegPaths, manifest bundle.Manifest, record bundle.Target, target string) error {
 	produced := filepath.Join(paths.scratch, sourceDir(manifest))
 
@@ -1449,20 +1345,18 @@ func readTheCompiledPair(paths ffmpegPaths, manifest bundle.Manifest, record bun
 	return nil
 }
 
-// aRecordNamingAReadWithNoRule is what this build says when a target's record names a proof it does not know how to
-// make. That is the record's failure and not the file's, and both of the build's gates say it the same way: the
-// gate that reads a program somebody dropped, and the read of the pair this build compiled.
+// aRecordNamingAReadWithNoRule is what this build says when a target's
+// record names a proof it does not know how to make: the record's failure
+// and not the file's, and both of the build's gates say it the same way.
 func aRecordNamingAReadWithNoRule(target string, read string) error {
 	return fmt.Errorf("the %s record names %s in its conformance reads, and this build has no rule for that read: it proves what it compiled by reading it, and runs no %s program, so it cannot promise a read it does not have",
 		target, read, target)
 }
 
-// runFFmpegOnHost does the work of the ffmpeg that comes from the machine running the build: the pair a
-// maintainer dropped for it, or the pair this machine's own run put in its cache.
-//
-// The dropped binaries are run before they are adopted, on the machine standing here, through the same gate
-// the compile runs its own binaries through. What converts is gzipped into the cache entry, and the licence
-// text the archive carries is written from that run: it names the machine that ran them.
+// runFFmpegOnHost does the work of the ffmpeg that comes from the
+// machine running the build: a maintainer's dropped pair, or the
+// pair this machine's own run cached, both run before adoption.
+// see the native-run-publishes-its-binaries maintainer note.
 func (t tool) runFFmpegOnHost(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
 	if plan.Adopts {
 		run, err := t.prove(target, manifest.Targets[target], plan.Paths, stdout)
@@ -1487,9 +1381,9 @@ func (t tool) runFFmpegOnHost(plan ffmpegPlan, manifest bundle.Manifest, target 
 		return false, nil
 	}
 
-	// The cache entry holds the binaries this machine's own run produced, and the licence text that run
-	// wrote is in the entry beside them: the archive carries the words the run said, not words this run
-	// composes about a compile it did not take part in.
+	// The cache entry holds the binaries this machine's own run produced, and
+	// the licence text that run wrote is in the entry beside them: the archive
+	// carries the words the run said, not words this run composes.
 	licence, err := theLicenceInTheCache(plan.Paths, manifest, target)
 	if err != nil {
 		return false, err
@@ -1504,16 +1398,10 @@ func (t tool) runFFmpegOnHost(plan ffmpegPlan, manifest bundle.Manifest, target 
 	return false, nil
 }
 
-// runNativeFFmpeg does the work of the ffmpeg binaries compiled on the machine that runs them.
-//
-// The binaries are dropped where a maintainer's binaries are dropped, and from there the run is the
-// adoption path: the same run of the binaries, the same gzip into the cache entry, the same licence text,
-// and the same removal of the raw programs from the directory the server embeds. A compile that published
-// its own binaries by its own route would be a second adoption path, and the two would drift apart.
-//
-// The order is the order the evidence is needed in. The binaries are run before anything is adopted,
-// because a cache entry holding binaries that convert nothing is an archive that ships a server that
-// converts nothing.
+// runNativeFFmpeg does the work of the ffmpeg binaries compiled on
+// the machine that runs them, through the same adoption path a
+// maintainer's drop takes, run before anything is adopted.
+// see the native-run-publishes-its-binaries maintainer note.
 func (t tool) runNativeFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
 	if err := prepareFFmpeg(plan.Paths); err != nil {
 		return false, err
@@ -1571,10 +1459,10 @@ func (t tool) runNativeFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target 
 	return false, nil
 }
 
-// nativeDrop puts the compiled binaries where a maintainer's drop is put, executable.
-//
-// The proof reads it from there, the adoption consumes it from there, and the directory it is dropped in
-// is the directory the server embeds, which is why the adoption takes it back out again.
+// nativeDrop puts the compiled binaries where a maintainer's drop
+// is put, executable. The proof reads and the adoption consumes
+// from there, and it is the directory the server embeds: that is
+// why the adoption takes the binaries back out again.
 func nativeDrop(t tool, plan ffmpegPlan, manifest bundle.Manifest, target string) error {
 	work := filepath.Join(plan.Paths.scratch, sourceDir(manifest))
 
@@ -1669,9 +1557,9 @@ func (t tool) runFFMPEGCheck(program theContainerProgram, plan ffmpegPlan, manif
 	)
 }
 
-// containerRun is how the build reaches a binary it cannot run itself: the compiled ffmpeg lives in the
-// mounted scratch directory, inside the container that compiled it. The image has to be named before the
-// program, or the program reads it as the image to run.
+// containerRun is how the build reaches a binary it cannot run itself:
+// the compiled ffmpeg lives in the mounted scratch directory inside the
+// container that compiled it. The image must be named before the program.
 func containerRun(program theContainerProgram, image string, scratch string, argv []string) []string {
 	args := append([]string{program.name}, program.run()...)
 	args = append(args, "-i", "-v", scratch+":/work", image)
@@ -1721,11 +1609,10 @@ func gzipCompiled(paths ffmpegPaths, manifest bundle.Manifest, target string) er
 	return nil
 }
 
-// publishFFmpeg puts the binaries, and what a release archive has to say about them, into the bundle directory
-// the server embeds. The placeholder that keeps a plain go build compiling is left where it is.
-//
-// The licence text is passed in, because the two ways a target's ffmpeg comes to be say different and
-// true things about it, and this function is not the place to decide which of them the archive carries.
+// publishFFmpeg puts the binaries, and what a release archive has to say
+// about them, into the bundle directory the server embeds; the go build
+// placeholder stays. The licence text is passed in: the two ways a
+// target's ffmpeg comes to be say different and true things about it.
 func publishFFmpeg(paths ffmpegPaths, manifest bundle.Manifest, target string, licence string) error {
 	if err := os.MkdirAll(paths.bundle, 0755); err != nil {
 		return fmt.Errorf("the build cannot prepare %s: %w", paths.bundle, err)
@@ -1749,19 +1636,10 @@ func publishFFmpeg(paths ffmpegPaths, manifest bundle.Manifest, target string, l
 	return nil
 }
 
-// ffmpegLicence is what a release archive carries about the ffmpeg inside it: the licence the binary is
-// under, the release it was compiled from, and the exact recipe it was compiled with.
-//
-// It is written from the manifest rather than kept as a document somebody has to remember to update,
-// because a licence notice that names the wrong release is worse than none.
-//
-// A target whose record names reads instead of a run also carries what the build did in place of running its
-// pair, because the archive is the only place that target's reader learns the pair was never started.
-//
-// What a compiled target's pair was built by, and how it was proved, is named from the record too: the
-// archive is the only place a reader of a release sees the toolchain, and a cache or a container store is
-// not something they can look at. The names are the ones the record carries, at the digests the record pins,
-// which is the same reference the build handed the container program.
+// ffmpegLicence is what a release archive carries about the ffmpeg inside
+// it: the licence, the release it was compiled from, and the exact
+// recipe, written from the manifest rather than a document somebody
+// updates, beside the toolchain, its digests, and the proof it describes.
 func ffmpegLicence(manifest bundle.Manifest, target string) string {
 	var text strings.Builder
 
@@ -1811,21 +1689,10 @@ func ffmpegLicence(manifest bundle.Manifest, target string) string {
 	return text.String()
 }
 
-// theCodecsTheRecipeSelects names the codecs the compiled program was asked to carry, out of the recipe the
-// notice already quotes: the decoders and the encoder it enables, and the disabling switch the recipe starts
-// with when it starts with one.
-//
-// The list is composed rather than written out, for the same reason the audio posture is: a notice that names
-// codecs the recipe no longer selects is a notice the release cannot stand behind. And it is what the recipe
-// selects rather than what a run recorded, because a build that reuses a cached pair starts nothing and has no
-// run to report, while the notice it writes has to say the same thing as the one that compiled.
-//
-// A pair the build did start is asked what it registers, and a pair that registers a video codec is refused;
-// a pair the build never started is not asked anything, and the notice says so instead of implying a proof
-// that did not happen.
-//
-// The names go in an indented block, the way the recipe and the source digest are carried, so the words about
-// them stay short enough to read and a list that grows does not push a paragraph off the page.
+// theCodecsTheRecipeSelects names the codecs the compiled program was
+// asked to carry, composed out of the recipe the notice already quotes:
+// a notice naming codecs the recipe no longer selects is one the release
+// cannot stand behind, and a cache hit starts no run to report.
 func theCodecsTheRecipeSelects(recipe []string, provedByReading bool) string {
 	var decoders, encoders []string
 
@@ -1864,13 +1731,10 @@ func theCodecsTheRecipeSelects(recipe []string, provedByReading bool) string {
 	return text + "The two programs were compiled by a build that started them, read back the codecs they register,\nand refused them if either one registered a video codec.\n\n"
 }
 
-// theToolchainThatCompiledIt names the container the pair was compiled in at the digest its record pins, the
-// file that image was built from, and the tree its link read when its record names one. These are the names
-// and the digests the build passed to the container program, so the notice names the toolchain that was
-// actually resolved and not a tag that can point somewhere else by the time a reader asks.
-//
-// A pinned reference is never shortened and never folded into a sentence: it is the one string in this notice
-// a reader may have to compare against something a registry reports, and it is already that long.
+// theToolchainThatCompiledIt names the container the pair was compiled
+// in at its record's pinned digest, the file that image was built from,
+// and the tree its link read: the toolchain as the build actually
+// resolved it, and a pinned reference is never shortened.
 func theToolchainThatCompiledIt(record bundle.Target) string {
 	text := "The toolchain it was compiled in:\n\n    " +
 		theImageTheRecordNames(record.Container, record.ContainerDigest) +
@@ -1909,13 +1773,10 @@ them runs, and that image carries no copy of it.
 	return text
 }
 
-// theProofTheRecordDescribes says what this build did to believe the two programs, in the shape the target's
-// record describes: a pair started in the image that compiled it, a pair started under a runner installed in
-// that image, a pair started under a runner in a second container the record names at a digest, or a pair
-// nothing ever started, held instead to the things the build read out of it.
-//
-// It names a runner because a proof run in an emulator is not the same proof as a run on the machine, and a
-// reader is the one who has to know which one the release is standing on.
+// theProofTheRecordDescribes says how this build came to believe the
+// two programs: started in its compile image, started under a runner
+// there or in a named second container at a digest, or never started
+// and only read. An emulated run is not a run on the machine.
 func theProofTheRecordDescribes(record bundle.Target) string {
 	if len(record.Conformance.Reads) > 0 {
 		return `What stands in place of a run is named by this target's record, and the build holds both
@@ -1949,13 +1810,10 @@ func theRunnerTheRecordNames(record bundle.Target) string {
 	return " under " + strings.Join(record.Conformance.Run, " and ")
 }
 
-// theAudioOnlyPosture is what the recipe says is not compiled in, in the words the licence texts use.
-// It is composed from the recipe, because a notice that names a switch the recipe dropped is a notice
-// promising a build the recipe does not produce, and that notice travels inside every archive.
-//
-// The video filters the compiled program carries are the ones ffmpeg's own program selects for its
-// output handling, and no configure switch takes them out; the posture is about codecs, decoders,
-// encoders and the network, which is what the recipe decides and the proof reads back.
+// theAudioOnlyPosture is what the recipe excludes, in the words the
+// licence texts use, composed from the recipe so a notice cannot name
+// a switch the recipe dropped: that notice travels inside every archive.
+// It covers codecs and the network, the things the recipe decides.
 func theAudioOnlyPosture(recipe []string) string {
 	var posture []string
 
@@ -1986,16 +1844,10 @@ func theRecipeCarries(recipe []string, flag string) bool {
 	return false
 }
 
-// suppliedFFMpegLicence is what a release archive carries about a pair this build did not compile in a
-// container: the pair a Mac compiled with its own toolchain, or the pair its maintainer built by hand and
-// dropped.
-//
-// The pair a container compile produced is reproducible from this repository, so its notice points at the
-// manifest and the command. This pair is not: it was built on a macOS host that could build it and start it,
-// and this build started it there before adopting it. The notice names that machine, the source and recipe
-// they were built from, the command that built them, and the codecs the run recorded. It says plainly that a
-// deployment inherits the libraries of the machine that compiled them, because that is the one thing about
-// these binaries the build does not check.
+// suppliedFFMpegLicence is what a release archive carries about a pair
+// this build did not compile in a container: the pair a Mac compiled
+// with its own toolchain, or a maintainer's hand-built drop.
+// see the ffmpeg-licence-in-archive maintainer note.
 func suppliedFFMpegLicence(manifest bundle.Manifest, target string, run theRunOfTheBinaries) string {
 	var text strings.Builder
 

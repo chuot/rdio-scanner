@@ -30,27 +30,10 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// What this build reads out of a Mach-O program, and the rules the macOS ffmpeg binaries are admitted under —
-// the pair it compiled in a container, and the programs a maintainer built by hand and dropped.
-//
-// The machine that produces the releases runs Linux, and it cannot start a macOS program. So the build reads
-// what it can read — the header and the load commands the target's own linker wrote — and requires the programs
-// to be the programs that target runs, in the form their target's record names:
-//
-//	macos-amd64, macos-arm64  a thin 64-bit Mach-O holding that architecture's machine code, because an Apple
-//	                          Silicon Mac runs arm64 and x86-64 alike and running the binaries cannot say which
-//	                          one the compiler produced; and the entry point, the dynamic linker, the system
-//	                          library, and on arm64 the code signature a program of that operating system needs
-//	                          in front of it before it starts
-//
-// Every other target this project ships an ffmpeg for is compiled in a container, which produces the program
-// that target runs; nothing is admitted into such a target from outside the compile that made it.
-//
-// A program this build compiled and a program somebody dropped are held to the same reads, which are the ones
-// the target's record names: two gates would be two standards, and a release adopting on the weaker one is not
-// visible from outside the build. Where a dropped program's recipe came from is the business of the machine that
-// built it, and the licence text the archive carries names that machine. That the program is one the target runs
-// at all is the build's business, and it is read out of the file.
+// The Mach-O reads this build makes of a macOS ffmpeg, and the rules
+// its binaries are admitted under: a thin 64-bit image of the target's
+// own architecture, entry point, linker, system library, and arm64 signature.
+// see the supply-macho-read-rules maintainer note.
 const (
 	machOMagic   = 0xfeedfacf // MH_MAGIC_64: a thin 64-bit image, little-endian
 	machO32Magic = 0xfeedface // MH_MAGIC: 32-bit, which no release of this project ships
@@ -61,11 +44,10 @@ const (
 
 	machOHeaderSize = 32
 
-	// The filetype a Mach-O file declares itself to be, and the load commands that say how it was linked and what
-	// it has to have in front of it before Apple's loader starts it. These are the numbers the headers of the
-	// software development kit this build compiles a macOS ffmpeg against define, and the numbers the linker that
-	// compiles with them writes: LC_CODE_SIGNATURE carries no LC_REQ_DYLD bit, and LC_MAIN is the entry-point
-	// command that carries no register set, which is why it is the same size on both architectures.
+	// The filetype a Mach-O file declares itself to be, and the load
+	// commands naming how it was linked and what it needs in front of it
+	// before Apple's loader starts it; the numbers come from the SDK
+	// headers of the toolchain this build compiles a macOS ffmpeg with.
 	machOFiletypeObject   = 0x1 // MH_OBJECT: a file that was never linked
 	machOFiletypeExecute  = 0x2 // MH_EXECUTE: a demand-paged program the operating system runs
 	machOFiletypeDylib    = 0x6 // MH_DYLIB: a library
@@ -80,18 +62,18 @@ const (
 	machOLoadDylinker    = 0x0e       // LC_LOAD_DYLINKER: the dynamic linker the program names
 	machOCodeSignature   = 0x1d       // LC_CODE_SIGNATURE: what macOS checks before starting an arm64 program
 
-	// The two things a dynamically linked macOS program cannot start without: the linker Apple's loader hands it
-	// to, and the system library every program of that operating system is under.
+	// The two things a dynamically linked macOS program cannot start
+	// without: Apple's dynamic linker, and the system library.
 	dyldEveryProgramStartsUnder  = "/usr/lib/dyld"
 	libSystemEveryProgramLinksTo = "/usr/lib/libSystem.B.dylib"
 
-	// Every load command starts with its number and its size, and that is as short as one gets: a reader that
-	// walked past a command naming a shorter size than that would be walking into the middle of the next one.
+	// aLoadCommandSize is the shortest size a load command may name: its
+	// own number and size are one word each.
 	aLoadCommandSize = 8
 )
 
-// aMachOProgram is what the build reads out of a Mach-O file without running it: what the header says the file
-// is, and the load commands that say how it was linked and what it names in front of itself.
+// aMachOProgram is what the build reads out of a Mach-O file without
+// running it: the header, and the load commands it carries.
 type aMachOProgram struct {
 	cpuType  uint32
 	fileType uint32
@@ -101,27 +83,23 @@ type aMachOProgram struct {
 	signed   bool     // LC_CODE_SIGNATURE: the program carries a signature
 }
 
-// aMachOProblem is one fact about a Mach-O program that a rule refuses, in the two halves this build's gates
-// both say: what the file said, and what the read asked for instead. The gate a dropped program passes puts the
-// first half in the sentence it says to the machine that dropped it; the read the build makes of the pair it
-// compiled puts both halves in the sentence it says about a program it produced and did not run. An empty "said"
+// aMachOProblem is one refused fact about a Mach-O program: what the
+// file said, and what the read asked for instead; an empty said half
 // is the file saying what was asked.
+// see the supply-macho-read-rules maintainer note.
 type aMachOProblem struct {
-	// noRule is a record naming a read this build has no rule for. That is the record's failure and not the
-	// file's, and each gate says it in the words it uses about a record.
+	// noRule marks a record naming a read this build has no rule for:
+	// the record's failure, not the file's.
 	noRule bool
 
 	said  string
 	asked string
 }
 
-// aMachOProgramAt reads a Mach-O program's header, walks the load commands it describes, and answers either the
-// program or what the file said instead of one: a build that could not read a pair has to be able to say why.
-//
-// Which architecture's machine code the file holds is asked here, and not left to a read a record names, because
-// it is a fact the header carries and not a promise the release could have made differently: macos-amd64 runs
-// x86-64 and nothing else, and the header is all that stands in front of a machine that cannot start the program
-// to say what the compiler wrote.
+// aMachOProgramAt reads a Mach-O program's header and load commands
+// and answers the program or what the file said instead of one.
+// the architecture is asked of the header, never left to the record.
+// see the supply-macho-read-rules maintainer note.
 func aMachOProgramAt(path string, target string) (aMachOProgram, aMachOProblem) {
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -138,9 +116,9 @@ func aMachOProgramAt(path string, target string) (aMachOProgram, aMachOProblem) 
 		}
 	}
 
-	// A universal binary's magic is written big-endian by every linker that produces one, whatever the byte
-	// order of the images inside it; a thin image's magic is the byte order of that image. So the fat magic is
-	// looked for in the big-endian reading of the first four bytes, and the thin magics in the little-endian one.
+	// A universal binary's magic is big-endian whatever machine produced
+	// it; a thin image's magic takes the image's own byte order, so the
+	// fat magic is read big-endian and the thin magics little-endian.
 	if binary.BigEndian.Uint32(body[0:]) == fatMagic {
 		return aMachOProgram{}, aMachOProblem{
 			said:  "is a universal binary: this project ships one archive per architecture and each binary carries the ffmpeg binaries that architecture runs, so build one program per architecture",
@@ -167,9 +145,9 @@ func aMachOProgramAt(path string, target string) (aMachOProgram, aMachOProblem) 
 		fileType: binary.LittleEndian.Uint32(body[12:]),
 	}
 
-	// The header names its load commands twice: the count of them, and the size they occupy. They are two
-	// different numbers, the walk follows the size each command names, and the area the header describes is what
-	// the walk is allowed to read.
+	// The Mach-O header names its load commands twice, a count and a
+	// size: two different numbers, the walk follows the size each
+	// command names, and the sized area is what the walk may read.
 	commands := int(binary.LittleEndian.Uint32(body[16:]))
 	described := int(binary.LittleEndian.Uint32(body[20:]))
 
@@ -251,9 +229,9 @@ func aMachOProgramAt(path string, target string) (aMachOProgram, aMachOProblem) 
 	return file, aMachOProblem{}
 }
 
-// aNameTheLoadCommandCarries reads the string one load command names as an offset from its own start, bounded by
-// the command that carries it. A header describes a program by naming offsets inside it, and a reader that trusted
-// an offset it was given would read past the command it is reading, and past whatever the next command is.
+// aNameTheLoadCommandCarries reads a string named as an offset inside
+// one load command, bounded by that command: trusting an unbounded
+// offset reads past the command and whatever comes next.
 func aNameTheLoadCommandCarries(body []byte, at int, size int, what string) (string, aMachOProblem) {
 	if size < aLoadCommandSize+4 {
 		return "", aMachOProblem{
@@ -280,9 +258,9 @@ func aNameTheLoadCommandCarries(body []byte, at int, size int, what string) (str
 	return string(name), aMachOProblem{}
 }
 
-// checkSuppliedProgram reports whether the program at path is the program the given target runs, holding it to
-// the reads that target's record names for the pair this build compiles. The gate a dropped program passes and
-// the read the build makes of its own compile are one rule, said in the voice each of them is read by.
+// checkSuppliedProgram reports whether the program at path is the
+// program the target runs, held to the reads its record names: one
+// rule for a dropped program and for this build's own compile.
 func checkSuppliedProgram(path string, target string, record bundle.Target) error {
 	name := filepath.Base(path)
 
@@ -306,14 +284,10 @@ func checkSuppliedProgram(path string, target string, record bundle.Target) erro
 	return fmt.Errorf("%s is not a target this project supplies an ffmpeg for", target)
 }
 
-// checkTheSuppliedMachOProgram reports whether the program somebody dropped is the program the given macOS
-// target runs.
-//
-// The architecture is the rule a crossed compile needs: an Apple Silicon Mac compiling the Intel binaries runs
-// what it produced under Rosetta 2 just as well, so only the file itself says which machine code the compiler
-// wrote. The entry point, the dynamic linker, the system library and the code signature are the rules the release
-// needs: the server writes the program out of its own binary and starts it, and a program that target's loader
-// will not start is not the ffmpeg the release ships.
+// checkTheSuppliedMachOProgram reports whether a dropped program is
+// the program the macOS target runs. The architecture is a rule a
+// crossed compile cannot check: only the file can answer it.
+// see the supply-macho-read-rules maintainer note.
 func checkTheSuppliedMachOProgram(path string, name string, target string, record bundle.Target) error {
 	file, problem := aMachOProgramAt(path, target)
 
@@ -336,18 +310,18 @@ func checkTheSuppliedMachOProgram(path string, name string, target string, recor
 	return nil
 }
 
-// theSuppliedProgramRefuses says to the machine that dropped a program what the program it handed over said
-// instead of what its target's record asks a program to say. It is this gate's own sentence, and not the one the
-// build says about a pair it compiled: whoever dropped the program is told which rule it broke, and is not told
-// that something was run to find that out.
+// theSuppliedProgramRefuses says to whoever dropped a program what it
+// said instead of what its target's record asks, in this gate's own
+// voice: the dropper learns which rule broke, and is not told that
+// anything was run to find it out.
 func theSuppliedProgramRefuses(name string, target string, said string) error {
 	return fmt.Errorf("the supplied %s for %s %s", name, target, said)
 }
 
-// readAMachOProgram reads the file at path and holds it to each name the record carries, in the order the record
-// carries them, refusing at the first thing the file does not say. It is the Mach-O half of what a target's record
-// names in its conformance reads, and it is what a pair this build compiled in a container is proved by on a
-// machine that cannot start either program.
+// readAMachOProgram holds the file at path to each read the record
+// names, in order, refusing at the first the file does not say; it is
+// the Mach-O half of a target's conformance reads, and what a pair
+// this build compiled is proved by on a machine that runs neither.
 func readAMachOProgram(path string, program string, target string, reads []string) error {
 	file, problem := aMachOProgramAt(path, target)
 
@@ -371,13 +345,10 @@ func readAMachOProgram(path string, program string, target string, reads []strin
 	return nil
 }
 
-// theMachOReadFailure answers no problem at all when a program says what one read asks it to say, and the two
-// halves of an answer an operator acts on when it does not. Each name refuses one shape a compiler can produce,
-// and every refusal is read out of the load commands the program carries.
-//
-// A name this build has no rule for is the record's failure and not the file's, which is why it is answered inside
-// the switch: a rule that holds and a rule that does not exist are two different answers, and a build that let the
-// first fall through into the second would refuse the pair its own compile produced for having no rule.
+// theMachOReadFailure answers no problem when a program says what a
+// read asks, and the two halves of an answer when it does not; each
+// name refuses one shape a compiler can produce, read out of the file.
+// see the supply-macho-read-rules maintainer note.
 func theMachOReadFailure(read string, file aMachOProgram) aMachOProblem {
 	switch read {
 	case "mh_execute":
@@ -445,10 +416,10 @@ func theMachOReadFailure(read string, file aMachOProgram) aMachOProblem {
 	return aMachOProblem{}
 }
 
-// theProgramLinksTheSystemLibrary says whether one of the references the program carries is the system library a
-// macOS program is under. A program that links the system library and three libraries a maintainer installed at
-// home is the program the target runs; a program that links only the ones he installed is a program the recipe
-// never compiled.
+// theProgramLinksTheSystemLibrary says whether one reference the
+// program carries is the system library a macOS program is under:
+// the system library plus extra ones is the program the target runs,
+// and a program without it is one the recipe never compiled.
 func theProgramLinksTheSystemLibrary(file aMachOProgram) bool {
 	for _, dylib := range file.dylibs {
 		if dylib == libSystemEveryProgramLinksTo {
@@ -459,8 +430,8 @@ func theProgramLinksTheSystemLibrary(file aMachOProgram) bool {
 	return false
 }
 
-// aMachOFileTypeName names the filetype a Mach-O header declares itself to be, which is what a refusal says a
-// program is when it is not the executable file its target runs.
+// aMachOFileTypeName names the filetype a Mach-O header declares,
+// which a refusal says a program is when it is not an executable.
 func aMachOFileTypeName(fileType uint32) string {
 	switch fileType {
 	case machOFiletypeObject:
@@ -478,18 +449,17 @@ func aMachOFileTypeName(fileType uint32) string {
 	return fmt.Sprintf("the Mach-O filetype 0x%x", fileType)
 }
 
-// theTargetRunsMachOPrograms says whether the programs one target runs are Mach-O programs, which is a fact of the
-// operating system that target is and not a thing a record can name differently: the two macOS targets run Mach-O
-// programs, and every other target this project ships an ffmpeg for runs an ELF program. The same answer decides
-// which half of this build's read rule reaches a pair it compiled.
+// theTargetRunsMachOPrograms says whether a target's programs are
+// Mach-O: a fact of the operating system, not of any record, and it
+// decides which half of this build's read rule reaches a pair.
 func theTargetRunsMachOPrograms(target string) bool {
 	tr, found := targetFor(target)
 
 	return found && tr.goos == "darwin"
 }
 
-// theCPUTypeTheTargetRuns is the machine code one target runs, which is the architecture its release archive is
-// named for. Only the Mach-O rule asks it, because only a Mach-O header answers it.
+// theCPUTypeTheTargetRuns is the machine code one target runs,
+// named by its release word; only the Mach-O rule asks, since only a Mach-O header answers.
 func theCPUTypeTheTargetRuns(target string) (uint32, bool) {
 	tr, found := targetFor(target)
 	if !found {
@@ -517,12 +487,10 @@ func nameOfCPU(cpuType uint32) string {
 	return fmt.Sprintf("0x%x", cpuType)
 }
 
-// theRunOfTheBinaries is what the build saw when it ran the ffmpeg binaries: the machine that ran them,
-// the version they said they are, the codecs they registered, and the recordings they converted.
-//
-// It is carried from the run to the licence text the archive ships, and it is kept nowhere else. There is
-// no proof file for a later build to read: the run that adopted the binaries is the run that ran them,
-// and the licence text says which machine that was.
+// theRunOfTheBinaries is what the build saw when it ran the ffmpeg
+// binaries: the machine, the version they said, the codecs they
+// registered, and the recordings they converted.
+// see the ffmpeg-run-gate maintainer note.
 type theRunOfTheBinaries struct {
 	Host        string
 	Version     string
@@ -531,33 +499,20 @@ type theRunOfTheBinaries struct {
 	Productions []production
 }
 
-// theBinariesTheHostCannotRun is what a host is told when the ffmpeg binaries in front of it do not run on it.
-//
-// The gate is the binaries' own execution, so a host that cannot execute them adopts nothing, and the
-// answer it gets names the host that can run them, the command that compiles them there, and the directory
-// the ones it cannot run are sitting in. The binaries in front of it are the ones it compiled, or the ones
-// somebody dropped.
-//
-// The operating system's own refusal is carried inside it. This build does not ask the host what it has
-// installed and does not guess at what it can execute: an Intel Mac holding the arm64 pair, and an Apple
-// Silicon Mac holding the Intel pair with no translator installed to start it, are answered by the programs
-// not starting. The gate is asked of a pair the host was about to adopt, and that is a macOS pair on a macOS
-// host: the container route never starts a pair this host cannot start, it reads what it produced instead.
+// theBinariesTheHostCannotRun is what a host is told when the ffmpeg
+// binaries in front of it do not run on it: the answer names the host
+// that can, the command that compiles them, and where they sit.
+// see the ffmpeg-run-gate maintainer note.
 func theBinariesTheHostCannotRun(target string, paths ffmpegPaths, machine host, err error) error {
 	return fmt.Errorf("the %s ffmpeg binaries do not run on this machine (%s): %w\n"+
 		"the pair in %s is adopted by being run, and this host cannot run it: run go run ./cmd/build ffmpeg %s on a %s host",
 		target, releaseTargetWordFor(machine.goos, machine.goarch), err, paths.bundle, target, target)
 }
 
-// proveSuppliedBinaries runs the ffmpeg binaries sitting in one target's bundle directory, on the machine
-// standing here, and says what it saw.
-//
-// The binaries are read before they are run: the header and the load commands the target's own linker writes are
-// what a run cannot say across the two macOS architectures, because an Apple Silicon Mac starts arm64 and x86-64
-// programs alike. A run answers what the program does; the read answers which program it is.
-//
-// The compile a macOS host runs and the run that adopts a drop both run the binaries through this: two gates
-// would be two standards, and a release adopting on the weaker one is not visible from outside the build.
+// proveSuppliedBinaries runs the ffmpeg binaries in one target's
+// bundle directory here, and says what it saw: a run answers what a
+// program does, not which program it is, so the file is read first.
+// see the supply-macho-read-rules maintainer note.
 func (t tool) proveSuppliedBinaries(target string, record bundle.Target, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error) {
 	drop := suppliedDropFor(paths, target)
 
@@ -607,9 +562,9 @@ func (t tool) proveSuppliedBinaries(target string, record bundle.Target, paths f
 	}, nil
 }
 
-// theProgramVersion is the first line the program says about itself, which is the release the run
-// records: the manifest pins one release, and binaries built from another are binaries this release does
-// not ship.
+// theProgramVersion is the first line the program says about itself:
+// the manifest pins one release, and binaries built from another are
+// binaries this release does not ship.
 func theProgramVersion(run command, program []string) (string, error) {
 	body, err := run(starts(program, "-version"), nil)
 	if err != nil {
@@ -624,16 +579,10 @@ func theProgramVersion(run command, program []string) (string, error) {
 	return line, nil
 }
 
-// onThisMachine runs one program here, hands it a recording on its input, and hands back what it wrote.
-//
-// It is the shape the check runs compiled binaries through a container in, used for the binaries this
-// machine can run: the pair a host adopts is a pair built for the machine standing there, so nothing stands
-// between the check and the programs.
-//
-// A program that ran and answered badly answers with its own words, which is what the check reads. A
-// program that never started has no words of its own: the operating system refused to start it, and that
-// refusal is the whole answer, so it is carried out and not thrown away. It is the answer a host gives that
-// was handed the binaries of the other macOS architecture.
+// onThisMachine runs one program here, hands it a recording on its
+// input, and hands back what it wrote: when a program never started,
+// the operating system's refusal is carried out, not thrown away.
+// see the ffmpeg-run-gate maintainer note.
 func onThisMachine() command {
 	return func(argv []string, stdin []byte) ([]byte, error) {
 		out := bytes.NewBuffer([]byte(nil))

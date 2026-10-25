@@ -21,30 +21,25 @@ import (
 )
 
 // releaseTarget is one platform the release matrix builds for.
-//
-// The name is what the archive and its directory are called, and is not always the operating system go
-// builds for: this project ships a macos release, and go builds a macos binary for darwin. The two
-// words are kept apart so that a release named macos is not built for a target go has never heard of.
+// The name is what the archive and its directory are called, and go
+// builds this project's macos release for the operating system word
+// darwin: the two are kept apart so a macos release is not misnamed.
 type releaseTarget struct {
 	name   string
 	goos   string
 	goarch string
 }
 
-// targetWord is the name the ffmpeg phase knows this target by, which is the name the manifest records
-// its toolchain under.
+// targetWord is the name the ffmpeg phase knows this target by,
+// which is the name the manifest records its toolchain under.
 func (t releaseTarget) targetWord() string {
 	return t.name + "-" + t.goarch
 }
 
 // releaseTargets is the matrix: the platforms a release archive is built for.
-//
-// Which of them carry an ffmpeg, and how the ffmpeg binaries they carry came to be, is not in this
-// list. The manifest answers that: the pair of every target is compiled in a container on the machine the
-// build runs on, and a Mac compiling a macOS target is the one case where that compile is made with the
-// host's own compiler, linker and signer instead — or is not made at all, because the pair its maintainer
-// built is already sitting in the directory the build embeds. The matrix is a product decision about what
-// gets released; the manifest is a build decision about what gets compiled, and they are not the same list.
+// Which targets carry an ffmpeg, and how those binaries came to be, is
+// not in this list: the manifest answers that.
+// see the targets-and-platforms maintainer note.
 var releaseTargets = []releaseTarget{
 	{name: "freebsd", goos: "freebsd", goarch: "amd64"},
 	{name: "linux", goos: "linux", goarch: "386"},
@@ -56,11 +51,11 @@ var releaseTargets = []releaseTarget{
 	{name: "windows", goos: "windows", goarch: "amd64"},
 }
 
-// targetFor resolves the word the operator named to the release target it names. A word outside the
-// matrix is not a target this project releases, and a release run asked for one is refused.
+// targetFor resolves the word the operator named to the release
+// target it names; a word outside the matrix is refused.
 func targetFor(word string) (releaseTarget, bool) {
-	// The same machine, named two ways. go builds a macOS binary for darwin, the release names the same
-	// machine macos, and a person naming the target their machine is types the word go gave it.
+	// the same machine, named two ways: go builds a macOS binary for
+	// darwin, the release names it macos, and a person may type either.
 	if goos, goarch, found := strings.Cut(word, "-"); found && goos == "darwin" {
 		word = "macos-" + goarch
 	}
@@ -74,12 +69,10 @@ func targetFor(word string) (releaseTarget, bool) {
 	return releaseTarget{}, false
 }
 
-// theReleaseWordTheRunBuildsFor is the release word a target word names. The release word is what the
-// manifest records, what the archive is named for, and what the guide uses, so a target named by go's word
-// for a machine is resolved here, where the run reads it, and every phase downstream works with one name.
-//
-// A word the matrix has no target for keeps the words it was typed with: the ffmpeg phase names the target
-// it compiles nothing for, and the release run refuses it as a platform this project does not release.
+// theReleaseWordTheRunBuildsFor is the release word a target word
+// names: the manifest, the archive name, and the guide all use the
+// release word, so every phase downstream works with one name.
+// see the targets-and-platforms maintainer note.
 func theReleaseWordTheRunBuildsFor(word string) string {
 	tr, found := targetFor(word)
 	if !found {
@@ -89,15 +82,10 @@ func theReleaseWordTheRunBuildsFor(word string) string {
 	return tr.targetWord()
 }
 
-// releaseTargetWordFor is the release target a machine belongs to, named the way the release names it.
-//
-// The two names are not one word: go builds a macOS binary for darwin, and the release is named macos, so
-// a machine named by the name go builds it for asks the manifest about a target this project has no record
-// for. The matrix is what says which release target a machine is.
-//
-// A machine the matrix has no entry for keeps the two words joined the way go names them: a hand-named
-// target is built for the platform its own name names, and the phase asked to build for it says what it
-// can do there.
+// releaseTargetWordFor is the release target a machine belongs to,
+// named the way the release names it: go builds a macOS binary for
+// darwin and the release is macos, so the matrix maps one word.
+// see the targets-and-platforms maintainer note.
 func releaseTargetWordFor(goos string, goarch string) string {
 	for _, tr := range releaseTargets {
 		if tr.goos == goos && tr.goarch == goarch {
@@ -108,17 +96,10 @@ func releaseTargetWordFor(goos string, goarch string) string {
 	return goos + "-" + goarch
 }
 
-// distTargets is the list of platforms one release run walks, decided before any of it runs: the target
-// the operator named, every platform the matrix releases when the whole matrix was asked for, and the
-// release target of the machine running the run when neither was.
-//
-// The machine is asked by the operating system go builds for and the architecture it builds for, which
-// are not the words the release is named by: a machine running darwin is a macos release target, and the
-// archive it builds carries the macos name.
-//
-// A machine the project releases nothing for is refused naming the flag that asks for the matrix. A
-// release run that built nothing at all is not what a release run is for, and an operator standing on a
-// machine outside the matrix is building a release, not trying a build.
+// distTargets is the list of platforms one release run walks, decided
+// before any of it runs: the named target, the whole matrix when it
+// was asked for, or the release target of the machine running it.
+// see the targets-and-platforms maintainer note.
 func distTargets(o options, goos string, goarch string) ([]releaseTarget, error) {
 	if o.target != "" {
 		tr, found := targetFor(o.target)
@@ -143,8 +124,8 @@ func distTargets(o options, goos string, goarch string) ([]releaseTarget, error)
 	return nil, fmt.Errorf("this machine is %s-%s, which is no platform this project releases: build every platform this project releases with go run ./cmd/build dist --all", goos, goarch)
 }
 
-// serverGoos is the operating system go builds a target word for. A word the matrix has no place for is
-// built for the operating system its own name names, which is what a hand-named target asks for.
+// serverGoos is the operating system go builds a target word for; a
+// word the matrix has no place for is built for its own name.
 func serverGoos(word string) string {
 	if t, found := targetFor(word); found {
 		return t.goos

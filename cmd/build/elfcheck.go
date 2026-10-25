@@ -24,27 +24,17 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// What a record's conformance.reads names is what the build reads out of the binaries it compiled, and this
-// file is the ELF half of that: the header, the program header table, and the comment section of the files the
-// container left behind.
-//
-// Nothing here starts the program it reads, which is the point of it. The targets that carry these names are
-// targets no program on the build host runs, so the only proof available is what the file says about how it was
-// made. Each name refuses one shape, and every refusal says what the file said, what the record asked for, and
-// that the machine which compiled the pair runs no program for that target.
-//
-// The reads are held against the files the release ships, not against something earlier than them: strip takes
-// the symbol table out and leaves the comment section, so the gzipped pair a bundle carries says the same thing
-// about its own linking as the pair the container compiled.
+// The ELF half of the conformance reads: header, program headers, comments. No target program
+// runs on the host: the file's own words are the proof. Shipped files keep the proof: strip
+// leaves the comment section intact.
+// see the elf-check-static-rule maintainer note.
 
 const (
 	elfClass32 = 1
 	elfClass64 = 2
 
-	// The operating system the header says the program belongs to. FreeBSD's is what the FreeBSD sysroot's own
-	// startup file and C library stamp, and Debian's own linker stamps GNU's on the same source compiled against
-	// that same sysroot — which is the mistake this read exists to catch, because that binary is a valid x86-64
-	// ELF program and is not a FreeBSD one.
+	// header OS/ABI: Debian's ld stamps GNU's on the FreeBSD sysroot, a valid x86-64 ELF
+	// that is not FreeBSD: the mistake this read exists to catch.
 	elfOSABISysV    = 0
 	elfOSABILinux   = 3
 	elfOSABIFreeBSD = 9
@@ -61,9 +51,8 @@ const (
 	elfSegmentDynamic = 2
 	elfSegmentInterp  = 3
 
-	// The same fields, at the two widths the ELF class says they have. A 32-bit program header table read at
-	// 64-bit widths invents numbers, and a build that refused a pair over numbers it invented would be refusing
-	// it for nothing.
+	// Same fields at the two widths the class names: reading a 32-bit table at 64-bit
+	// widths invent numbers, and invented numbers prove nothing.
 	elfHeaderSize32  = 52
 	elfHeaderSize64  = 64
 	elfEntrySize32   = 32
@@ -74,9 +63,8 @@ const (
 	elfIdentSize = 16
 )
 
-// anELFProgram is what the build reads out of an ELF file without running it: the facts the header carries,
-// the program headers the file declares, and the comment section, split into lines the way the section's own
-// strings flag says they are split.
+// anELFProgram is an ELF file read without running it: header facts, program headers it
+// declares, and the comment section split into its flagged lines.
 type anELFProgram struct {
 	class      byte
 	osABI      byte
@@ -87,11 +75,9 @@ type anELFProgram struct {
 	hasComment bool
 }
 
-// readAnELFProgram reads the file at path, and holds it to each name the record carries, in the order the
-// record carries them, refusing the first thing the file does not say.
-//
-// A name the build has no rule for is refused as well: a record that promises a proof this build does not know
-// how to make has promised something the release cannot deliver.
+// readAnELFProgram reads the file at path and holds it to every read name the record carries,
+// in order, refusing the first thing the file does not say. A read name with no rule here is
+// refused too: a record cannot promise a proof this build does not know how to make.
 func readAnELFProgram(path string, program string, target string, reads []string, record bundle.Target) error {
 	file, said := anELFProgramAt(path)
 	if said != "" {
@@ -108,8 +94,8 @@ func readAnELFProgram(path string, program string, target string, reads []string
 	return nil
 }
 
-// theELFReadHolds answers nil when the file says what one read asks it to say, and the sentence the operator
-// acts on when it does not.
+// theELFReadHolds answers nil when the file says what one read asks, and the sentence the
+// operator acts on when it does not.
 func theELFReadHolds(read string, file anELFProgram, program string, target string, record bundle.Target) error {
 	switch read {
 	case "elf64":
@@ -176,8 +162,8 @@ func theELFReadHolds(read string, file anELFProgram, program string, target stri
 	return nil
 }
 
-// askedForTheStaticRead says what the record asked for in the words the record itself uses, because a refusal
-// that names a flag the record does not carry is a refusal the operator cannot check.
+// askedForTheStaticRead names the record's ask in the record's own words: a refusal must name
+// something the operator can check.
 func askedForTheStaticRead(record bundle.Target) string {
 	for _, flag := range append(append([]string{}, record.CFlags...), record.LDFlags...) {
 		if flag == "-static" || strings.HasPrefix(flag, "-static ") {
@@ -188,12 +174,10 @@ func askedForTheStaticRead(record bundle.Target) string {
 	return "a pair linked with no dynamic loader, which is what a host that cannot run the target's programs is left with"
 }
 
-// theLinkTheCommentSectionNames holds the pair to both halves of what a comment section has to say about it:
-// the linker the record's ldflags name, and the FreeBSD project's own compiler-built startup file and library,
-// which enter a link only when the compile read the sysroot the record names.
-//
-// The comment section is collected from every object in the link, which is what makes it evidence: a pair
-// linked against the build host's own libraries carries the host's lines and not FreeBSD's.
+// theLinkTheCommentSectionNames holds the pair to both halves of the story: the record's
+// ldflags linker, and FreeBSD's crt and libc, which enter the link only if the compile read
+// the sysroot the record names. It gathers lines from every object, so a host-linked pair
+// shows itself.
 func theLinkTheCommentSectionNames(file anELFProgram, program string, target string, read string, record bundle.Target) error {
 	linker := theLinkerTheRecordNames(record)
 
@@ -237,9 +221,9 @@ func theLinkTheCommentSectionNames(file anELFProgram, program string, target str
 			record.SysrootImage, theSysrootTheRecordNames(record)))
 }
 
-// anELFProgramAt reads an ELF file's header, its program headers, and its comment section. When the file is not
-// an ELF program, or says tables it does not carry, it answers with no program and with what the file did say,
-// in the words a refusal is built from: a build that could not read a pair has to be able to say why.
+// anELFProgramAt reads a file's header, program headers, and comment section; on a non-ELF
+// file or broken tables it answers with no program and with what the file did say, in refusal
+// words: an unread pair needs a stated reason.
 func anELFProgramAt(path string) (anELFProgram, string) {
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -377,8 +361,8 @@ func anELFProgramAt(path string) (anELFProgram, string) {
 	return file, ""
 }
 
-// The offset and size of a section header move with the class: they are the same two facts at different
-// widths, and a reader that fixed them at one width would read a 32-bit pair's comment section as garbage.
+// A section header's offset and size fields move with the class: fixed at one width, a 32-bit
+// pair's comment section reads as garbage.
 func sectionOffsetField(class64 bool) int {
 	if class64 {
 		return 24
@@ -447,10 +431,9 @@ func (e *theELFBytes) word() uint64 {
 	return v
 }
 
-// aReadRefusal is the sentence the build says about a program it read and did not run: what the file said,
-// what the record asked for, and the fact that the machine standing here runs none of these programs. Every
-// refusal the reads make is built here, so an operator reading one knows which of the record's names the pair
-// failed, and does not have to guess whether something was run on the way to finding out.
+// aReadRefusal builds every refusal the reads make: what the file said, what the record asked,
+// and that the build host ran nothing, so the operator knows which of the record's names the
+// pair failed.
 func aReadRefusal(program string, target string, read string, said string, asked string) error {
 	return fmt.Errorf("the compiled %s for %s %s; its record names %s, which asks for %s, and the machine that compiled it runs no %s program",
 		program, target, said, read, asked, target)

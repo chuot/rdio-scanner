@@ -26,18 +26,15 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// archivePath is where a target's release archive is written. The name is the name the platform
-// document's transcript tells the reader to download, so a release that writes a file the document does
-// not name is a release a reader cannot follow.
+// archivePath is where a target's release archive is written.
+// The name is the one the platform document tells the reader to download.
 func archivePath(target string, version string) string {
 	return filepath.Join("dist", fmt.Sprintf("rdio-scanner-%s-v%s.zip", target, version))
 }
 
-// archiveVersionOf reads the version out of a release archive's name: the name is
-// `rdio-scanner-<target>-v<version>.zip`, and the target is the part whose shape the tool knows, so the
-// separator between the two is found by the target's shape and not by the last hyphen a prerelease name
-// happens to carry. A name the tool did not write is not an archive of this release, and a file the
-// release folder happens to hold is left to the operator who put it there.
+// archiveVersionOf reads the version out of a release archive's name,
+// found by the target's known shape rather than by the last hyphen.
+// A name the tool did not write is not an archive of this release.
 func archiveVersionOf(name string) (string, bool) {
 	rest, found := strings.CutSuffix(strings.TrimPrefix(name, "rdio-scanner-"), ".zip")
 	if !found {
@@ -59,14 +56,10 @@ func archiveVersionOf(name string) (string, bool) {
 	return "", false
 }
 
-// pruneReleaseFolder removes the release archives of the versions this run did not release. The release
-// folder is where the archives sit side by side until they are uploaded by hand, and the archives of an
-// older version sitting next to the new ones is how the wrong file gets uploaded. The version a run
-// resolved is derived from the declared core and git, so the run knows exactly which archive names are
-// current, and names each removal it makes.
-//
-// A file in the release folder whose name is not an archive name is left to the operator who put it
-// there.
+// pruneReleaseFolder removes the archives of versions this run did not release,
+// so nobody uploads an older file sitting beside the new ones,
+// and names each removal it makes.
+// A file that is not an archive name is left to the operator who put it there.
 func pruneReleaseFolder(repo string, version string) ([]string, error) {
 	dir := filepath.Join(repo, "dist")
 
@@ -103,10 +96,8 @@ func pruneReleaseFolder(repo string, version string) ([]string, error) {
 	return removed, nil
 }
 
-// archiveFile is one file in a release archive, with the time the file it carries was written. The
-// archive is required to state when the files it carries were written, and stamping every entry with the
-// moment the archive was written states nothing: the binary the run compiled, the guide the repository
-// has, and the licence the ffmpeg phase wrote are three files with three histories.
+// archiveFile is one file a release archive carries,
+// with the time that file itself was written.
 type archiveFile struct {
 	name     string
 	mode     os.FileMode
@@ -114,9 +105,8 @@ type archiveFile struct {
 	body     []byte
 }
 
-// readArchiveSource reads one file the archive carries, at the path in the tree it reads it from, with
-// the time that file was written: the time the source file carries is the only time that says when the
-// file was written.
+// readArchiveSource reads one file the archive carries from a path in the tree,
+// keeping the time the source file itself carries.
 func readArchiveSource(repo string, path string, name string, mode os.FileMode) (archiveFile, error) {
 	full := filepath.Join(repo, path)
 
@@ -133,49 +123,25 @@ func readArchiveSource(repo string, path string, name string, mode os.FileMode) 
 	return archiveFile{name: name, mode: mode, modified: info.ModTime(), body: body}, nil
 }
 
-// guideSource is the document a release archive carries for whoever installs and runs the server: the
-// administrator guide, at the path the guide itself states. It is the whole of the documentation an
-// operator needs — the platform pages, the container guide, the log guide, the questions, and the
-// licence and access position are chapters of it — and it carries its own pictures, its stylesheet, and
-// the project's mark, so the archive needs no picture folder and the reader needs no network.
+// guideSource is the administrator guide the archive carries for whoever
+// installs and runs the server, at the path the guide itself states,
+// with its own pictures and stylesheet inside, so the reader needs no network.
 const guideSource = "docs/admin-guide.html"
 
-// listenerGuideSource is the document a release archive carries for whoever hears calls on the web
-// application the server serves: the guide written for that listener, again at the path the guide
-// itself states, and again with its pictures, its stylesheet, and the project's mark inside it. A release
-// that shipped the administrator guide alone left the person who actually uses the program with the
-// document that operates somebody else's work.
+// listenerGuideSource is the guide the archive carries for whoever hears
+// calls on the web application, at the path it states, carrying its own
+// pictures and stylesheet, so the listener is not handed the administrator's document.
 const listenerGuideSource = "docs/user-guide.html"
 
-// archiveFiles reads what a target's archive carries: the program the run wrote to `output`, the two
-// guides that operate it — the administrator guide for whoever runs the server, the listening guide for
-// whoever hears calls on the web application — and the licence of the ffmpeg the build embeds.
-//
-// The program is read from the path the run wrote it to, and not from a path the archive chose for
-// itself: a release that reads a path it picked ships whatever was standing there, which is a binary the
-// release did not build.
-//
-// Every target the release matrix ships carries an ffmpeg inside its binary, so every one of these
-// archives carries a licence. Which of the two notices it carries is decided by where the pair came from: a
-// pair this build compiled in a container carries the notice naming the recipe, the source digest, and the
-// toolchain and image the record pins, and for the three pairs a compile host cannot start it names what the
-// build read out of the produced files in place of running them; a pair a Mac compiled with its own toolchain,
-// or a maintainer built and dropped, carries the notice naming the host that compiled them, the command that
-// built them there, and the codecs the run that adopted them recorded. The licence is the text the ffmpeg phase
-// wrote, and the archive carries it under the name a reader looks for, not the name the bundle directory uses.
-//
-// A target the manifest has no record for carries no licence, because it carries no ffmpeg: that is a
-// hand-named target outside the matrix, which is what a developer builds to try something this project
-// does not release.
-//
-// The archive's layout is the repository's own layout, so the path each guide states for itself resolves
-// inside the archive. The tool renders nothing, converts nothing, inlines nothing, and rewrites nothing:
-// each guide the archive carries is the guide the repository has, byte for byte.
+// archiveFiles reads what a target's archive carries: the program the run wrote,
+// the two guides, and the licence of the ffmpeg the binary embeds.
+// The program comes from the path this run wrote it to, never a path of its own.
+// see the ffmpeg-licence-in-archive maintainer note.
 func archiveFiles(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
 	name := "rdio-scanner" + programSuffix(tr.targetWord())
 
-	// The binary is a program the reader runs, and the guide is a document they read. Info-Zip
-	// restores the mode it finds in the archive, so the mode has to be in the archive.
+	// The program must arrive executable: the archiver restores
+	// the mode it finds in the archive, so the mode goes in.
 	program, err := readArchiveSource(repo, output, name, 0o755)
 	if err != nil {
 		return nil, fmt.Errorf("the release has no %s for %s: %w", name, tr.targetWord(), err)
@@ -223,14 +189,11 @@ func writeArchive(path string, files []archiveFile) error {
 			Modified: f.modified,
 		}
 
-		// The entry carries the time of the file it carries. An archive whose every entry is stamped
-		// with the moment it was written tells a reader who extracts it nothing about when the files
-		// inside it were written, and the three files here have three histories.
+		// The entry carries the time of the file it carries,
+		// not the moment the archive was written.
 
-		// The mode has to be in the archive, because Info-Zip restores the mode it finds there and a
-		// binary that arrives not executable is a release a reader cannot run. SetMode is the supported
-		// way: it puts the permissions in the high half of the external attributes and the Unix creator
-		// byte that tells a reader to look there.
+		// SetMode puts the permissions where the archiver
+		// looks for them when it restores the file.
 		header.SetMode(f.mode)
 
 		w, err := writer.CreateHeader(header)

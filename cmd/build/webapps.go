@@ -13,10 +13,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// The webapps phase is everything the tool knows about the two web applications: where they
-// live, where their bundles are written, what a bundle is built from, whether a bundle is
-// current, which applications a run builds, and the npm commands that build the bundles. The
-// ffmpeg phase is in ffmpeg.go, and the run that calls the phases in order is in build.go.
+// The webapps phase is everything the tool knows about the two web
+// applications: where they live, where their bundles are written,
+// what a bundle is built from, whether one is current, which
+// applications a run builds, and the npm commands that build them.
 package main
 
 import (
@@ -29,35 +29,29 @@ import (
 	"rdio-scanner/cmd/build/buildinfo"
 )
 
-// presentationDir is where the two applications live and where their dependencies are installed. Each
-// application writes into the bundle directory of the Go package that embeds it, so the build has
-// nowhere to send an output directory.
+// presentationDir is where the two applications live and where their
+// dependencies are installed; each application writes into the
+// bundle directory of the Go package that embeds it.
 const presentationDir = "internal/presentation"
 
-// appBundle is the bundle directory of the Go package that embeds each application. A build has
-// nowhere to send an output directory because the destination is a fact about where the application
-// lives.
+// appBundle is the bundle directory of the Go package that embeds
+// each application: the destination is a fact about where the
+// application lives, so the build never sends an output directory.
 var appBundle = map[string]string{
 	subScanner: "internal/presentation/scanner/frontend/bundle",
 	subAdmin:   "internal/presentation/admin/frontend/bundle",
 }
 
-// bundleOutput is the file a built bundle is judged by. The build writes it into the bundle directory of
-// the Go package that embeds it.
+// bundleOutput is the file a built bundle is judged by, written into
+// the bundle directory of the Go package that embeds it.
 func bundleOutput(repo string, app string) string {
 	return filepath.Join(repo, presentationDir, app, "frontend", "bundle", "index.html")
 }
 
-// clientSources is every file the bundle of one application is built from: the build script and the
-// manifests that build both bundles, the frontend sources of the application the bundle belongs to, the
-// sources the two applications share, and — for the administration application alone — the OpenAPI
-// contract its bundle carries as a static file. The built bundle is not one of its own sources: a rule
-// that watched its own output would rebuild on every run.
-//
-// Watching both applications' sources for both bundles rebuilt the administration bundle every time a
-// scanner source changed, and watching the contract for both rebuilt a scanner bundle that carries no
-// contract: a release run rebuilt bundles it was not asked for, and the log said it had built things
-// nobody changed.
+// clientSources is every file the bundle of one application is built
+// from: the build script and manifests, that application's frontend,
+// the shared sources, and for administration alone the OpenAPI contract.
+// see the webapps-source-watch maintainer note.
 func clientSources(repo string, app string) ([]string, error) {
 	var files []string
 
@@ -92,10 +86,9 @@ func clientSources(repo string, app string) ([]string, error) {
 		}
 	}
 
-	// The administration bundle carries the OpenAPI contract as a static file, and the OpenAPI section
-	// renders from it: a contract edit must make that bundle stale, or the section ships endpoints the
-	// server no longer answers. The scanner bundle carries no contract, so a contract edit has nothing
-	// to make stale there.
+	// the administration bundle carries the OpenAPI contract as a static
+	// file its OpenAPI section renders from, so a contract edit must
+	// make it stale; the scanner bundle carries no contract to go stale.
 	if app == subAdmin {
 		files = append(files, filepath.Join(repo, "docs", "openapi.json"))
 	}
@@ -103,10 +96,10 @@ func clientSources(repo string, app string) ([]string, error) {
 	return files, nil
 }
 
-// isBundleContent reports whether a file is inside a built bundle. The bundle and everything a build
-// writes under it are the client build's output, not its sources: a rule that watched its own output
-// would rebuild on every run, and a bundle that watched only the files sitting directly in the bundle
-// directory would watch the bundle built last as a source of the bundle built first.
+// isBundleContent reports whether a file is inside a built bundle:
+// the bundle and everything under it are output, not sources.
+// A rule watching its own output would rebuild on every run.
+// see the webapps-source-watch maintainer note.
 func isBundleContent(path string) bool {
 	for _, part := range strings.Split(path, string(filepath.Separator)) {
 		if part == "bundle" {
@@ -117,23 +110,23 @@ func isBundleContent(path string) bool {
 	return false
 }
 
-// bundleIsCurrent reports whether a built bundle is newer than every file it is built from. A bundle
-// that is not there is not current.
+// bundleIsCurrent reports whether a built bundle is newer than every
+// file it is built from; a bundle that is not there is not current.
 func bundleIsCurrent(repo string, app string) (bool, error) {
 	return newerThan(repo, bundleOutput(repo, app), func(string) ([]string, error) {
 		return clientSources(repo, app)
 	})
 }
 
-// clientSteps is the pair of applications a run builds: the ones the command line named, and the ones
-// whose bundle is not already newer than every file it is built from.
+// clientSteps is the pair of applications a run builds: the ones the
+// command line named, and the ones whose bundle is not current.
 func clientSteps(o options, state planState) []string {
 	var apps []string
 
 	for _, app := range []string{subScanner, subAdmin} {
-		// A run that named one application builds that application. A run that named the whole
-		// pipeline, both applications, the release matrix, or the container image builds both: the
-		// bundles are the same for every target, so the matrix builds them once.
+		// A run naming one application builds that one; a run naming the whole
+		// pipeline, both applications, the release matrix, or the container
+		// image builds both, because the bundles are the same for every target.
 		if o.sub != "" && o.sub != subClient && o.sub != subDist && o.sub != subContainer && o.sub != app {
 			continue
 		}
@@ -152,17 +145,16 @@ func clientSteps(o options, state planState) []string {
 	return apps
 }
 
-// needsNpm is decided by the plan: the dependencies are looked for only when a client step is going to
-// run. A run that builds no bundle has no use for npm, and installing esbuild into a tree that will not
-// build is work nobody asked for.
+// needsNpm is decided by the plan: the dependencies are looked for
+// only when a client step is going to run, and a run that builds no
+// bundle has no use for npm.
 func needsNpm(o options, state planState) bool {
 	return len(clientSteps(o, state)) > 0
 }
 
-// runWebapps runs the webapps phase: it looks for npm when a bundle is going to be built,
-// decides whether the dependencies have to be installed, and runs the steps that build the
-// bundles. The steps are composed by plan, and the version reaches each bundle through the
-// environment.
+// runWebapps runs the webapps phase: it looks for npm when a bundle
+// is going to be built, decides whether the dependencies have to be
+// installed, and runs the steps that build the bundles.
 func (t tool) runWebapps(o options, version buildinfo.Version, stdout io.Writer, state planState) error {
 	npmName := ""
 
@@ -188,9 +180,9 @@ func (t tool) runWebapps(o options, version buildinfo.Version, stdout io.Writer,
 	return nil
 }
 
-// plan composes the commands the options asked for, in the order they have to happen: the scanner
-// application, then the administration application. The ffmpeg and the server that carries both come
-// after, because the server embeds the bundles and the ffmpeg the build produced.
+// plan composes the commands the options asked for, in the order
+// they have to happen: the scanner application, then the
+// administration application, because the server embeds both bundles.
 func plan(o options, repo string, version buildinfo.Version, npmName string, state planState) []step {
 	steps := []step{}
 
