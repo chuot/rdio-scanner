@@ -23,9 +23,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// session is the surface reached the way an assistant reaches it: one client, one server, the
-// protocol's own round trips, with the HTTP layer taken out so a capability test measures the
-// capability and not a socket.
+// session is the surface reached the way an assistant reaches it: one client,
+// one server, the protocol's own round trips, the HTTP layer taken out, so a
+// capability test measures the capability and not a socket.
 type session struct {
 	*mcp.ClientSession
 
@@ -38,10 +38,10 @@ func newSession(t *testing.T, restricted bool) *session {
 	return newCallerSession(t, Caller{Tier: TierFull})
 }
 
-// newCallerSession is the surface reached by a caller the gate decided, over the in-memory transport.
-// The caller's tier decides which capability set the session is connected to — the same choice the
-// HTTP handler makes from the caller the gate left in the request — and the caller is put in the
-// context the session runs on, which is the context a capability handler is handed.
+// newCallerSession is the surface reached by a gate-decided caller over the
+// in-memory transport: the caller's tier picks the capability set the way the
+// HTTP handler does, and the caller sits in the context a capability handler
+// is handed.
 func newCallerSession(t *testing.T, who Caller) *session {
 	t.Helper()
 
@@ -55,10 +55,10 @@ func newCallerSession(t *testing.T, who Caller) *session {
 	return newSessionOn(t, bundle, target, who)
 }
 
-// newAdministratorSetSession is the administrator's capability set reached by a caller of any tier.
-// The surface hands that set to the administrator's credential alone, so this is the shape the
-// surface has when a capability is registered on the administrator's set and the caller standing in
-// front of it is weaker — the drift the handlers' own credential check is the lock on.
+// newAdministratorSetSession is the administrator's capability set reached by a
+// caller of any tier: the shape when a write capability drifts onto the
+// administrator's set in front of a weaker caller, the lock the handlers' own
+// credential check is on.
 func newAdministratorSetSession(t *testing.T, who Caller) *session {
 	t.Helper()
 
