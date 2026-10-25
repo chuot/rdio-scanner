@@ -17,13 +17,10 @@ package backend
 
 import "fmt"
 
-// The inventory of this surface: every capability it registers, with who may reach it, what it does
-// to the deployment, and the entry point its answer comes from.
-//
-// The inventory is written down on purpose. An assistant sees the catalog the protocol hands it, and
-// an operator needs a reading of what enabling this surface actually opened: which capabilities a
-// listener's access code reaches, which ones only the administrator's credential reaches, and which
-// ones change something. A capability that is not in this list is a capability nobody reviewed.
+// This file is the surface's inventory: every capability it registers, who
+// may reach it, what it changes, and the entry point its answer comes
+// from. A capability not listed here is one nobody reviewed; see the
+// capabilities-are-questions-not-routes maintainer note.
 
 // Kind is what shape a capability takes.
 type Kind string
@@ -53,8 +50,8 @@ const (
 	// EffectWrite changes something, and is reversible by the same surface.
 	EffectWrite Effect = "write"
 
-	// EffectDestructive changes something by removing it. The assistant is expected to confirm with
-	// the operator before reaching for one, and the surface says so in its annotations.
+	// EffectDestructive removes something. The surface says so in its
+	// annotations, and the assistant is expected to confirm first.
 	EffectDestructive Effect = "destructive"
 )
 
@@ -84,10 +81,9 @@ type Capability struct {
 	// Effect is what using it does.
 	Effect Effect
 
-	// Endpoints are the documented entry points its answer is built from, named the way the OpenAPI
-	// document names them. A capability built on a socket is not in this inventory: the listener and
-	// administrator sockets are reserved, and this surface reaches the deployment over its documented
-	// entry points.
+	// Endpoints are the documented entry points its answer is built from, named
+	// as the OpenAPI document names them. The reserved listener and
+	// administrator sockets are not in this inventory.
 	Endpoints []string
 }
 
@@ -105,9 +101,9 @@ func (r Reach) String() string {
 	return "read-only tier and administrator"
 }
 
-// capabilityCatalog is the inventory. Every capability the surface registers is listed here, and the
-// tests keep the two in step in both directions: an unregistered entry is a promise nobody implemented,
-// an unlisted capability is one nobody reviewed.
+// capabilityCatalog is the inventory of every capability the surface
+// registers, and the tests keep the two in step: an unregistered entry is
+// an unkept promise, an unlisted capability is an unreviewed one.
 var capabilityCatalog = []Capability{
 	{
 		Name:      "search_calls",
