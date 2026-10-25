@@ -27,13 +27,13 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The composites: the questions an operator asks that no entry point can answer on its own. Each
-// one composes several reads into one answer, and names in its own description the entry points it
-// composed, so an assistant reading the catalog knows what a call reaches and an operator reading
-// the answer knows where each part came from.
+// The composites: questions no entry point answers on its own. Each
+// composes several reads into one answer and names the entry points it
+// composed, so an assistant knows what a call reaches and an operator
+// knows where each part came from.
 
-// registerHealthReview adds the health review. It reads the whole deployment, so it is registered on
-// the administrator's server alone.
+// registerHealthReview adds the health review. It reads the whole
+// deployment, so it is registered on the administrator's server alone.
 func registerHealthReview(target *mcp.Server, deps Deps) {
 	mcp.AddTool(target, &mcp.Tool{
 		Name:  "analyze_health",
@@ -68,11 +68,10 @@ func registerHealthReview(target *mcp.Server, deps Deps) {
 			return nil, healthReport{}, err
 		}
 
-		// The log view is asked once per severity, because its per-subsystem counts describe the
-		// criteria as submitted: asking for warnings answers how many each subsystem warned, and
-		// asking for errors answers how many each subsystem failed. Oldest first, because the day
-		// the review reads is the window: asked newest-first, the log view's own criterion reads
-		// the day *before* an instant at its start.
+		// The log view is asked once per severity, because its counts describe
+		// the criteria as submitted, and oldest first, because newest-first
+		// would read the day before an instant at the window's start; see the
+		// log-review-asks-the-log-view-as-the-operator-would maintainer note.
 		warnings, err := deps.Logs.Handle(ctx, application.SearchLogsQuery{Search: domain.LogSearch{
 			Date:      at,
 			Level:     domain.LogLevelWarn,
@@ -109,9 +108,10 @@ func registerHealthReview(target *mcp.Server, deps Deps) {
 	})
 }
 
-// registerFeedDiagnosis adds the feed diagnosis. Its history question is one a listener's access code
-// answers about its own talkgroups, so it is registered on both servers, and the read-only form names
-// the parts of the deployment the code does not open as unavailable.
+// registerFeedDiagnosis adds the feed diagnosis. Its history question is
+// one a listener's access code answers about its own talkgroups, so it is
+// registered on both servers, and the read-only form names the parts the
+// code does not open as unavailable.
 func registerFeedDiagnosis(target *mcp.Server, deps Deps) {
 	mcp.AddTool(target, &mcp.Tool{
 		Name:  "diagnose_feed_problem",
@@ -137,9 +137,9 @@ func registerFeedDiagnosis(target *mcp.Server, deps Deps) {
 			day = dayOf(deps.Clock.Now().Format(time.RFC3339))
 		}
 
-		// The last activity on the talkgroup, newest first, and how much history it has at all.
-		// The day is not a filter here: "when did it last report" is asked of the whole history,
-		// and the day the review names scopes the log lines, not the answer.
+		// The last activity on the talkgroup, newest first, and how much history
+		// it has at all. The day the review names scopes the log lines, not the
+		// answer.
 		page, err := deps.Search.Handle(ctx, application.SearchCallsQuery{
 			Criteria: domain.ParseCallSearch(map[string]any{
 				"system":    float64(in.System),
@@ -232,8 +232,8 @@ func registerFeedDiagnosis(target *mcp.Server, deps Deps) {
 // the log view.
 const restartMarker = "server started"
 
-// analyzeHealthInput is the day to review. The day is the window the log view reads, so the review
-// is one day wide and says so.
+// analyzeHealthInput is the day to review. The day is the window the log
+// view reads, so the review is one day wide and says so.
 type analyzeHealthInput struct {
 	Date string `json:"date,omitempty" jsonschema:"the day to review, as an RFC 3339 instant inside it, or a date; defaults to the day this server is in"`
 }
@@ -281,8 +281,8 @@ func review(deps Deps, configuration domain.Configuration, at time.Time, warning
 		Findings:            []finding{},
 	}
 
-	// The subsystems that failed, named with how much they failed: the log view's own counts, not a
-	// tally invented from the page.
+	// The subsystems that failed, named with how much they failed: the log
+	// view's own counts, not a tally invented from the page.
 	for _, count := range answer.Errors {
 		answer.Findings = append(answer.Findings, finding{
 			Subject:  count.Source,
@@ -417,8 +417,9 @@ type forward struct {
 	Disabled bool   `json:"disabled"`
 }
 
-// grantingCall is the call a downstream's scope is asked about: the scope is asked of a call, so
-// the question is answered with the two references that identify one.
+// grantingCall is the call a downstream's scope is asked about: the scope
+// is asked of a call, so the question is answered with the two references
+// that identify one.
 func (d feedDiagnosis) grantingCall() domain.Call {
 	call := domain.NewCall()
 
