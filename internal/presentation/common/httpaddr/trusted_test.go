@@ -20,9 +20,9 @@ import (
 	"testing"
 )
 
-// The forwarding header is a statement the peer makes, not a fact the server knows. It is honored
-// only when the connection came from a proxy the operator named: a server that trusts the header
-// from anyone lets a client pick the address its rate limits and log lines are keyed on.
+// The forwarding header is the peer's claim, not a fact. It is honored
+// only from named proxies, else clients pick the address limits key on.
+// see the trusted-proxy-selection-is-not-a-security-check maintainer note.
 
 func TestAddressHonorsTheForwardedEntryFromATrustedProxy(t *testing.T) {
 	trusted, err := ParseTrusted("127.0.0.0/8")
