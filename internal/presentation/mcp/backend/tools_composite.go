@@ -108,10 +108,9 @@ func registerHealthReview(target *mcp.Server, deps Deps) {
 	})
 }
 
-// registerFeedDiagnosis adds the feed diagnosis. Its history question is
-// one a listener's access code answers about its own talkgroups, so it is
-// registered on both servers, and the read-only form names the parts the
-// code does not open as unavailable.
+// registerFeedDiagnosis adds the feed diagnosis on both servers: a listener's access
+// code answers its history question about its own talkgroups, and the read-only form
+// marks what the code does not open as unavailable.
 func registerFeedDiagnosis(target *mcp.Server, deps Deps) {
 	mcp.AddTool(target, &mcp.Tool{
 		Name:  "diagnose_feed_problem",
@@ -417,9 +416,8 @@ type forward struct {
 	Disabled bool   `json:"disabled"`
 }
 
-// grantingCall is the call a downstream's scope is asked about: the scope
-// is asked of a call, so the question is answered with the two references
-// that identify one.
+// grantingCall is the call a downstream's scope is asked about: the question is answered with
+// the two references identifying one call.
 func (d feedDiagnosis) grantingCall() domain.Call {
 	call := domain.NewCall()
 
