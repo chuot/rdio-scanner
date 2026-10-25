@@ -479,7 +479,7 @@ func migrateTags(ctx context.Context, s store, progress Progress) error {
 
 // migrateSystems mirrors `migrateSystems` in `server/migrations.go`: the v6 system's `id` column is
 // its radio-system reference and becomes `systemRef`, and its `_id` becomes the identity every
-// later stage resolves v6 references against; see the system-unit-talkgroup-resolution maintainer
+// later stage resolves v6 references against; see the system-unit-and-talkgroup maintainer
 // note for the blacklist shape.
 func migrateSystems(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateSystems", "systems"
@@ -623,7 +623,7 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 // migrateTalkgroups mirrors `migrateTalkgroups` in `server/migrations.go`: each row's system and
 // group are resolved against the tables earlier stages have already filled, a row whose system is
 // not there is archived with its reason said at warn level, and a group link is written only for a
-// group that is actually here; see the system-unit-talkgroup-resolution maintainer note.
+// group that is actually here; see the system-unit-and-talkgroup maintainer note.
 func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateTalkgroups", "talkgroups"
 
@@ -926,7 +926,7 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 
 // migrateUnits mirrors `migrateUnits` in `server/migrations.go`: each row's system is resolved the
 // way the talkgroup stage resolves it, and a row whose system is not there is archived with its
-// reason said at warn level; see the system-unit-talkgroup-resolution maintainer note for the
+// reason said at warn level; see the system-unit-and-talkgroup maintainer note for the
 // repaired `unitRef` write.
 func migrateUnits(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateUnits", "units"
