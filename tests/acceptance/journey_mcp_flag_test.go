@@ -29,12 +29,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// The operator's way of turning the assistant on is a word on the command line. Everything the feature
-// proves about the endpoint can be proven against a server built inside a test process, where the
-// configuration is a struct the test fills in by hand — and that is exactly why the flag itself needs a
-// journey: the deployment's entry point parses the word, hands the server a configuration built a second
-// time, and the switch is only real if it survives that handoff. A server started the way an operator
-// starts it is the only place the whole path exists.
+// the assistant flag gets its own journey: the deployment's entry point parses the word
+// and builds the server's configuration from it, and only a started server runs that handoff.
+// see the mcp-flag-journey maintainer note.
 
 func TestTheOperatorTurnsTheAssistantOnFromTheCommandLine(t *testing.T) {
 	base := t.TempDir()
@@ -45,10 +42,8 @@ func TestTheOperatorTurnsTheAssistantOnFromTheCommandLine(t *testing.T) {
 
 	_, _, _, addr := startTheServerWithTheAssistant(t, exe, base, port)
 
-	// The endpoint answers its own path: a path this server does not know falls to the application
-	// that answers every unmatched path. A deployment that never asked for the endpoint answers both
-	// of them the same way, which is what the journey below measures against a server started without
-	// the word.
+	// a path this server does not know falls to the handler of every unmatched path,
+	// which is what a deployment without the endpoint answers /mcp with.
 	knocked := theAnswerTo(t, "http://"+addr, "/mcp")
 	unmatched := theAnswerTo(t, "http://"+addr, "/a/path/that/is/not/an/endpoint")
 
@@ -64,7 +59,7 @@ func TestTheOperatorTurnsTheAssistantOnFromTheCommandLine(t *testing.T) {
 			knocked.Code, firstLinesOf(knocked.body))
 	}
 
-	// And the assistant gets in with the credential the administrator's login hands out, and answers
+	// the assistant gets in with the administrator's session credential and answers
 	// the capabilities the surface publishes.
 	token := loginTheRunningAdministrator(t, "http://"+addr)
 
@@ -95,10 +90,8 @@ func TestTheOperatorTurnsTheAssistantOnFromTheCommandLine(t *testing.T) {
 	}
 }
 
-// TestTheAssistantIsAbsentWhenTheOperatorAskedForNothing is the switch's other half against the
-// deployment's entry point: a server started without the word answers the assistant's path exactly as it
-// answers every path it does not know, which is the answer the deployments that never heard of the
-// endpoint give today.
+// TestTheAssistantIsAbsentWhenTheOperatorAskedForNothing covers the switch's other half:
+// a server started without the word answers the assistant's path like any unknown path.
 func TestTheAssistantIsAbsentWhenTheOperatorAskedForNothing(t *testing.T) {
 	base := t.TempDir()
 
@@ -121,8 +114,8 @@ func TestTheAssistantIsAbsentWhenTheOperatorAskedForNothing(t *testing.T) {
 	}
 }
 
-// startTheServerWithTheAssistant starts the built server the way the shutdown journey starts it, with
-// the operator's word for the assistant added to the command line.
+// startTheServerWithTheAssistant starts the built server as the shutdown journey does,
+// adding the operator's word for the assistant to the command line.
 func startTheServerWithTheAssistant(t *testing.T, exe, base, port string) (*lockedBuffer, *exec.Cmd, chan error, string) {
 	t.Helper()
 
@@ -146,8 +139,8 @@ func startTheServerWithTheAssistant(t *testing.T, exe, base, port string) (*lock
 	}()
 
 	t.Cleanup(func() {
-		// The journey ends the process with the server's own stop; this is the net under a journey
-		// that failed early, so no built server outlives the test that started it.
+		// the journey ends the process with the server's own stop; this net covers
+		// an early failure, so no built server outlives the test that started it.
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
 		}
@@ -200,8 +193,8 @@ func firstLinesOf(body []byte) string {
 	return strings.Join(lines, " | ")
 }
 
-// loginTheRunningAdministrator logs in over the running server's address the way an administrator logs
-// in, and hands back the session token the login answer carries.
+// loginTheRunningAdministrator logs in over the running server's address the way an
+// administrator does and hands back the login's session token.
 func loginTheRunningAdministrator(t *testing.T, base string) string {
 	t.Helper()
 
@@ -237,7 +230,7 @@ func loginTheRunningAdministrator(t *testing.T, base string) string {
 	return answered.Token
 }
 
-// theAssistantAtTheEndpoint connects the assistant to the endpoint the running server is answering,
+// theAssistantAtTheEndpoint connects the assistant to the running server's endpoint,
 // presenting the administrator's session token the way the gate reads it.
 func theAssistantAtTheEndpoint(t *testing.T, base, token string) *mcp.ClientSession {
 	t.Helper()
@@ -255,8 +248,8 @@ func theAssistantAtTheEndpoint(t *testing.T, base, token string) *mcp.ClientSess
 	return session
 }
 
-// journeyCredentialRoundTripper presents the session token in the Authorization header, the way the
-// administrator's own page presents it.
+// journeyCredentialRoundTripper presents the session token in the Authorization
+// header, the way the administrator's own page presents it.
 type journeyCredentialRoundTripper struct {
 	token string
 }

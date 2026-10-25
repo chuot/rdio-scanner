@@ -26,18 +26,10 @@ import (
 	"time"
 )
 
-// TestWatchedRecordingsPopulateTheConfigurationTheyName is the same path as the end-to-end run with the
-// configuration taken away: the server is given two watches and nothing else, and the recordings it reads
-// name systems, talkgroups, groups, tags and radios it has never heard of. What the test compares is the
-// configuration the server ended up creating, row by row and column by column, against what the legacy
-// server created from the same recordings in the same order, which capturedRun hands back under the
-// name dirwatch-autopopulate.json.
-//
-// The recordings are dropped one at a time, and the next is not dropped until the previous one has become a
-// call, because the order is what each recording is testing: the first creates a talkgroup whose label is
-// its own reference written out as a number, and the second is the labeled upload that repairs that
-// placeholder. Dropping them together would test whatever order two directory watchers happened to notice
-// them in.
+// TestWatchedRecordingsPopulateTheConfigurationTheyName drops
+// recordings naming unknown systems, talkgroups, groups, tags and
+// radios, checked against the `dirwatch-autopopulate` capture.
+// see the autopopulate-journey maintainer note.
 func TestWatchedRecordingsPopulateTheConfigurationTheyName(t *testing.T) {
 	captured := capturedRun(t, "dirwatch-autopopulate.json")
 
@@ -60,25 +52,25 @@ func TestWatchedRecordingsPopulateTheConfigurationTheyName(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 
-	// A system named by label, and a talkgroup named only by its reference: the server has no label to
-	// give the talkgroup, so it writes the reference out as a number, and it has no group or tag to file
-	// it under, so it uses the ones a fresh deployment starts with. The system gets the first reference
-	// nothing else is using.
+	// a system named by label and a talkgroup named only by its
+	// reference: the reference becomes its label, the system takes
+	// the first free reference, and the default group and tag
+	// receive the talkgroup
 	dropTrunkRecording(t, srv, trunk, "first", firstRecordingSidecar)
 
-	// The same system and the same talkgroup, and this time the sidecar says what they are called. Nothing
-	// is created: the placeholder label and name are replaced with the ones the sidecar names, and the
-	// group and tag the sidecar names are left alone because the talkgroup was already filed somewhere.
+	// a labeled upload for the same system and talkgroup replaces
+	// the placeholder label and name, creates nothing, and leaves
+	// the talkgroup filed where it already was
 	dropTrunkRecording(t, srv, trunk, "second", secondRecordingSidecar)
 
-	// A system, a group and a tag the server has never seen. The group and the tag are created, the
-	// talkgroup is filed under the tag its group names, and the label it is given is the one its own tag
-	// names. This system also gets the next reference nothing else is using.
+	// unknown group and tag: both are created, the talkgroup is
+	// filed under the tag its group names and labeled as that tag
+	// names, and the system takes the next free reference
 	dropTrunkRecording(t, srv, trunk, "third", thirdRecordingSidecar)
 
-	// A dsd+ recording names its system by reference rather than by label, so the server keeps the
-	// reference the recording carries and gives the system a label made out of it. It also names a radio
-	// the server has never heard of, which is created on the system the recording's system became.
+	// a dsd+ recording names its system by reference, so the
+	// server keeps that reference and labels the system from it,
+	// and creates the radio it names on that system
 	dropRecording(t, filepath.Join(dsd, "20261006"), dsdRecordingName, recording(2048))
 
 	waitForLogMentioning(t, srv.db, "success, "+dsdRecordingName)
@@ -97,10 +89,10 @@ func TestWatchedRecordingsPopulateTheConfigurationTheyName(t *testing.T) {
 
 	assertEveryServerLogEntry(t, srv.db)
 
-	// The capture reports the two columns the legacy capture reported, so the filing is proven here. An
-	// operator looking for something that appeared in a configuration nobody edited filters to the
-	// configuration, so every change these recordings caused has to be filed there — and has to name the
-	// recording that caused it, which is the thing an operator traces.
+	// the log capture reads the configuration-sourced entries only:
+	// every change these recordings caused has to be filed there,
+	// naming the recording that caused it, the way an operator
+	// traces a change
 	const query = `SELECT "message" FROM "logs" WHERE "source" = 'config' ORDER BY "logid"`
 
 	rows, err := srv.db.Query(query)
@@ -139,8 +131,8 @@ func TestWatchedRecordingsPopulateTheConfigurationTheyName(t *testing.T) {
 	}
 }
 
-// The four recordings, and the sidecars that say what they are. They are the recordings the capture wrote,
-// byte for byte, which is why the recorded run can pin how long they are.
+// the four recordings and their sidecars, byte for byte the
+// bytes the capture wrote
 const (
 	firstRecordingSidecar = `{
   "short_name": "Grand Metro",
@@ -172,11 +164,10 @@ const (
 `
 )
 
-// TestASystemsSectionSaveLeavesAutoPopulateInventingTheTalkgroupsRecordingsName is the half of auto
-// populate the systems-section save could have broken: the section writes the system row, and the
-// flag that lets the server invent a talkgroup for a recording that names one lives in that row. The
-// save submits the row's own fields, the flag is saved with them, and the recording that arrives
-// afterwards still gets its talkgroup.
+// TestASystemsSectionSaveLeavesAutoPopulateInventingThe
+// TalkgroupsRecordingsName pins that a systems-section save keeps
+// the invent-the-talkgroup flag set and later recordings still work.
+// see the autopopulate-journey maintainer note.
 func TestASystemsSectionSaveLeavesAutoPopulateInventingTheTalkgroupsRecordingsName(t *testing.T) {
 	srv := journeyServerIn(t, t.TempDir())
 
@@ -199,8 +190,8 @@ func TestASystemsSectionSaveLeavesAutoPopulateInventingTheTalkgroupsRecordingsNa
 
 	token := administratorToken(t, srv)
 
-	// The Systems section, as the page submits it: the fields of the system row, and no copy of the
-	// levels. The label is what the operator came to change.
+	// the Systems section as the page submits it: the system row's
+	// fields, and the label the operator came to change
 	if rec := srv.put("/api/admin/config/systems", token, `[{
 		"alert": "",
 		"autoPopulate": true,
@@ -216,8 +207,8 @@ func TestASystemsSectionSaveLeavesAutoPopulateInventingTheTalkgroupsRecordingsNa
 		t.Fatalf("saving the Systems section was answered %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// A recording naming a talkgroup the system has never heard of. The server invents it, under the
-	// labels a recording that names nothing is filed with, and keeps the call.
+	// a recording naming an unknown talkgroup: the server invents it,
+	// files it under the no-name defaults, keeping the saved label
 	answered := srv.uploadRecording(t, uploadedRecording{
 		key:       autoPopulateUploadKey,
 		systemRef: 10001,
@@ -240,8 +231,8 @@ func TestASystemsSectionSaveLeavesAutoPopulateInventingTheTalkgroupsRecordingsNa
 		t.Errorf("the server kept %d calls, want the one it invented a talkgroup for", rows)
 	}
 
-	// The label the Systems section saved is the label the invented talkgroup is filed under, which is
-	// the system row the save wrote and not a copy of it.
+	// the saved label is the one the invented talkgroup is filed
+	// under: the save wrote the system row, not a copy of it
 	if rows := countRows(t, srv.db, `SELECT COUNT(*) FROM "systems" WHERE "label" = 'Grand Metro Renamed'`); rows != 1 {
 		t.Errorf("the store holds %d systems carrying the label the Systems section saved, want the one", rows)
 	}
@@ -249,22 +240,22 @@ func TestASystemsSectionSaveLeavesAutoPopulateInventingTheTalkgroupsRecordingsNa
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// autoPopulateUploadKey is the credential the auto populate reading posts its recording with, and
-// inventedTalkgroupRef is a reference no seeded row carries: it is the one the server has to invent.
+// autoPopulateUploadKey is the credential the auto populate
+// reading posts with, and inventedTalkgroupRef an unused reference
 const (
 	autoPopulateUploadKey = "a-key-that-refuses-nothing-here"
 
 	inventedTalkgroupRef = 1514500
 )
 
-// dropTrunkRecording puts a trunk-recorder pair into a watched directory and waits for the server to have
-// finished taking it in.
+// dropTrunkRecording puts a trunk-recorder pair into a watched
+// directory and waits for the server to finish taking it in
 func dropTrunkRecording(t *testing.T, srv *journeyServer, directory, name, sidecar string) {
 	t.Helper()
 
-	// The sidecar goes in before the recording it describes: the recording is what the watch is looking
-	// for, and a recording whose sidecar has not arrived yet is a recording the server cannot say
-	// anything about.
+	// the sidecar goes in before the recording: the watch looks
+	// for recordings, and a recording whose sidecar has not
+	// arrived is one the server cannot say anything about
 	dropRecording(t, directory, name+".json", []byte(sidecar))
 	dropRecording(t, directory, name+".wav", recording(2092))
 

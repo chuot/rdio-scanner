@@ -31,19 +31,17 @@ import (
 	"rdio-scanner/internal/infrastructure/persistence"
 )
 
-// This is the shutdown journey, and the only journey that runs the server as a subprocess:
-// the interrupt handling is the process ending itself, which a server running inside the
-// test process cannot show. The binary is built the way the deployment builds it, started on
-// a folder the test owns, and interrupted with real signals.
+// the shutdown journey is the only journey running the server as a subprocess:
+// interrupt handling is the process ending itself, invisible to an in-process server.
+// see the shutdown-journey maintainer note.
 
-// secondSignalWindow is how long the second interrupt is allowed to take: the point of
-// forcing the exit is that the operator does not sit through the hang again.
+// secondSignalWindow is how long the second interrupt may take: forcing the exit
+// exists so the operator never sits through the hang again.
 const secondSignalWindow = 2 * time.Second
 
-// TestTheFirstInterruptStopsTheServerCleanly is the half of the interrupt journey the
-// server already answers: the operator's first interrupt stops the server the way the stop
-// is meant to stop — every address shut down, the departure said, the stop recorded, and the
-// process ends by running out of work.
+// TestTheFirstInterruptStopsTheServerCleanly covers the half of the interrupt journey
+// the server already answers: the first interrupt shuts every address down, says its
+// departure, records the stop, and the process ends by running out of work.
 func TestTheFirstInterruptStopsTheServerCleanly(t *testing.T) {
 	base := t.TempDir()
 
@@ -77,12 +75,9 @@ func TestTheFirstInterruptStopsTheServerCleanly(t *testing.T) {
 	}
 }
 
-// TestASecondInterruptEndsAServerThatCannotStop: the stop
-// is the polite way out, and a stop that cannot finish — a log write the database will not
-// take, a goroutine that never returns — leaves the operator holding a running server with
-// no answer. Today the second interrupt is ignored and the third is SIGKILL, with no trace
-// of why. The second interrupt ends the process within its window and says so on the
-// terminal the operator is reading.
+// TestASecondInterruptEndsAServerThatCannotStop covers a stop that cannot finish,
+// which leaves the operator with a running server and no answer: a second interrupt
+// within its window ends the process and says so on the operator's terminal.
 func TestASecondInterruptEndsAServerThatCannotStop(t *testing.T) {
 	base := t.TempDir()
 
@@ -94,10 +89,8 @@ func TestASecondInterruptEndsAServerThatCannotStop(t *testing.T) {
 
 	waitForServerAnswer(t, addr)
 
-	// 	// Make the stop one that cannot finish: lock the database the stop's last entry is
-	// 	// written into, so the stopping server sits on the log write it cannot make. This is
-	// 	// the shape of every stop that hangs — the operator's third press is SIGKILL, and
-	// 	// nothing is left behind saying why.
+	// the locked database forces the stop that cannot finish: the stop's last log write
+	// sits on the lock.
 	db := lockTheServerLog(t, base)
 	defer db.Close()
 
@@ -105,9 +98,8 @@ func TestASecondInterruptEndsAServerThatCannotStop(t *testing.T) {
 		t.Fatalf("sending the first interrupt: %v", err)
 	}
 
-	// The margin is the stop's own walk to the write it cannot make — shutting the
-	// addresses, ending the connections, reaching the log. The assertion below measures
-	// from the second signal, not from this pause.
+	// the pause is the stop's own travel to the write it cannot make; the assertion below
+	// measures from the second signal, not from this pause.
 	time.Sleep(500 * time.Millisecond)
 
 	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
@@ -138,8 +130,8 @@ func TestASecondInterruptEndsAServerThatCannotStop(t *testing.T) {
 	}
 }
 
-// buildServerBinary builds the command the way the deployment builds it, so the journey
-// runs the same entry point an operator starts.
+// buildServerBinary builds the command exactly the way the deployment builds it.
+// see the shutdown-journey maintainer note.
 func buildServerBinary(t *testing.T) string {
 	t.Helper()
 
@@ -157,9 +149,9 @@ func buildServerBinary(t *testing.T) string {
 	return exe
 }
 
-// startServerBinary starts the built server on a folder the test owns, reading its terminal
-// into a buffer the test can read from more than one goroutine at a time, and hands back
-// the channel the process's ending arrives on.
+// startServerBinary starts the built server on a folder the test owns, reads its
+// terminal into a multi-goroutine buffer, and hands back the channel the process's
+// ending arrives on.
 func startServerBinary(t *testing.T, exe, base, port string) (*lockedBuffer, *exec.Cmd, chan error, string) {
 	t.Helper()
 
@@ -183,8 +175,8 @@ func startServerBinary(t *testing.T, exe, base, port string) (*lockedBuffer, *ex
 	}()
 
 	t.Cleanup(func() {
-		// The journeys end the process themselves; this is the net under a journey that
-		// failed early, so no built server outlives the test that started it.
+		// the journeys end the process themselves; this net covers an early failure,
+		// so no built server outlives the test that started it.
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
 		}
@@ -199,8 +191,8 @@ func startServerBinary(t *testing.T, exe, base, port string) (*lockedBuffer, *ex
 	return console, cmd, ended, addr
 }
 
-// waitForServerAnswer waits until the built server is taking connections, which is the
-// journey's first fact: a server that never answered cannot be interrupted.
+// waitForServerAnswer waits until the built server takes connections, the journey's
+// first fact: a server that never answered cannot be interrupted.
 func waitForServerAnswer(t *testing.T, addr string) {
 	t.Helper()
 
@@ -220,9 +212,8 @@ func waitForServerAnswer(t *testing.T, addr string) {
 	t.Fatalf("the server never answered on %s", addr)
 }
 
-// lockTheServerLog takes the exclusive lock on the database the server writes its log into
-// and holds it: every log write the stopping server attempts then sits on the lock, which
-// is the stop that cannot finish.
+// lockTheServerLog takes and holds the exclusive lock on the database the server
+// writes its log into, so every stop log write sits on it: the stop that cannot finish.
 func lockTheServerLog(t *testing.T, base string) *sql.DB {
 	t.Helper()
 
@@ -243,8 +234,8 @@ func lockTheServerLog(t *testing.T, base string) *sql.DB {
 	return db
 }
 
-// aFreeTCPPort picks a port the operating system just handed out and gives it back, so the
-// built server answers on an address no other test is holding.
+// aFreeTCPPort gives back an OS-assigned free port for the built server to bind.
+// see the harness-ports maintainer note.
 func aFreeTCPPort(t *testing.T) string {
 	t.Helper()
 

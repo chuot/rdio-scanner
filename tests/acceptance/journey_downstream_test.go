@@ -32,14 +32,14 @@ import (
 	"time"
 )
 
-// A downstream server is another Rdio Scanner this one re-posts its calls to. The forwarder and the ingest
-// fan-out are pinned apart from each other; what these tests add is the arrangement a deployment actually
-// runs: the downstreams are rows in the server's own database, the receiving server is a socket on the
-// network, and the call that arrives there is the call this server recorded.
+// A downstream server is another Rdio Scanner this one re-posts
+// its calls to; these tests pin the real arrangement: downstreams
+// as database rows and a receiving server on the loopback.
+// see the downstream-journey maintainer note.
 
-// repostKey is the credential these tests upload a recording with, and repostOpenKey is the credential the
-// receiving server is configured to accept it under. Two different credentials, because the one names who
-// may post to this server and the other names who this server posts to.
+// repostKey is the credential these tests upload with, and
+// repostOpenKey the one the receiving server accepts it under:
+// one names who may post here, the other who this server posts
 const (
 	repostKey      = "a-key-that-reposts-nothing"
 	repostOpenKey  = "the-credential-the-downstream-was-given"
@@ -47,10 +47,10 @@ const (
 	repostGoneKey  = "a-downstream-that-is-switched-off"
 )
 
-// TestARecordedCallIsRepostedToTheOtherServersWhoseScopeCoversIt is the whole re-post on a running server:
-// the downstreams are what the configuration stores, the call is what an uploader sent, and what arrives at
-// the receiving server is the call this server stored — its recording, its references, its instant, and the
-// credential that server was given.
+// TestARecordedCallIsRepostedToTheOtherServersWhoseScope
+// CoversIt is the whole re-post on a running server: the call an
+// uploader sent arrives at the receiver as this server stored it,
+// recording, references, instant, and credential included
 func TestARecordedCallIsRepostedToTheOtherServersWhoseScopeCoversIt(t *testing.T) {
 	open := newDownstreamRecorder(t, http.StatusOK)
 	scoped := newDownstreamRecorder(t, http.StatusOK)
@@ -91,9 +91,9 @@ func TestARecordedCallIsRepostedToTheOtherServersWhoseScopeCoversIt(t *testing.T
 		t.Errorf("the downstream was sent to %s, want the upload endpoint of the address it was configured with", got.path)
 	}
 
-	// The recording is the one that was uploaded, byte for byte, and it is the name the call was stored
-	// under: the fixture turns audio conversion off, so this is the recording and not something ffmpeg
-	// made of it.
+	// the recording arrives byte for byte, the name the call was
+	// stored under: the fixture turns conversion off, so this is
+	// the uploaded recording and not ffmpeg's work
 	if !bytes.Equal(got.audio, recording(2048)) {
 		t.Errorf("the downstream received %d bytes of recording, want the %d bytes that were uploaded", len(got.audio), 2048)
 	}
@@ -102,8 +102,8 @@ func TestARecordedCallIsRepostedToTheOtherServersWhoseScopeCoversIt(t *testing.T
 		t.Errorf("the recording the downstream received is named %q, want the name the call was stored under", got.fields["audioFilename"])
 	}
 
-	// The references are the ones the call was resolved to, which is what the receiving server matches its
-	// own systems and talkgroups against.
+	// the references are the ones the call was resolved to, what
+	// the receiving server matches its own systems against
 	for field, want := range map[string]string{
 		"key":            repostOpenKey,
 		"system":         "10001",
@@ -118,23 +118,23 @@ func TestARecordedCallIsRepostedToTheOtherServersWhoseScopeCoversIt(t *testing.T
 		}
 	}
 
-	// Every part the legacy server writes is there, and nothing else is. The order the parts are written in
-	// is pinned where the body is built.
+	// every part the legacy server writes is there, and nothing else
+	// is: the writing order is pinned elsewhere, where the body is built
 	if got, want := partNames(open), sortedPartNames(); got != want {
 		t.Errorf("the downstream received the parts %s, want %s", got, want)
 	}
 
-	// A downstream that refuses the call is reported, and the call is still a call this server accepted: the
-	// re-post is somebody else's server, and its answer is not this server's failure.
+	// a downstream that refuses the call is reported, and the call
+	// stays accepted here: another server's answer is not this one's
 	if got := refused.waitFor(t, 1); got.method != http.MethodPost {
 		t.Fatalf("the downstream that refuses calls was sent %v, want the call", got)
 	}
 
 	waitForLogMentioning(t, srv.db, "downstream.send: bad status: 500 Internal Server Error")
 
-	// A downstream whose scope names a different system is not sent to at all, and a downstream that is
-	// switched off is not sent to either. Both had their turn: the fan-out walks the downstreams in order,
-	// and the refusal it reached is further down that list than either of these two.
+	// a downstream whose scope names a different system and one
+	// switched off are not sent to at all: the fan-out walks the
+	// downstreams in order, and the refusal it reached sits below
 	time.Sleep(200 * time.Millisecond)
 
 	if n := scoped.count(); n != 0 {
@@ -153,9 +153,9 @@ func TestARecordedCallIsRepostedToTheOtherServersWhoseScopeCoversIt(t *testing.T
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestARepostedCallCarriesTheGroupsAndTagItsTalkgroupIsFiledUnder is the part of the re-post that is not
-// simply the call: the receiving server is told the group and tag names this server's configuration gives
-// the talkgroup, because that is what it files the call under.
+// TestARepostedCallCarriesTheGroupsAndTagItsTalkgroupIs
+// FiledUnder is the part of the re-post that is not the call: the
+// receiver is told the group and tag names the talkgroup has
 func TestARepostedCallCarriesTheGroupsAndTagItsTalkgroupIsFiledUnder(t *testing.T) {
 	open := newDownstreamRecorder(t, http.StatusOK)
 
@@ -188,9 +188,9 @@ func TestARepostedCallCarriesTheGroupsAndTagItsTalkgroupIsFiledUnder(t *testing.
 	}
 }
 
-// seedRepostTargets installs the downstreams these tests re-post to. Each one is a row of the same shape a
-// configuration save writes, so that what is being tested is the stored scope and the stored switch rather
-// than an in-memory stand-in.
+// seedRepostTargets installs these tests' downstreams, each a
+// row of the same shape a configuration save writes, so the
+// stored scope and switch are what is tested
 func seedRepostTargets(t *testing.T, db *sql.DB, targets ...*downstreamRecorder) {
 	t.Helper()
 
@@ -210,8 +210,8 @@ func seedRepostTargets(t *testing.T, db *sql.DB, targets ...*downstreamRecorder)
 		return
 	}
 
-	// The second names a system this call was not heard on. The third is switched off. The fourth is the
-	// server that answers every call with a refusal.
+	// the second names a system this call was not heard on, the
+	// third is switched off, the fourth refuses every call
 	seed(t, db,
 		seedStatement{
 			query: `INSERT INTO "downstreams" ("downstreamId", "apikey", "disabled", "order", "systems", "url") VALUES (2, ?, 0, 0, '[{"id":20002,"talkgroups":"*"}]', ?)`,
@@ -228,8 +228,8 @@ func seedRepostTargets(t *testing.T, db *sql.DB, targets ...*downstreamRecorder)
 	)
 }
 
-// seedFiledTalkgroup files the talkgroup these tests re-post onto under one group and gives it a tag, which
-// is what the receiving server is told the call belongs to.
+// seedFiledTalkgroup files the re-posted talkgroup under one group
+// with a tag, what the receiving server is told the call belongs to
 func seedFiledTalkgroup(t *testing.T, db *sql.DB) {
 	t.Helper()
 
@@ -246,7 +246,7 @@ func seedFiledTalkgroup(t *testing.T, db *sql.DB) {
 	)
 }
 
-// repostPartNames are the parts the legacy server writes into a re-posted call, in the order it writes them.
+// repostPartNames are the parts, in the legacy server's write order
 func repostPartNames() []string {
 	return []string{
 		"audio",
@@ -268,7 +268,7 @@ func repostPartNames() []string {
 	}
 }
 
-// sortedPartNames is the legacy part list in a fixed order, for comparing with what arrived.
+// sortedPartNames is the legacy part list, re-sorted to compare arrivals
 func sortedPartNames() string {
 	names := append([]string{}, repostPartNames()...)
 
@@ -286,8 +286,8 @@ type recordedUpload struct {
 	hasAudio bool
 }
 
-// downstreamRecorder stands in for another Rdio Scanner: it answers every upload the way a receiving server
-// answers, and remembers what it was sent.
+// downstreamRecorder stands in for another Rdio Scanner: it answers
+// uploads and remembers what it was sent
 type downstreamRecorder struct {
 	server   *httptest.Server
 	status   int
@@ -388,9 +388,9 @@ func (recorder *downstreamRecorder) count() int {
 	return len(recorder.received)
 }
 
-// partNames lists the parts a receiving server was sent, in a fixed order, so that a test can say which
-// parts arrived without depending on the order they were written in — which is pinned where the body is
-// built.
+// partNames lists the parts a receiving server was sent, in a
+// fixed order, so a test can say which arrived without the
+// writing order, which is pinned where the body is built
 func partNames(recorder *downstreamRecorder) string {
 	recorder.mutex.Lock()
 	defer recorder.mutex.Unlock()

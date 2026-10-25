@@ -29,21 +29,13 @@ import (
 	"rdio-scanner/internal/app"
 )
 
-// This is the assistant's session against a running server, and the bounds that apply to it.
-//
-// The server bounds every request it answers: 25 seconds, so a handler blocked on a database that
-// does not answer is answered with a failure the administrator can read instead of a browser that
-// spins. The assistant's endpoint carries a bound of its own beside it, because its work is not the
-// administrator's: a composite capability runs several queries over a deployment with a full
-// history, and the session's stream stays open for the life of the session.
-//
-// The journey runs the two against each other on a server that is really running: the administrator's
-// request keeps its bound, and the assistant's session is outliving the request bound for as long as
-// its operator is thinking.
+// the assistant session journey weighs the request bound against a long-lived session:
+// the endpoint needs its own bound for composite capabilities and open streams.
+// see the mcp-stream-journey maintainer note.
 
-// requestBound is the bound the composition root puts on an ordinary request. The journey names it
-// here because the property it protects is a property about time: the bound is the administrator's,
-// and the assistant's session is what must not be cut off by it.
+// requestBound is the bound the composition root puts on an ordinary request, named
+// here because the journey's property is about time: the assistant's session must
+// not be cut off by the administrator's bound.
 const requestBound = 25 * time.Second
 
 func TestAnAssistantSessionOutlivesTheRequestDeadlineTheAdministratorsRequestKeeps(t *testing.T) {
@@ -53,16 +45,15 @@ func TestAnAssistantSessionOutlivesTheRequestDeadlineTheAdministratorsRequestKee
 
 	endpoint := httptest.NewServer(srv.server)
 
-	// The endpoint is closed by a cleanup registered before the session's own: cleanups run in the
-	// order they were registered reversed, so the assistant's stream is gone before the endpoint
-	// waits for its connections.
+	// this cleanup is registered before the session's own: cleanups run in reverse,
+	// so the assistant's stream is gone before the endpoint waits on connections.
 	t.Cleanup(endpoint.Close)
 
 	opened := time.Now()
 
 	session := theAssistantConnected(t, endpoint.URL, token)
 
-	// The session works, and the administrator's page works, before anything is locked.
+	// the session works, and the administrator's page works, before anything is locked.
 	callTheAssistant(t, session, "list_systems")
 
 	if rec := srv.authorizedRequest(t, http.MethodGet, "/api/admin/config", token, ""); rec.Code != http.StatusOK {
@@ -70,9 +61,8 @@ func TestAnAssistantSessionOutlivesTheRequestDeadlineTheAdministratorsRequestKee
 			rec.Code, http.StatusOK)
 	}
 
-	// A database that does not answer. The administrator's save is the request the request bound is
-	// for: it is answered with a failure the administrator can read, inside the bound, and not held
-	// open by a lock that is never going to clear.
+	// a database that does not answer: the administrator's save is the request the bound
+	// is for, answered with a readable failure inside the bound, not held open forever.
 	locked := lockTheServerLog(t, srv.base)
 
 	administered := make(chan administratorAnswer, 1)
@@ -125,10 +115,9 @@ func TestAnAssistantSessionOutlivesTheRequestDeadlineTheAdministratorsRequestKee
 		t.Fatalf("releasing the database: %v", err)
 	}
 
-	// The assistant's session is measured against the same bound, and is not what the bound is for.
-	// The operator at the other end of a session takes minutes to read an answer and type a question;
-	// the session the server opened for that operator is alive when the request bound has gone by,
-	// and the stream carrying it is kept writing so the socket's own write bound does not close it.
+	// the assistant's session is not what the request bound is for: an operator thinks
+	// for minutes, so the session outlives the bound and keeps its stream writing so
+	// the socket's write bound does not close it.
 	if elapsed := time.Since(opened); elapsed < requestBound+3*time.Second {
 		time.Sleep(requestBound + 3*time.Second - elapsed)
 	}
@@ -136,9 +125,8 @@ func TestAnAssistantSessionOutlivesTheRequestDeadlineTheAdministratorsRequestKee
 	callTheAssistant(t, session, "list_systems")
 }
 
-// startedServerNamingTheAssistant is the journey's server with the assistant's endpoint named in its
-// configuration: the endpoint is served only when the operator asked for it, and this journey is
-// about the endpoint, so this journey is the one that names it.
+// startedServerNamingTheAssistant is the journey's server with the assistant's
+// endpoint named in its configuration, the endpoint this journey measures.
 func startedServerNamingTheAssistant(t *testing.T) *journeyServer {
 	t.Helper()
 
@@ -161,9 +149,9 @@ func startedServerNamingTheAssistant(t *testing.T) *journeyServer {
 	return &journeyServer{server: srv, base: base, db: openTestDatabase(t, base)}
 }
 
-// theAssistantConnected is an assistant holding a session against the running server, signed in with
-// the session the administrator's login handed out. The stream the session opens for the server's own
-// messages is left open, because that is the stream the bounds are measured against.
+// theAssistantConnected is an assistant holding a session against the running server,
+// signed in with the administrator's session credential, its message stream left
+// open: that stream is what the bounds are measured against.
 func theAssistantConnected(t *testing.T, endpoint, token string) *mcp.ClientSession {
 	t.Helper()
 
@@ -182,8 +170,8 @@ func theAssistantConnected(t *testing.T, endpoint, token string) *mcp.ClientSess
 	return session
 }
 
-// signedInWith is the transport that puts the administrator's session credential on every request the
-// assistant's transport makes, the way the assistant's own configuration lines do.
+// signedInWith is the transport that puts the administrator's session credential on
+// every assistant request, the way the assistant's configuration lines do.
 func signedInWith(token string) http.RoundTripper {
 	return credentialRoundTripper{token: token}
 }
@@ -224,8 +212,8 @@ func callTheAssistant(t *testing.T, session *mcp.ClientSession, tool string) {
 	}
 }
 
-// administratorAnswer is what the administrator's request answered, and how long the server took to
-// answer it: the bound is measured by the time the request was held.
+// administratorAnswer is what the administrator's request answered and how long the
+// server took: the bound is measured by the time the request was held.
 type administratorAnswer struct {
 	status int
 	took   time.Duration
@@ -234,8 +222,8 @@ type administratorAnswer struct {
 	err error
 }
 
-// awaitTheAdministratorAnswer waits for the administrator's request to answer. The bound under test
-// is twenty-five seconds; a minute is the point at which the journey says the server never answered.
+// awaitTheAdministratorAnswer waits for the administrator's request to answer: the
+// bound under test is 25 seconds, a minute is when the journey calls it never.
 func awaitTheAdministratorAnswer(t *testing.T, administered chan administratorAnswer) administratorAnswer {
 	t.Helper()
 

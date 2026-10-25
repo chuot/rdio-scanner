@@ -25,11 +25,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// The operator's Monday morning question: someone changed something on this deployment over the
-// weekend, and the log view is where the story is. The answer has to be findable there — the
-// assistant's work is filed under a subsystem the operator can filter for, the way the ingestion,
-// the pruning, and the logins are — and it has to be safe to read out loud: the surface runs on
-// credentials at every layer, and a log view is pasted into tickets and screenshotted at meetings.
+// the assistant's work has to show up in the operator's log view under a filterable
+// subsystem, and that view must never carry a session credential: it is shared freely.
+// see the mcp-logging-journey maintainer note.
 
 func TestTheAssistantsWorkIsInTheLogViewTheOperatorFiltersBySubsystem(t *testing.T) {
 	srv := startedServerNamingTheAssistant(t)
@@ -41,16 +39,16 @@ func TestTheAssistantsWorkIsInTheLogViewTheOperatorFiltersBySubsystem(t *testing
 
 	session := theAssistantConnected(t, endpoint.URL, token)
 
-	// The server becomes restricted by an access list: from here on, a caller that proves nothing is
-	// a caller the credential gate refuses, which is the event the operator wants to see.
+	// an access list makes the server restricted: a caller that proves nothing is a caller
+	// the credential gate refuses, the event the operator wants to see.
 	if saved := srv.put("/api/admin/config/access", token, `[
 	  { "id": 0, "code": "the-journey-access-code", "ident": "Journey desk", "systems": "*" }
 	]`); saved.Code != http.StatusOK {
 		t.Fatalf("saving the access list was answered %d: %s", saved.Code, saved.Body.String())
 	}
 
-	// A caller the credential gate will not let in. This is the event the operator wants to see:
-	// somebody knocked on the assistant's endpoint with nothing to show.
+	// a caller the credential gate refuses: somebody knocked on the assistant's endpoint
+	// with nothing to show, the event the operator wants to see.
 	resp, err := http.Post(endpoint.URL+"/mcp", "application/json", strings.NewReader("{}"))
 	if err != nil {
 		t.Fatalf("knocking on the assistant's endpoint: %v", err)
@@ -83,8 +81,8 @@ func TestTheAssistantsWorkIsInTheLogViewTheOperatorFiltersBySubsystem(t *testing
 			messagesOfTheEntries(view.Entries))
 	}
 
-	// And nothing in the whole log view carries the session credential the administrator's login
-	// handed out. The log view is read out loud, pasted into a ticket, and handed to a client.
+	// no entry in the whole log view carries the administrator's session credential: the
+	// view is read out loud, pasted into tickets, and handed to clients.
 	everything := theLogViewTheOperatorSees(t, session, map[string]any{"limit": float64(500)})
 
 	for _, entry := range everything.Entries {
@@ -96,9 +94,8 @@ func TestTheAssistantsWorkIsInTheLogViewTheOperatorFiltersBySubsystem(t *testing
 	}
 }
 
-// theLogViewTheOperatorSees is the administrator's log search, asked through the assistant's own
-// capability: the operator's panel and the assistant's tool read the same view, and a journey that
-// proves the view proves both of them.
+// theLogViewTheOperatorSees is the administrator's log search asked through the
+// assistant's own capability: operator's panel and tool read one view.
 func theLogViewTheOperatorSees(t *testing.T, session *mcp.ClientSession, criteria map[string]any) logViewAnswer {
 	t.Helper()
 

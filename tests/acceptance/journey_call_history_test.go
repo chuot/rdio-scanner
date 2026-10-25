@@ -26,30 +26,25 @@ import (
 	"time"
 )
 
-// The call history over HTTP is the journey a listener has today on the listener socket, taken off
-// the socket: search the history, read one call, fetch one recording. The socket and this surface reach
-// the same history and are under the same licence, so this is the surface a third-party client — and the
-// Model Context Protocol surface built on it — reaches the history through.
-//
-// These journeys run against a server with a real database, a real upload that put the call in it,
-// and the real access list, because the thing being proved is the seam: the paging the history
-// search applies, the recording the store keeps beside its call, and the credential rules the access
-// list states, all reached through the composed server.
+// The call history over HTTP: search, read one call, fetch one
+// recording, the surface a third-party client and the Model
+// Context Protocol surface reach the history through.
+// see the call-history-journey maintainer note.
 
 const (
 	historyKey       = "history-upload-key"
 	historyOpenCode  = "history-open"
 	historyScopedKey = "history-scoped"
 
-	// historyAttemptsMax is the access-code guess budget one address is given, stated here in the
-	// business terms the operator states it in. The application layer holds the constant; a journey
-	// states the rule, and a change to the bound that leaves this rule standing is a change the
-	// journey is there to catch.
+	// historyAttemptsMax is the access-code guess budget one
+	// address is given, stated here in the operator's terms: a
+	// change to the bound that leaves this rule standing is a
+	// change the journey is there to catch
 	historyAttemptsMax = 3
 )
 
-// A call recorded by an upload is searchable, readable, and listenable over HTTP, with no credential
-// in sight: a server with no access list opens its history the way it opens the listener socket.
+// a call recorded by an upload is searchable, readable, and
+// listenable over HTTP with no credential
 func TestTheCallHistoryIsSearchedAndRetrievedOverRest(t *testing.T) {
 	srv := journeyServerIn(t, t.TempDir())
 
@@ -104,8 +99,8 @@ func TestTheCallHistoryIsSearchedAndRetrievedOverRest(t *testing.T) {
 
 	id := page.Results[0].ID
 
-	// One call, in full, and without its recording: the metadata answer is asked far more often
-	// than a recording is listened to.
+	// one call in full without its recording: the metadata answer
+	// is asked far more often than a recording is listened to
 	metadata := srv.get(historyCallPath(id))
 
 	if metadata.Code != http.StatusOK {
@@ -203,9 +198,9 @@ func TestTheCallHistoryIsSearchedAndRetrievedOverRest(t *testing.T) {
 	}
 }
 
-// A server with an access list is restricted, and the call history is listener-facing: a caller that
-// proves nothing is refused, an access code opens exactly what that access grants, and a call outside
-// the grant is refused as a call that is not there.
+// an access list restricts the server and the call history is
+// listener-facing: an unproved caller is refused, an access code
+// opens exactly its grant, a call outside the grant is refused as absent
 func TestARestrictedServerOpensTheCallHistoryToAnAccessCodeAndToNothingElse(t *testing.T) {
 	srv := journeyServerIn(t, t.TempDir())
 
@@ -227,8 +222,8 @@ func TestARestrictedServerOpensTheCallHistoryToAnAccessCodeAndToNothingElse(t *t
 
 	token := srv.loginAnswered(t)
 
-	// The administrator installs the access list the way an administrator installs it, and the
-	// server becomes restricted by it.
+	// the administrator installs the access list through the admin
+	// endpoint, and the server becomes restricted by it
 	if saved := srv.put("/api/admin/config/access", token, `[
 	  { "id": 0, "code": "`+historyOpenCode+`", "ident": "History open", "systems": "*" },
 	  { "id": 0, "code": "`+historyScopedKey+`", "ident": "History scoped", "systems": [{ "id": 10001, "talkgroups": "*" }] }
@@ -288,10 +283,10 @@ func TestARestrictedServerOpensTheCallHistoryToAnAccessCodeAndToNothingElse(t *t
 		t.Errorf("the recording of a granted call = %d, want the bytes: %s", clip.Code, clip.Body.String())
 	}
 
-	// The call on the other system is refused as a call that is not there. The scoped caller has
-	// seen both systems in its searches, so the server has to find it an id to ask for: the
-	// wildcard code is asked first, and the id the scoped caller is not entitled to is the one the
-	// wildcard answer carries and the scoped answer does not.
+	// the call on the other system is refused as a call that is
+	// not there: the wildcard search comes first, and the id the
+	// scoped caller is not entitled to is the one only the
+	// wildcard answer carries
 	opened := srv.codeRequest(http.MethodPost, "/api/calls/search", historyOpenCode, `{"limit":10}`)
 
 	if opened.Code != http.StatusOK {
@@ -333,8 +328,8 @@ func TestARestrictedServerOpensTheCallHistoryToAnAccessCodeAndToNothingElse(t *t
 		}
 	}
 
-	// A search naming a system the caller cannot see answers with no rows, and says nothing about
-	// what exists outside the grant.
+	// a search naming a system outside the grant answers with no
+	// rows, and says nothing about what exists beyond it
 	if filtered := srv.codeRequest(http.MethodPost, "/api/calls/search", historyScopedKey,
 		`{"system":10002,"talkgroup":1515000}`); filtered.Code != http.StatusOK {
 		t.Fatalf("a scoped caller searching a system it cannot see = %d, want the page: %s",
@@ -358,9 +353,9 @@ func TestARestrictedServerOpensTheCallHistoryToAnAccessCodeAndToNothingElse(t *t
 	}
 }
 
-// Guessing an access code over HTTP is bounded per address, on the model of the administrator login
-// budget: the attempts up to the bound are answered on their merits, and the one past it is refused
-// whatever it carries, with an answer that gives away nothing distinguishing it from a wrong code.
+// guessing an access code over HTTP is bounded per address, on
+// the model of the administrator login budget: attempts up to
+// the bound answer on their merits, past it refused like wrong codes
 func TestGuessingAccessCodesOverRestIsBoundedPerAddress(t *testing.T) {
 	srv := journeyServerIn(t, t.TempDir())
 
@@ -407,8 +402,8 @@ func TestGuessingAccessCodesOverRestIsBoundedPerAddress(t *testing.T) {
 		}
 	}
 
-	// The correct code, arriving after the budget is spent, is refused — and the answer gives away
-	// nothing that distinguishes it from the refusals above.
+	// the correct code, arriving after the budget is spent, is
+	// refused with nothing distinguishing it from the refusals above
 	spent := srv.codeRequest(http.MethodPost, "/api/calls/search", historyOpenCode, `{}`)
 
 	if spent.Code != http.StatusUnauthorized {
@@ -420,7 +415,7 @@ func TestGuessingAccessCodesOverRestIsBoundedPerAddress(t *testing.T) {
 			spent.Body.String(), first.Body.String())
 	}
 
-	// The refusals name the address, once per window, and never the code that was guessed.
+	// the refusals name the address, once per window, never the code
 	if lines := countLogLines(t, srv.db, "a caller from "+testRequestAddress+" presented an access code that is not valid"); lines != 1 {
 		t.Errorf("the log carries %d lines about the guessing address, want exactly one per window", lines)
 	}
@@ -429,8 +424,8 @@ func TestGuessingAccessCodesOverRestIsBoundedPerAddress(t *testing.T) {
 		t.Errorf("the log files %d lines naming the credential that was guessed, want none", lines)
 	}
 
-	// The budget belongs to the address that spent it, and a journey reaching the server from
-	// another address is answered on its merits.
+	// the budget belongs to the address that spent it: another
+	// address is answered on its merits
 	fromElsewhere := srv.codeRequestFrom(http.MethodPost, "/api/calls/search", historyOpenCode, `{}`, "198.51.100.4")
 
 	if fromElsewhere.Code != http.StatusOK {

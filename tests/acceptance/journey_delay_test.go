@@ -26,25 +26,22 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// The delay tests put a server through the two things the delayer is for: a call recorded on a talkgroup
-// that holds its calls back is not told to anybody until the hold has run out, and the calls a server was
-// holding back when it stopped are picked up by the server that starts again.
-//
-// Both are run against a server that is actually assembled and answering, because the thing being proved
-// is the wiring: that the hold is decided in the one delivery step every call goes through, and that what
-// the delayer hands back goes into that same step rather than into a copy of it written for delayed calls.
+// The delay tests: a call on a talkgroup that holds its calls back
+// is told to nobody until the hold runs out, and a new server picks
+// up the calls the old one was holding.
+// see the delay-journey maintainer note.
 
-// heldUploadKey is the credential the delay tests upload a recording with. Its scope covers every system,
-// so that what these tests are about is the hold and not the gate in front of the ingest.
+// heldUploadKey is the credential the delay tests upload with,
+// scoped to every system so the run is about the hold
 const heldUploadKey = "a-key-that-holds-nothing-back"
 
 // heldTalkgroupDelay is the hold the seeded talkgroup names, in the unit the configuration stores it in.
 const heldTalkgroupDelay = 1
 
-// TestUploadedCallOnADelayedTalkgroupReachesAListenerOnlyWhenItsHoldRunsOut is the live half of the
-// delayer on a running server: the recording is stored and written down as waiting, the listener that
-// asked for that talkgroup is told nothing, and the call arrives when its hold has run out carrying the
-// mark that says it was held back.
+// TestUploadedCallOnADelayedTalkgroupReachesAListenerOnlyWhen
+// ItsHoldRunsOut is the live half: the recording is stored and
+// written down as waiting, the listener is told nothing, and
+// the call arrives when the hold runs out, marked as held
 func TestUploadedCallOnADelayedTalkgroupReachesAListenerOnlyWhenItsHoldRunsOut(t *testing.T) {
 	srv := journeyServerIn(t, t.TempDir())
 
@@ -58,9 +55,9 @@ func TestUploadedCallOnADelayedTalkgroupReachesAListenerOnlyWhenItsHoldRunsOut(t
 
 	listenForHeldCalls(t, conn)
 
-	// The recording happened 55 seconds ago, and the talkgroup holds its calls for a minute, so this one
-	// has five seconds left to wait. The hold is measured from the moment the call happened, which is what
-	// makes a recording that arrived late wait out only what is left of it.
+	// the recording happened 55 seconds ago and the talkgroup holds
+	// for a minute, so five seconds remain: the hold runs from when
+	// the call happened, so a late upload waits out only what is left
 	postedAt := time.Now()
 	happenedAt := postedAt.Add(-55 * time.Second)
 
@@ -113,11 +110,10 @@ func TestUploadedCallOnADelayedTalkgroupReachesAListenerOnlyWhenItsHoldRunsOut(t
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestTheCallsAStoppedServerWasHoldingBackReachTheNextServersListener is the restart half: the calls a
-// server was holding back are read back at startup, the ones whose hold ran out while the server was not
-// running are delivered at once, and the ones still holding are armed again and delivered when their hold
-// runs out — all of them through the delivery step every other call takes, which is what makes them reach
-// a listener.
+// TestTheCallsAStoppedServerWasHoldingBackReachTheNextServers
+// Listener is the restart half: waiting calls are read back at
+// startup, the expired ones delivered at once, the others
+// re-armed, all through the same delivery step every call takes
 func TestTheCallsAStoppedServerWasHoldingBackReachTheNextServersListener(t *testing.T) {
 	// A database left behind by a server that was holding two calls back.
 	seededAt := time.Now()
@@ -130,8 +126,8 @@ func TestTheCallsAStoppedServerWasHoldingBackReachTheNextServersListener(t *test
 	seedHeldCall(t, srv.db, 1, seededAt.Add(-3*time.Minute), seededAt.Add(-1*time.Minute))
 	seedHeldCall(t, srv.db, 2, seededAt.Add(-58*time.Second), seededAt.Add(3*time.Second))
 
-	// The listener is connected before the startup, which is how a call that was already waiting when the
-	// server stopped can be seen being delivered by the server that picked it up.
+	// the listener connects before the startup, so a call that was
+	// already waiting can be seen delivered by the new server
 	conn := srv.dial(t, "/")
 
 	listenForHeldCalls(t, conn)
@@ -154,8 +150,8 @@ func TestTheCallsAStoppedServerWasHoldingBackReachTheNextServersListener(t *test
 		t.Fatalf("the listener was told about %d calls, want the two the previous server was holding back", len(held))
 	}
 
-	// Both carry the mark, and they arrive in the order the waiting list names them: the one whose hold
-	// ran out while the server was down first, the one still holding when its hold runs out second.
+	// both carry the held mark and arrive in waiting-list order:
+	// the expired one first, the re-armed one when its hold ends
 	for i, payload := range held {
 		if held, marked := payload["delayed"].(bool); !marked || !held {
 			t.Errorf("the %dth call says it was held back %v, want both calls marked", i+1, payload["delayed"])
@@ -171,9 +167,9 @@ func TestTheCallsAStoppedServerWasHoldingBackReachTheNextServersListener(t *test
 	}
 }
 
-// TestAStoredHoldIsArmedAgainForTheDelayTheConfigurationNamesNow is the reason the startup re-arms a
-// waiting call instead of trusting the moment written down beside it: an administrator who changes a
-// talkgroup's delay expects the calls already waiting to follow the new one.
+// TestAStoredHoldIsArmedAgainForTheDelayTheConfiguration
+// NamesNow is why startup re-arms a waiting call instead of
+// trusting the stored moment: calls waiting follow the delay set now
 func TestAStoredHoldIsArmedAgainForTheDelayTheConfigurationNamesNow(t *testing.T) {
 	seededAt := time.Now()
 
@@ -181,8 +177,8 @@ func TestAStoredHoldIsArmedAgainForTheDelayTheConfigurationNamesNow(t *testing.T
 
 	seedDelayedTalkgroup(t, srv.db)
 
-	// Written down when the talkgroup held its calls for ten minutes; the talkgroup now names one, and
-	// the call happened long enough ago for that minute to have a second left to run.
+	// stored under a ten-minute hold, the talkgroup now names a
+	// minute, and the call happened long enough ago for a second left
 	seedHeldCall(t, srv.db, 1, seededAt.Add(-59*time.Second), seededAt.Add(10*time.Minute))
 
 	if until := heldUntil(t, srv.db); !until.Equal(seededAt.Add(10 * time.Minute).Truncate(time.Millisecond)) {
@@ -197,8 +193,8 @@ func TestAStoredHoldIsArmedAgainForTheDelayTheConfigurationNamesNow(t *testing.T
 		t.Fatalf("start: %v", err)
 	}
 
-	// The startup rewrote the hold for the minute the talkgroup names now, rather than keeping the ten
-	// minutes that were written down.
+	// the startup rewrote the hold for the delay the talkgroup
+	// names now, not the ten minutes stored beside it
 	payload := readHeldCall(t, conn)
 
 	if payload["id"] != float64(1) {
@@ -210,18 +206,18 @@ func TestAStoredHoldIsArmedAgainForTheDelayTheConfigurationNamesNow(t *testing.T
 	}
 }
 
-// seedDelayedTalkgroup gives the server the system and talkgroup the delay tests record onto: the talkgroup
-// holds its calls for a minute, the system names no hold of its own, the credential these tests upload with
-// covers every system, and audio is left as it was recorded so that the run is about the hold and not about
-// ffmpeg.
+// seedDelayedTalkgroup gives the delay tests their system and
+// talkgroup: a one-minute hold, no system-level hold, an all-
+// systems upload credential, and audio left as recorded so
+// the run is about the hold and not about ffmpeg
 func seedDelayedTalkgroup(t *testing.T, db *sql.DB) {
 	t.Helper()
 
 	seedUploadTarget(t, db, heldTalkgroupDelay, heldUploadKey)
 }
 
-// seedHeldCall writes a recorded call and the waiting-list row that says it is being held back until the
-// given moment, which is exactly what a server leaves behind when it stops in the middle of a hold.
+// seedHeldCall writes a recorded call and its waiting-list row
+// until the given moment, as a stopping server leaves them
 func seedHeldCall(t *testing.T, db *sql.DB, id uint64, happenedAt, until time.Time) {
 	t.Helper()
 
@@ -237,8 +233,8 @@ func seedHeldCall(t *testing.T, db *sql.DB, id uint64, happenedAt, until time.Ti
 	)
 }
 
-// heldUntil reads the moment the waiting list says the held call stops being held back. It insists there is
-// exactly one, because these tests hold exactly one call back.
+// heldUntil reads when the waiting list says the held call is
+// released, insisting there is exactly one
 func heldUntil(t *testing.T, db *sql.DB) time.Time {
 	t.Helper()
 
@@ -276,9 +272,9 @@ func heldUntil(t *testing.T, db *sql.DB) time.Time {
 	return until
 }
 
-// listenForHeldCalls registers a listener socket and asks it to watch the talkgroup the delay tests record
-// onto. The exchange is finished before the test goes on, so that a call delivered afterwards has somewhere
-// to go.
+// listenForHeldCalls connects a listener socket watching the
+// delay tests' talkgroup, finishing the exchange first so a
+// call delivered afterwards has somewhere to go
 func listenForHeldCalls(t *testing.T, conn *websocket.Conn) {
 	t.Helper()
 
@@ -306,8 +302,8 @@ func listenForHeldCalls(t *testing.T, conn *websocket.Conn) {
 	}
 }
 
-// readHeldCall waits for the server to broadcast a call and hands back its payload. The wait is longer than
-// a call takes to arrive, because a held call arrives when its hold has run out and not when it was recorded.
+// readHeldCall waits for a broadcast call and returns its payload:
+// a held call arrives when its hold runs out, not when recorded
 func readHeldCall(t *testing.T, conn *websocket.Conn) map[string]any {
 	t.Helper()
 

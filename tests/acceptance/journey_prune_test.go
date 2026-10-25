@@ -26,20 +26,17 @@ import (
 	"rdio-scanner/internal/application"
 )
 
-// The retention is the server's own schedule, and what it discards is the history the server itself wrote.
-// The pruning use case is pinned apart from the server, and the hourly schedule is pinned apart from the
-// database; what these tests add is the two of them together: the retention the stored configuration names,
-// applied to the recordings and the log entries a running server produced.
+// the retention prune journey pins the pruning use case and the hourly schedule
+// together, on history a running server wrote itself, which neither pinning alone shows.
+// see the prune-journey maintainer note.
 
 // pruneKey is the credential these tests post a recording with while testing what becomes of it.
 const pruneKey = "a-key-that-ages-out"
 
-// TestTheServerDiscardsTheHistoryOlderThanTheRetentionItIsConfiguredWith is the retention on a running
-// server: two recordings posted the way an uploader posts them, one outside the retention and one inside it,
-// and the pruning that the server's own schedule runs keeping only the second.
-//
-// The retention these tests store is three days, which is not the default, so that what is being proved is
-// that the number the configuration holds is the number the pruning uses.
+// TestTheServerDiscardsTheHistoryOlderThanTheRetentionItIsConfiguredWith posts two
+// recordings, one outside the retention and one inside, and the server's own schedule
+// keeps only the second. The stored retention is three days, not the default, so the
+// journey proves the configuration's number is the pruning's number.
 func TestTheServerDiscardsTheHistoryOlderThanTheRetentionItIsConfiguredWith(t *testing.T) {
 	srv := journeyServerIn(t, t.TempDir())
 
@@ -51,8 +48,8 @@ func TestTheServerDiscardsTheHistoryOlderThanTheRetentionItIsConfiguredWith(t *t
 		t.Fatalf("start: %v", err)
 	}
 
-	// The upload endpoint is what names the moment a call happened, which is how a recording that is five
-	// days old is made without a time machine.
+	// the upload endpoint names the moment a call happened, which is how a recording five
+	// days old gets made without a time machine.
 	older := time.Now().Add(-5 * 24 * time.Hour).Truncate(time.Millisecond)
 	recent := time.Now().Add(-2 * 24 * time.Hour).Truncate(time.Millisecond)
 
@@ -92,8 +89,8 @@ func TestTheServerDiscardsTheHistoryOlderThanTheRetentionItIsConfiguredWith(t *t
 		t.Errorf("the pruning discarded %d log entries, want the three written before the retention", result.LogsPruned)
 	}
 
-	// What is left is the recording inside the retention, and it is the same recording: the pruning discards
-	// whole calls rather than trimming anything.
+	// what is left is the in-retention recording, whole: the pruning discards entire
+	// calls rather than trimming anything.
 	if rows := countRows(t, srv.db, fmt.Sprintf(`SELECT COUNT(*) FROM "calls" WHERE "timestamp" < %d`, older.Add(time.Second).UnixMilli())); rows != 0 {
 		t.Errorf("the server still holds %d calls older than the retention, want none", rows)
 	}
@@ -102,9 +99,8 @@ func TestTheServerDiscardsTheHistoryOlderThanTheRetentionItIsConfiguredWith(t *t
 		t.Errorf("the server holds %d calls from inside the retention, want the one it accepted two days ago", rows)
 	}
 
-	// The log entries that were older than the retention are gone, and the ones the running server wrote
-	// today are not — including the notice the pruning gave about itself, which is written with the current
-	// instant so that a pruning does not discard its own report.
+	// log entries older than the retention are gone, today's are not, including the
+	// pruning's own report, stamped with the current instant so it never ages itself out.
 	if rows := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs"`); rows == 0 {
 		t.Fatalf("the server's log view is empty after the pruning, want the entries the server wrote today")
 	}
@@ -124,9 +120,9 @@ func TestTheServerDiscardsTheHistoryOlderThanTheRetentionItIsConfiguredWith(t *t
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestTheServerKeepsItsHistoryWhenTheRetentionIsSwitchedOff is the other half of the option: a retention of
-// nothing means the server touches nothing, and it does not even say that it is pruning, which is what a
-// deployment with the retention off sees in its log view.
+// TestTheServerKeepsItsHistoryWhenTheRetentionIsSwitchedOff is the option's other half:
+// a retention of nothing leaves the server touching nothing and saying nothing about
+// pruning in its log view.
 func TestTheServerKeepsItsHistoryWhenTheRetentionIsSwitchedOff(t *testing.T) {
 	srv := journeyServerIn(t, t.TempDir())
 
@@ -169,9 +165,9 @@ func seedRetention(t *testing.T, db *sql.DB, days uint) {
 	})
 }
 
-// seedOldLogEntries writes log entries that are five days old, which is what a retention of three days is
-// meant to discard. They are written directly because the point is the age of a log entry, and the server
-// writes its own entries with the current instant.
+// seedOldLogEntries writes log entries five days old, what a retention of three days
+// discards: written directly because the server only ever stamps its own entries now.
+// the age is the point.
 func seedOldLogEntries(t *testing.T, db *sql.DB, count int) {
 	t.Helper()
 

@@ -26,27 +26,18 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// The run this test reads was captured from the legacy server with its time zone set to UTC, which is
-// the time zone every capture in this repository was taken in. It matters here because a
-// watched recording is dated by a clock read in the server's own time zone: the six digits at the front of
-// a dsd+ recording name a local time, and the server's time zone is what turns it into a moment.
+// The run this test reads was captured from the legacy server
+// with its time zone set to UTC, the time zone of every capture
+// here: a watched recording is dated by a local clock.
+// see the fixture-capture maintainer note.
 func init() {
 	os.Setenv("TZ", "UTC")
 }
 
-// TestWatchedRecordingsBecomeCallsThatReachALiveListener is the whole path a recording takes: a watch
-// reads a file a recording tool left behind, the call it describes is written to the database, and the
-// listener that asked for that talkgroup is told about it while it is still live.
-//
-// The expectation is what the legacy server did in the same run, frame for frame and column for column:
-// capturedRun under the name dirwatch-end-to-end.json. Both servers were given the same configuration,
-// which this
-// test seeds into a database the server itself created, because the run is about a recording becoming a
-// call and not about what a server creates when it has never seen a system before — that run is the
-// auto-populate test.
-//
-// The two recordings are dropped one at a time, the second only after the first has been broadcast, so
-// that the frames arrive in an order both servers can be expected to produce.
+// TestWatchedRecordingsBecomeCallsThatReachALiveListener is the
+// whole path: a watch ingests a recording and a live listener
+// hears it, against the `dirwatch-end-to-end` capture.
+// see the dirwatch-journey maintainer note.
 func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 	captured := capturedRun(t, "dirwatch-end-to-end.json")
 
@@ -61,8 +52,8 @@ func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 	dsd := filepath.Join(watched, "dsd")
 	trunk := filepath.Join(watched, "trunk")
 
-	// The dated directory is the one dsd+ writes into, and it is there before the server starts watching,
-	// which is how a deployment that has been recording for a while looks.
+	// the dated directory is the one dsd+ writes into, created
+	// before the watch starts, as a deployed recorder looks
 	for _, directory := range []string{dsd, filepath.Join(dsd, "20261006"), trunk} {
 		if err := os.MkdirAll(directory, 0o755); err != nil {
 			t.Fatalf("preparing the watched directory %s: %v", directory, err)
@@ -81,12 +72,10 @@ func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 		t.Fatalf("asking for the configuration: %v", err)
 	}
 
-	// A listener is only a listener once it has asked for the configuration, and a call is only broadcast
-	// to a listener that asked for the talkgroup it lands on. The references the listener asks for are the
-	// ones the configuration it was just given names.
-	//
-	// Both answers belong in the frames being compared: the capture recorded everything the listener was
-	// sent, in the order it was sent.
+	// a listener is only a listener once it asks for the configuration,
+	// and calls reach only listeners that asked for their talkgroup:
+	// it asks using the references the configuration just handed it,
+	// and both answers belong in the frames the capture recorded
 	observed := []map[string]any{}
 
 	frame := observedFrame(t, conn)
@@ -115,23 +104,23 @@ func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 
 	observed = append(observed, frame)
 
-	// The trunk-recorder pair first: the recording and the sidecar that says what it is. This one names
-	// its system by label, and the configuration already has a system with that label.
+	// the trunk-recorder pair first: recording and sidecar, naming
+	// its system by a label the configuration already has
 	dropRecording(t, trunk, "call.wav", recording(2092))
 	dropRecording(t, trunk, "call.json", []byte(trunkRecorderSidecar))
 
 	observed = append(observed, readFramesUntilCall(t, conn, 1)...)
 
-	// The dsd+ recording second: this one names its system by reference, and it names a radio the
-	// configuration has never heard of, which is the part of the run that changes the configuration and
-	// makes the server re-send it.
+	// the dsd+ recording second: it names its system by reference
+	// and a radio the configuration has never heard, which is
+	// what changes the configuration and makes the server re-send
 	dropRecording(t, filepath.Join(dsd, "20261006"), dsdRecordingName, recording(2048))
 
 	observed = append(observed, readFramesUntilCall(t, conn, 1)...)
 
-	// The listener-count report is written five seconds after the count changes, and it counts the
-	// listeners that are there when it is written rather than the ones that were there when it was
-	// scheduled. Hanging up before that moment would put a different count in the log.
+	// the listener-count report is written five seconds after the
+	// count changes and counts the listeners present when written,
+	// so hanging up earlier would log a different count
 	waitForLogMessage(t, srv.db, "there is 1 listener")
 
 	conn.Close()
@@ -140,8 +129,8 @@ func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 
 	compareCanonical(t, "the frames the listener saw", captured["frames"], observed)
 
-	// The watched recordings are gone from the directories: both watches delete after ingesting, which is
-	// what keeps a recording tool's output directory from filling up.
+	// the watched recordings are gone: both watches delete after
+	// ingesting, so the recording tool's directory does not fill up
 	for _, directory := range []string{dsd, trunk} {
 		left := findFiles(t, directory)
 
@@ -157,19 +146,18 @@ func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// seedEndToEndConfiguration is the configuration the end-to-end run is given. The systems and talkgroups
-// are there before the recordings arrive, so that a call reaching a listener does not depend on the server
-// inventing them on the way; the audio conversion is turned off, so that the recording a watch hands over
-// is the recording the test wrote, byte for byte, and the recorded run pins the server passing it along rather
-// than pinning what one version of ffmpeg makes of it. Conversion is compared where ffmpeg is the subject.
+// seedEndToEndConfiguration gives the run its configuration:
+// systems and talkgroups seeded before the recordings arrive, so
+// a call reaching a listener does not depend on inventing them,
+// and conversion off, so the pinned recording is the file written
 func seedEndToEndConfiguration(t *testing.T, db *sql.DB, dsd, trunk string) {
 	t.Helper()
 
 	seedWatches(t, db, dsd, trunk)
 
-	// The two systems and their talkgroups, named the way the recordings name them: the trunk-recorder
-	// recording matches its system by label and the dsd+ recording matches its system by reference, which
-	// together are both ways a call is matched.
+	// the two systems and their talkgroups, named the way the
+	// recordings name them: one matched by label, the other by
+	// reference, the two ways a call is matched
 	seed(t, db,
 		seedStatement{
 			query: `INSERT INTO "systems" ("systemId", "autoPopulate", "blacklists", "delay", "label", "led", "order", "systemRef", "type") VALUES (1, 0, '', 0, 'Grand Metro', '', 0, 10001, '')`,
@@ -187,9 +175,9 @@ func seedEndToEndConfiguration(t *testing.T, db *sql.DB, dsd, trunk string) {
 	)
 }
 
-// seedWatches gives the server the two watches and the one option that keeps ffmpeg out of the run. It is
-// the whole configuration the auto-populate run is given: everything else that run ends up with is named
-// by the recordings, and is what the server is expected to create from them.
+// seedWatches gives the server its two watches and the option
+// that keeps ffmpeg out; everything else the auto-populate
+// run ends up with comes from the recordings themselves
 func seedWatches(t *testing.T, db *sql.DB, dsd, trunk string) {
 	t.Helper()
 
@@ -209,12 +197,12 @@ func seedWatches(t *testing.T, db *sql.DB, dsd, trunk string) {
 	)
 }
 
-// dsdRecordingName is a recording the way dsd+ names one: the clock first, then the talkgroup, then the
-// system as a net and a WACN, then the talkgroup again with its label, then the radio with its label.
+// dsdRecordingName is a recording the way dsd+ names one:
+// the clock, the talkgroup, the system as net and WACN, the
 const dsdRecordingName = "120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3"
 
-// trunkRecorderSidecar is the JSON a trunk-recorder instance writes beside its recording, and it is the
-// only way that recording says what it is.
+// trunkRecorderSidecar is the JSON a trunk-recorder instance
+// writes beside its recording, the only way it names the call
 const trunkRecorderSidecar = `{
   "short_name": "Grand Metro",
   "talkgroup": 1514000,
@@ -236,9 +224,9 @@ func dropRecording(t *testing.T, directory, name string, content []byte) {
 	}
 }
 
-// readFramesUntilCall reads frames until the server has broadcast the given number of calls, and returns
-// all of them: a server that changes its configuration on the way to a call sends the configuration first,
-// and the order it sends them in is part of what the capture pinned.
+// readFramesUntilCall reads frames until the given number of
+// calls have been broadcast and returns all of them: a server
+// sends a changed configuration first, the order the capture pinned
 func readFramesUntilCall(t *testing.T, conn *websocket.Conn, calls int) []map[string]any {
 	t.Helper()
 
@@ -270,8 +258,8 @@ func observedFrame(t *testing.T, conn *websocket.Conn) map[string]any {
 
 	observed := map[string]any{"command": command}
 
-	// The configuration a listener is sent is the whole configuration, and it is pinned by the
-	// recorded configurations rather than being repeated here.
+	// the configuration sent to a listener is the whole
+	// configuration, pinned by the recorded configurations
 	if command == "CFG" || len(frame) < 2 {
 		return observed
 	}
@@ -289,9 +277,9 @@ func observedFrame(t *testing.T, conn *websocket.Conn) map[string]any {
 	return observed
 }
 
-// withoutRecording replaces the recording inside a call frame with how many bytes it was. The recording is
-// the file the test put in the watched directory itself, so what the recorded run has to pin is that the server
-// passed it along whole, and not the bytes a second time.
+// withoutRecording replaces a call frame's recording with its
+// byte count: the recording is the file the test wrote, so
+// what the run pins is that it was passed along whole
 func withoutRecording(call map[string]any) map[string]any {
 	audio, ok := call["audio"].(map[string]any)
 	if !ok {
