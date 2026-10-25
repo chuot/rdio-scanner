@@ -19,19 +19,14 @@ import (
 	"testing"
 )
 
-// The tone tables are the payload: no option and no administrator changes them, and every client that
-// shows an alert reads the same nine. They reach the wire through the configuration payload and the
-// administrator's alert endpoint, which are tested against the captures the legacy server left. What
-// this file proves is the tables themselves, in the package that owns them: the nine names, the bytes
-// each one marshals to, and the three states of the panel for each brand the server knows.
-//
-// The alert bytes are the capture of the administrator's alert endpoint, which is the same nine tables
-// with nothing around them. The keypad bytes are the shape the panel's three states take, recorded as
-// the legacy server wrote them.
+// The tone tables are the payload: they reach the wire through the
+// configuration payload and the alert endpoint. This file proves the
+// tables themselves: the nine names, the bytes each marshals to, and the
+// three keypad states for each brand the server knows.
 
-// TestTheNineAlertTablesAreTheCapturedAlertEndpoint is the alert half: the table this package holds
-// marshals to the bytes the legacy server answered, name by name, tone by tone, in the order the tones
-// are written.
+// TestTheNineAlertTablesAreTheCapturedAlertEndpoint proves each alert
+// table marshals to the bytes the legacy server answered, name by name,
+// tone by tone, in order.
 func TestTheNineAlertTablesAreTheCapturedAlertEndpoint(t *testing.T) {
 	if got := jsonOf(t, alertTones); got != capturedAnswer(t, "rest-alerts.json") {
 		t.Errorf("the alert tables marshal to %s, want the captured alert endpoint", got)
@@ -42,9 +37,9 @@ func TestTheNineAlertTablesAreTheCapturedAlertEndpoint(t *testing.T) {
 	}
 }
 
-// TestTheKeypadBeepTablesAreTheThreeStatesForEachBrand is the panel half: the brand the server was told
-// it is talking to picks the table, and a brand the server does not know is answered with three empty
-// lists rather than with another brand's tones.
+// TestTheKeypadBeepTablesAreTheThreeStatesForEachBrand proves the brand
+// the server was told picks the table, and an unknown brand gets three
+// empty lists.
 func TestTheKeypadBeepTablesAreTheThreeStatesForEachBrand(t *testing.T) {
 	for _, brand := range []struct{ option, want string }{
 		{
@@ -66,9 +61,9 @@ func TestTheKeypadBeepTablesAreTheThreeStatesForEachBrand(t *testing.T) {
 	}
 }
 
-// TestTheToneKeysAreTheFourTheClientsRead is the shape of one tone: the four keys, in the order the
-// clients that read them expect. A tone that gained a key, lost one, or wrote them in another order is
-// a payload the clients are not written to parse.
+// TestTheToneKeysAreTheFourTheClientsRead proves one tone carries the four
+// keys, in the order the clients that read them expect, because any other
+// shape is a payload the clients cannot parse.
 func TestTheToneKeysAreTheFourTheClientsRead(t *testing.T) {
 	tone := Tone{Begin: 0.05, End: 0.1, Frequency: 1200, Kind: "square"}
 
