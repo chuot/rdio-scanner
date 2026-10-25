@@ -24,8 +24,8 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestConfigPayloadMatchesTheCapturedConfig is the byte-for-byte half of the criterion for a
-// configuration: what an unrestricted listener is told about a server, as the legacy server told it.
+// TestConfigPayloadMatchesTheCapturedConfig proves an unrestricted listener's
+// configuration byte for byte, as the legacy server told it.
 func TestConfigPayloadMatchesTheCapturedConfig(t *testing.T) {
 	got := marshal(t, ConfigPayload{Snapshot: captureSnapshot()})
 	want := capturedAnswer(t, "payload-cfg.json")
@@ -35,9 +35,9 @@ func TestConfigPayloadMatchesTheCapturedConfig(t *testing.T) {
 	}
 }
 
-// TestConfigPayloadMatchesTheCapturedScopedConfig is the same for a listener whose access code names
-// one system: the systems list narrows, and so do the groups, the tags, and the data behind them,
-// because all four are built from what this listener was shown and not from what the server has.
+// TestConfigPayloadMatchesTheCapturedScopedConfig proves the same for a
+// scoped listener: systems, groups, and tags all narrow to that listener's
+// view, not the server's whole set.
 func TestConfigPayloadMatchesTheCapturedScopedConfig(t *testing.T) {
 	snapshot := captureSnapshot()
 	snapshot.Options.ShowListenersCount = false
@@ -58,10 +58,9 @@ func TestConfigPayloadMatchesTheCapturedScopedConfig(t *testing.T) {
 	}
 }
 
-// The talkgroups option decides how a system's talkgroups are ordered and numbered. With the option
-// on they come in label order and are numbered from one; with it off they come in the order the server
-// keeps them and keep the number the server stores, which for a talkgroup that was never given one is
-// zero.
+// TestConfigPayloadOrdersTalkgroupsByTheOptionAndNotByTheServer proves the
+// talkgroups option decides talkgroup order and numbering.
+// see the configuration-payload-field-order maintainer note.
 func TestConfigPayloadOrdersTalkgroupsByTheOptionAndNotByTheServer(t *testing.T) {
 	snapshot := captureSnapshot()
 
@@ -86,9 +85,9 @@ func TestConfigPayloadOrdersTalkgroupsByTheOptionAndNotByTheServer(t *testing.T)
 	}
 }
 
-// A talkgroup whose tag the server no longer knows is not shown, and a system left with nothing under
-// it is still shown. A listener that asks for a system and gets it empty is being told the truth about
-// a server that has lost the tags its talkgroups pointed at.
+// TestConfigPayloadKeepsASystemWhoseTalkgroupsAllLoseTheirTags shows a
+// system still shows when all its talkgroups lose their tags.
+// see the configuration-payload-field-order maintainer note.
 func TestConfigPayloadKeepsASystemWhoseTalkgroupsAllLoseTheirTags(t *testing.T) {
 	snapshot := captureSnapshot()
 
@@ -113,8 +112,8 @@ func TestConfigPayloadKeepsASystemWhoseTalkgroupsAllLoseTheirTags(t *testing.T) 
 	}
 }
 
-// The groups and tags a listener is given are the ones its own systems and talkgroups use, not every
-// group and tag the server has.
+// TestConfigPayloadGivesOnlyTheGroupsAndTagsThisListenerCanSee proves scoped
+// group and tag lists. see the configuration-payload-field-order maintainer note.
 func TestConfigPayloadGivesOnlyTheGroupsAndTagsThisListenerCanSee(t *testing.T) {
 	scope, _ := domain.ParseAccessScope([]any{
 		map[string]any{"id": float64(10002), "talkgroups": "*"},
@@ -134,15 +133,14 @@ func TestConfigPayloadGivesOnlyTheGroupsAndTagsThisListenerCanSee(t *testing.T) 
 	}
 }
 
-// The alert and colour rules a listener's call is measured against walk the groups the listener is
-// given, so a group a talkgroup belongs to has to be in that listing whatever position it holds in the
-// talkgroup. A group that is never the first group of any talkgroup this listener can see is the case
-// the listing used to miss.
+// TestConfigPayloadListsEveryGroupATalkgroupBelongsTo proves the group
+// listing holds every group a talkgroup belongs to, whatever position it
+// holds, including one that is never the first group.
 func TestConfigPayloadListsEveryGroupATalkgroupBelongsTo(t *testing.T) {
 	snapshot := captureSnapshot()
 
-	// EMS is the third group of talkgroup 1514100 and the first group of no talkgroup this
-	// listener can see. The administrator gave it an alert tone and a colour.
+	// EMS is talkgroup 1514100's third group and the first group of no
+	// talkgroup this listener can see. It has an alert tone and a colour.
 	snapshot.Systems[0].Talkgroups[1].GroupIDs = []uint64{3, 7, 2}
 	snapshot.Groups[1].Alert = "alert5"
 	snapshot.Groups[1].LED = "red"
@@ -159,8 +157,8 @@ func TestConfigPayloadListsEveryGroupATalkgroupBelongsTo(t *testing.T) {
 		t.Errorf("the listing =\n  %s\nwant\n  %s", got, want)
 	}
 
-	// A group no talkgroup belongs to is still not in the listing: the widening is about the
-	// groups a listener's talkgroups carry, not about every group the server has.
+	// A group no talkgroup belongs to stays out: the listing covers the
+	// groups this listener's talkgroups carry, not the server's whole set.
 	for _, entry := range groupsData {
 		if label := objectOf(t, entry)["label"]; label == "Interop" || label == "Law" {
 			t.Errorf("the listing carries %v, a group no talkgroup of this listener belongs to", label)
@@ -173,9 +171,9 @@ func TestConfigPayloadListsEveryGroupATalkgroupBelongsTo(t *testing.T) {
 	}
 }
 
-// The alert tones are a table the server carries and not something an administrator configures, and
-// the keypad beeps are one of three tables picked by an option. An option naming a brand the server
-// does not know is answered with three empty lists rather than with somebody else's beeps.
+// TestConfigPayloadCarriesTheToneTablesTheServerOwns proves the server owns
+// the tone tables and unknown brands get empty lists. see the
+// tones-fixtures-and-the-golden-capture-contract maintainer note.
 func TestConfigPayloadCarriesTheToneTablesTheServerOwns(t *testing.T) {
 	snapshot := captureSnapshot()
 
@@ -196,9 +194,9 @@ func TestConfigPayloadCarriesTheToneTablesTheServerOwns(t *testing.T) {
 	}
 }
 
-// A listener is given the options that change what it shows. The ones that decide what the server does
-// — how long it keeps its history, how many clients it admits, the secret that signs administrator
-// sessions, the password it stores — are not in this payload.
+// TestConfigPayloadCarriesOnlyTheOptionsAListenerIsTold proves the payload
+// leaves out options that decide server behavior. see the
+// two-configuration-payload-shapes maintainer note.
 func TestConfigPayloadCarriesOnlyTheOptionsAListenerIsTold(t *testing.T) {
 	snapshot := captureSnapshot()
 	snapshot.Options.Secret = "a-secret"
