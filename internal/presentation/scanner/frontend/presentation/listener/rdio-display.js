@@ -1,5 +1,5 @@
-// rdio-display: the LCD display rows, history table, unlock overlay, dimmer,
-// clock and progress tick (legacy main.component.ts + main.component.html).
+// rdio-display: the LCD display rows, history table, unlock overlay,
+// dimmer, clock and progress tick.
 
 import { getAppContext } from '../../application/context.js';
 import { version } from '../../../../common/frontend/infrastructure/version.js';
@@ -90,10 +90,8 @@ class RdioDisplay extends HTMLElement {
     this.callHistory = new Array(HISTORY_SIZE).fill(null);
     this.callTime = 0;
     this.replayOffset = 0;
-    // The display starts dimmed: the dimmer lights it only when a call
-    // arrives or the listener presses a control, and dims it again
-    // DIMMER_DELAY_MS after that. The configuration arriving is not one of
-    // those occasions.
+    // the display starts dimmed: only a call arriving or a control pressed lights it; the
+    // configuration arriving is not one of those occasions.
     this.dimmer = createDimmer({
       setDimmed: (dimmed) => this.classList.toggle('idle', dimmed),
     });
@@ -103,7 +101,6 @@ class RdioDisplay extends HTMLElement {
     this.clock = new Date();
     this.lastSubmittedPin = null;
 
-    // Legacy idle display defaults (main.component.ts field initializers):
     // the pristine display shows placeholder rows until the first call.
     this.el.system.textContent = 'System';
     this.el.tag.textContent = 'Tag';
@@ -118,9 +115,9 @@ class RdioDisplay extends HTMLElement {
     this.el.authForm.addEventListener('submit', (ev) => {
       ev.preventDefault();
 
-      // A submit reaches the field it submits: the code may have arrived without the listener ever
-      // leaving the field — pasted in, filled in by the browser, pressed with Enter — and the
-      // server's answer to it is written on that field.
+      // a submit reaches the field it submits: the code may have arrived
+      // without the listener leaving the field, and the server's answer
+      // to it is written on that field.
       this.el.auth.querySelector('rdio-form-field')?.markReached();
 
       this.authenticate();
@@ -178,13 +175,13 @@ class RdioDisplay extends HTMLElement {
         return;
       }
 
-      // The elapsed reading rides the audio clock: the engine anchors it to the instant the
-      // recording entered the graph, so it restarts on every new recording, freezes with the
-      // audio while the playback context is suspended, and answers null when nothing plays.
+      // the elapsed reading rides the audio clock: it restarts on every
+      // new recording, freezes with the audio while playback is
+      // suspended, and answers null when nothing plays.
       this.callTime = Math.floor(getAppContext().audio.playbackElapsed() ?? 0);
 
-      // The legacy re-arms the dimmer on every progress update, so the display
-      // stays lit for as long as a call is playing.
+      // the dimmer re-arms on every progress update, so the display stays lit
+      // while a call is playing.
       this.updateDimmer();
       this.render();
     }, 500);
@@ -202,8 +199,8 @@ class RdioDisplay extends HTMLElement {
     this.el.authInput.focus();
   }
 
-  // legacy main.component.ts replay(): successive presses walk the history
-  // within a 1 s window; the offset resets 1 s after the last press.
+  // successive replay presses walk the history within a 1 s window; the
+  // offset resets 1 s after the last press.
   replayLast() {
     const { store, useCases } = getAppContext();
     const { call, pause } = store.getState();
@@ -240,11 +237,9 @@ class RdioDisplay extends HTMLElement {
     this.updateDimmer();
   }
 
-  // The screen the operator is looking at is the listener's state: the talkgroup playing, the
-  // queue filling. The operator who cannot see the screen has only what the page says, so the
-  // display writes the state it shows into the polite region the shell carries, in the page's
-  // own words. The first render is the page introducing itself, not an answer: the region stays
-  // empty until a state the display owns actually changes.
+  // the display writes the listener's state it shows into the shell's
+  // polite region, in the page's own words; the first render stays silent.
+  // see the display-state-announcements maintainer note.
   announceState(call, pause, queue) {
     const playing = call ? (call.talkgroupData?.label ?? `${call.talkgroup}`) : null;
 
@@ -256,8 +251,8 @@ class RdioDisplay extends HTMLElement {
 
     const last = this.lastAnnounced;
 
-    // The queue sentence goes first: when a call starts, the queue empties in the same paint,
-    // and the talkgroup being played is the sentence the operator needs to hear last.
+    // the queue sentence goes first: on a call start the queue
+    // empties in one paint, and the played talkgroup comes last.
     if (queue !== last.queue) announce(`Queue: ${queue}`);
 
     if (playing && (call.id !== last.id || !!pause !== last.pause)) {
@@ -269,9 +264,9 @@ class RdioDisplay extends HTMLElement {
     this.lastAnnounced = { id: call?.id ?? null, pause: !!pause, queue, name: playing ?? last.name };
   }
 
-  // The display is a fixed grid, and a long label is truncated by the cell it will not fit. The
-  // full text is the row's accessible name, so the operator who cannot see the truncation — a
-  // screen reader, 400% magnification — has the whole of it, not the part that fits.
+  // the display is a fixed grid and a long label is truncated by
+  // the cell it will not fit; the full text is the row's accessible
+  // name, so the whole of it reaches a screen reader and 400% zoom.
   write(el, text) {
     el.textContent = text;
 
@@ -284,9 +279,9 @@ class RdioDisplay extends HTMLElement {
     const state = store.getState();
     const { call, config, linked, listeners, pause, queue, auth } = state;
 
-    // A call arriving is what lights the display, as it is in the legacy. Neither
-    // the configuration arriving nor the clock ticking arms the dimmer, which is
-    // why the display sits dimmed from the moment the page loads.
+    // a call arriving is what lights the display: neither the
+    // configuration arriving nor the clock ticking arms the dimmer,
+    // so the display sits dimmed from the moment the page loads.
     if (call && call !== this.lastCall) this.updateDimmer();
 
     this.announceState(call, pause, queue);
@@ -321,19 +316,18 @@ class RdioDisplay extends HTMLElement {
 
       if (call.audio) this.recordPlayed(call);
     } else if (!this.lastCall) {
-      // legacy keeps the last call's rows on screen after it ends; only the
-      // pristine idle state shows the version line
+      // the last call's rows stay on screen after it ends; only the
+      // pristine idle state shows the version line.
       this.write(this.el.name, `Rdio Scanner v${version}`);
     }
 
-    // Legacy evaluates the flags from `call || callPrevious` on every event
-    // (main.component.ts), so AVOID/PATCH/temp-avoid keep refreshing while
-    // the display idles on the last call's rows.
+    // the flags evaluate from the current call or the last call on
+    // every event, so AVOID, PATCH, and timed-avoid keep refreshing
+    // while the display idles on the last call's rows.
     const reference = call ?? this.lastCall;
     if (reference) {
-      // Exact legacy isAvoided/isAvoidedTimer/isPatched semantics
-      // (rdio-scanner.service.ts): a system missing from the map is never
-      // avoided, and PATCH only shows for an avoided call.
+      // a system missing from the map is never avoided, and PATCH only
+      // shows for an avoided call.
       const sysMap = state.map?.[reference.system];
       const avoided = !!sysMap && sysMap[reference.talkgroup]?.active !== true;
       const minutes = sysMap?.[reference.talkgroup]?.minutes ?? 0;
@@ -359,7 +353,7 @@ class RdioDisplay extends HTMLElement {
   }
 
   renderHistory(currentCall) {
-    // legacy renders a fixed 5-row table; missing entries are blank rows
+    // the history is a fixed 5-row table; missing entries are blank rows.
     const rows = [];
 
     for (let i = 0; i < HISTORY_SIZE; i++) {
@@ -376,8 +370,8 @@ class RdioDisplay extends HTMLElement {
       const name = previousCall.talkgroupData?.name ?? previousCall.frequency;
       const replaying = currentCall && currentCall.id === previousCall.id ? ' class="replaying"' : '';
 
-      // The history rows live in a fixed grid and truncate like the display rows; the full text
-      // rides on the cell that clips it, so magnification and a screen reader get the whole of it.
+      // the history rows truncate like the display rows; the full text rides
+      // on the cell that clips it.
       rows.push(`<tr${replaying}><td title="${time}"><span>${time}</span></td><td title="${system}"><span>${system}</span></td><td title="${talkgroup}"><span>${talkgroup}</span></td><td title="${name}"><span>${name}</span></td></tr>`);
     }
 

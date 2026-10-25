@@ -1,7 +1,6 @@
-// The display dimmer: the display lights when a call arrives
-// or the listener presses a control, and dims again DIMMER_DELAY_MS after that.
-// The delay is a domain constant; the retired dimmer delay option is gone. The
-// timers are injected so the timing can be observed with a fake clock.
+// display dimmer: lights the display when a call arrives or a control is pressed, and dims it
+// again DIMMER_DELAY_MS later; the delay is a domain constant, and timers are injected so a
+// fake clock can observe the timing.
 
 export const DIMMER_DELAY_MS = 5000;
 

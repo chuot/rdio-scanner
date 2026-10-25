@@ -1,6 +1,5 @@
-// rdio-promo: native-app promo snackbar (legacy native/native.component).
-// Shown 10 s after boot on Android/iPad/iPhone user agents, with a 10 s
-// countdown and the inline-SVG store badges ported from the legacy client.
+// rdio-promo: native-app promo snackbar, shown 10 s after boot on Android, iPad, and iPhone
+// user agents, with a 10 s countdown and inline-SVG store badges.
 
 import appStoreBadge from '../../assets/badges/app-store-badge.svg';
 import googlePlayBadge from '../../assets/badges/google-play-badge.svg';
@@ -35,8 +34,7 @@ export function showPromo(userAgent = navigator.userAgent) {
     badgeBox.innerHTML = `<a href="https://apps.apple.com/us/app/rdio-scanner/id1563065667#?platform=iphone" target="_blank">${appStoreBadge}</a>`;
   }
 
-  // legacy native.component.html: one row holding the message and the badge side
-  // by side, with the countdown outside it.
+  // one row holds the message and the badge side by side, with the countdown outside it.
   const row = document.createElement('div');
   row.append(messageBox, badgeBox);
 
@@ -48,7 +46,7 @@ export function showPromo(userAgent = navigator.userAgent) {
   return true;
 }
 
-// legacy rdio-scanner.component.ts ngOnInit: the promo check runs 10 s after boot.
+// the promo check runs 10 s after boot.
 export function schedulePromo({ setTimeoutImpl = setTimeout, userAgent = navigator.userAgent } = {}) {
   return setTimeoutImpl(() => showPromo(userAgent), 10000);
 }

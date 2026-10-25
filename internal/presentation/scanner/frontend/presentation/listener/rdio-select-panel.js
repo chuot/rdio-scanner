@@ -1,7 +1,6 @@
-// rdio-select-panel: category buttons (shown when ≥ 2 categories), per-system
-// talkgroup fieldsets with timed-avoid blink, ALL ON/OFF (legacy select.component).
-// A talkgroup press is a plain flip on/off that clears any timed window on it —
-// the timed avoid cycle belongs to the control bar's AVOID button alone.
+// rdio-select-panel: category buttons shown with 2 or more categories, per-system talkgroup
+// fieldsets with timed-avoid blink, ALL ON/OFF. A talkgroup press is a plain flip that clears
+// any timed window on it.
 
 import { getAppContext } from '../../application/context.js';
 
@@ -95,8 +94,8 @@ class RdioSelectPanel extends HTMLElement {
       const system = Number(button.dataset.system);
       const talkgroup = Number(button.dataset.talkgroup);
 
-      // The tone answers the state the press leaves, the way the legacy panel read
-      // the map before handing the flip over.
+      // the tone answers the state the press leaves, read from the map before
+      // the flip is handed over.
       useCases.beep(store.getState().map?.[system]?.[talkgroup]?.active ? 'deactivate' : 'activate');
       useCases.toggleTalkgroup(system, talkgroup);
     }

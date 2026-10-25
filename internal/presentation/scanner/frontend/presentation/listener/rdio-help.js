@@ -1,6 +1,5 @@
-// rdio-help: support snackbar (legacy main/support/support.component) linking
-// to the configured email or the Rdio Scanner discussions page, with a 10 s
-// countdown before it dismisses itself.
+// rdio-help: support snackbar linking to the configured email or the Rdio Scanner discussions
+// page, with a 10 s countdown before it dismisses itself.
 
 import { dismissSnackbar, showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 
@@ -23,9 +22,8 @@ export function showHelp(email) {
   showSnackbar(content, null);
 }
 
-// Shared 10 s countdown footer used by the help and promo snackbars. The baseline
-// writes the support footer as a span and the native one as a div, and the tag is
-// what makes the native footer a flex row like every other row of that component.
+// shared 10 s countdown footer used by the help and promo snackbars; the tag makes the native
+// footer a flex row like every other row of that component.
 export function startCountdown(tag = 'span') {
   const node = document.createElement(tag);
   node.className = 'countdown';

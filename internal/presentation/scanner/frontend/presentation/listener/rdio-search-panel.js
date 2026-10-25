@@ -1,6 +1,6 @@
-// rdio-search-panel: call search table + paginator (server pages of 200,
-// client pages of 10), PLAY/DOWNLOAD toggle, cascading filter form
-// (legacy search.component).
+// rdio-search-panel: call search table and paginator (server pages of
+// 200, client pages of 10), PLAY/DOWNLOAD toggle, and the cascading
+// filter form.
 
 import { getAppContext } from '../../application/context.js';
 import { computeFilterOptions, resolveCallSearchCriteria } from '../../domain/search-filters.js';
@@ -11,8 +11,8 @@ import { announce } from '../../../../common/frontend/presentation/ui/primitives
 const SERVER_PAGE = 200;
 const CLIENT_PAGE = 10;
 
-// The controls the operator narrows the call list with. They are one group because they are one
-// thing: a search in flight makes the whole set of them unavailable at once.
+// the controls the operator narrows the call list with; a search in flight makes the whole set
+// of them unavailable at once.
 const FILTER_CONTROLS = ['sort', 'date', 'system', 'talkgroup', 'group', 'tag'];
 
 class RdioSearchPanel extends HTMLElement {
@@ -63,8 +63,8 @@ class RdioSearchPanel extends HTMLElement {
     this.paginator.addEventListener('page', () => {
       this.refreshResults();
 
-      // The page the list moved to is the operator's own move; the count rides the server's
-      // answer. Saying it after the results refresh keeps the page the newest word the page says.
+      // the page the list moved to is the operator's own move; saying it
+      // after the refresh keeps it the newest word the page says.
       announce(`Page ${this.paginator.pageIndex + 1}`);
     });
 
@@ -72,16 +72,16 @@ class RdioSearchPanel extends HTMLElement {
 
     this.querySelector('tbody').addEventListener('click', (ev) => this.rowClick(ev));
 
-    // The counter rides every call-list answer, so the results render - and the progress
-    // bar ends, and the form comes back to the operator - even when the answer equals the list
-    // already on screen.
+    // the counter rides every call-list answer, so the results render,
+    // the progress bar ends, and the form comes back even when the
+    // answer equals the list already on screen.
     this.unsubscribe = store.subscribe(['playbackList', 'playbackListSeq', 'call', 'livefeedMode', 'config'], () => {
       const seq = getAppContext().store.getState().playbackListSeq ?? 0;
 
-      // The search in flight is answered by the answer the server sent, and that answer carries the
-      // counter. When the counter moves, the search that left is over, and the form is the
-      // operator's again. A store change that is not an answer - a call starting, a mode changing -
-      // leaves the search in flight.
+      // when the counter moves, the search that left is over and the
+      // form is the operator's again; a store change that is not an
+      // answer, a call starting or a mode changing, leaves the search in
+      // flight.
       if (seq !== this.lastAnsweredSeq) {
         this.lastAnsweredSeq = seq;
         this.resultsPending = false;
@@ -152,7 +152,7 @@ class RdioSearchPanel extends HTMLElement {
   formChangeHandler() {
     const { useCases } = getAppContext();
 
-    // The form is the operator's while no search is in flight, and is not theirs while one is. A
+    // the form is the operator's while no search is in flight; a
     // change that started a search must not start a second one.
     if (this.resultsPending) return;
 
@@ -186,8 +186,8 @@ class RdioSearchPanel extends HTMLElement {
 
     if (selection.date) options.date = new Date(Date.parse(selection.date)).toISOString();
 
-    // The operator reads labels, and the history is narrowed by reference: a filter sent as the
-    // label the operator read is read as no filter at all, and the answer is the whole history.
+    // the history narrows by reference: a filter sent as the read label
+    // reads as no filter, and the answer comes back unfiltered.
     const criteria = resolveCallSearchCriteria(store.getState().config, selection);
 
     if (criteria.group) options.group = criteria.group;
@@ -198,8 +198,8 @@ class RdioSearchPanel extends HTMLElement {
     this.resultsPending = true;
     this.renderProgress();
 
-    // A form that goes quiet for no stated reason is a form the operator cannot trust. The search
-    // says it has left, in the page's own words, and the count says where it landed.
+    // a form that goes quiet for no stated reason cannot be trusted:
+    // the search says it left, the count says where it landed.
     announce('Searching calls');
 
     useCases.searchCalls(options);
@@ -211,10 +211,9 @@ class RdioSearchPanel extends HTMLElement {
     const from = this.paginator.pageIndex * CLIENT_PAGE;
     const list = useCases.playbackList;
 
-    // A page move while a search is in flight asks the server for nothing: the request already
-    // running will answer with the window the list is drawn from. The move itself stands, and the
-    // rows come from the window the server already answered with - the same rule the administration
-    // log screen follows, and the same one the v6.6.3 search screen followed behind its own guard.
+    // a page move while a search is in flight asks the server for nothing:
+    // the running request will answer with the window the list is drawn
+    // from, and the move itself stands.
     if (this.resultsPending) {
       this.renderResults();
 
@@ -233,22 +232,18 @@ class RdioSearchPanel extends HTMLElement {
     const state = store.getState();
     const list = state.playbackList;
 
-    // The date field is bounded to the window the search is answering with: a date the operator
-    // types outside it is a date the list has no calls for. The two ends the server names are the
-    // ends of the whole match, not of the page shown.
-    //
-    // A search that answered with no calls has no window to bound the field to. It names the epoch
-    // at both ends - the shape the history's own read leaves behind when nothing matches - and a
-    // field bounded to it is a field bounded to a day the archive has no calls in, which reads as a
-    // search that found nothing because the operator asked for the wrong day.
+    // the date field is bounded to the window the search is answering with:
+    // the two ends the server names are the ends of the whole match, not of
+    // the page shown.
+    // see the search-date-window-bounds maintainer note.
     const answered = list && list.count > 0 ? [list.dateStart, list.dateStop] : [];
 
     this.form.elements.date.min = toLocalInputValue(answered[0]);
     this.form.elements.date.max = toLocalInputValue(answered[1]);
 
-    // The count the search answered with is a number the operator cannot see on a locked screen.
-    // The answer counter rides every answer, so the page says the count once per answer — not once
-    // per paint — and says nothing before the first answer arrives.
+    // the answer counter rides every answer, so the page says the
+    // count once per answer, not once per paint, and says nothing
+    // before the first answer arrives.
     const seq = state.playbackListSeq ?? 0;
 
     if (seq !== this.lastAnnouncedSeq) {
@@ -291,15 +286,9 @@ class RdioSearchPanel extends HTMLElement {
     }).join('');
   }
 
-  // The one place the search's state is painted: the bar that says a search is in flight, and the
-  // form that says whether it is the operator's to use.
-  //
-  // The lock lands as a result of the operator's own change, and the keyboard is standing on the
-  // control that caused it. `disabled` would take that control out of the tab order, the browser
-  // would put the focus on the body, and the operator's next Tab would start at the top of the
-  // document with the place they were working in gone. `aria-disabled` says the same thing to the
-  // operator's assistive technology, keeps the control focusable so the keyboard keeps its place,
-  // and costs nothing to release. The guards in the handlers are what stop the second search.
+  // one place paints the search's state: the in-flight bar and whether
+  // the form is the operator's to use.
+  // see the aria-disabled-search-lock maintainer note.
   renderProgress() {
     const pending = !!this.resultsPending;
 

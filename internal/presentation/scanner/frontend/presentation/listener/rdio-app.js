@@ -1,6 +1,5 @@
-// rdio-app: listener shell (legacy rdio-scanner.component) — status bar,
-// display, controls, the select/search side panels, fullscreen, the
-// beforeunload live-feed guard, and the help/promo identity features.
+// rdio-app: listener shell with the status bar, display, controls, the select and search side
+// panels, fullscreen, the beforeunload live-feed guard, and the help and promo features.
 
 import { getAppContext } from '../../application/context.js';
 import { showHelp } from './rdio-help.js';
@@ -10,11 +9,10 @@ class RdioApp extends HTMLElement {
   connectedCallback() {
     const { store } = getAppContext();
 
-    // The content the listener works in is a named region, and the name it carries is the
-    // application's own heading: a screen reader entering the page by landmark says the application
-    // name, and the heading list the operator jumps through names the page and both panels. The
-    // heading is off screen because the listener's screen shows the call, not a title line; it is
-    // the heading for the person who navigates by headings, and it is the region's name.
+    // the content the listener works in is a named region, named by the
+    // application's own heading: entering the page by landmark says the
+    // application name, and the headings name both panels.
+    // see the named-working-region maintainer note.
     this.innerHTML = `
       <aside class="panel search" hidden>
         <h2 class="rdio-visually-hidden">Search</h2>
@@ -85,9 +83,9 @@ class RdioApp extends HTMLElement {
     this.helpButton = this.querySelector('.rdio-help button');
     this.helpButton.addEventListener('click', () => showHelp(store.getState().config?.email));
 
-    // The keyboard's route into the fullscreen the display takes on a double-click. A double-click is
-    // a pointer gesture with no keyboard equivalent, so the state needs a control the keyboard can
-    // stop on, and it needs to say which way it will move the page. The double-click route stays.
+    // the keyboard's route into the display's double-click fullscreen:
+    // the gesture has no keyboard equivalent.
+    // see the fullscreen-keyboard-control maintainer note.
     this.fullscreenButton = this.querySelector('.rdio-fullscreen button');
     this.fullscreenButton.addEventListener('click', () => this.toggleFullscreen());
 
@@ -119,9 +117,9 @@ class RdioApp extends HTMLElement {
   openPanel(name) {
     const panel = this.panels[name];
 
-    // The control the operator pressed to open the panel: the keyboard goes back there when the panel
-    // leaves, because a focus left standing on a control that has just left the page puts the operator
-    // at the top of the document.
+    // the control the operator pressed to open the panel: the keyboard
+    // goes back there when the panel leaves, so the operator is not
+    // dropped at the top of the document.
     this.openers.set(panel, document.activeElement);
 
     this.cancelClosing(panel);
@@ -138,17 +136,10 @@ class RdioApp extends HTMLElement {
 
     if (name === 'search') this.querySelector('rdio-search-panel').open();
 
-    // The keyboard travels with the panel it opened. A drawer that slides out under the pointer and
-    // leaves the keyboard on the button that opened it puts the panel the operator is looking at
-    // behind them in the tab order, and every Tab key walks the page to reach it. The landing place
-    // is the control the panel itself marks; a panel that marks nothing takes the first control of
-    // its own content, and a panel with nothing to work in takes the control that closes it.
-    //
-    // The panel's own mark matters because a panel rebuilds its content as the page answers: the
-    // search panel repaints every row of its table on each answer, so a keyboard landed on a row is
-    // standing on a control the answer takes away, and the browser puts the operator at the top of
-    // the document. The control a panel marks as its landing place is one its own answers leave
-    // standing.
+    // the keyboard travels with the panel it opened: the landing place is
+    // a control the panel marks itself, because a search answer repaints
+    // a row a landed keyboard would stand on.
+    // see the panel-keyboard-landing maintainer note.
     const landing = panel.querySelector('[data-landing]')
       ?? panel.querySelector('.scroll button, .scroll input, .scroll select, .scroll textarea, .scroll a[href], .scroll [tabindex]')
       ?? panel.querySelector('.panel-close');
@@ -161,9 +152,9 @@ class RdioApp extends HTMLElement {
 
     panel.classList.remove('open');
 
-    // A drawer leaves the page when it has finished sliding out, not before:
-    // hiding it earlier would cut the motion short, and leaving it shown would
-    // keep an off-screen panel in the tab order.
+    // a drawer leaves the page when it has finished sliding out: hiding
+    // it earlier cuts the motion short, and leaving it shown keeps an
+    // off-screen panel in the tab order.
     const finished = (event) => {
       if (event.target !== panel || event.propertyName !== 'transform') {
         return;
@@ -189,8 +180,7 @@ class RdioApp extends HTMLElement {
   }
 
   renderHelp() {
-    // legacy main.component.html: the help button only appears when the
-    // server config carries a contact email
+    // the help button only appears when the server config carries a contact email.
     this.querySelector('.rdio-help').hidden = !getAppContext().store.getState().config?.email;
   }
 
@@ -198,18 +188,18 @@ class RdioApp extends HTMLElement {
     const el = document.documentElement;
 
     if (document.fullscreenElement) {
-      // The way out is the document's own: Chrome and Safari carry it on the document, and only
-      // Firefox puts it on the element. Asking the element to leave is asking a question the
-      // browser never put on it, and the page stays in the state with nothing to leave by.
+      // the way out of fullscreen is the document's own: Chrome and
+      // Safari carry it there, and only Firefox puts it on the element.
+      // see the fullscreen-exit-api maintainer note.
       (document.exitFullscreen ?? document.webkitExitFullscreen ?? document.mozCancelFullScreen ?? document.msExitFullscreen)?.call(document);
     } else {
       (el.requestFullscreen ?? el.mozRequestFullScreen ?? el.msRequestFullscreen ?? el.webkitRequestFullscreen)?.call(el);
     }
   }
 
-  // The control names the move it will make, not the state it sits in: "Fullscreen" while the page is
-  // in the window, "Exit fullscreen" once it is not. The pressed state says where the page is, so the
-  // control also reads correctly after the pointer put the page into fullscreen with a double-click.
+  // the control names the move it will make, not the state it sits in:
+  // pressed says where the page is.
+  // see the fullscreen-keyboard-control maintainer note.
   renderFullscreen() {
     const button = this.fullscreenButton;
 

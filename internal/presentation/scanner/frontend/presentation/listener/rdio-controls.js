@@ -1,5 +1,5 @@
-// rdio-controls: the 9 control buttons (legacy main.component.ts control row),
-// each guarded by the unlock overlay, with keypad beeps and dimmer refresh.
+// rdio-controls: the 9 control buttons, each guarded by the unlock overlay, with keypad beeps
+// and dimmer refresh.
 
 import { getAppContext } from '../../application/context.js';
 
@@ -50,14 +50,14 @@ class RdioControls extends HTMLElement {
     const state = store.getState();
 
     if (state.auth.status === 'pin-required' || state.auth.status === 'expired' || state.auth.status === 'too-many') {
-      // legacy main.component.ts: locked controls only focus the unlock field, no beep
+      // locked controls only focus the unlock field, no beep.
       this.dispatchEvent(new CustomEvent('auth-focus'));
       return;
     }
 
-    // The v6.6.3 control row arms the dimmer on the controls that change what the display is
-    // showing — livefeed, the two holds, replay, skip, pause, and avoid when there is a call to
-    // avoid. The two panel openers leave the dimmer where it is, and so does avoid denied.
+    // the control row arms the dimmer on the controls that change
+    // what the display shows: livefeed, the holds, replay, skip,
+    // pause, and avoid; the panel openers leave it where it is.
     let armed = true;
 
     switch (action) {

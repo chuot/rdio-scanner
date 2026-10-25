@@ -1,4 +1,4 @@
-// rdio-status: branding line + server LED (legacy .rdio-status block).
+// rdio-status: branding line and server LED.
 
 import { getAppContext } from '../../application/context.js';
 import { LED_COLORS, resolveLedColor } from '../../domain/alert-priority.js';
