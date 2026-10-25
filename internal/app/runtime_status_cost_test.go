@@ -186,7 +186,7 @@ func statusReadAgainstASeededServer(b *testing.B) *application.GetRuntimeStatusH
 
 // The history the read is timed against: row counts read off a working deployment, spread
 // over the 30 days it records, so the read is timed against a grown table rather than a new
-// one. The 24 hours the read counts sit inside that month.
+// one. The day the read counts sits inside that month.
 const (
 	statusReadHistoryCalls = 57_000
 	statusReadHistoryLogs  = 58_000
@@ -214,7 +214,7 @@ func seedStatusReadHistory(b *testing.B, db *sql.DB) {
 	b.Helper()
 
 	// The history is laid out backwards from when the benchmark runs, because the read counts
-	// the 24 hours it is made in.
+	// only the day before it runs.
 	base := time.Now().UTC()
 
 	// The tag is one a fresh server writes itself into a tagless database:
