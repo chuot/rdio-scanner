@@ -21,12 +21,9 @@ import (
 	"rdio-scanner/internal/application"
 )
 
-// AdminStatusPayload is the administrator's status view: what this server is, what it is running right
-// now, what it recorded over the last 24 hours, and what it lately had to complain about.
-//
-// The identity of the deployment — the version, the container answer, the folder it serves — is named
-// here beside the snapshot the use case measured, because the administrator surface already carries those
-// three and the use case cannot measure them.
+// AdminStatusPayload is the administrator's status view: it
+// names the deployment facts beside the measured snapshot.
+// see the administrator-status-payload-shape maintainer note.
 type AdminStatusPayload struct {
 	Server   adminStatusServer   `json:"server"`
 	Live     adminStatusLive     `json:"live"`
@@ -41,15 +38,15 @@ type adminStatusServer struct {
 	StartedAt time.Time `json:"startedAt"`
 	Now       time.Time `json:"now"`
 
-	// UptimeSeconds is whole seconds, and 0 for a server that has not recorded a start. The page decides
-	// how to say it — "2h 14m", "41s" — and the payload does not decide the words.
+	// UptimeSeconds is whole seconds, 0 with no start.
+	// see the administrator-status-payload-shape maintainer note.
 	UptimeSeconds int64 `json:"uptimeSeconds"`
 
 	BaseDir string `json:"baseDir"`
 
-	// DatabaseBytes is the size of the file this server writes its database into, and DatabaseKnown says
-	// whether this deployment can state it at all. A deployment whose data lives inside a database server
-	// it does not own answers 0 and false rather than a number that means something else on each backend.
+	// DatabaseBytes is the file size of this server's database,
+	// and DatabaseKnown says whether it can be stated: 0 and
+	// false when the data lives in a database server not ours.
 	DatabaseBytes int64 `json:"databaseBytes"`
 	DatabaseKnown bool  `json:"databaseKnown"`
 }
@@ -71,9 +68,8 @@ type adminStatusActivity struct {
 	CallsToday    uint64 `json:"callsToday"`
 	CallsLastHour uint64 `json:"callsLastHour"`
 
-	// LastCallAt is absent when the history has no calls in it, and not a zero instant the page would
-	// have to recognize. A page that has to notice a date is the year 1 is a page that will eventually
-	// stop checking.
+	// LastCallAt is absent when the history has no calls.
+	// see the administrator-status-payload-shape maintainer note.
 	LastCallAt *time.Time `json:"lastCallAt,omitempty"`
 
 	Hours   []adminStatusHour      `json:"hours"`
@@ -82,8 +78,8 @@ type adminStatusActivity struct {
 }
 
 type adminStatusHour struct {
-	// Start is the instant the whole hour begins. The count is what falls in that hour and not in the
-	// next, which is what lets the page draw the bar without deciding what an hour is.
+	// Start is the instant the whole hour begins, and Count
+	// holds what falls in that hour, not the next.
 	Start time.Time `json:"start"`
 	Count uint64    `json:"count"`
 }
@@ -102,8 +98,8 @@ type adminStatusCall struct {
 	TalkgroupRef uint      `json:"talkgroupRef"`
 	Timestamp    time.Time `json:"timestamp"`
 
-	// AudioLengthSeconds is how long the recording lasts. The recording itself is not here: this is read
-	// every few seconds, and audio is the heaviest thing the server keeps.
+	// AudioLengthSeconds is how long the recording lasts. The
+	// payload omits the audio, the heaviest thing kept.
 	AudioLengthSeconds float64 `json:"audioLengthSeconds"`
 }
 
@@ -122,12 +118,10 @@ type adminStatusLogSource struct {
 	Warnings uint64 `json:"warnings"`
 }
 
-// AdminStatus turns the status read into the published payload, adding the three facts about the
-// deployment the administrator surface already holds.
-//
-// Every list is answered as a list even when nothing was recorded. A page that has to check each of them
-// for being absent before it can count it is a page that will eventually stop checking, and an empty list
-// is the answer "nothing" for a list.
+// AdminStatus turns the status read into the published payload,
+// adding the three deployment facts the admin surface holds.
+// Every list is answered as a list even when nothing was
+// recorded, so a page can count it without guarding first.
 func AdminStatus(status application.RuntimeStatus, version string, docker bool, baseDir string) AdminStatusPayload {
 	payload := AdminStatusPayload{
 		Server: adminStatusServer{
