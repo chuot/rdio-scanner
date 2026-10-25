@@ -518,9 +518,9 @@ func adminBundle() fstest.MapFS {
 	}
 }
 
-// TestMountedBundleServesItsOwnFilesUnderTheMount is why the mount
-// exists: /admin/main.AAA.js is answered from bundle/main.AAA.js, so
-// the bundle stays flat with no copy of the prefix inside it.
+// TestMountedBundleServesItsOwnFilesUnderTheMount is why the mount exists: a
+// requested path under the mount is answered from the same path inside the
+// bundle, which stays flat with no copy of the prefix inside it.
 func TestMountedBundleServesItsOwnFilesUnderTheMount(t *testing.T) {
 	status, header, body := getMounted(t, adminBundle(), "/admin", "/admin/main.AAA.js", nil)
 

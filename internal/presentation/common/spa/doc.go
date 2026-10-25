@@ -14,6 +14,6 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
 // Package spa serves a single-page application out of a file set: embedded files, the
-// text/javascript content type for.js, the SPA fallback rules, and the mount prefix a
-// bundle is served under. It owns no embed; the application packages that use it do.
+// content type scripts in the set are served with, the SPA fallback rules, and the mount
+// prefix a bundle is served under. It owns no embed; the applications that use it do.
 package spa

@@ -175,8 +175,8 @@ type recordingUploadParser struct {
 	// Fields records every field that was handed to the field reading, in the order it arrived.
 	Fields []string
 
-	// FiledNames records the file name each field arrived with, which is how the recording's own name
-	// reaches the server.
+	// FileNames records the file name each field arrived with, which is how the
+	// recording's own name reaches the server.
 	FileNames []string
 
 	// Bodies records the contents of each field handed to the field reading.
