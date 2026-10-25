@@ -32,10 +32,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// installedConverter is the converter a deployment with ffmpeg gets. These are integration tests
-// over the real binary, so a machine that does not have the tool is a failure and not a skip: the
-// suite that runs with the `integration` tag is the suite that says the conversion works, and a run
-// that quietly skipped everything would say nothing.
+// installedConverter is the converter a deployment with ffmpeg gets. These
+// are integration tests over the real binary, so a machine without the tool
+// is a failure and not a skip.
 func installedConverter(t *testing.T) *Converter {
 	t.Helper()
 
@@ -84,12 +83,12 @@ func probe(t *testing.T, path string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// TestTheDisabledLevelLeavesTheRecordingUntouched is the level an administrator chooses when the
-// server is to store exactly what the recording tool produced: nothing is run and nothing is
+// TestTheDisabledLevelLeavesTheRecordingUntouched is the level that stores
+// exactly what the recording tool produced: nothing is run and nothing is
 // changed, not even the name.
 
-// TestTheDisabledLevelLeavesTheRecordingUntouched is the level an administrator chooses when the
-// server is to store exactly what the recording tool produced: nothing is run and nothing is
+// TestTheDisabledLevelLeavesTheRecordingUntouched is the level that stores
+// exactly what the recording tool produced: nothing is run and nothing is
 // changed, not even the name.
 func TestTheDisabledLevelLeavesTheRecordingUntouched(t *testing.T) {
 	converter := installedConverter(t)
@@ -110,9 +109,9 @@ func TestTheDisabledLevelLeavesTheRecordingUntouched(t *testing.T) {
 	}
 }
 
-// TestAMissingConverterIsReportedOncePerServerRun is what a deployment without ffmpeg sees: one
-// warning line in the administrator's log, and then a server that stores every recording as it
-// arrived and says nothing more about it.
+// TestAMissingConverterIsReportedOncePerServerRun is what a deployment
+// without ffmpeg sees: one warning line, and then every recording stored as
+// it arrived.
 
 // TestConvertingARecordingProducesTheFormatTheServerStores is the plain level: the wav a
 // recording tool wrote becomes the m4a the server serves, named for the recording it came from.
@@ -190,13 +189,13 @@ func TestTheCallTagsAreWrittenIntoTheConvertedRecording(t *testing.T) {
 	}
 }
 
-// TestARecordingConvertedWithoutTagsCarriesNoTags is the call on a talkgroup that has no tag:
-// the legacy writes no tags at all for it, not even the title or the moment, and a client that
-// shows a recording's tags shows nothing for those calls.
+// TestARecordingConvertedWithoutTagsCarriesNoTags is the call on a talkgroup
+// that has no tag: no tags at all are written for it, not even the title or
+// the moment.
 
-// TestARecordingConvertedWithoutTagsCarriesNoTags is the call on a talkgroup that has no tag:
-// the legacy writes no tags at all for it, not even the title or the moment, and a client that
-// shows a recording's tags shows nothing for those calls.
+// TestARecordingConvertedWithoutTagsCarriesNoTags is the call on a talkgroup
+// that has no tag: no tags at all are written for it, not even the title or
+// the moment.
 func TestARecordingConvertedWithoutTagsCarriesNoTags(t *testing.T) {
 	converter := installedConverter(t)
 
@@ -216,13 +215,13 @@ func TestARecordingConvertedWithoutTagsCarriesNoTags(t *testing.T) {
 	}
 }
 
-// TestTheLoudnessLevelsPadTheRecordingOnlyForTheReleaseThatHasTheFilters is the observable
-// difference between the two releases: the filters begin by padding the recording to three
-// seconds, so a server on an ffmpeg that predates them stores the short recording.
+// TestTheLoudnessLevelsPadTheRecordingOnlyForTheReleaseThatHasTheFilters is
+// the observable difference between the two releases: the filters pad the
+// recording to three seconds, and a release without them does not.
 
-// TestTheLoudnessLevelsPadTheRecordingOnlyForTheReleaseThatHasTheFilters is the observable
-// difference between the two releases: the filters begin by padding the recording to three
-// seconds, so a server on an ffmpeg that predates them stores the short recording.
+// TestTheLoudnessLevelsPadTheRecordingOnlyForTheReleaseThatHasTheFilters is
+// the observable difference between the two releases: the filters pad the
+// recording to three seconds, and a release without them does not.
 func TestTheLoudnessLevelsPadTheRecordingOnlyForTheReleaseThatHasTheFilters(t *testing.T) {
 	converter := installedConverter(t)
 
@@ -278,13 +277,13 @@ func TestARecordingTheConverterRefusesKeepsItsOriginalAudio(t *testing.T) {
 	}
 }
 
-// TestAStoppedCallerKeepsTheOriginalRecording covers the converter's one deliberate difference
-// from the legacy: the run belongs to the caller that asked for it, and a caller that stops gets
-// an error rather than a hung server.
+// TestAStoppedCallerKeepsTheOriginalRecording covers the converter's one
+// deliberate difference from the legacy: the run belongs to the caller that
+// asked for it.
 
-// TestAStoppedCallerKeepsTheOriginalRecording covers the converter's one deliberate difference
-// from the legacy: the run belongs to the caller that asked for it, and a caller that stops gets
-// an error rather than a hung server.
+// TestAStoppedCallerKeepsTheOriginalRecording covers the converter's one
+// deliberate difference from the legacy: the run belongs to the caller that
+// asked for it.
 func TestAStoppedCallerKeepsTheOriginalRecording(t *testing.T) {
 	converter := installedConverter(t)
 

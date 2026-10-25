@@ -30,22 +30,15 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// Prober is the audio length prober that runs ffprobe.
-//
-// It is the fallback for the calls the converter could not measure: conversion switched off,
-// no ffmpeg installed, a conversion that failed, a conversion that stated no running time.
-// ffprobe cannot read a length from a stream it cannot seek, so the prober writes the audio
-// out to a temporary file in the folder it works in, asks about that file, and removes it
-// again — the probe file is a step on the way to the answer and never a thing the server
-// keeps.
-//
-// Whether ffprobe is installed is decided once when the server starts, the same rule the
-// converter runs by: a deployment that installs ffprobe while the server is running measures
-// nothing until it restarts.
+// Prober measures how long recordings last by running ffprobe. It is the
+// fallback for the calls the converter could not measure, and it writes the
+// audio to a temporary file because ffprobe cannot seek a stream; whether
+// ffprobe is installed is decided once at startup; see the recording-
+// duration-probe maintainer note.
 type Prober struct {
-	// program is the ffprobe this prober runs: the one the server carries inside its own
-	// binary, or the name `ffprobe` when the server's target carries none and the host's is
-	// used.
+	// program is the ffprobe this prober runs: the one the server carries inside
+	// its own binary, or the host's; see the recording-duration-probe maintainer
+	// note.
 	program string
 
 	// workDir is the folder the probe files are written into — the same folder the server
@@ -84,23 +77,19 @@ func NewProberAt(program string, workDir string) *Prober {
 	return prober
 }
 
-// probedRecordingFormat is the part of the ffprobe answer this prober asked for. The recipe
-// enables the json muxer for exactly this, and it is the recipe the build's ffmpeg check
-// probes converted recordings with, so the runtime probe and the build gate read recordings
-// the same way.
+// probedRecordingFormat is the part of the ffprobe answer this prober asked
+// for, read with the same recipe the build's ffmpeg check uses; see the
+// recording-duration-probe maintainer note.
 type probedRecordingFormat struct {
 	Format struct {
 		Duration string `json:"duration"`
 	} `json:"format"`
 }
 
-// Probe reports how long one recording lasts.
-//
-// The audio is written to a temporary file, ffprobe is asked for the duration of that file,
-// and the file is removed on every way this ends — the answer, the refusal, and the failure.
-// A recording ffprobe cannot read, a format whose duration ffprobe cannot name, and a
-// deployment without ffprobe each report an error and name no length: the call is stored
-// with the length unknown, never with a guessed one.
+// Probe reports how long one recording lasts, through a temporary file
+// removed on every way this ends. A recording ffprobe cannot read and a
+// deployment without ffprobe each report an error and name no length; see
+// the recording-duration-probe maintainer note.
 func (prober *Prober) Probe(ctx context.Context, in ports.AudioFile) (time.Duration, error) {
 	if missing, err := prober.notInstalled(); missing {
 		return 0, err
@@ -162,11 +151,9 @@ func (prober *Prober) Probe(ctx context.Context, in ports.AudioFile) (time.Durat
 	return time.Duration(math.Round(seconds*1_000_000)) * time.Microsecond, nil
 }
 
-// Available reports whether the program this prober was given ran its probe.
-//
-// It is what the status view shows: whether this deployment measures the length of a recording at all.
-// A prober that is not there is the same fact the startup warning states, and that warning is said once
-// per server run while this is read again every time the status is asked for.
+// Available reports whether the program this prober was given ran its probe,
+// which is what the status view shows; see the audio-conversion maintainer
+// note.
 func (prober *Prober) Available() bool {
 	prober.mutex.Lock()
 	defer prober.mutex.Unlock()

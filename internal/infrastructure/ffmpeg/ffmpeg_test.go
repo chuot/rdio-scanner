@@ -30,9 +30,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// recordedRecording is one second of a 440 Hz tone, in the 8 kHz 16-bit mono wav the recording
-// tools write. A tone rather than silence, because the loudness filters measure the recording
-// they are handed and have nothing to measure in silence.
+// recordedRecording is one second of a 440 Hz tone in the wav the recording
+// tools write: a tone rather than silence, because the loudness filters
+// measure whatever they are handed.
 func recordedRecording(t *testing.T) []byte {
 	t.Helper()
 
@@ -83,13 +83,12 @@ func writeUint16(out *bytes.Buffer, v uint16) {
 	out.Write(b[:])
 }
 
-// installedConverter is the converter a deployment with ffmpeg gets. The conversion tests are
-// integration tests over the real binary, and they are skipped — and reported — when the
-// deployment does not have it.
+// installedConverter is the converter a deployment with ffmpeg gets, built
+// over the real binary.
 
-// TestAMissingConverterIsReportedOncePerServerRun is what a deployment without ffmpeg sees: one
-// warning line in the administrator's log, and then a server that stores every recording as it
-// arrived and says nothing more about it.
+// TestAMissingConverterIsReportedOncePerServerRun is what a deployment
+// without ffmpeg sees: one warning line, and then every recording stored as
+// it arrived.
 func TestAMissingConverterIsReportedOncePerServerRun(t *testing.T) {
 	converter := &Converter{}
 
@@ -131,13 +130,10 @@ func TestTheDisabledLevelIsSilentEvenWithoutAConverter(t *testing.T) {
 	}
 }
 
-// TestTheLoudnormProbeReadsTheFilterListTheCapturedReleasesPrint: the loudness filters are decided by the filter list the program
-// itself prints — `ffmpeg -hide_banner -filters` — and not by its version string.
-// The captured outputs below are the real filter lists of the releases named: the
-// 4.x releases print three flag columns, the 7.x ones dropped command support and
-// print two, and the probe reads both. The version-string path misread 4.10, 10.0,
-// tagged N-builds, and git-builds as having no filters; the filter list is the
-// ground truth, and every one of those releases prints loudnorm.
+// TestTheLoudnormProbeReadsTheFilterListTheCapturedReleasesPrint: the
+// loudness filters are decided by the filter list the program itself prints,
+// and the fixtures below are the real filter lists of the releases named,
+// in the flag-column shape each release prints.
 func TestTheLoudnormProbeReadsTheFilterListTheCapturedReleasesPrint(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -163,9 +159,8 @@ func TestTheLoudnormProbeReadsTheFilterListTheCapturedReleasesPrint(t *testing.T
 	}
 }
 
-// The captured `ffmpeg -hide_banner -filters` outputs. The loudnorm line rides the
-// flag columns the release of that name prints: three in the 4.x and 3.x form,
-// two in the 7.x-and-later form.
+// The captured `ffmpeg -hide_banner -filters` outputs, one per release
+// named.
 
 const filters32 = `Filters:
   T.. = Timeline support
@@ -248,9 +243,9 @@ const filtersWithLoudnorm = filters43
 // The filter list without it, in the 3.x form.
 const filtersWithoutLoudnorm = filters32
 
-// aProgramIsGiven writes a program the test controls and returns its path. It answers the filter
-// probe with the filter list it was given and converts by saying who it is, so a test can tell
-// which program actually ran without needing the real ffmpeg on this machine.
+// aProgramIsGiven writes a program the test controls and returns its path:
+// it answers the filter probe with the filter list it was given and converts
+// by saying who it is.
 func aProgramIsGiven(t *testing.T, filters string) string {
 	t.Helper()
 
@@ -318,9 +313,8 @@ func TestTheConverterReportsAProgramItWasGivenThatIsNotThere(t *testing.T) {
 	}
 }
 
-// The filter list the given program prints is what decides whether the loudness filters are
-// used, so a bundled ffmpeg and a host ffmpeg are not interchangeable when their filter lists
-// differ.
+// The filter list the given program prints decides whether the loudness
+// filters are used.
 func TestTheConverterAsksTheProgramItWasGivenWhichFiltersItHas(t *testing.T) {
 	without := NewAt(aProgramIsGiven(t, filtersWithoutLoudnorm))
 
@@ -335,9 +329,8 @@ func TestTheConverterAsksTheProgramItWasGivenWhichFiltersItHas(t *testing.T) {
 	}
 }
 
-// aProgramThatFailsWith writes a program that answers the filter probe with a filter list and
-// fails with the given transcript on stderr, the way a real ffmpeg floods its whole session log
-// onto a conversion failure.
+// aProgramThatFailsWith writes a program that answers the filter probe with
+// a filter list and fails with the given transcript on stderr.
 func aProgramThatFailsWith(t *testing.T, transcript string) string {
 	t.Helper()
 
@@ -368,10 +361,9 @@ func aProgramThatFailsWith(t *testing.T, transcript string) string {
 	return path
 }
 
-// TestAProgramWhoseFilterProbeFailsIsReportedAsNoConverterOnce:
-// the filter probe is the converter's availability probe. A program that cannot
-// answer it is a converter this server does not have: the recording is kept, the
-// reason is said once, and the silence after it is the legacy's silence.
+// TestAProgramWhoseFilterProbeFailsIsReportedAsNoConverterOnce: the filter
+// probe is the converter's availability probe, and a program that cannot
+// answer it is a converter this server does not have.
 func TestAProgramWhoseFilterProbeFailsIsReportedAsNoConverterOnce(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "ffmpeg")
 
@@ -405,11 +397,9 @@ func TestAProgramWhoseFilterProbeFailsIsReportedAsNoConverterOnce(t *testing.T) 
 	}
 }
 
-// TestTheConverterReportsAFailingProgramShortAndQuiet: ffmpeg's stderr on
-// a failure is written into the server's log line. A real ffmpeg floods a whole session —
-// thousands of bytes, newlines, ANSI colors — and pasted into a log line it forges entries
-// and fills the operator's view. The report keeps the first 512 bytes and nothing that can
-// forge.
+// TestTheConverterReportsAFailingProgramShortAndQuiet: ffmpeg's stderr on a
+// failure is written into the server's log line, and the report keeps the
+// first 512 bytes and nothing that can forge a log entry.
 func TestTheConverterReportsAFailingProgramShortAndQuiet(t *testing.T) {
 	flood := strings.Repeat("x", 2000) + "\\nsecond\\nline\\t\\033[31mred\\033[0m\\n"
 
@@ -434,9 +424,9 @@ func TestTheConverterReportsAFailingProgramShortAndQuiet(t *testing.T) {
 	}
 }
 
-// aProgramThatConvertsWithProgress writes a program that converts by echoing a fixed body and
-// says the given progress lines on its standard error, the way a real ffmpeg reports the
-// running time of the file it is writing as it writes it.
+// aProgramThatConvertsWithProgress writes a program that converts by
+// echoing a fixed body and says the given progress lines on its standard
+// error.
 func aProgramThatConvertsWithProgress(t *testing.T, progress string) string {
 	t.Helper()
 
@@ -472,10 +462,9 @@ func aProgramThatConvertsWithProgress(t *testing.T, progress string) string {
 	return path
 }
 
-// The progress lines ffmpeg writes while it convert name the running time of the recording
-// they are writing; the last one is the length of the whole file. The converter reads it off
-// the output it already captures, so a converted call knows its length without a second
-// program ever running.
+// The progress lines ffmpeg writes while it converts name the running time
+// of the recording it is writing; the last one is the length of the whole
+// file, read off the output the converter already captures.
 func TestTheConverterReportsTheLengthTheProgramStatedLast(t *testing.T) {
 	converter := NewAt(aProgramThatConvertsWithProgress(t,
 		"size=       1kB time=00:00:01.02 bitrate=   6.7kbits/s speed=0.31x\n"+
@@ -495,9 +484,8 @@ func TestTheConverterReportsTheLengthTheProgramStatedLast(t *testing.T) {
 	}
 }
 
-// A program that says no running time — a trimmed build, a quiet run, an old release with a
-// bare `time=00:00:03` — is a conversion that names no length, and the converter says so by
-// returning no length rather than guessing one.
+// A program that says no running time is a conversion that names no
+// length, and the converter returns no length rather than guessing one.
 func TestTheConverterReportsNoLengthWhenTheProgramStatedNone(t *testing.T) {
 	converter := NewAt(aProgramThatConvertsWithProgress(t,
 		"video:0kB audio:3kB subtitle:0kB other streams:0kB muxing overhead: 33.0%\n",
@@ -515,10 +503,9 @@ func TestTheConverterReportsNoLengthWhenTheProgramStatedNone(t *testing.T) {
 	}
 }
 
-// The running time is read from the progress of a conversion that ran. A conversion that
-// failed keeps the original recording, and the failure transcript — which carries ffmpeg's
-// own progress among its flood — must not become a length for audio the converter did not
-// produce.
+// The running time is read from the progress of a conversion that ran: a
+// failed conversion's transcript must not become a length for audio the
+// converter did not produce.
 func TestAFailedConversionReportsNoLength(t *testing.T) {
 	converter := NewAt(aProgramThatFailsWith(t,
 		"size=       4kB time=00:00:03.01 bitrate=  10.8kbits/s speed=0.42x\\nError opening output files: Invalid argument\\n",
@@ -536,9 +523,7 @@ func TestAFailedConversionReportsNoLength(t *testing.T) {
 	}
 }
 
-// The status view reports whether this deployment converts audio at all. It is the same fact the startup
-// warning states, but the warning is said once per server run and this is read again every time the
-// status is asked for.
+// The status view reports whether this deployment converts audio at all.
 func TestTheConverterReportsWhetherItsProgramRanItsProbe(t *testing.T) {
 	if available := NewAt(aProgramIsGiven(t, filtersWithLoudnorm)).Available(); !available {
 		t.Error("Available() = false for a program that answered the filter probe, want true: this deployment converts")

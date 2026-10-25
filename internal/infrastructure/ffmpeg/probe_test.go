@@ -21,9 +21,8 @@ import (
 	"testing"
 )
 
-// The status view reports whether this deployment measures the length of a recording at all. It is the
-// same fact the startup warning states, but the warning is said once per server run and this is read
-// again every time the status is asked for.
+// The status view reports whether this deployment measures the length of a
+// recording at all.
 func TestTheProberReportsWhetherItsProgramRanItsProbe(t *testing.T) {
 	if available := NewProberAt(aProberProgramIsGiven(t), t.TempDir()).Available(); !available {
 		t.Error("Available() = false for a program that answered the version probe, want true: this deployment measures lengths")

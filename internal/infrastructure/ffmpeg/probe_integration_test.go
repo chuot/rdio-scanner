@@ -28,9 +28,9 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// installedProber is the prober a deployment with ffprobe gets. These are integration tests
-// over the real binary, so a machine that does not have the tool is a failure and not a skip:
-// the suite that runs with the `integration` tag is the suite that says the probe works.
+// installedProber is the prober a deployment with ffprobe gets. These are
+// integration tests over the real binary, so a machine without the tool is
+// a failure and not a skip.
 func installedProber(t *testing.T) *Prober {
 	t.Helper()
 
@@ -47,9 +47,9 @@ func installedProber(t *testing.T) *Prober {
 	return prober
 }
 
-// TestTheProberMeasuresTheRecordingItIsGiven: ffprobe cannot read a length from a stream it
-// cannot seek, so the prober writes the audio out, asks about the file, and answers with the
-// length of the recording it was handed.
+// TestTheProberMeasuresTheRecordingItIsGiven: the prober writes the audio
+// out, asks about the file, and answers with the length of the recording it
+// was handed.
 func TestTheProberMeasuresTheRecordingItIsGiven(t *testing.T) {
 	prober := installedProber(t)
 
@@ -96,9 +96,8 @@ func TestTheProberLeavesNoFileBehind(t *testing.T) {
 	}
 }
 
-// A recording ffprobe refuses — bytes that are not audio at all — is a probe that cannot
-// answer: the prober reports the failure and names no length, and it leaves no file behind
-// on this path either.
+// A recording ffprobe refuses is a probe that cannot answer: the prober
+// reports the failure, names no length, and leaves no file behind.
 func TestTheProberReportsARecordingItCannotRead(t *testing.T) {
 	dir := t.TempDir()
 
@@ -126,9 +125,8 @@ func TestTheProberReportsARecordingItCannotRead(t *testing.T) {
 	}
 }
 
-// A deployment without ffprobe is a deployment whose calls keep no measured length: the
-// reason is said once per server run and the calls keep arriving, exactly as a deployment
-// without ffmpeg sees its converter reported.
+// A deployment without ffprobe is a deployment whose calls keep no measured
+// length: the reason is said once per server run.
 func TestAMissingProberIsReportedOncePerServerRun(t *testing.T) {
 	prober := NewProberAt("/does/not/exist/ffprobe-9.0.2", t.TempDir())
 
