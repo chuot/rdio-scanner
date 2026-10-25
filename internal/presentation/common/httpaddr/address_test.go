@@ -20,9 +20,9 @@ import (
 	"testing"
 )
 
-// The forwarding header is what the server names when the connection came from a proxy the operator
-// named, because a server behind a proxy is otherwise described by the proxy's address and every warning
-// it writes is about the wrong machine. These tests name the localhost peer as the trusted proxy.
+// trustedLocalhost names the localhost peer as the trusted proxy, so
+// these tests exercise the forwarded path. see the
+// trusted-proxy-selection-is-not-a-security-check maintainer note.
 func trustedLocalhost(t *testing.T) *Trusted {
 	t.Helper()
 
@@ -44,9 +44,9 @@ func TestAddressIsTheFirstForwardedEntryWithoutItsPort(t *testing.T) {
 	}
 }
 
-// An entry with nothing before its colon is not something the pattern can cut, and the server reports it
-// as it arrived rather than moving on to the next entry: the pattern that removes a port needs at least
-// one character before the colon it removes, and a forwarding entry that has nothing to keep is kept.
+// TestAddressReportsAForwardedEntryThePatternCannotCutAsItArrived: a
+// forward entry with no port to cut is reported whole. see the
+// trusted-proxy-selection-is-not-a-security-check maintainer note.
 func TestAddressReportsAForwardedEntryThePatternCannotCutAsItArrived(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/admin/config", nil)
 	r.Header.Set("X-Forwarded-For", ":8123, 198.51.100.4")
@@ -57,8 +57,8 @@ func TestAddressReportsAForwardedEntryThePatternCannotCutAsItArrived(t *testing.
 	}
 }
 
-// An address in brackets with its port is cut at the last colon, which is the one that separates the
-// port, and so the address a proxy forwards in IPv6 form survives.
+// TestAddressKeepsAForwardedAddressInBracketsWhole: cut at the port colon. see the
+// trusted-proxy-selection-is-not-a-security-check maintainer note.
 func TestAddressKeepsAForwardedAddressInBracketsWhole(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/admin/config", nil)
 	r.Header.Set("X-Forwarded-For", "[2001:db8::1]:1234")
@@ -69,8 +69,8 @@ func TestAddressKeepsAForwardedAddressInBracketsWhole(t *testing.T) {
 	}
 }
 
-// With no forwarding header the connection is all the server has, and its port is not part of the address
-// the server names.
+// TestAddressIsTheConnectionAddressWithoutItsPortWhenNothingIsForwarded:
+// names the connection, port cut, when no forwarding header is present.
 func TestAddressIsTheConnectionAddressWithoutItsPortWhenNothingIsForwarded(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/admin/config", nil)
 	r.RemoteAddr = "127.0.0.1:43210"
@@ -80,8 +80,8 @@ func TestAddressIsTheConnectionAddressWithoutItsPortWhenNothingIsForwarded(t *te
 	}
 }
 
-// An empty forwarding header is not a forwarded address: the server does not name an empty string, it
-// names the connection.
+// TestAddressIgnoresAForwardingHeaderThatNamesNothing: an empty header
+// names nothing, so the connection is named.
 func TestAddressIgnoresAForwardingHeaderThatNamesNothing(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/admin/config", nil)
 	r.Header.Set("X-Forwarded-For", "")
@@ -92,8 +92,8 @@ func TestAddressIgnoresAForwardingHeaderThatNamesNothing(t *testing.T) {
 	}
 }
 
-// An address with no colon at all is the address. The pattern that removes a port does not match it, and
-// the server reports what it was given rather than nothing.
+// TestAddressReportsAnAddressWithNoPortAsItArrived: the port-cutting
+// pattern never matches, and what arrived is reported.
 func TestAddressReportsAnAddressWithNoPortAsItArrived(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/admin/config", nil)
 	r.RemoteAddr = "127.0.0.1"
