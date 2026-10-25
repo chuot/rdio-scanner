@@ -37,8 +37,8 @@ func capturedRecordingBytes() []byte {
 	return append(header, []byte("a recording long enough to be a recording, and then some more of it")...)
 }
 
-// TestCallPayloadMatchesTheCapturedCall is the byte-for-byte half of the criterion for a call: the payload
-// the legacy server sent for the upload that names everything an upload can name.
+// TestCallPayloadMatchesTheCapturedCall matches the legacy bytes,
+// byte for byte, for the upload naming all it can name.
 func TestCallPayloadMatchesTheCapturedCall(t *testing.T) {
 	got := marshal(t, CallPayload{Call: capturedCall()})
 	want := capturedAnswer(t, "payload-cal-detailed.json")
@@ -48,9 +48,9 @@ func TestCallPayloadMatchesTheCapturedCall(t *testing.T) {
 	}
 }
 
-// TestCallPayloadMatchesTheCapturedCallWithNothingToSay covers the other shape the same call takes:
-// the one an upload of a single audio part leaves behind, with no frequencies, no site, no units, no
-// signal level, and no audio type because the upload did not name one.
+// TestCallPayloadMatchesTheCapturedCallWithNothingToSay covers the bare
+// shape an upload of a single audio part leaves: no
+// frequencies, site, units, signal level, or audio type.
 func TestCallPayloadMatchesTheCapturedCallWithNothingToSay(t *testing.T) {
 	call := domain.NewCall()
 
@@ -70,9 +70,9 @@ func TestCallPayloadMatchesTheCapturedCallWithNothingToSay(t *testing.T) {
 	}
 }
 
-// A call read back out of the database has no patches list at all and comes out as `null`; a call
-// that is being made has an empty one and comes out as `[]`. Both are what the legacy server sends,
-// and a client that iterates the list is the one that has to know the difference.
+// TestCallPayloadKeepsAbsentPatchesAsNullAndEmptyPatchesAsAnEmptyList proves a
+// stored call answers null patches and a live call []:
+// both legacy. see the call-payload-field-order maintainer note.
 func TestCallPayloadKeepsAbsentPatchesAsNullAndEmptyPatchesAsAnEmptyList(t *testing.T) {
 	call := domain.Call{ID: 1, Audio: capturedRecording}
 
@@ -87,9 +87,9 @@ func TestCallPayloadKeepsAbsentPatchesAsNullAndEmptyPatchesAsAnEmptyList(t *test
 	}
 }
 
-// The audio is the number of each byte, under a wrapper that says it is a buffer, because that is the
-// shape the clients already read. A call with no audio has an empty list of them rather than no audio
-// at all.
+// TestCallPayloadCarriesTheAudioAsByteNumbersUnderABuffer: the audio is byte
+// numbers under a buffer wrapper, the clients' shape. No audio is an empty
+// list. see the call-payload-field-order maintainer note.
 func TestCallPayloadCarriesTheAudioAsByteNumbersUnderABuffer(t *testing.T) {
 	call := domain.Call{ID: 1, Audio: []byte{82, 73, 70, 70}, PatchTalkgroupRefs: []uint{}}
 
@@ -104,10 +104,10 @@ func TestCallPayloadCarriesTheAudioAsByteNumbersUnderABuffer(t *testing.T) {
 	}
 }
 
-// A frequency is on the wire only when the call has one, and its signal level only when the level is
-// greater than zero. A preserved quirk: the server stores a level that is zero and drops one that is negative,
-// and then emits only a level above zero — so a level of zero is stored, carried in the database, and
-// never shown to anybody.
+// TestCallPayloadCarriesFrequenciesAndOnlyASignalLevelAboveZero proves a frequency
+// appears only when the call carries them, and its signal
+// level only when above zero. The server stores a zero
+// level, drops a negative one, and emits neither.
 func TestCallPayloadCarriesFrequenciesAndOnlyASignalLevelAboveZero(t *testing.T) {
 	call := domain.Call{
 		ID:                 1,
@@ -133,8 +133,8 @@ func TestCallPayloadCarriesFrequenciesAndOnlyASignalLevelAboveZero(t *testing.T)
 	}
 }
 
-// A site, a system, a talkgroup, a channel type and the units heard are each on the wire only when the
-// call has them, and a talkgroup's label and name only when they are not empty.
+// TestCallPayloadLeavesOutWhatTheCallDoesNotHave proves site, system, talkgroup,
+// channel type, and units heard appear only when the call has them.
 func TestCallPayloadLeavesOutWhatTheCallDoesNotHave(t *testing.T) {
 	call := domain.Call{
 		ID:                 1,
@@ -194,9 +194,9 @@ func TestCallPayloadRendersTheMomentToTheSecond(t *testing.T) {
 	}
 }
 
-// The length of the recording is the number of seconds it lasts, written to the millisecond,
-// and it is on the wire only when the server knows it: a call whose length was never measured
-// says nothing about its length, rather than claiming a zero-second recording.
+// TestCallPayloadCarriesTheAudioLengthInSecondsToTheMillisecond proves the length
+// is seconds to the millisecond, on the wire only when known:
+// unknown says nothing, never a zero-second recording.
 func TestCallPayloadCarriesTheAudioLengthInSecondsToTheMillisecond(t *testing.T) {
 	call := domain.Call{
 		ID:                 1,
@@ -216,8 +216,8 @@ func TestCallPayloadCarriesTheAudioLengthInSecondsToTheMillisecond(t *testing.T)
 	}
 }
 
-// A call whose length no source ever named carries no length key at all: the payload says
-// nothing about a length the server does not know, and never invents a zero-second recording.
+// TestCallPayloadLeavesOutTheAudioLengthWhenItWasNeverMeasured proves a call with
+// no measured length carries no length key. see the call-payload-field-order maintainer note.
 func TestCallPayloadLeavesOutTheAudioLengthWhenItWasNeverMeasured(t *testing.T) {
 	call := domain.Call{
 		ID:                 1,
