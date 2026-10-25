@@ -13,18 +13,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// Package backend is the call history HTTP surface: the entry points a client uses to search the
-// recorded calls, read one recorded call, and fetch one recording.
-//
-// The history exists today on the listener socket. That socket and this HTTP surface are both part of
-// the server and carry the same licence, so the history reaches an HTTP client — and the Model Context
-// Protocol surface built on it — by being added here.
-//
-// The endpoints answer with the page and the call the listener already gets, from the use cases the
-// listener already uses. Nothing is decided here: the paging bounds, the day window, the group and
-// tag expansion, and the caller's scope are the history search's own rules, and the access rule is
-// the access list's own rule. This package reads a credential, asks a use case, and maps the answer
-// onto the status codes the server's other HTTP surfaces already use.
+// Package backend is the call history HTTP surface: the entry points a client uses to
+// search the recorded calls, read one recorded call, and fetch one recording; see the
+// call-history-over-http maintainer note.
 package backend
 
 import (
@@ -42,11 +33,8 @@ import (
 	"rdio-scanner/internal/presentation/common/httpaddr"
 )
 
-// accessCodeHeader carries a listener access code.
-//
-// It is deliberately not the Authorization header. The administrator session and a listener access
-// code are two different principals with two different sets of rights, and one header meaning both
-// is how a client that was handed the wrong credential ends up with the rights of the other one.
+// accessCodeHeader carries a listener access code, never the Authorization header; see the
+// listener-access-code-header maintainer note.
 const accessCodeHeader = "X-Access-Code"
 
 // CallsDeps is what the call history surface is built from: the two queries it answers with, the
@@ -102,24 +90,17 @@ func NewCalls(deps CallsDeps) *Calls {
 	}
 }
 
-// Register hangs the three entry points on the mux the composition root is building its routes on.
-//
-// The paths are registered without a method, the way the administrator's surface registers its own,
-// and each entry point answers the methods it does not serve with 405 itself. A method-qualified
-// pattern would answer a method mismatch with 404, because the mux dispatches on the method before
-// it compares paths — and 404 says "no such path", which is the answer this surface gives for a
-// call that is not there.
+// Register hangs the three entry points on the routes the composition root is building; paths
+// register without a method, and each entry point answers methods it does not serve with 405
+// itself; see the method-agnostic-route-registration maintainer note.
 func (calls *Calls) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/calls/search", calls.Search)
 	mux.HandleFunc("/api/calls/{callId}", calls.Get)
 	mux.HandleFunc("/api/calls/{callId}/audio", calls.Audio)
 }
 
-// caller is who is asking, and what they may see.
-//
-// An administrator session and an anonymous caller on an unrestricted server carry no scope: they
-// see the whole history. A listener access carries the scope the access names, and that scope is
-// applied where the history applies it — inside the search, and at the door of one call.
+// caller is who is asking, and what they may see; see the caller-scope-semantics
+// maintainer note.
 type caller struct {
 	// Scoped says the caller's view is limited by an access, and is the only state that makes the
 	// server check a call against a scope at all.
@@ -190,11 +171,8 @@ func (calls *Calls) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, dto.CallMetadataPayload{Call: call})
 }
 
-// Audio answers one recording, as it is stored.
-//
-// The audio lives in the database beside its call, so the answer is the stored bytes with the
-// stored type and the stored name: no filesystem, no conversion, no path to traverse. A range
-// request is answered the way the server answers a range for any other content.
+// Audio answers one recording, as it is stored; see the recordings-served-as-stored-bytes
+// maintainer note.
 func (calls *Calls) Audio(w http.ResponseWriter, r *http.Request) {
 	who, ok := calls.who(r)
 	if !ok {
@@ -223,13 +201,9 @@ func (calls *Calls) Audio(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, call.AudioFilename, call.Timestamp, bytes.NewReader(call.Audio))
 }
 
-// who decides who is asking. The administrator's own credential opens the whole history; a listener
-// access code opens what that access grants; a server with no access list opens the history to
-// anybody, which is what the listener socket does with the same configuration today.
-//
-// The order matters and is the order the administrator's surface uses: the administrator credential
-// is examined first, because an administrator is not scoped by a listener access list and must not
-// be refused by a stale access-code header.
+// who decides who is asking: the administrator credential is checked first, then a listener
+// access code, then an anonymous caller on a restricted server; see the caller-scope-semantics
+// maintainer note.
 func (calls *Calls) who(r *http.Request) (caller, bool) {
 	if calls.session.Handle(r.Context(), application.CheckAdminSessionQuery{Token: credential(r)}) {
 		return caller{}, true
@@ -262,12 +236,9 @@ func (calls *Calls) scopeOf(who caller) domain.AccessScope {
 	return who.Access.Scope
 }
 
-// callInScope reads one call and refuses, before anything about it is answered, a call its caller
-// may not see.
-//
-// The refusal is the refusal a call that is not there gets. Telling a caller that the id exists and
-// is outside their reach is telling them what they are missing, which is exactly the information a
-// caller probing the history is looking for.
+// callInScope reads one call and refuses a call its caller may not see, before answering
+// anything about it, with the refusal a call that is not there gets; see the
+// uniform-not-there-refusals maintainer note.
 func (calls *Calls) callInScope(w http.ResponseWriter, r *http.Request, who caller) (domain.Call, bool) {
 	id, err := strconv.ParseUint(r.PathValue("callId"), 10, 64)
 	if err != nil {
@@ -298,9 +269,8 @@ func (calls *Calls) callInScope(w http.ResponseWriter, r *http.Request, who call
 	return call, true
 }
 
-// reportUnreadableRequest files a request this server could not read, from a caller whose credential
-// it already accepted — which is what makes filing it safe: an entry per unreadable body is only
-// safe when only somebody who proved themselves can cause one.
+// reportUnreadableRequest files an unreadable request body only for an accepted credential,
+// which keeps entry spam from anonymous callers out of the log.
 func (calls *Calls) reportUnreadableRequest(r *http.Request, reason error) {
 	if calls.logs == nil {
 		return

@@ -31,14 +31,13 @@ import (
 var fixtureTime = time.Date(2026, 5, 11, 9, 0, 0, 0, time.UTC)
 
 const (
-	// adminToken is an open administrator session. The call history endpoints accept the same
-	// credential the administrator's own page presents, so the fixture opens one the same way the
-	// administrator's tests do: by putting the token in the server's accepted window.
+	// adminToken is an open administrator session, opened the way the administrator's tests do:
+	// by putting the token in the server's accepted window, because these endpoints accept the
+	// same credential the administrator's own page presents.
 	adminToken = "capture-admin-token"
 
-	// listenerCode is a listener access code, and listenerIdent is the identity it is configured
-	// under. The restricted-server tests seed one access, and the scoped tests name the systems it
-	// grants.
+	// listenerCode is a listener access code configured under listenerIdent; the restricted
+	// tests seed this one access, and the scoped tests name the systems it grants.
 	listenerCode  = "753159"
 	listenerIdent = "dispatch-desk"
 )
@@ -187,9 +186,8 @@ func fixtureCall(id uint64, systemRef, talkgroupRef uint, at time.Time, name, mi
 	return call
 }
 
-// callsRequest is one request to one call history endpoint. The credential is left out of the struct
-// when the test is about a request that carries none, because these endpoints answer differently
-// depending on whether the caller proved anything.
+// callsRequest is one request to one call history endpoint, and the credential is left out of
+// the struct when the test is about a request that carries none.
 type callsRequest struct {
 	body   string
 	code   string
@@ -235,9 +233,9 @@ func (fixture *callsFixture) newRequest(request callsRequest) *http.Request {
 	return req
 }
 
-// trustedLocalhostProxy names the peers these tests connect from as proxies the operator named, the
-// way the administrator's tests do: the address the endpoints name is the address the budget is
-// keyed on, and the forwarding header has to be honored for a test to be able to change it.
+// trustedLocalhostProxy names the peers these tests connect from as proxies the operator
+// named, so the forwarding header is honored and a test can change the address the guess
+// budget is keyed on.
 func trustedLocalhostProxy() *httpaddr.Trusted {
 	trusted, err := httpaddr.ParseTrusted("127.0.0.0/8, 192.0.2.0/24")
 	if err != nil {

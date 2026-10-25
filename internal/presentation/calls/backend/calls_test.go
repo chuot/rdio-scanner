@@ -25,10 +25,8 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The call history endpoints are the HTTP surface for the recorded calls, under the same licence as the
-// rest of the server. The history is reachable on the listener socket too; these endpoints are the answer
-// an HTTP client — and the Model Context Protocol surface built on it — can use, and they answer with the
-// same page and the same call the listener gets.
+// The endpoints answer with the same page and the same call the listener gets, reached over
+// HTTP as the surface an HTTP client and the Model Context Protocol surface can use.
 
 func TestSearchEndpointAnswersAPageOfCallHistory(t *testing.T) {
 	fixture := newCallsFixture(t)
@@ -325,11 +323,8 @@ func TestSearchEndpointAnswersTheFailureStatusWhenTheHistoryCannotBeRead(t *test
 	}
 }
 
-// One recorded call, in full, is the follow-up question a history page always raises: the
-// frequencies, the units heard, the talkgroups it was patched to, and how long the recording is.
-//
-// The recording itself is not here. A metadata question is asked far more often than a recording is
-// listened to, and a call payload carrying base64 audio makes every metadata answer a download.
+// One recorded call comes back in full: the frequencies, the units heard, the talkgroups it
+// was patched to, and how long the recording is, but without the recording's bytes.
 func TestGetEndpointAnswersOneCallWithoutItsRecording(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -437,9 +432,8 @@ func TestAudioEndpointAnswersTheRecordingAsItIsStored(t *testing.T) {
 	}
 }
 
-// A client that is resuming a download, or streaming a player that seeks, asks for a range. The
-// recording is served as the server serves any other content: the requested slice, with the total
-// length named.
+// A range request for a recording is served like any other content: the requested slice, with
+// the total length named.
 func TestAudioEndpointAnswersARangeRequest(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -485,12 +479,8 @@ func TestAudioEndpointRefusesARequestThatProvesNothingOnARestrictedServer(t *tes
 	}
 }
 
-// The recording is read before the caller's scope is checked, the bytes are the most exfiltratable
-// thing this surface carries, so the scope is checked first and a call the caller may not see is
-// refused before any byte is read.
-//
-// The refusal is the refusal a call that is not there gets: a caller is not told that the id exists
-// and is theirs to lose.
+// The caller's scope is checked before the bytes are read, and an out-of-scope call gets the
+// not-there answer.
 func TestAudioEndpointRefusesACallOutsideTheCallersScopeAsAcallThatIsNotThere(t *testing.T) {
 	fixture := newCallsFixture(t)
 
@@ -556,20 +546,15 @@ type fixtureError struct{}
 
 func (fixtureError) Error() string { return "the fixture's own store refuses" }
 
-// The search screen's System and Talkgroup filters name the label the operator read, and the history
-// is narrowed by reference: the criteria leave the screen as the search reads them, with the system
-// and the talkgroup as numbers, the group and the tag as labels, and the date as an instant.
-//
-// The reading is taken on the published history endpoint, which parses the body with the search's own
-// parser and echoes the body back as it arrived. The shape the screen sends is measured against the
-// shape the search reads, and not against a copy of the rule written in the test.
+// The search screen's filters reach the published endpoint as the search reads them: system
+// and talkgroup as numbers, group and tag as labels, the date as an instant. The reading is
+// taken through the search's own parser, not against a copy of the rule in the test.
 func TestSearchEndpointNarrowsByTheShapeEachCriterionIsReadIn(t *testing.T) {
 	fixture := newCallsFixture(t)
 
-	// The configuration as the listener is given it: the labels the operator reads, over the
-	// references the history is stored under. The talkgroups carry the group and the tag the
-	// filters name, and the second system names a group and a tag of its own, so a filter that
-	// stands answers with part of the history and not with all of it.
+	// The configuration as the listener is given it: the filters name labels over the references
+	// the history is stored under, and the second system names a group and a tag of its own, so a
+	// filter that stands narrows the history instead of answering with all of it.
 	fixture.systems.Stored = domain.Systems{
 		{
 			ID:        1,
@@ -655,9 +640,8 @@ func TestSearchEndpointNarrowsByTheShapeEachCriterionIsReadIn(t *testing.T) {
 		t.Errorf("the answer echoes tag = %v, want the label Fire Dispatch it was asked with", got)
 	}
 
-	// A group and a tag travel as labels, and the server expands them over the talkgroups the
-	// listener can see. The same criterion as a number names nothing the expansion knows, and the
-	// search is left with no filter to run.
+	// A group and a tag travel as labels and expand over the listener's talkgroups; the same
+	// criterion as a number expands to nothing and leaves the search unfiltered.
 	if got := ask(t, `{"limit":200,"offset":0,"sort":-1,"group":"Marine"}`); got.Count != 1 || got.Results[0].System != systemTwoRef {
 		t.Errorf("the group label Marine answered with %d calls, want the 1 call on the talkgroup in that group", got.Count)
 	}
@@ -671,8 +655,7 @@ func TestSearchEndpointNarrowsByTheShapeEachCriterionIsReadIn(t *testing.T) {
 	}
 
 	// A system and a talkgroup arriving as the labels the operator read are read as no filter at
-	// all, and the answer is the whole history with nothing in the echo to say a filter was asked
-	// for. This is the shape the search screen's filters had.
+	// all, and the whole history comes back with no echo of a filter asked for.
 	labelled := ask(t, `{"limit":200,"offset":0,"sort":-1,"system":"Grand Metro","talkgroup":"Fire dispatch"}`)
 
 	if labelled.Count != 3 {
@@ -685,9 +668,9 @@ func TestSearchEndpointNarrowsByTheShapeEachCriterionIsReadIn(t *testing.T) {
 		}
 	}
 
-	// The date is an instant, which is what the screen writes the wall-clock minute the operator
-	// typed into. A value the parser cannot read leaves the day unfiltered, which is the same
-	// silent answer a label where a reference is read produces.
+	// The date is an instant, written at the wall-clock minute the operator typed; a value the
+	// parser cannot read leaves the day unfiltered, the same silent answer a label where a
+	// reference is read produces.
 	day := fixtureTime.Add(-2 * time.Hour).Format(time.RFC3339)
 
 	if got := ask(t, fmt.Sprintf(`{"limit":200,"offset":0,"sort":-1,"date":%q}`, day)); got.Count != 2 {
