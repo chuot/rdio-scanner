@@ -23,11 +23,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// The catalog is checked against the shape the surface was built to have: capabilities named for
-// the questions an operator asks, and not for the transport that carries the answers. A surface that
-// mirrors its endpoints one for one is the same HTTP API with an extra protocol on front of it, and
-// an assistant reading `get_logs`, `get_logs_by_level`, `get_logs_by_source` has to assemble the
-// workflow itself, which is the part an assistant gets wrong.
+// The catalog is checked against the shape the surface was built to have:
+// capabilities named for the operator's questions, not for the transport. An
+// endpoint mirror is the same HTTP API with an extra protocol in front.
 
 func TestNoCapabilityIsATransportShape(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
@@ -44,8 +42,8 @@ func TestNoCapabilityIsATransportShape(t *testing.T) {
 		}
 	}
 
-	// The matcher has to catch the names the surface was told not to write, or it is a check that
-	// passes because it looks at nothing.
+	// The matcher has to catch the names told not to be written, or the check
+	// passes by looking at nothing.
 	for _, name := range []string{
 		"getLogs",
 		"get_logs",
@@ -66,22 +64,16 @@ func TestNoCapabilityIsATransportShape(t *testing.T) {
 	}
 }
 
-// transportShaped names how a capability name is a transport shape, or answers the empty string when
-// it is a question.
-//
-// Four shapes are refused: a name mirroring an endpoint the contract says stays a workflow, a
-// transport method used as a capability's name, a per-filter clone of a search, and an endpoint's
-// own path with its separators changed.
-//
-// "get" is not refused on its own: reading one recorded call is what an operator asks for in the
-// product's own words, and the contract names that capability. What is refused is the endpoint
-// mirror the contract names, and the verbs that exist only in the transport.
+// transportShaped names how a capability name is a transport shape, or the
+// empty string when it is a question. Refused: a contract-named endpoint
+// mirror, a transport verb as a name, a per-filter search clone, an endpoint
+// path with separators changed. A bare 'get' is not refused.
 func transportShaped(name string) string {
 	lower := strings.ToLower(name)
 	flat := strings.ReplaceAll(lower, "_", "")
 
-	// The endpoint mirrors the contract names by name, and any spelling of them with the
-	// separators changed. These are the shapes a client would have to assemble into a workflow.
+	// The endpoint mirrors the contract names and their separator spellings:
+	// the shapes a client could assemble into a workflow.
 	for _, shape := range []string{
 		"getlogs", "getfeed", "updatefeed", "restartfeed",
 		"adminlogs", "callssearch", "adminconfig", "adminalerts", "adminlogin", "adminlogout",
@@ -92,18 +84,17 @@ func transportShaped(name string) string {
 		}
 	}
 
-	// A method's name is not a capability's name. Nothing in the product speaks of posting,
-	// putting, patching, or deleting a thing; those are the transport's verbs.
+	// No capability name is a transport verb: post, put, patch, delete are the
+	// transport's, and the product never speaks of posting a thing.
 	for _, verb := range []string{"post", "put", "patch", "delete"} {
 		if strings.HasPrefix(flat, verb) {
 			return "transport method " + verb
 		}
 	}
 
-	// A per-filter clone is a search with one filter moved out of its arguments and into its name:
-	// the same question with a name per filter, so the assistant has to work out which sibling to
-	// call. The tell is a search verb carrying a dataset and then a filter, or the filter named as
-	// a clause of its own.
+	// A per-filter clone moves a filter from its arguments into its name: the
+	// tell is a search verb carrying a dataset and a filter, or the filter
+	// named as a clause of its own.
 	if strings.Contains(lower, "_by_") {
 		return "filter moved into its name as a clause"
 	}
@@ -124,9 +115,9 @@ func transportShaped(name string) string {
 	return ""
 }
 
-// TestEveryToolDeclaresItsEntryPoints is the catalog's other half: a capability that does not say
-// what it reaches is a capability whose cost nobody can read, and the description an assistant
-// chooses from has to carry the same entry points the inventory names.
+// TestEveryToolDeclaresItsEntryPoints: every capability says what it reaches, so
+// nobody can misread its cost, and the description carries the entry points
+// the inventory names.
 func TestEveryToolDeclaresItsEntryPoints(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
 
@@ -157,8 +148,8 @@ func TestEveryToolDeclaresItsEntryPoints(t *testing.T) {
 			}
 		}
 
-		// A tool that composes several entry points says so: an assistant that reads one call as
-		// one request is an assistant that will be surprised by the cost of a composite.
+		// A capability composing several entry points says so in its description:
+		// an assistant reading one call as one request is surprised by the cost.
 		if len(capability.Endpoints) > 1 && !strings.Contains(tool.Description, "and") {
 			t.Fatalf("%s composes %d entry points and its description does not say so", tool.Name, len(capability.Endpoints))
 		}
