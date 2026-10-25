@@ -54,19 +54,12 @@ func extractWith(t *testing.T, parsers *Parsers, watch domain.Dirwatch, path str
 	return parsers.Extract(context.Background(), watch, path)
 }
 
-// id3v23Recording builds a recording carrying the ID3v2.3 tags sdr-trunk writes into the
-// recordings it produces: the radio that spoke in the artist, the talkgroup in the title, and
-// the run of labeled fields in the comment.
-//
-// The audio behind the tags is not a real recording; the parsers read the tags and the ingest
-// path only asks whether there is more audio than a container header.
+// id3v23Recording builds a recording carrying the ID3v2.3 tags// sdr-trunk writes: the radio that spoke in the artist, the talkgroup// in the title, the run of labeled fields in the comment. The audio// behind the tags is not real; the parsers read the tags, and the// ingest path only asks whether there is more audio than a header.
 func id3v23Recording(artist, title, comment string) []byte {
 	frames := id3v23TextFrame("TPE1", artist)
 	frames += id3v23TextFrame("TIT2", title)
 
-	// A comment frame is an encoding byte, a three-letter language, an empty description, and
-	// the text — which is the shape sdr-trunk writes, and the shape the tag reader returns as
-	// the comment.
+	// A comment frame is an encoding byte, a three-letter language, an	// empty description, and the text, the shape sdr-trunk writes and the	// tag reader returns as the comment.
 	frames += id3v23Frame("COMM", "\x00eng\x00"+comment)
 
 	header := []byte("ID3\x03\x00\x00")
@@ -95,9 +88,7 @@ func id3v23Frame(name, content string) string {
 	return name + string(size) + "\x00\x00" + content
 }
 
-// TestExtractDSDPlusReadsTheCallFromTheNameDsdPlusWrites is the whole of the dsd+ grammar at
-// once: the moment from the directory and the name, the system from the type dsd+ reports, the
-// talkgroup and the radio from the last two pieces of the name.
+// TestExtractDSDPlusReadsTheCallFromTheNameDsdPlusWrites is the whole// dsd+ grammar at once: the moment from the directory and the name,// the system from the type, the talkgroup and radio from the last two.
 func TestExtractDSDPlusReadsTheCallFromTheNameDsdPlusWrites(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Kind = domain.DirwatchTypeDSDPlus
@@ -221,12 +212,7 @@ func TestExtractDSDPlusReadsTheSystemForEachTypeItReports(t *testing.T) {
 	}
 }
 
-// TestExtractDSDPlusRefusesANameThatNamesNeitherATalkgroupNorASource is a preserved quirk. The talkgroup
-// and the radio are read from the last two pieces of the name, and the legacy reads them
-// unguarded: a name with no underscore has no second-to-last piece, and the legacy takes the
-// whole server down with an index-out-of-range panic when the file arrives while it is running.
-// Here the name is refused and reported, which is the outcome the legacy already produces for
-// the same file when it is found at startup.
+// TestExtractDSDPlusRefusesANameThatNamesNeitherATalkgroupNorASource:// a preserved quirk. The talkgroup and the radio are read unguarded// from the last two name pieces: a name with no underscore has no// second-to-last piece, and the legacy panics the server. Here the// name is refused and reported, the outcome the legacy already// produces for the same file at startup.
 func TestExtractDSDPlusRefusesANameThatNamesNeitherATalkgroupNorASource(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Kind = domain.DirwatchTypeDSDPlus
@@ -242,9 +228,7 @@ func TestExtractDSDPlusRefusesANameThatNamesNeitherATalkgroupNorASource(t *testi
 	}
 }
 
-// TestExtractDSDPlusIgnoresALabelThatIsOnlyPunctuation is how dsd+ writes that it has no name
-// for a talkgroup or a radio: the name slot is filled with separators, and a slot full of
-// separators is not a name.
+// TestExtractDSDPlusIgnoresALabelThatIsOnlyPunctuation: dsd+ writes// that it has no name by filling the slot with separators, and a slot// full of separators is not a name.
 func TestExtractDSDPlusIgnoresALabelThatIsOnlyPunctuation(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Kind = domain.DirwatchTypeDSDPlus
@@ -296,11 +280,7 @@ func TestExtractDSDPlusDoesNotNameARadioBeyondItsReference(t *testing.T) {
 	}
 }
 
-// TestExtractDSDPlusWithoutADatedDirectoryRecordsTheCallAtTheYear1 is a preserved quirk. The only place
-// the dsd+ grammar reads a moment from is the directory, and the guard that is supposed to
-// refuse a call with no moment asks whether the timestamp is the Unix epoch — which an unset
-// time is not. So a dsd+ watch pointed at a directory that is not named for the day ingests
-// every recording, dated to the year 1.
+// TestExtractDSDPlusWithoutADatedDirectoryRecordsTheCallAtTheYear1:// a preserved quirk. The directory is the only place the grammar reads// a moment from, and the no-moment guard asks whether the timestamp is// the Unix epoch, which an unset time is not: a dsd+ watch on a// directory not named for the day ingests every recording dated 1.
 func TestExtractDSDPlusWithoutADatedDirectoryRecordsTheCallAtTheYear1(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Kind = domain.DirwatchTypeDSDPlus
@@ -472,9 +452,7 @@ func TestExtractSdrTrunkReadsTheTalkgroupsTheCallWasPatchedTo(t *testing.T) {
 	}
 }
 
-// TestExtractSdrTrunkReportsARecordingWithoutTags is the watch pointed at recordings that are
-// not sdr-trunk's: the tags are not there, and the parser says so rather than ingesting a call
-// that names nothing.
+// TestExtractSdrTrunkReportsARecordingWithoutTags: the watch is// pointed at recordings that are not sdr-trunk's, and the parser says// so rather than ingesting a call that names nothing.
 func TestExtractSdrTrunkReportsARecordingWithoutTags(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Kind = domain.DirwatchTypeSdrTrunk
@@ -652,10 +630,7 @@ func TestExtractTrunkRecorderReadsTheCarriersAndRadiosTheSidecarNames(t *testing
 	}
 }
 
-// TestExtractTrunkRecorderDropsASidecarWhoseRecordingIsNotThere is a legacy silence worth
-// knowing about: trunk-recorder writes the sidecar and the recording as a pair, but not at the
-// same instant, and a sidecar whose recording has not arrived yet is dropped without a word and
-// never comes back.
+// TestExtractTrunkRecorderDropsASidecarWhoseRecordingIsNotThere: a// legacy silence worth knowing about. The sidecar and the recording// are a pair but not written at the same instant, and a sidecar whose// recording has not arrived is dropped without a word.
 func TestExtractTrunkRecorderDropsASidecarWhoseRecordingIsNotThere(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Kind = domain.DirwatchTypeTrunkRecorder
@@ -673,9 +648,7 @@ func TestExtractTrunkRecorderDropsASidecarWhoseRecordingIsNotThere(t *testing.T)
 	}
 }
 
-// TestExtractTrunkRecorderReportsASidecarItCannotRead is the other half: a sidecar that is
-// there and cannot be read is reported, because that is a watch that will never ingest
-// anything.
+// TestExtractTrunkRecorderReportsASidecarItCannotRead is the other// half: a sidecar that is there and cannot be read is reported,// because that watch will never ingest anything.
 func TestExtractTrunkRecorderReportsASidecarItCannotRead(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Kind = domain.DirwatchTypeTrunkRecorder
@@ -703,11 +676,7 @@ func TestExtractTrunkRecorderReportsASidecarItCannotRead(t *testing.T) {
 	}
 }
 
-// TestExtractTrunkRecorderRecordsTheCallAtTheMomentTheSidecarWasRead is a preserved quirk: the sidecar's
-// recorded instant is read and then replaced with the moment the file was read, by a debug line
-// the legacy server has carried since the field was written. A deployment watching
-// trunk-recorder's output records every call that does not also name `timestamp` as a call that
-// happened just now.
+// TestExtractTrunkRecorderRecordsTheCallAtTheMomentTheSidecarWasRead:// a preserved quirk. The sidecar's recorded instant is read and then// replaced with the moment the file was read, by a legacy debug line// carried since the field was written, so a call that does not also// name `timestamp` is recorded as one that happened just now.
 func TestExtractTrunkRecorderRecordsTheCallAtTheMomentTheSidecarWasRead(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Kind = domain.DirwatchTypeTrunkRecorder
@@ -739,9 +708,7 @@ func TestExtractTrunkRecorderRecordsTheCallAtTheMomentTheSidecarWasRead(t *testi
 	}
 }
 
-// TestExtractTrunkRecorderKeepsTheInstantWhenTheSidecarNamesTimestamp pins the field that saves
-// a trunk-recorder call from the debug line above: `timestamp` is read later in the same pass
-// and wins.
+// TestExtractTrunkRecorderKeepsTheInstantWhenTheSidecarNamesTimestamp// pins the field that saves a trunk-recorder call from the debug line// above: `timestamp` is read later in the same pass and wins.
 func TestExtractTrunkRecorderKeepsTheInstantWhenTheSidecarNamesTimestamp(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Kind = domain.DirwatchTypeTrunkRecorder
@@ -806,9 +773,7 @@ func TestExtractTrunkRecorderReadsTheRecordingExtensionTheWatchConfigured(t *tes
 	}
 }
 
-// TestExtractTrunkRecorderIgnoresAFileThatIsNotASidecar is the watched directory holding the
-// recordings as well as the sidecars: the parser reads the sidecars and leaves the recordings
-// for the sidecars to find.
+// TestExtractTrunkRecorderIgnoresAFileThatIsNotASidecar: the watched// directory holds the recordings as well as the sidecars, and the// parser reads the sidecars and leaves the recordings for them.
 func TestExtractTrunkRecorderIgnoresAFileThatIsNotASidecar(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Kind = domain.DirwatchTypeTrunkRecorder
@@ -820,12 +785,7 @@ func TestExtractTrunkRecorderIgnoresAFileThatIsNotASidecar(t *testing.T) {
 	}
 }
 
-// TestExtractTrunkRecorderNeverReadsAPathWalkingExtension:
-// the recording path a trunk-recorder watch composes from the configured extension walks
-// out of the watched directory when an old server stored a name that is not a name —
-// "x/../../secret.wav" lands two levels up. The parser reads the pair beside the
-// sidecar, and
-// nothing outside the watched directory.
+// TestExtractTrunkRecorderNeverReadsAPathWalkingExtension: the// recording path a trunk-recorder watch composes from the configured// extension walks out of the watched directory when an old server// stored a name that is not a name, "x/../../secret.wav" landing two// levels up. The parser reads the pair beside the sidecar and nothing// outside the watched directory.
 func TestExtractTrunkRecorderNeverReadsAPathWalkingExtension(t *testing.T) {
 	base := t.TempDir()
 
@@ -835,9 +795,7 @@ func TestExtractTrunkRecorderNeverReadsAPathWalkingExtension(t *testing.T) {
 		t.Fatalf("creating the watched directory: %v", err)
 	}
 
-	// The traversal needs its steps to exist: the composed path is
-	// <watched>/call.x/../../secret.wav, and the kernel resolves it to <base>/secret.wav
-	// only with call.x there as a directory.
+	// The traversal needs its steps to exist: the composed path is	// <watched>/call.x/../../secret.wav, and the kernel resolves it to	// <base>/secret.wav only with call.x there as a directory.
 	if err := os.MkdirAll(filepath.Join(directory, "call.x"), 0o755); err != nil {
 		t.Fatalf("creating the traversal step: %v", err)
 	}
@@ -877,10 +835,7 @@ func TestExtractTrunkRecorderNeverReadsAPathWalkingExtension(t *testing.T) {
 	}
 }
 
-// TestAMaskNamingOnlyTheUnitLabelMatches: a preserved quirk —
-// a mask naming only #UNITLBL has #UNIT replaced inside it, leaving a literal LBL the
-// filename then has to end with, so the obvious way to write the mask silently matches
-// nothing. The token table applies longest-first, and the label token is replaced whole.
+// TestAMaskNamingOnlyTheUnitLabelMatches: a preserved quirk. A mask// naming only #UNITLBL has #UNIT replaced inside it, leaving a// literal LBL the filename then has to end with, so the obvious mask// silently matches nothing; the token table applies longest-first.
 func TestAMaskNamingOnlyTheUnitLabelMatches(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG-#UNITLBL-#DATE-#TIME"
@@ -913,9 +868,7 @@ func TestAMaskNamingOnlyTheUnitLabelMatches(t *testing.T) {
 	}
 }
 
-// TestAMaskNamingTheUnitTokenStandaloneStillMatches is the other half of the decision:
-// the reordering may not change what a mask that already works matches — the unit token
-// named on its own keeps reading the unit number.
+// TestAMaskNamingTheUnitTokenStandaloneStillMatches is the other half// of the decision: the reordering may not change what a mask that// already works matches - the unit token alone still reads the unit.
 func TestAMaskNamingTheUnitTokenStandaloneStillMatches(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG-#UNIT-#DATE-#TIME"

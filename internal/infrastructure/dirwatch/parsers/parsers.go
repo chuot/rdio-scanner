@@ -38,25 +38,14 @@ import (
 // Extracted is what a file that appeared in a watched directory is worth to the ingest
 // path.
 type Extracted struct {
-	// Call is the call the file describes, with its system and talkgroup still named as
-	// claims rather than as resolved aggregates: resolving them is the ingest use case's
-	// job, and it is the same job for a watched directory, an upload, and a forwarded call.
+	// Call is the call the file describes, with its system and talkgroup	// still named as claims: resolving them is the ingest use case's job,	// the same job for a watch, an upload, and a forwarded call.
 	Call domain.Call
 
-	// Files are every file the call was built from — the file the watcher noticed, plus the
-	// companion file a parser read for it. A watch that deletes after ingesting deletes all
-	// of them, which is what the legacy does for a trunk-recorder pair: the sidecar and the
-	// recording it points at.
+	// Files are every file the call was built from: the file the watcher	// noticed plus any companion a parser read, so deleting after ingesting	// deletes them all; see the recording-parsers maintainer note.
 	Files []string
 }
 
-// Parsers read what an ingest source produced into the call the server records: the four
-// shapes a watched directory holds, and the form fields an upload endpoint is handed.
-//
-// The systems are read for the two parsers that name a system by its label — the default
-// token mask and the sdr-trunk tags — because both resolve the label against the
-// configuration in effect and, when it names no system, claim the next free reference for a
-// system auto-populate will create. That is what the legacy does with its in-memory list.
+// Parsers read what an ingest source produced into the call the server// records: the four shapes a watched directory holds, and the form// fields an upload endpoint is handed; see the recording-parsers// maintainer note.
 type Parsers struct {
 	systems ports.SystemRepository
 	clock   ports.Clock
@@ -71,16 +60,7 @@ func New(systems ports.SystemRepository, clock ports.Clock) *Parsers {
 	}
 }
 
-// Extract reads one file that appeared in a watched directory.
-//
-// The second result says whether the file was this watch's parser's file at all. A file it
-// does not recognize is not a failure and nothing is said about it, which is what the legacy
-// does: a watch pointed at a directory full of other applications' output ingests the files
-// it understands and ignores the rest.
-//
-// A file it does recognize but cannot turn into a call is a failure, and the watcher reports
-// it in its log, because that is the only way an administrator finds out that a watch is
-// configured for the wrong shape.
+// Extract reads one file that appeared in a watched directory. The// second result says whether the file was this watch's parser's file// at all: a file it does not recognize is not a failure and nothing is// said about it, as in the legacy. A file it recognizes but cannot// turn into a call is a failure, and the watcher reports it in its// log, which is how an administrator finds a watch set to the wrong// shape; see the recording-parsers maintainer note.
 func (parsers *Parsers) Extract(ctx context.Context, watch domain.Dirwatch, filePath string) (Extracted, bool, error) {
 	var (
 		extracted Extracted
@@ -122,9 +102,7 @@ func (parsers *Parsers) extractDefault(ctx context.Context, watch domain.Dirwatc
 	call.AudioFilename = filepath.Base(filePath)
 	call.AudioMime = mime.TypeByExtension(path.Ext(filePath))
 
-	// The recording is stamped with the moment it was noticed, and the mask can replace
-	// that with the moment the filename names. A mask with no date tokens therefore records
-	// a call at the time the file appeared, not at the time it was recorded.
+	// The recording is stamped with the moment it was noticed, and the	// mask can replace that with the moment the filename names. A mask	// with no date tokens therefore records a call at the time the file	// appeared, not at the time it was recorded.
 	call.Timestamp = parsers.clock.Now().UTC()
 
 	if watch.Frequency > 0 {
@@ -181,9 +159,7 @@ func (parsers *Parsers) extractDSDPlus(watch domain.Dirwatch, filePath string) (
 		})
 	}
 
-	// The watch's own system and talkgroup are claimed for every recording in the directory,
-	// as they are for a default watch. Its site is not: the legacy writes it into a metadata
-	// field nothing ever reads, so a dsd+ watch's site setting has never had an effect.
+	// The watch's own system and talkgroup are claimed for every	// recording in the directory, as they are for a default watch. Its	// site is not: the legacy writes it into a metadata field nothing ever	// reads, so a dsd+ watch's site setting has never had an effect.
 	if watch.SystemID > 0 {
 		call.Meta.SystemID = watch.SystemID
 	}
@@ -246,12 +222,7 @@ func (parsers *Parsers) extractSdrTrunk(ctx context.Context, watch domain.Dirwat
 	return Extracted{Call: call, Files: []string{filePath}}, true, nil
 }
 
-// extractTrunkRecorder reads a recording from the pair trunk-recorder writes: the sidecar
-// that describes the call, and the recording beside it.
-//
-// The recording is read first, and a sidecar whose recording is not there is dropped without
-// a word, which is what the legacy does: it returns the read failure as a nil error. A
-// sidecar that cannot be read at all is reported.
+// extractTrunkRecorder reads a recording from the pair trunk-recorder// writes: the sidecar that describes the call, and the recording beside// it. The recording is read first, and a sidecar whose recording is not// there is dropped without a word, which is what the legacy does by// returning the read failure as a nil error; a sidecar that cannot be// read at all is reported; see the recording-parsers maintainer note.
 func (parsers *Parsers) extractTrunkRecorder(ctx context.Context, watch domain.Dirwatch, filePath string) (Extracted, bool, error) {
 	if !strings.EqualFold(path.Ext(filePath), ".json") {
 		return Extracted{}, false, nil
@@ -294,22 +265,14 @@ func (parsers *Parsers) extractTrunkRecorder(ctx context.Context, watch domain.D
 	return Extracted{Call: call, Files: []string{filePath, audioPath}}, true, nil
 }
 
-// applyDSDPlus reads the call out of the name dsd+ gives a recording, and out of the
-// directory dsd+ recorded it into.
-//
-// The name is split on underscores that are not inside square brackets, because dsd+ writes
-// labels in brackets and a label may itself contain underscores.
+// applyDSDPlus reads the call out of the name dsd+ gives a recording,// and out of the directory dsd+ recorded it into. The name is split on// underscores that are not inside square brackets, because dsd+ writes// labels in brackets and a label may itself contain underscores.
 func (parsers *Parsers) applyDSDPlus(call *domain.Call, filePath string) error {
 	dir := filepath.Dir(filePath)
 	base := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 
 	meta := splitDSDPlusName(base)
 
-	// The talkgroup and the source are read from the last two pieces of the name, so a name
-	// with fewer than two pieces has nothing to read them from. The legacy reads them
-	// unguarded and takes the server down with an index-out-of-range panic,
-	// so here the name is refused and reported instead, which is the outcome the legacy's
-	// startup walk already produces for the same file.
+	// The talkgroup and the source are read from the last two pieces of the	// name, so a name with fewer than two pieces has nothing to read them	// from. The legacy reads them unguarded and takes the server down with	// an index-out-of-range panic; here the name is refused and reported,	// the outcome the legacy's startup walk already produces for the same	// file; see the recording-parsers maintainer note.
 	if len(meta) < 2 {
 		return fmt.Errorf("dsdplus: %s does not name a talkgroup and a source", base)
 	}
@@ -373,9 +336,7 @@ func (parsers *Parsers) applyDSDPlus(call *domain.Call, filePath string) error {
 		}
 	}
 
-	// The talkgroup is the first number of the second-to-last piece, and its label is
-	// whatever follows it — unless what follows is only punctuation, which is what dsd+
-	// writes when it has no name for the talkgroup.
+	// The talkgroup is the first number of the second-to-last piece, and	// its label is whatever follows it, unless that is only punctuation,	// which is what dsd+ writes when it has no name for the talkgroup.
 	if parts := regexp.MustCompile(`[^\[\]]+`).FindAllString(meta[len(meta)-2], -1); len(parts) > 0 {
 		if ref, err := strconv.Atoi(parts[0]); err == nil && ref > 0 {
 			call.Meta.TalkgroupRef = uint(ref)
@@ -388,9 +349,7 @@ func (parsers *Parsers) applyDSDPlus(call *domain.Call, filePath string) error {
 		}
 	}
 
-	// The source is the first number of the last piece, and its label is whatever follows it
-	// — unless that is the number again, which is what dsd+ writes when it has no name for
-	// the radio, or only punctuation.
+	// The source is the first number of the last piece, and its label is	// whatever follows it - unless that is the number again, which is what	// dsd+ writes when it has no name for the radio, or only punctuation.
 	if parts := regexp.MustCompile(`[^\[\]]+`).FindAllString(meta[len(meta)-1], -1); len(parts) > 0 {
 		if source, err := strconv.Atoi(parts[0]); err == nil && source > 0 {
 			call.Units = append(call.Units, domain.CallUnit{
@@ -584,10 +543,7 @@ func (parsers *Parsers) applyTrunkRecorder(call *domain.Call, sidecar []byte) er
 		}
 	}
 
-	// The recorded instant is read from `start_time` and then replaced with the moment the
-	// file was read, which is a debug line the legacy server has carried since the field was
-	// written. A sidecar that also names `timestamp` — read below, and later in the same
-	// pass — keeps its instant; one that does not is recorded as a call that happened now.
+	// The recorded instant is read from `start_time` and then replaced with	// the moment the file was read, a debug line the legacy server has	// carried since the field was written. A sidecar that also names	// `timestamp` - read below, later in the same pass - keeps its	// instant; one that does not is recorded as a call that happened now.
 	if start, ok := m["start_time"].(float64); ok {
 		_ = time.Unix(int64(start), 0)
 
@@ -625,11 +581,7 @@ func (parsers *Parsers) applyTrunkRecorder(call *domain.Call, sidecar []byte) er
 	return nil
 }
 
-// ApplyTrunkRecorderSidecar reads the JSON document trunk-recorder writes beside a recording, reached from
-// the call-upload endpoint instead of from a watched directory.
-//
-// It is the same reading, and it keeps the same quirk: a sidecar that names a start time and no timestamp is
-// recorded at the moment the server read it, and that is the quirk it keeps.
+// ApplyTrunkRecorderSidecar reads the JSON document trunk-recorder// writes beside a recording, reached from the call-upload endpoint// instead of from a watched directory. It is the same reading and it// keeps the same quirk: a sidecar naming a start time and no timestamp// is recorded at the moment the server read it; see the// recording-parsers maintainer note.
 func (parsers *Parsers) ApplyTrunkRecorderSidecar(call *domain.Call, sidecar []byte) error {
 	return parsers.applyTrunkRecorder(call, sidecar)
 }
@@ -665,12 +617,7 @@ func splitDSDPlusName(base string) []string {
 	return meta
 }
 
-// hasExtension reports whether a watched file is the kind this parser reads. The watch's own
-// extension wins over the parser's default, and the comparison ignores case.
-//
-// The configured extension is written without its dot, because that is what the administrator
-// types into the field. An extension typed with a leading dot asks for a file whose extension
-// is a dot followed by the extension, which matches nothing.
+// hasExtension reports whether a watched file is the kind this parser// reads. The watch's own extension wins over the parser's default, and// the comparison ignores case. The configured extension is written// without its dot, because that is what the administrator types: an// extension typed with a leading dot asks for a file whose extension// is a dot followed by the extension, which matches nothing; see the// recording-parsers maintainer note.
 func hasExtension(filePath, configured, fallback string) bool {
 	extension := fallback
 
@@ -681,12 +628,7 @@ func hasExtension(filePath, configured, fallback string) bool {
 	return strings.EqualFold(path.Ext(filePath), extension)
 }
 
-// audioExtension is the recording extension a trunk-recorder watch looks for beside the
-// sidecar it read.
-//
-// The name composes a filesystem path, so a stored name that is not a plain name — the
-// kind an old server left behind before the apply-time rule — asks for a
-// file outside the watched directory, and it asks for nothing here: the pair is not read.
+// audioExtension is the recording extension a trunk-recorder watch// looks for beside the sidecar it read. The name composes a filesystem// path, so a stored name that is not a plain name - the kind an old// server left behind before the apply-time rule - asks for a file// outside the watched directory, and asks for nothing here: the pair// is not read; see the recording-parsers maintainer note.
 func audioExtension(configured string) string {
 	if len(configured) > 0 {
 		if !plainExtensionPattern.MatchString(configured) {
