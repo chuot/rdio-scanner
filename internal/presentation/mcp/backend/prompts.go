@@ -26,15 +26,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// The administrator's standing questions, packaged so a client starts a session with them.
-//
-// A prompt is not a capability and it does no work. It states, in the operator's words, the question
-// an operator keeps asking, the capabilities that answer it, the order that answers it, and what the
-// answer has to say. An assistant that is handed the sequence is an assistant that does not have to
-// invent one, and an assistant that invents one invents a different one.
-//
-// These are the administrator's questions, so they are registered on the administrator's set: a
-// listener's access code is not handed a standing question it cannot act on.
+// The administrator's standing questions, packaged so a client starts a
+// session with them: a prompt states the question, the capabilities that
+// answer it, and their order, registered on the administrator's set.
+// see the prompts-carry-standing-questions-for-administrators maintainer note.
 
 // registerStandingQuestions adds the administrator's standing questions.
 func registerStandingQuestions(target *mcp.Server, deps Deps) {
@@ -207,8 +202,9 @@ func registerStandingQuestions(target *mcp.Server, deps Deps) {
 	})
 }
 
-// answer is a standing question's one instruction, on the user's turn: the protocol hands a prompt's
-// messages to the assistant as the user's own words, so the question is asked once, in full.
+// answer is a standing question's one instruction, on the user's turn: the
+// protocol hands a prompt's messages to the assistant as the user's own
+// words.
 func answer(description, instruction string) (*mcp.GetPromptResult, error) {
 	return &mcp.GetPromptResult{
 		Description: description,
@@ -224,9 +220,9 @@ func argument(req *mcp.GetPromptRequest, name string) string {
 	return strings.TrimSpace(req.Params.Arguments[name])
 }
 
-// requirePair reads the system and talkgroup a talkgroup question cannot be asked without. The
-// protocol checks the arguments a prompt declares, so the question checks its own, and the refusal
-// names the argument that is missing.
+// requirePair reads the system and talkgroup a talkgroup question cannot be
+// asked without. The protocol checks the arguments a prompt declares, so
+// the question checks its own, and the refusal names what is missing.
 func requirePair(req *mcp.GetPromptRequest) (string, string, error) {
 	system := argument(req, "system")
 	if system == "" {
@@ -241,8 +237,8 @@ func requirePair(req *mcp.GetPromptRequest) (string, string, error) {
 	return system, talkgroup, nil
 }
 
-// requireOnboarding reads what the onboarding question cannot be asked without: whose code it is,
-// what it may see, and when it stops working.
+// requireOnboarding reads what the onboarding question cannot be asked
+// without: whose code it is, what it may see, and when it stops working.
 func requireOnboarding(req *mcp.GetPromptRequest) (string, string, string, error) {
 	ident := argument(req, "ident")
 	if ident == "" {
@@ -266,13 +262,10 @@ func requireOnboarding(req *mcp.GetPromptRequest) (string, string, string, error
 	return ident, systems, expires, nil
 }
 
-// spellScope turns the scope an operator names in the argument's shape into the scope the write
-// call takes, spelled out system by system, so the change is read before it is made and not
-// invented at the moment it is sent.
-//
-// The domain's own rule is honoured here: a scope entry that names no talkgroups does not see that
-// system at all, so a bare reference is spelled as every talkgroup on it, which is what an operator
-// naming a system means.
+// spellScope spells the scope an operator names out system by system into
+// the scope the write call takes, so the change is read before it is
+// made and not invented at send time: the domain's rule holds, a system
+// named without talkgroups is unseen, so the bare reference names all.
 func spellScope(systems string) (string, error) {
 	entries := []string{}
 
@@ -327,9 +320,9 @@ func scopeEntry(field string) (string, string, error) {
 	return `"systemRef": ` + ref, `, "talkgroups": [` + strings.Join(refs, ", ") + `]`, nil
 }
 
-// The standing questions are the administrator's, and the inventory names them behind the
-// administrator's credential. The registration reads the same inventory, so the questions the
-// surface packages and the questions the inventory names cannot drift apart.
+// The standing questions are the administrator's, and the inventory names
+// them behind the administrator's credential, so the two cannot drift
+// apart.
 func standingQuestionNames() []string {
 	names := []string{}
 
