@@ -32,10 +32,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The call-upload endpoints are what an outside program posts recordings to: a radio bridge, another
-// rdio-scanner server reposting what it received, and the trunk-recorder compatibility path. They answer
-// with plain text and not with JSON, they are not behind an administrator session, and every failure they
-// report is written in the server's own log view as well as to the uploader.
+// The call-upload endpoints take posted recordings, answer in plain
+// text, and file every refusal with the upload endpoint.
+// see the call-upload-tests-and-their-captures maintainer note.
 
 const (
 	uploadSystemRef    = uint(10001)
@@ -186,17 +185,17 @@ type recordingUploadParser struct {
 	// Sidecars records every sidecar the trunk-recorder endpoint handed to the sidecar reading.
 	Sidecars [][]byte
 
-	// Completed is the call the parser produces, and HasCall says whether it produces one at all. A
-	// parser that produces nothing is a parser that read fields naming nothing a call needs, which is how
-	// these tests produce an incomplete call.
+	// Completed is the call the parser produces, and HasCall says whether
+	// it produces one at all: a parser producing nothing is how these
+	// tests build an incomplete call.
 	Completed domain.Call
 	HasCall   bool
 
 	// SidecarErr, when set, is what the sidecar reading reports.
 	SidecarErr error
 
-	// Truncation, when set, is the warning the reading reports for the field it reads — the
-	// shape a list over the server's cap earns.
+	// Truncation, when set, is the warning the reading reports for a
+	// read field: the shape a list over the server's cap earns.
 	Truncation string
 }
 
@@ -337,9 +336,9 @@ func (fixture *uploadFixture) loggedAs(source domain.LogSource, fragment string)
 	return false
 }
 
-// An upload the server takes is answered with the plain line the legacy server has always answered with,
-// and the credential is taken out of the fields rather than handed to the parser: the parser has no
-// business knowing that a key exists.
+// TestCallUploadEndpointAnswersTheCapturedUpload proves an accepted
+// upload gets the captured legacy answer, credential kept out.
+// see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointAnswersTheCapturedUpload(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -375,9 +374,9 @@ func TestCallUploadEndpointAnswersTheCapturedUpload(t *testing.T) {
 	}
 }
 
-// A credential the server does not know is refused with the message the legacy server has always written,
-// including the two names it always says are nothing: the message is built from the call's resolved system
-// and talkgroup, and at this boundary neither has been resolved.
+// TestCallUploadEndpointRefusesAKeyTheServerDoesNotKnowWithTheCapturedAnswer
+// proves the refusal is the legacy message, whose two names are nothing.
+// see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointRefusesAKeyTheServerDoesNotKnowWithTheCapturedAnswer(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -397,16 +396,16 @@ func TestCallUploadEndpointRefusesAKeyTheServerDoesNotKnowWithTheCapturedAnswer(
 		t.Errorf("upload answer =\n  %q\nwant\n  %q", got, want)
 	}
 
-	// The legacy server answers this refusal and writes nothing about it, which this feature supersedes: an
-	// operator chasing a capture box that stopped uploading has to be able to tell "it never reached the
-	// server" from "it reached the server and was refused". The refusal is now in the log view, filed with
-	// the upload endpoint. The answer the uploader receives is unchanged.
+	// The refusal is filed with the upload endpoint, which the legacy
+	// server never did: the operator must tell an unreachable server
+	// from a refused upload. The uploader's answer is unchanged.
+	// see the call-upload-tests-and-their-captures maintainer note.
 	if !fixture.loggedAs(domain.LogSourceUpload, "the upload was refused: the apikey is not valid") {
 		t.Errorf("the refused credential is not filed with the upload endpoint: %v", fixture.logs.Stored)
 	}
 
-	// And stamped with the server's clock. A refused upload is the event an operator lines up against the
-	// capture box's own clock, and this writer used to stamp the wall clock instead.
+	// The refusal entry is stamped with the server's clock.
+	// see the call-upload-tests-and-their-captures maintainer note.
 	fixture.assertStamped(t, "the upload was refused")
 }
 
@@ -438,10 +437,10 @@ func (fixture *uploadFixture) assertStamped(t *testing.T, fragment string) {
 	}
 }
 
-// A credential scoped to particular systems covers an upload naming one of them. The legacy server cannot
-// answer this case at all: it compares the credential against the call's resolved system, and at this
-// boundary the system has not been resolved, so the comparison dereferences nothing and the connection
-// ends with no reply. Recorded as a preserved quirk, and repaired by the owner's decision.
+// TestCallUploadEndpointAcceptsAKeyScopedToTheSystemTheUploadNames proves a
+// system-scoped credential covers an upload naming that system. The
+// legacy server dereferences an unresolved system here and answers
+// nothing: a preserved quirk, repaired by owner decision.
 func TestCallUploadEndpointAcceptsAKeyScopedToTheSystemTheUploadNames(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -471,9 +470,9 @@ func TestCallUploadEndpointRefusesAKeyScopedAwayFromTheSystemTheUploadNames(t *t
 
 	body, contentType := postedBody(t, fields...)
 
-	// The call the parser produces names the system the upload names. What the parser makes of a field is
-	// the parser's own contract and is proven in its own suite; what is proven here is that the credential
-	// is decided against the references the call carries.
+	// The parser produces a call naming the system the upload names:
+	// what is proven here is that the credential is decided against the
+	// references the call carries, not the parser's reading of fields.
 	fixture.parser.produces(callNaming(uploadOtherSystem, uploadTalkgroupRef))
 
 	rec := fixture.post("/api/call-upload", contentType, body)
@@ -487,8 +486,8 @@ func TestCallUploadEndpointRefusesAKeyScopedAwayFromTheSystemTheUploadNames(t *t
 	}
 }
 
-// A submission that is not a call is answered with what is missing, in the legacy server's own words, and
-// the same line is written in the log view.
+// TestCallUploadEndpointAnswersWhatASubmissionIsMissing answers what is missing,
+// see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointAnswersWhatASubmissionIsMissing(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -507,9 +506,8 @@ func TestCallUploadEndpointAnswersWhatASubmissionIsMissing(t *testing.T) {
 			"and its error helper adds one", got, want)
 	}
 
-	// The exact sentence, not a fragment: the legacy helper passes the uploader's own body — which ends
-	// with a line break — straight into the log, and a stored message that carries the answer's line break
-	// is the answer pasted into the log rather than a statement of what happened.
+	// The log holds the exact sentence, not a fragment: the legacy helper
+	// feeds the uploader's own trailing-line-break body straight into the log.
 	stored := ""
 
 	for _, entry := range fixture.logs.Stored {
@@ -524,8 +522,8 @@ func TestCallUploadEndpointAnswersWhatASubmissionIsMissing(t *testing.T) {
 	}
 }
 
-// A method the endpoint does not answer is refused with a body of its own, which is unusual for this
-// server and is what its clients have always been given.
+// TestCallUploadEndpointRefusesAMethodItDoesNotAnswerWithItsOwnBody refuses
+// with its own body, see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointRefusesAMethodItDoesNotAnswerWithItsOwnBody(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -543,16 +541,16 @@ func TestCallUploadEndpointRefusesAMethodItDoesNotAnswerWithItsOwnBody(t *testin
 		t.Errorf("GET answer = %q, want %q", got, want)
 	}
 
-	// A client posting to the wrong endpoint, or with the wrong method, is a standing misconfiguration, and
-	// the log view is where an operator finds out that the server was reached at all. The legacy server
-	// answers this and writes nothing, which this feature supersedes.
+	// A wrong-method poster is a standing misconfiguration, and the log
+	// view is where an operator learns the server was reached at all:
+	// the legacy server answered this refusal in silence.
 	if !fixture.loggedAs(domain.LogSourceUpload, "the upload was refused: the server does not answer this method") {
 		t.Errorf("the refused method is not filed with the upload endpoint: %v", fixture.logs.Stored)
 	}
 }
 
-// A request that is not a multipart body is refused with the status the frozen contract fixes, and the
-// reason is written in the log view.
+// TestCallUploadEndpointRefusesARequestThatIsNotAMultipartBody proves the
+// non-multipart request is refused with the contract's status, logged.
 func TestCallUploadEndpointRefusesARequestThatIsNotAMultipartBody(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -571,8 +569,8 @@ func TestCallUploadEndpointRefusesARequestThatIsNotAMultipartBody(t *testing.T) 
 	}
 }
 
-// A Content-Type the server cannot read at all is a different refusal from a Content-Type that reads but
-// is not a multipart body, and the legacy server says which one happened.
+// TestCallUploadEndpointRefusesARequestWhoseContentTypeItCannotRead
+// proves it names which of the two refusals happened.
 func TestCallUploadEndpointRefusesARequestWhoseContentTypeItCannotRead(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -591,9 +589,9 @@ func TestCallUploadEndpointRefusesARequestWhoseContentTypeItCannotRead(t *testin
 	}
 }
 
-// A multipart body the server cannot read is reported with the failure status and the reader's own words,
-// because someone posting to this endpoint needs to know their request was malformed and not rejected on
-// its contents.
+// TestCallUploadEndpointReportsAMultipartBodyItCannotRead proves an
+// unreadable body is reported with the reader's own words.
+// see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointReportsAMultipartBodyItCannotRead(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -614,8 +612,8 @@ func TestCallUploadEndpointReportsAMultipartBodyItCannotRead(t *testing.T) {
 	}
 }
 
-// A body that stops being readable partway through is a failure of the connection and not of the upload,
-// and the server says so rather than answering with whatever it managed to read.
+// TestCallUploadEndpointReportsABodyThatStopsBeingRead proves a body that
+// stops being readable is refused as a failure, never answered half-read.
 func TestCallUploadEndpointReportsABodyThatStopsBeingRead(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -643,10 +641,10 @@ func TestCallUploadEndpointReportsABodyThatStopsBeingRead(t *testing.T) {
 	}
 }
 
-// An upload the server could not place is still an upload the uploader was told it made. A call naming a
-// system the server does not know is reported in the server's own log view and not to the uploader, which
-// is what the legacy server's ingest queue produces and what an uploader can only act on by looking at the
-// server's log view.
+// TestUploadEndpointAnswersSuccessForACallTheServerCouldNotPlace proves an
+// unplaceable call is still answered success: the failure reaches only
+// the server's own log view.
+// see the call-upload-tests-and-their-captures maintainer note.
 func TestUploadEndpointAnswersSuccessForACallTheServerCouldNotPlace(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -676,8 +674,8 @@ func TestUploadEndpointAnswersSuccessForACallTheServerCouldNotPlace(t *testing.T
 	}
 }
 
-// The trunk-recorder compatibility endpoint takes a JSON sidecar and a recording. The sidecar is read by
-// the sidecar reading and not as a form field, because its contents are a document and not a value.
+// TestTrunkRecorderUploadEndpointAnswersTheCapturedUpload proves the
+// sidecar is read as a document and not as a posted field.
 func TestTrunkRecorderUploadEndpointAnswersTheCapturedUpload(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -717,8 +715,8 @@ func TestTrunkRecorderUploadEndpointAnswersTheCapturedUpload(t *testing.T) {
 	}
 }
 
-// A sidecar the server cannot read is refused with the legacy server's own words, which name no reason:
-// the failure text is written in the log view and the uploader is told only that the call data is invalid.
+// TestTrunkRecorderUploadEndpointRefusesASidecarItCannotRead proves the
+// refusal is the reasonless legacy words, the text going to the log.
 func TestTrunkRecorderUploadEndpointRefusesASidecarItCannotRead(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -751,16 +749,10 @@ func TestTrunkRecorderUploadEndpointRefusesASidecarItCannotRead(t *testing.T) {
 	}
 }
 
-// Both endpoints hand every posted field to the ingest parser in the order it arrived, and a field that
-// arrived later is applied after one that arrived earlier — which is what decides which of two fields
-// naming the same thing wins.
-//
-// The legacy server's trunk-recorder endpoint collects the fields into a map and applies them in whatever
-// order Go walks that map in, so an upload naming both a recording and a name for it is answered
-// differently on different runs. Recorded as a preserved quirk, and not reproduced: both endpoints here apply the
-// fields as they arrived, which is what the legacy server's own call-upload endpoint does. What a field
-// means, and that a later one overwrites an earlier one, is proven by the parser's own suite in
-// internal/infrastructure/dirwatch/parsers/multipart_test.go.
+// TestUploadEndpointsHandTheParserEveryFieldInTheOrderTheyArrived proves
+// both endpoints apply posted fields in arrival order, so a later field
+// wins an earlier one.
+// see the call-upload-tests-and-their-captures maintainer note.
 func TestUploadEndpointsHandTheParserEveryFieldInTheOrderTheyArrived(t *testing.T) {
 	cases := []struct {
 		path   string
@@ -862,10 +854,10 @@ func (err *bodyCutShortError) Error() string {
 	return "the connection was closed while the body was being read"
 }
 
-// TestCallUploadEndpointRefusesABodyBeyondTheUploadCap: the endpoint reads the whole
-// body into memory before it knows anything about the caller, so a cap is the only thing standing
-// between an anonymous POST and the server's memory. The refusal rides the existing read-failure
-// answer — a 417 naming the step that failed — because the frozen contract already has that shape.
+// TestCallUploadEndpointRefusesABodyBeyondTheUploadCap proves a body over
+// the cap is refused with the existing read-failure answer: the only
+// thing between an anonymous POST and the server's memory.
+// see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointRefusesABodyBeyondTheUploadCap(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -888,8 +880,8 @@ func TestCallUploadEndpointRefusesABodyBeyondTheUploadCap(t *testing.T) {
 	}
 }
 
-// The cap must not cost the server its endpoint: a body under it, with a recording of a size real
-// uploads carry, is answered exactly as before.
+// TestCallUploadEndpointAcceptsABodyUnderTheUploadCap proves the cap
+// costs nothing real uploads carry: such a body is answered as before.
 func TestCallUploadEndpointAcceptsABodyUnderTheUploadCap(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -908,10 +900,10 @@ func TestCallUploadEndpointAcceptsABodyUnderTheUploadCap(t *testing.T) {
 	}
 }
 
-// TestCallUploadEndpointFilesAnOversizedListTruncation: the truncation is
-// the parser's decision, and the endpoint is the one with the operator's log. The upload is
-// still taken — the call is real, just bounded — and the truncation is filed where an
-// administrator reads it.
+// TestCallUploadEndpointFilesAnOversizedListTruncation proves the
+// endpoint files the parser's list truncation in the operator's log:
+// the upload is still taken, just bounded.
+// see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointFilesAnOversizedListTruncation(t *testing.T) {
 	fixture := newUploadFixture()
 
