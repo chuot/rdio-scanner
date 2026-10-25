@@ -1,11 +1,7 @@
-// rdio-admin-options: options section (legacy config/options). Single
-// object form (no rows): the editable options in legacy order with the legacy
-// control types. The 12-hour time format, dimmer delay, duplicate detection
-// time frame and playback-goes-live options are retired: the browser locale
-// decides the time format, the dimmer delay and the duplicate window are
-// domain constants, and playback always goes live. Edits clone the working
-// object and set only the edited key, so server-only keys (adminPassword,
-// secret) are preserved; per-section Save lives in the shared bar.
+// rdio-admin-options: options section: a single object form (no rows),
+// editable options in legacy order. Edits set only the edited key, so
+// server-only keys (adminPassword, secret) survive.
+// see the options-retired-fields maintainer note.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import {
@@ -134,8 +130,8 @@ class RdioAdminOptions extends HTMLElement {
 
     this.unwatchFocus = getAdminContext().store.subscribe(['focus'], () => this.applyFocus());
 
-    // The controls of this section's working copy remember the state of having been reached, the
-    // way the systems tree sections do: the key they are remembered by names this section's slice.
+    // reached-state set for this section's controls, keyed by a prefix that
+    // names this section's slice.
     this.reached = new Set();
     this.rowKeyPrefix = `section:${NAME}`;
 
@@ -231,8 +227,8 @@ class RdioAdminOptions extends HTMLElement {
 
     const field = document.createElement('rdio-form-field');
 
-    // The caption is the name this row gives the control, so the marker rides it, and the field
-    // host carries the other half of the pair so the control announces it.
+    // the required marker rides the caption, and the field host carries
+    // the pair's other half so the control announces it.
     if (control.required) markRequired(field, description.querySelector('.field-title'));
 
     if (control.type === 'select') {

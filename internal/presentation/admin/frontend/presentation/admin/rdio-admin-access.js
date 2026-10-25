@@ -1,6 +1,5 @@
-// rdio-admin-access: access codes section (legacy config/access).
-// Rows are collapsible panels, one row open at a time: code (hide/show), ident, expiration, limit,
-// systems selection dialog. Hidden id/order round-trip; per-section Save lives in the shared bar.
+// rdio-admin-access: access codes section; collapsible panels, one row open at a
+// time; hidden id/order round-trip; per-section Save lives in the shared bar.
 
 import { openSystemsSelectionDialog } from './rdio-systems-selection.js';
 import {
@@ -19,8 +18,8 @@ import { clearReached, harvestReached, refreshField, restoreReached } from './su
 
 const NAME = 'access';
 
-// The rows of this section carry its prefix on the panel, the way systems-tree rows carry theirs:
-// the open row follows the row the section remembers, not the place a render leaves it in.
+// the prefix keys this section's panels: the open row follows the remembered row,
+// not render order.
 const PANEL_PREFIX = 'acc';
 
 export function accessRowErrors(row, index, rows) {
@@ -43,13 +42,11 @@ class RdioAdminAccess extends HTMLElement {
 
     this.unsubscribe = bindSectionSlice(NAME, () => this.render());
 
-    // The fields of this section's working copy remember the state of having been reached, the way
-    // the systems tree sections do: the key they are remembered by names this section's slice.
+    // reached fields of this section's working copy; the key names its slice.
     this.reached = new Set();
     this.rowKeyPrefix = `section:${NAME}`;
 
-    // Which rows of this section the operator holds open, carried across the rebuilds the store
-    // causes, exactly as the systems tree carries its open row.
+    // the rows the operator holds open, kept across the rebuilds the store causes.
     this.openState = new Map();
 
     this.render();
@@ -68,17 +65,15 @@ class RdioAdminAccess extends HTMLElement {
 
     if (!slice || slice.working === this.internalEdit) return;
 
-    // The rows the operator left open ride the rebuild: the page is the state the operator reads,
-    // and the section's map is what reproduces it, so the open rows are read off the page before
-    // the rows are built again.
+    // open rows are read off the page before the rebuild: the map reproduces what the
+    // operator reads.
     for (const details of this.querySelectorAll('details[data-key]')) {
       this.openState.set(details.dataset.key, details.open);
     }
 
     harvestReached(this);
 
-    // A section whose working copy matches the server's baseline — saved, discarded, or pushed from
-    // the server — starts with every field unreached: the operator has touched nothing.
+    // a clean section (saved, discarded, pushed) starts with every field unreached.
     if (!slice.dirty) clearReached(this, this.rowKeyPrefix);
 
     const rows = this.rows;
@@ -114,8 +109,7 @@ class RdioAdminAccess extends HTMLElement {
 
     attachDragSort(list, (from, to) => this.commitRows(reorderAfterDrag(this.rows, from, to)));
 
-    // One row open at a time: the rows the operator is not working on shrink, so the list stays
-    // short and the save bar under it is reached without scrolling past the rows opened on the way.
+    // one row open at a time: the list stays short and the save bar stays reachable.
     attachSingleOpenRule(list, this.openState);
 
     root.append(list);
@@ -134,22 +128,21 @@ class RdioAdminAccess extends HTMLElement {
   rowElement(row, index, rows) {
     const errors = accessRowErrors(row, index, rows);
 
-    // The row is remembered on its panel by a key of its own, the way a systems-tree row is:
-    // the open row follows the row the operator works on, not the place a render leaves it in.
+    // the panel key names the row itself: the open row follows it, not the position a
+    // render happens to leave it in.
     const key = `${PANEL_PREFIX}:${rowKey(row, index)}`;
 
     const panel = makePanel(this.openState, key, row.ident || 'NewAccess', Object.keys(errors).length, { index, total: rows.length });
 
-    // The row's warning icon follows the row's validity, recomputed from the rows as the section
-    // holds them: the row the operator is editing stays on the page, so the icon moves on the spot.
+    // the row's warning icon recomputes from the section's rows: the row stays put
+    // and the icon moves in place.
     const refreshMarker = () => {
       const rows = this.rows;
 
       setRowMarker(panel, Object.keys(accessRowErrors(rows[index], index, rows)).length > 0);
     };
 
-    // code — hidden by default with a visibility toggle (legacy hideCode). The
-    // toggle sits inline right of the input, not on a row of its own.
+    // the code field is hidden by default, with a visibility toggle to its right.
     const reveal = document.createElement('button');
     reveal.type = 'button';
     reveal.className = 'rdio-icon-button';
@@ -240,9 +233,8 @@ class RdioAdminAccess extends HTMLElement {
     const input = document.createElement('input');
     input.type = 'text';
 
-    // The mark the operator reads as an asterisk is this section's declaration that the field
-    // cannot be left empty: it rides the field's own name, and the field host carries the other
-    // half so the control announces it.
+    // the required marker rides the field's own name, with the announced pair on the
+    // host; it declares that this section cannot leave the field empty.
     if (required) markRequired(field, labelEl);
 
     if (trailing) {
@@ -268,8 +260,8 @@ class RdioAdminAccess extends HTMLElement {
     onFieldEdit(input, () => {
       this.updateRow(index, { [key]: input.value });
 
-      // The message the field carries is the one its row has now, read from the rows as the
-      // section holds them: a code another row has is a rule about the whole list.
+      // the field's message is its row's current one from the section's rows: duplicates
+      // are a whole-list rule.
       const rows = this.rows;
 
       refreshField(this, field, accessRowErrors(rows[index], index, rows)[key] ?? '');
@@ -282,9 +274,7 @@ class RdioAdminAccess extends HTMLElement {
     this.commitRows(this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row)), true);
   }
 
-  // Every commit of this section's rows carries the section's validity: the Save control answers
-  // the rows the section holds, and adding, deleting, moving a row, and picking its systems all
-  // change them.
+  // every rows commit carries the section's validity: Save answers its rows.
   commitRows(rows, selfEdit = false) {
     if (selfEdit) this.internalEdit = rows;
 
@@ -296,10 +286,9 @@ class RdioAdminAccess extends HTMLElement {
     const fresh = markRowIdentity({ code: '', ident: '', systems: '*', order: 0 });
     const rows = [fresh, ...this.rows.map((row, i) => ({ ...row, order: i + 2 }))];
 
-    // The row the add control creates is the row the operator came to fill in, so it opens, and it
-    // is the section's one open row. The rows the operator left open close on the page as well as
-    // in the map: the render that follows reads the open rows off the page, and a row left open
-    // there would come back open.
+    // the added row opens as the section's one open row: the others close in the map
+    // and on the page, since the next render reads open rows off the page
+    // see the single-open-row-rule maintainer note.
     for (const row of this.querySelectorAll('details[data-key]')) row.open = false;
 
     this.openState.clear();

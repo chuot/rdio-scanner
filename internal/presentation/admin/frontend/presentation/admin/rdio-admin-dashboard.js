@@ -1,16 +1,6 @@
-// rdio-admin-dashboard: the section a signed-in operator lands on. It is a read of the server, not a form:
-// nothing on it saves anything, and it has no section slice in the store. The one read the page makes is
-// GET /api/admin/status, on its own interval, again the moment the configuration changes, and not at all
-// while the page is the one the operator is not looking at.
-//
-// The layout is six cards — the server, what is ingesting, who is listening, the last 24 hours of calls,
-// the busiest talkgroups, and the log — each stating its own state in one word and, when it is not working,
-// one sentence saying why. Every figure is text: the bars are the shape a sighted operator reads at a
-// glance, and the list they come from says the same thing to an operator who is not looking at them.
-//
-// The rules that decide the state words, the sentences, and the words the figures are shown in are in
-// domain/dashboard-status.js, so that the sentence a sighted operator reads and the sentence a screen
-// reader reads are the same sentence. This owns the rendering and the keeping-current.
+// rdio-admin-dashboard: read of the server, not a form: no store slice,
+// GET /api/admin/status on its own interval; rendering only, rules elsewhere
+// see the dashboard-status-read maintainer note.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import {
@@ -28,8 +18,8 @@ import { createRefreshSchedule } from '../../domain/log-refresh.js';
 import { formatMonthDay, formatTime } from '../../../../common/frontend/presentation/display-format.js';
 import { announce } from '../../../../common/frontend/presentation/ui/primitives.js';
 
-// The word each card answers with. The state is also carried as data-state for the stylesheet, and the word
-// is what the operator reads: colour is never the only signal.
+// card state words, also carried as data-state for the stylesheet
+// the word is what the operator reads: colour is never the only signal
 const STATE_WORDS = { ok: 'Working', attention: 'Needs attention', unknown: 'Not known' };
 
 class RdioAdminDashboard extends HTMLElement {
@@ -41,14 +31,12 @@ class RdioAdminDashboard extends HTMLElement {
     this.closed = false;
     this.reading = null;
 
-    // Whether the failure the page is in has already been said out loud. The page falls into the failure
-    // state once and says it once; a server that goes on refusing is the same failure it has already told
-    // the operator about.
+    // whether this failure has already been announced out loud
+    // a server that keeps refusing is the same failure: said once
     this.failureAnnounced = false;
 
-    // The same schedule the log view uses: the next poll is scheduled before this one runs, so a read that
-    // fails does not quietly end a refresh the operator asked for, and a read already in flight is not
-    // stacked on top of.
+    // same schedule the log view uses: next poll scheduled before this one runs
+    // a failed read does not end the refresh; an in-flight read is not stacked
     this.schedule = createRefreshSchedule({
       poll: () => this.read(),
       delay: STATUS_REFRESH_DELAY,
@@ -76,8 +64,7 @@ class RdioAdminDashboard extends HTMLElement {
 
     this.querySelector('.rdio-dashboard-refresh').addEventListener('click', () => this.readAgain());
 
-    // One control for the operator's own decision, and it says which way that decision is: a control whose
-    // pressed state is not exposed is a control a screen reader operator cannot read back.
+    // auto-refresh is one control, and its pressed state is exposed for screen readers
     const auto = this.querySelector('.rdio-dashboard-auto-refresh');
 
     auto.addEventListener('click', () => {
@@ -97,8 +84,7 @@ class RdioAdminDashboard extends HTMLElement {
 
     this.followThePage();
 
-    // The page reads as soon as it is opened: an operator who has just signed in, or who has come back to
-    // this section after an hour elsewhere, is looking at the answer to a question they are not asking.
+    // read on open: the operator has not asked and should not wait an interval
     this.read();
   }
 
@@ -114,16 +100,15 @@ class RdioAdminDashboard extends HTMLElement {
     this.reading = null;
   }
 
-  // The page asks the server, and only once at a time: the use case holds the read it has in flight, so the
-  // schedule, a configuration push, and the operator's own button cannot each start their own.
+  // one read at a time: the use case holds the read in flight
+  // the schedule, a config push, and the operator's button share it
   read() {
     const reading = getAdminContext().useCases.loadStatus();
 
     this.reading = reading;
 
-    // The read is in flight for as long as the use case's read is, whichever way that read ended. The page
-    // hands back the use case's own read, so whoever asked for the answer is waiting on the same thing the
-    // page is.
+    // in flight as long as the use case's read, however it ends
+    // the page hands that same read back to whoever asked
     reading.finally(() => {
       if (this.reading === reading) this.reading = null;
     });
@@ -131,10 +116,8 @@ class RdioAdminDashboard extends HTMLElement {
     return reading;
   }
 
-  // The operator asked for an answer, so the page answers out loud as well as on the screen. A refresh the
-  // page does by itself says nothing on its own schedule: a sentence every five seconds is a page that never
-  // stops talking. Asking is asking to be told again, so asking sets aside the page's own "already said", and
-  // a refusal the page falls into on the way is said once whichever way it got here.
+  // a requested refresh is answered out loud; a refusal is said once
+  // see the dashboard-refresh-announce maintainer note.
   async readAgain() {
     this.failureAnnounced = false;
 
@@ -151,9 +134,8 @@ class RdioAdminDashboard extends HTMLElement {
     announce(`Read again at ${formatTime(new Date(status.fetchedAt))}.`);
   }
 
-  // The failure sentence has one owner, and it is said once for every time the page falls into the failure
-  // state. A server going away is a change of state the operator would find critical, and a change a screen
-  // reader is never told about is a change that happens in silence.
+  // one owner for the failure sentence, said once per fall into the failure state
+  // a screen reader is never told about a silent change of state
   announceTheFailure() {
     if (this.failureAnnounced) return;
 
@@ -162,20 +144,16 @@ class RdioAdminDashboard extends HTMLElement {
     announce('The server did not answer the dashboard read.');
   }
 
-  // A page in a tab behind another one, or on a laptop with the lid shut, is a page costing the server
-  // several statements every interval for nobody. The browser says when the page stopped being the page the
-  // operator is looking at, and the page stops; coming back starts exactly one chain again.
+  // polls while visible: a hidden page costs the server statements for nobody
+  // coming back starts exactly one poll chain
   followThePage() {
     if (this.closed) return;
 
     if (this.autoRefresh && document.visibilityState !== 'hidden') this.schedule.start();
     else this.schedule.stop();
 
-    // Coming back is the moment the figures on the page are looked at again, and the page's clock has been
-    // moving the whole time it was away. The page re-reads its own claim about them here rather than leaving
-    // an operator looking at an hour-old answer under a line that says nothing about it, and rather than
-    // waiting for the next poll to notice: the first poll lands an interval after the operator is already
-    // reading.
+    // re-render on coming back: the clock kept moving while away,
+    // and the first scheduled poll lands an interval late
     this.render();
   }
 
@@ -191,9 +169,8 @@ class RdioAdminDashboard extends HTMLElement {
 
       this.strip.textContent = '';
 
-      // The numbers the page is holding stay in the page's state and are not put on the screen. A figure
-      // with no moment attached to it is a figure the operator will believe, and the moment is the one thing
-      // a refused read took away.
+      // on a refused read the held numbers stay in state, off screen:
+      // a figure with no moment attached is a figure the operator will believe
       this.body.innerHTML = `
         <p class="rdio-dashboard-failure">The server did not answer this read. The dashboard is not showing the numbers it is holding, because they are no longer current.</p>
       `;
@@ -201,8 +178,7 @@ class RdioAdminDashboard extends HTMLElement {
       return;
     }
 
-    // A read that came back ends the failure the page has already said out loud, so the next time the page
-    // loses its server it says so again.
+    // a successful read clears failureAnnounced, so the next failure is announced again
     this.failureAnnounced = false;
 
     if (!snapshot) {
@@ -232,14 +208,8 @@ class RdioAdminDashboard extends HTMLElement {
       return;
     }
 
-    // The page's own clock against the instant the answer was read. Past three intervals the page can no
-    // longer assume it is keeping the numbers current, and saying so is the only honest thing left.
-    //
-    // A read the server refused is that state already: the figures on the page are the ones from the last
-    // read that answered, and the read that would have replaced them is the one that did not. The store
-    // sees the second refusal as the same failure as the first and tells nobody about it, so a page that
-    // only rewrites this line when something tells it to would go on claiming its figures are current.
-    // The page knows it has not read the server, and says so from the first refusal onward.
+    // stale past three intervals; a refused read is stale from the first refusal on
+    // see the dashboard-stale-readline maintainer note.
     const stale = status.failed || isStale(status.fetchedAt, new Date().toISOString());
 
     this.readLine.textContent = stale
@@ -248,8 +218,7 @@ class RdioAdminDashboard extends HTMLElement {
   }
 }
 
-// The strip is the page's one-sentence answer, and it is the same figures the cards carry: a strip that
-// disagreed with the card beside it would be a page contradicting itself in one line.
+// the strip carries the same figures as the cards: no one-line self-contradiction
 function stripSentence(snapshot, series) {
   const parts = [`up ${formatUptime(snapshot.server?.uptimeSeconds)}`];
 
@@ -332,8 +301,8 @@ function activityCard(snapshot, series) {
 
   const hours = series
     .map((hour) => {
-      // The bar's height as a share of the busiest hour. The floor the stylesheet gives a zero bar is what
-      // keeps an empty hour visible as an hour instead of as a gap in the chart.
+      // bar width as a share of the busiest hour
+      // the stylesheet floor keeps a zero bar visible as an hour, not a gap
       const width = Math.round(hour.ratio * 100);
 
       return `

@@ -1,16 +1,7 @@
-// Shared scaffold for the three per-level sections: a system
-// dropdown over the saved systems in display order, the rows of the selected
-// system's level, add/delete/drag-sort with the 1-based order rewrite, and the
-// save bar bound to the `subsection:<level>:<systemId>` slice. The row editor
-// is the only part each section supplies.
-//
-// The rows a section renders belong to the system it is showing, and only this
-// scaffold knows that id: the dropdown picks it, and a section falls back to
-// another system when the one it shows is deleted. So the scaffold owns the
-// store binding — it listens to the slice the section renders and moves the
-// binding when the shown system changes. A section that bound its own slice
-// before the scaffold picked the system would listen to a slice it never shows,
-// and keep its rows on screen while the data under them moved.
+// Shared scaffold for the per-level sections: system dropdown, rows, save bar; the row
+// editor is the only part each section supplies.
+// The scaffold owns the store binding: only it knows which system is shown.
+// see the subsection-binding-ownership maintainer note.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { subSectionInvalid } from '../../domain/systems-validation.js';
@@ -39,8 +30,7 @@ export function newRow(level) {
 }
 
 // The panel key the scaffold's open state and the section's row builders share:
-// the level's prefix keeps rows of different levels apart in one section, and
-// the scaffold needs it to name the row its add control creates.
+// rowPrefix keeps levels apart in one section and names the add control's new row.
 export function rowPanelKey(component, row, index) {
   return `${component.subSection.rowPrefix}:${rowKey(row, index)}`;
 }
@@ -49,8 +39,8 @@ function sliceKey(component) {
   return `subsection:${component.subSection.level}:${component.systemId}`;
 }
 
-// The blacklist slice of the system the scaffold shows: the talkgroups level edits it beside its
-// rows, so the section follows the system it shows and its rows follow the blacklist with it.
+// The talkgroups level edits the system's blacklist beside its rows, so the
+// key tracks the shown system.
 function blacklistsKey(component) {
   return component.subSection.level === 'talkgroups' ? `blacklists:${component.systemId}` : null;
 }
@@ -60,8 +50,8 @@ function bind(component) {
 
   component.boundKey = sliceKey(component);
 
-  // The fields of the slice the section shows are reached or not, and the fields of another
-  // system are their own: the slice's key is the prefix every field key of this render is built on.
+  // boundKey is the prefix every field key of this render is built on, so reached state
+  // stays per system.
   component.rowKeyPrefix = component.boundKey;
 
   const { store } = getAdminContext();
@@ -75,8 +65,8 @@ function bind(component) {
   component.unsubscribes = [store.subscribe(keys, () => component.render())];
 }
 
-// `spec` is the section's description: its level, caption, add control label,
-// row prefix, the extra slices its rows render from, and the row editor.
+// The section's description: its level, caption, add control label, row prefix,
+// the extra slices its rows render from, and the row editor.
 export function connectSubSection(component, spec) {
   component.subSection = spec;
   component.openState = new Map();
@@ -92,11 +82,10 @@ export function disconnectSubSection(component) {
   component.unsubscribes = [];
 }
 
-// Model commit for a per-level section. A field edit carries the marker: the render
-// that sees the value it just committed returns without rebuilding, so the row the
-// operator is typing in — and the field they are in — stays on the page. Add,
-// delete, drag, and the level's own actions commit without the marker and rebuild.
-// The invalid flag is always recomputed from the committed rows.
+// Model commit for a per-level section.
+// A field edit carries the selfEdit marker and its render skips the rebuild, so the
+// row being typed in stays on the page.
+// see the subsection-selfedit-rebuild maintainer note.
 export function commitSubRows(component, rows, selfEdit = false) {
   const { level } = component.subSection;
 
@@ -106,9 +95,8 @@ export function commitSubRows(component, rows, selfEdit = false) {
   setSubInvalid(level, component.systemId, subSectionInvalid(level, rows, sectionWorking('groups') ?? [], sectionWorking('tags') ?? []));
 }
 
-// The field the operator just edited: its message is recomputed from the rows as they now are, and
-// editing a field is reaching it. The row's warning icon follows the same recomputation, because
-// the row stays on the page and the icon has to move with it.
+// refreshField recomputes the edited field's error message from the rows as they now
+// are and marks it reached; setRowMarker moves the row's warning icon with it.
 export function refreshField(component, field, message, panel, invalid) {
   component.reached.add(field.dataset.field);
 
@@ -118,8 +106,8 @@ export function refreshField(component, field, message, panel, invalid) {
   if (panel) setRowMarker(panel, invalid);
 }
 
-// The fields the section built carry the key their reached state is remembered by; the state is
-// harvested before the rebuild, the way the open state is, and handed back after it.
+// harvestReached collects reached state by the data-field key before a rebuild,
+// the way the open state is; restoreReached hands it back after.
 export function harvestReached(component) {
   for (const field of component.querySelectorAll('rdio-form-field[data-field]')) {
     if (field.isReached?.()) component.reached.add(field.dataset.field);
@@ -132,10 +120,9 @@ export function restoreReached(component) {
   }
 }
 
-// A section whose working copy matches the server's baseline — saved, discarded, or pushed from the
-// server — starts with every field unreached: the operator has touched nothing. Only the fields of
-// the slice being rebuilt are cleared; the rows the operator is working on in another system keep
-// the state of the fields they edited.
+// A section matching the server's baseline starts with every field unreached.
+// Only the keys under this prefix are cleared, so rows in another system keep their
+// reached fields.
 export function clearReached(component, prefix) {
   for (const key of [...component.reached]) {
     if (key.startsWith(`${prefix}:`)) component.reached.delete(key);
@@ -155,24 +142,22 @@ export function renderSubSection(component) {
 
   if (!systems.some((system) => system.id === component.systemId)) component.systemId = systems[0]?.id ?? null;
 
-  // The shown system moves under the section: the operator picks another one in
-  // the dropdown, or the system it shows is deleted and the section falls back.
-  // The rows follow it, so the binding follows with them.
+  // The shown system moves under the section: dropdown choice, or fallback after a delete.
+  // The binding follows the rows to the new slice.
   if (component.boundKey !== sliceKey(component)) bind(component);
 
-  // The number the operator reads for the system this section shows: the reference they type into
-  // the fields and search the log by. The scaffold is what resolves the shown system, so it is
-  // what carries that number to the bar and to the section's own messages.
+  // The scaffold resolves the shown system and carries its systemRef, the number the
+  // operator types and searches the log by, to the bar and the section's messages.
   component.systemRef = systems.find((system) => system.id === component.systemId)?.systemRef ?? null;
 
-  // The operator's own field edit is what reaches here as a store change; the rows
-  // they are working on stay where they are. See commitSubRows.
+  // A store change here is the operator's own field edit: see commitSubRows, whose render
+  // keeps their rows in place.
   const slice = subSlice(level, component.systemId);
 
   if (slice && slice.working === component.internalEdit) return;
 
-  // A section whose working copy matches the server's baseline — saved, discarded, or pushed
-  // from the server — starts with every field unreached: the operator has touched nothing.
+  // A section whose working copy matches the server's baseline starts with every field
+  // unreached: the operator has touched nothing.
   if (slice && !slice.dirty) clearReached(component, component.boundKey);
 
   component.errorTargets = [];
@@ -205,10 +190,9 @@ export function renderSubSection(component) {
     const rows = subWorking(level, component.systemId) ?? [];
     const fresh = [newRow(level), ...rows.map((row, i) => ({ ...row, order: i + 2 }))];
 
-    // The row the add control creates is the one the operator came to fill in, and it is the section's
-    // one open row: the rows the operator left open close with it, the way they close when the operator
-    // opens a row themselves. They close on the page as well as in the map, because the render that
-    // follows reads the open rows off the page, and a row left open there would come back as open.
+    // The row the add control creates is the section's one open row: the rows the operator
+    // left open close with it.
+    // see the add-close-open-rows maintainer note.
     const opened = rowPanelKey(component, fresh[0], 0);
 
     for (const row of component.querySelectorAll('details[data-key]')) row.open = false;
@@ -240,13 +224,12 @@ export function renderSubSection(component) {
 
   rows.forEach((row, index) => list.append(buildRow(component, row, index, rows)));
 
-  // The drop commits the rows the store holds at the moment of the move, the way the
-  // Systems section does: a field edit the operator made after this render is not in
-  // the rows above, and a move must not drop what they typed.
+  // The drop commits subWorking as the store holds it at the moment of the move, the way
+  // the Systems section does, so a later field edit is not dropped.
   attachDragSort(list, (from, to) => commitSubRows(component, reorderAfterDrag(subWorking(level, component.systemId) ?? [], from, to)));
 
-  // One row open at a time: the rows the operator is not working on shrink, so the list stays short
-  // and the save bar below it is reached without scrolling past the rows opened on the way.
+  // One row open at a time keeps the list short and the save bar below it reachable
+  // without scrolling past opened rows.
   attachSingleOpenRule(list, component.openState);
 
   root.append(list);

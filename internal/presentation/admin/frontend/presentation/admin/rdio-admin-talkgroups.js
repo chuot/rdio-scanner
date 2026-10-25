@@ -1,8 +1,6 @@
-// rdio-admin-talkgroups: the talkgroups of one system, saved on
-// their own. Same scaffold as the sites and units sections, plus the fields a
-// talkgroup carries (groups, tag, alert, delay, frequency, led, type) and the
-// Blacklist action, which adds the talkgroup's reference to the system's blacklist and removes the
-// row, so one save of this section stores both.
+// rdio-admin-talkgroups: the talkgroups of one system, saved on their
+// own: same scaffold as the sites and units sections, plus the
+// Blacklist action that removes the row and stores the blacklist.
 
 import { playAlert } from './play-alert.js';
 import { getAdminContext } from '../../application/admin-context.js';
@@ -81,9 +79,8 @@ function freshRows(component) {
   return getAdminContext().store.getState()[`subsection:${LEVEL}:${component.systemId}`]?.working ?? [];
 }
 
-// The fields the section refuses to save, said in the words the section marks its fields with. The
-// Blacklist action names them when it refuses, because the operator has to know which rows to finish
-// before the action can store anything.
+// unstoredTalkgroupFields names the fields the section refuses to
+// save, so the Blacklist refusal says which rows to finish first.
 function unstoredTalkgroupFields(rows, groups, tags) {
   const knownIds = { groupIds: groups.map((group) => group.id), tagIds: tags.map((tag) => tag.id) };
 
@@ -98,11 +95,10 @@ function unstoredTalkgroupFields(rows, groups, tags) {
   return messages.join(', ');
 }
 
-// The list the Systems section holds for this system, and the list it has saved: the operator's draft
-// of the Blacklists field, and the text behind it. The Blacklist action stores a list the server
-// accepts, and the Systems section saves the list it is holding, so a draft that differs from the
-// saved text is a draft the action is about to replace — and the operator has to hear that from the
-// click that replaces it, not find it out from the calls the server stops refusing.
+// systemsBlacklistDraft reads the Systems section's draft of the
+// Blacklists field and the text behind it: the Blacklist action is
+// about to replace a differing draft the operator must hear about.
+// see the blacklist-draft-overwrite maintainer note.
 function systemsBlacklistDraft(systemId) {
   const systems = getAdminContext().store.getState()['section:systems'] ?? {};
 
@@ -119,9 +115,9 @@ function talkgroupRow(component, talkgroup, index, rows) {
 
   const knownIds = { groupIds: groups.map((group) => group.id), tagIds: tags.map((tag) => tag.id) };
 
-  // The row's errors, recomputed from the rows as they are at the moment of the reading: a
-  // duplicate identifier is a rule about the whole list, and the row the operator's value collides
-  // with has to be found in the list as it now is.
+  // errorsFor recomputes talkgroupErrors per read: duplicate identifier
+  // is a whole-list rule, so the colliding row must be in the current
+  // list and knownIds.
   const errorsFor = (list) => talkgroupErrors(list[index], list, knownIds);
 
   const errors = errorsFor(rows);
@@ -174,9 +170,9 @@ function talkgroupRow(component, talkgroup, index, rows) {
 
   groupsHelp.append(groupsTitle, document.createElement('br'), groupsCaption);
 
-  // The list is required on every row, and the caption naming it carries the marker. The list is
-  // built outside a form field, so the declaration rides the pair the stylesheet reads: the naming
-  // element and the block holding the fields it names.
+  // required on every row, marker on the caption naming the list: built
+  // outside a form field, so the declaration rides the pair the
+  // stylesheet reads.
   markRequired(groupsRow, groupsTitle);
 
   const groupsList = document.createElement('div');
@@ -200,9 +196,8 @@ function talkgroupRow(component, talkgroup, index, rows) {
     checkbox.type = 'checkbox';
     checkbox.checked = selectedGroupIds.includes(group.id);
     checkbox.addEventListener('change', () => {
-      // The selection the boxes carry right now, read from the row as the store holds it: the row
-      // the operator is editing stays on the page, so the boxes they tick next are the boxes of
-      // this same render, and a pick must add to what the row already holds.
+      // readGroupIds takes the selection the store holds right now: the
+      // edited row stays on the page, so a pick adds to what it holds.
       const selected = readGroupIds(freshRows(component)[index]);
 
       const next = checkbox.checked ? [...selected, group.id] : selected.filter((id) => id !== group.id);
@@ -261,14 +256,9 @@ function talkgroupRow(component, talkgroup, index, rows) {
     blacklist.className = 'rdio-button-mini blacklist';
     blacklist.textContent = 'Blacklist talkgroup';
     blacklist.addEventListener('click', async () => {
-      // The action stores what it means, in the click: the row goes away and the system refuses that
-      // talkgroup, and both leave in the save the section's Save button makes. The entry names the
-      // reference the server compares a recording against.
-      //
-      // The rows the click is about to store are composed first, because the section's own validation
-      // has to answer before anything is written. A section holding a row the page will not save cannot
-      // be saved by this click, and an entry queued in such a section is one the operator can never
-      // store: the same invalid row keeps the section's Save disabled.
+      // the Blacklist click stores both halves at once: the row goes away
+      // and the entry names the talkgroup's reference.
+      // see the blacklist-save-flow maintainer note.
       const rows = freshRows(component).filter((_, i) => i !== index);
       const groups = sectionWorking('groups') ?? [];
       const tags = sectionWorking('tags') ?? [];

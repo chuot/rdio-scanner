@@ -1,6 +1,5 @@
-// Admin-side alert audition (legacy admin.service.ts playAlert): a private
-// playback AudioContext at gain 0.1 (the gain lives in domain/oscillator's
-// scheduleOscillators), sequences resolved on the last oscillator's onended.
+// admin alert audition: a private playback AudioContext; the gain lives in
+// domain/oscillator; the sequence resolves on the last oscillator's onended.
 
 import { scheduleOscillators } from '../../../../common/frontend/domain/oscillator.js';
 

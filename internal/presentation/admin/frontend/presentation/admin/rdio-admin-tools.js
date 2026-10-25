@@ -1,8 +1,6 @@
-// rdio-admin-tools: admin tools (legacy import-export-config,
-// import-talkgroups, import-units screens). Not a config section: no
-// section bar. Imports mutate the per-section working copies (each affected
-// section becomes dirty and is saved individually, replacing the legacy
-// whole-form swap).
+// rdio-admin-tools: admin tools, not a config section: no section bar.
+// Imports make each affected section dirty, and each is saved
+// individually.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { ADMIN_CONFIG_SECTIONS } from '../../../../common/frontend/domain/config.js';
@@ -68,9 +66,9 @@ class RdioAdminTools extends HTMLElement {
     return details;
   }
 
-  // filePicker is the theme-styled file picker: a mini button that opens a hidden
-  // native input, and a caption that shows the chosen file name. The native picker
-  // button is browser-styled and localized, so it never sits in a row itself.
+  // filePicker: mini button opening a hidden native input, with a
+  // caption for the chosen file name: the native picker button is
+  // browser-styled, so it never sits in a row itself.
   filePicker(accept, onChange) {
     const input = document.createElement('input');
     input.type = 'file';
@@ -100,11 +98,8 @@ class RdioAdminTools extends HTMLElement {
     return { button, name, input };
   }
 
-  // --- export config and import config -------------------------------------------
-  //
-  // Two panels, export first: downloading the saved config and loading a file into
-  // the working copies are separate operations, and one panel that mixes a button
-  // with a file picker reads as a single flow that does not exist.
+  // export config and import config stay two panels: a button and a
+  // file picker in one panel read as a single flow that does not exist.
 
   exportPanel() {
     const details = this.panel('Export config', 'file_download');

@@ -1,8 +1,5 @@
-// rdio-admin: admin shell with sidebar navigation (replaces the legacy
-// mat-accordion). One section page visible
-// at a time; each section element loads and saves independently. Logout lives
-// in the header. Unimplemented sections render a placeholder until their task
-// registers the element.
+// rdio-admin: admin shell with sidebar navigation: one section page at a time
+// section elements load and save independently; placeholders until registered
 
 import { getAdminContext } from '../../application/admin-context.js';
 import './openapi-box.js';
@@ -23,17 +20,8 @@ import './rdio-admin-tags.js';
 import './rdio-admin-tools.js';
 import './rdio-admin-units.js';
 
-// The navigation is ordered by the work an administrator works through, not by
-// the labels: the landing that answers whether the deployment is working; the
-// system at the top of the hierarchy a listener browses and the three levels
-// filled in with it; the labels a listener selects and filters by; how audio
-// arrives and where it is forwarded on; who may post calls and who may listen;
-// how the server behaves; the log a problem is diagnosed in; the maintenance
-// tools; and the published contract last, because it is reference. Sections
-// that answer the same question sit next to each other, so the sibling of what
-// the operator is already looking at is where they are already looking. Keep
-// this list in that order: the order is what lets the column be read by meaning
-// instead of searched alphabetically.
+// keep SECTIONS in this order: the navigation is ordered by admin work flow, not labels
+// see the nav-section-order maintainer note.
 const SECTIONS = [
   { name: 'dashboard', label: 'Dashboard', icon: 'speed' },
   { name: 'systems', label: 'Systems', icon: 'settings' },
@@ -52,8 +40,7 @@ const SECTIONS = [
   { name: 'openapi', label: 'OpenAPI', icon: 'api' },
 ];
 
-// The label the operator reads in the navigation, for the section the shell is putting on the page.
-// The navigation list above is the one place the labels are written.
+// the navigation list above is the one place the section labels are written
 const sectionLabel = (name) => SECTIONS.find((section) => section.name === name)?.label ?? name;
 
 class RdioAdmin extends HTMLElement {
@@ -70,10 +57,7 @@ class RdioAdmin extends HTMLElement {
     const { store, useCases } = getAdminContext();
     const { authenticated, docker } = store.getState().auth;
 
-    // The section an operator lands on is the one that answers the question they arrived with: is this
-    // deployment working. Everything the landing used to be a step towards — the ingestion paths, the
-    // history, the log — is reached from here, and the operator should not have to know that in order to go
-    // looking for it.
+    // operators land on dashboard: it answers whether the deployment is working
     if (!this.current) this.current = 'dashboard';
 
     if (!authenticated) {
@@ -115,9 +99,7 @@ class RdioAdmin extends HTMLElement {
     nav.className = 'rdio-admin-nav';
     nav.setAttribute('aria-label', 'Admin sections');
 
-    // The sections are a list: a screen reader entering the navigation says how many items it
-    // holds and reads them one by one, the way the operator scans the column with their eyes. Bare
-    // buttons in the navigation announce a bar of controls with no count and no shape.
+    // a list element: screen readers can count the nav items; bare buttons announce none
     const list = document.createElement('ul');
 
     for (const section of SECTIONS) {
@@ -129,9 +111,8 @@ class RdioAdmin extends HTMLElement {
       control.type = 'button';
       control.dataset.section = section.name;
 
-      // Only the section the operator is standing on is current. The others say nothing: an item
-      // that announces aria-current="false" is a screen reader naming every section as part of a
-      // route the operator is not on, thirteen times over.
+      // only the current section gets aria-current="page": the others say nothing
+      // aria-current="false" on every row makes a screen reader name thirteen routes
       if (section.name === this.current) control.setAttribute('aria-current', 'page');
 
       control.innerHTML = `<i class="material-icons" aria-hidden="true">${section.icon}</i><span>${section.label}</span>`;
@@ -148,20 +129,15 @@ class RdioAdmin extends HTMLElement {
     content.id = 'content';
     content.setAttribute('aria-labelledby', 'rdio-admin-section-heading');
 
-    // The heading names the section the operator is on, and the content region takes its name from
-    // it: a screen reader entering the region by landmark says the section, and the heading list the
-    // operator jumps through carries every section the shell can put on the page. The shell renders
-    // it because the shell is the one place that knows which section is on the page.
+    // the heading names the section, and the content region is labelled by it
+    // the shell renders it: only it knows which section is on the page
     const heading = document.createElement('h2');
     heading.id = 'rdio-admin-section-heading';
     heading.textContent = sectionLabel(this.current);
 
-    // The polite region the page answers through: the save bar's result and a row's move land in
-    // it, for the operator who is not looking at the rows when the page answers. It rides inside
-    // the content region, below the heading naming it, and carries nothing static. The shell
-    // keeps one region across every repaint: a store change that rebuilds the page must not
-    // throw away the sentence it wrote a moment ago, before the operator who is not looking has
-    // heard it.
+    // the live region carries save and row-move answers; nothing static sits in it
+    // the shell keeps one region across every repaint so a reply is not lost
+    // see the live-region-repaint maintainer note.
     if (!this.liveRegion) this.liveRegion = document.createElement('rdio-live-region');
 
     content.append(heading, this.liveRegion);
@@ -175,11 +151,9 @@ class RdioAdmin extends HTMLElement {
     this.replaceChildren(header, layout);
   }
 
-  // todosBanner is the card the administrator sees first: it sits in the content
-  // column above the section card, with the same width cap and card chrome, so its
-  // edges line up with the section below. It renders nothing when the list is
-  // empty, and it is never dismissible — a todo disappears when the administrator
-  // fixes what caused it.
+  // todosBanner sits above the section card, edges aligned by the same width cap
+  // it renders nothing when empty and is never dismissible
+  // see the todos-banner-placement maintainer note.
   todosBanner(todos) {
     if (todos.length === 0) return null;
 
@@ -198,8 +172,7 @@ class RdioAdmin extends HTMLElement {
       const label = document.createElement('span');
       label.textContent = todo.message;
 
-      // A todo that names the control clearing it is followed, not just read: the row
-      // opens the section that owns the control and asks for its attention.
+      // a todo with a step opens the section owning the control that clears it
       if (!todo.step) {
         item.append(icon, label);
         banner.append(item);

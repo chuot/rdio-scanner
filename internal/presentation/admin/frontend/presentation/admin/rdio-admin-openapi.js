@@ -1,10 +1,7 @@
-// rdio-admin-openapi: the OpenAPI submenu.
-// The card renders the endpoint groups derived from docs/openapi.json — the
-// complete API contract — through the shared rdio-admin-openapi-box, so the
-// endpoints the administrator reads are the endpoints the server answers. The
-// contract reaches the browser as the openapi.json static file the build copies
-// into the bundle; a fetch failure renders one honest caption, never a broken
-// card. Informational: no save bar, no store slice, no requests beyond the fetch.
+// rdio-admin-openapi: endpoint groups derived from the openapi.json contract, shown by
+// rdio-admin-openapi-box; a fetch failure renders one honest caption. Informational only:
+// no save bar, no store slice, no requests beyond the fetch
+// see the openapi-contract-card maintainer note.
 
 import './openapi-box.js';
 

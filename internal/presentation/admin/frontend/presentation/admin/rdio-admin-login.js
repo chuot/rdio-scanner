@@ -1,7 +1,6 @@
-// rdio-admin-login: admin login form (legacy login.component.ts).
-// Password required; form disabled while submitting; a wrong password shows
-// "Invalid password", and a server that cannot be reached is named as such —
-// the form re-enables for a retry either way.
+// rdio-admin-login: admin login form.
+// password required, form disabled while submitting, wrong password shows Invalid password,
+// an unreachable server is named as such, and the form re-enables for a retry either way
 
 import { getAdminContext } from '../../application/admin-context.js';
 
@@ -28,8 +27,7 @@ class RdioAdminLogin extends HTMLElement {
     this.form.addEventListener('submit', async (event) => {
       event.preventDefault();
 
-      // A submit reaches the field it submits: the operator may have pressed Enter without ever
-      // leaving the field, and the failure the server answers has to be said out loud.
+      // a submit reaches the field it submits, so a login failure is announced out loud
       this.field.markReached();
 
       const password = this.input.value;

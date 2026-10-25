@@ -1,6 +1,5 @@
-// rdio-admin-units: the units of one system, saved on their own.
-// Same scaffold as the sites section: a system dropdown, the rows of the
-// selected system, add/delete/drag-sort, and the per-level save bar.
+// rdio-admin-units: units of one system picked from a dropdown, added, deleted and
+// drag-sorted on the same scaffold as the sites section, with the per-level save bar
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { unitErrors } from '../../domain/systems-validation.js';
@@ -18,9 +17,8 @@ function freshRows(component) {
 }
 
 function unitRow(component, unit, index, rows) {
-  // The row's errors, recomputed from the rows as they are at the moment of the reading: a
-  // duplicate identifier is a rule about the whole list, and the row the operator's value collides
-  // with has to be found in the list as it now is.
+  // errorsFor recomputes unitErrors on the current list: a duplicate identifier check must
+  // find the row the value collides with as the list now is
   const errorsFor = (list) => unitErrors(list[index], list);
 
   const errors = errorsFor(rows);

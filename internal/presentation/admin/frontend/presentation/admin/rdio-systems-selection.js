@@ -1,10 +1,7 @@
-// rdio-systems-selection: tri-state selection dialog
-// (legacy config/systems-selection). The tree Everything → Groups / Tags /
-// Systems → Talkgroups is rendered from the pure domain model; every check
-// cascades through it and the tree re-renders. A row names itself by the label
-// its configuration carries, with the system or talkgroup reference number
-// after it (rowLabel). Result: '*' or
-// [{ id: systemRef, talkgroups: '*' | [talkgroupRef...] }], or null on cancel.
+// rdio-systems-selection: tri-state Everything/Groups/Tags/Systems/Talkgroups dialog
+// every check cascades through the domain model and the tree re-renders
+// result: '*' or [{ id: systemRef, talkgroups: '*' | [talkgroupRef...] }], null on cancel
+// see the systems-selection-result-format maintainer note.
 
 import { openDialog } from '../../../../common/frontend/presentation/ui/primitives.js';
 import {
@@ -18,13 +15,10 @@ import {
   setTalkgroup,
 } from '../../domain/systems-selection.js';
 
-// The words a row of the tree answers with. The label the configuration carries names the row, and the
-// reference number the operator works with — the one a row's Id field states, an exported configuration
-// carries, and a listener's `?id=` address names — follows it in parentheses. A group and a tag carry a
-// stored id and no reference number of their own, so their rows are named by the label alone. A row with
-// a reference and no label is named by that number, which the operator can still act on; a row with
-// neither is named by the words the section's own add control uses, so a row the operator has not filled
-// in yet reads the way the section reads it instead of as `undefined` or `null`.
+// rowLabel names a row by its label with (ref) in parentheses after it
+// groups and tags have no reference number, so their rows carry the label alone
+// an empty row falls back to the unnamed text instead of undefined or null
+// see the row-label-fallback maintainer note.
 function rowLabel({ label, ref, unnamed }) {
   const name = typeof label === 'string' ? label.trim() : '';
 
@@ -52,12 +46,10 @@ class RdioSystemsSelection extends HTMLElement {
   render() {
     const model = this.model;
 
-    // The tree answers every activation by painting itself again — the cascade runs through the rows
-    // above and below — and a rebuild throws away the control the keyboard was standing on. A browser
-    // puts the focus on the page when the control it was on leaves, so the operator who checks a
-    // talkgroup with the keyboard is back at the top of the dialog, and the next Tab key walks the
-    // tree from its beginning. The row the operator activated is recorded before the rebuild, and the
-    // keyboard is put back on that same row after it.
+    // the tree repaints on every activation, which throws away the focused control
+    // the activated row's dataset.node is recorded before the rebuild
+    // the keyboard is put back on that same row after it
+    // see the selection-focus-restore maintainer note.
     const activated = document.activeElement?.dataset?.node;
 
     const root = document.createElement('div');
@@ -158,8 +150,7 @@ class RdioSystemsSelection extends HTMLElement {
     input.indeterminate = !!indeterminate;
     input.addEventListener('change', () => onChange(input.checked));
 
-    // The row's own identity, carried on the control: the row is what the operator is looking at, and
-    // it is what the rebuild hands the keyboard back to.
+    // data-node carries the row's identity: the rebuild hands focus back by it
     if (node) input.setAttribute('data-node', node);
 
     const text = document.createElement('span');

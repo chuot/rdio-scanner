@@ -1,7 +1,5 @@
-// Shared admin section scaffolding (Phase E): a per-section save bar bound to
-// the `section:<name>` store slice (Save enabled only when dirty and valid,
-// conflict banner with reload, Discard), plus list-ordering helpers for the
-// native HTML5 drag sorting (legacy CDK drop(): 1-based order rewrite).
+// Shared admin section scaffolding: a per-section save bar bound to the section:<name> slice,
+// plus drag-sort helpers and the reorderAfterDrag 1-based order rewrite.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { announce, showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
@@ -52,8 +50,7 @@ export function setSectionInvalid(name, invalid) {
   getAdminContext().useCases.setSectionInvalid(name, invalid);
 }
 
-// Per-level slices: `subsection:<level>:<systemId>` carries the same
-// baseline/working/dirty/invalid/conflict state a section slice does.
+// The subsection:<level>:<systemId> slice carries the same state a section slice does.
 export function subSlice(level, systemId) {
   return getAdminContext().store.getState()[`subsection:${level}:${systemId}`];
 }
@@ -106,8 +103,7 @@ class RdioAdminSectionBar extends HTMLElement {
 
       this.unsubscribe = bindSubSlice(level, this.systemId, () => this.render());
 
-      // The talkgroups level is saved together with the system's blacklist, so its bar answers the
-      // two as the one change the operator is standing in.
+      // talkgroups saves with the system's blacklist: its bar binds the blacklists slice too.
       if (level === 'talkgroups') this.unsubscribeBlacklists = bindBlacklistsSlice(this.systemId, () => this.render());
     } else {
       this.unsubscribe = bindSectionSlice(this.dataset.section, () => this.render());
@@ -134,9 +130,8 @@ class RdioAdminSectionBar extends HTMLElement {
     const invalid = slice.invalid || blacklists?.invalid === true;
     const conflict = slice.conflict || blacklists?.conflict === true;
 
-    // The system is named by its reference number, the number the operator reads in the section and
-    // types into the fields. The scaffold that resolves the shown system hands it to the bar; a bar
-    // built without it falls back to the identity the store gave the row.
+    // The bar names a level by the system's reference number, the number the operator
+    // types into the fields; the scaffold hands it over, else the store row id is used.
     const label = this.level
       ? `the ${this.level} of system ${this.dataset.systemRef || this.systemId}`
       : sectionLabel(name);
@@ -173,8 +168,8 @@ class RdioAdminSectionBar extends HTMLElement {
         ? await getAdminContext().useCases.saveSubSection(this.level, this.systemId)
         : await getAdminContext().useCases.saveSection(name);
 
-      // The save bar's answer is the operator's question, asked of the server: the polite region
-      // says it in words, for the operator who is not looking at the rows when the answer lands.
+      // The save bar also speaks the result through the polite announce region: the operator
+      // may not be looking at the rows when it lands.
       if (!ok) {
         showSnackbar(`Unable to save ${label}`);
         announce(`Save failed: ${label}`);
@@ -199,15 +194,13 @@ class RdioAdminSectionBar extends HTMLElement {
 
 customElements.define('rdio-admin-section-bar', RdioAdminSectionBar);
 
-// Display order: `order` ascending, missing order last (legacy `|| 0`).
+// display order: order ascending, missing order sorts last
 export function sortedByOrder(list) {
   return [...(list ?? [])].sort((a, b) => (a.order || 0) - (b.order || 0));
 }
 
-// The move a row makes says what it moved and where it landed: the row's own words, and its place
-// in the list the listener plays in. The keyboard's Move buttons and the pointer's drag land in
-// the same reorder, so the operator who cannot see the list shuffling hears the same sentence from
-// either route.
+// announceMove names the row moved and its place in the list, so keyboard and drag
+// reorder sound the same to the listener.
 function announceMove(label, index, total) {
   announce(`${label}, position ${index + 1} of ${total}`);
 }
@@ -219,9 +212,8 @@ export function attachDragSort(container, onReorder) {
 
   const rows = () => [...container.querySelectorAll(':scope > [data-drag]')];
 
-  // The reorder both routes go through, with the sentence the page says about it: the row's own
-  // words, and the place it landed on. The keyboard's Move buttons and the pointer's drag land
-  // here, so the operator who cannot see the list shuffling hears the move from either route.
+  // The shared reorder both routes go through: Move buttons and drag both call onReorder
+  // and announce the move.
   const move = (from, to) => {
     const label = rows()[from]?.querySelector('.row-title')?.textContent.trim() ?? '';
 
@@ -272,14 +264,8 @@ export function attachDragSort(container, onReorder) {
     for (const row of rows()) row.classList.remove('dragging');
   });
 
-  // The keyboard's route to the same reorder: the Move up and Move down buttons a row carries beside
-  // its handle. The click the keyboard's Enter and Space leave on a button lands here, and the move
-  // goes through the same onReorder the drop goes through, so the order the save bar sends is the
-  // same order either way.
-  //
-  // The buttons sit inside the row's own control — the summary line that opens and closes the row —
-  // so the click that moves the row takes that activation away from the browser: moving a row must
-  // not open it.
+  // Move up/down buttons reach the same onReorder as the drop. preventDefault matters:
+  // the buttons sit inside the row's summary control, and moving a row must not open it.
   container.addEventListener('click', (ev) => {
     const button = ev.target?.closest?.('[data-move]');
 

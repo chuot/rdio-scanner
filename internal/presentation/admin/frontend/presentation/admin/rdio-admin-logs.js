@@ -1,13 +1,6 @@
-// rdio-admin-logs: admin logs section (legacy logs.component.ts).
-// Not a config section: no section bar, no store slice — the query state is
-// local to the element. rdio-admin.js creates a fresh element on every section
-// open, so connecting IS the reload-on-open behavior. Client pages of 10 over
-// server pages of 200 reuse the search-pagination domain helpers.
-//
-// The view narrows on the part of the server that wrote an entry, searches the message text,
-// shows how many entries each part wrote, and can keep itself current. The decisions behind all four —
-// what the filters mean as a request, what the counts become, when a refresh is due — are in
-// domain/log-search.js and domain/log-refresh.js; this owns the rendering.
+// rdio-admin-logs: logs section, not a config section: no section bar, no store slice,
+// fresh element per open, client pages of 10 over server pages of 200
+// see the logs-local-query-state maintainer note.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import {
@@ -96,9 +89,7 @@ class RdioAdminLogs extends HTMLElement {
     this.reloadButton = this.querySelector('button.reload');
     this.resetButton = this.querySelector('button.reset');
 
-    // The subsystem choices are the server's vocabulary, and they are built from it rather than written
-    // out here: a select that names the subsystems by hand is a select that silently lacks the one the
-    // server gains next release.
+    // subsystem choices come from the server vocabulary, built by logSearchFilterOptions()
     this.sourceSelect.options = logSearchFilterOptions();
 
     // rdio-form-field only labels native controls; label the inner selects.
@@ -117,8 +108,8 @@ class RdioAdminLogs extends HTMLElement {
 
     this.paginator.addEventListener('page', () => this.refresh());
 
-    // The counts are how the view offers the narrowing: an operator who sees that the directory watchers
-    // wrote 137 of the 183 entries in front of them is one click away from a log that is only those 137.
+    // clicking a source count narrows the log to that subsystem,
+    // one click from 137 of 183 entries to only those 137
     this.sourceCounts.addEventListener('click', (event) => {
       const source = event.target?.dataset?.source;
 
@@ -141,8 +132,8 @@ class RdioAdminLogs extends HTMLElement {
     this.reload();
   }
 
-  // The element is created fresh every time the section is opened, and a schedule outliving the element it
-  // was started for is a request for a log view nobody is looking at.
+  // stop the refresh schedule: the element is fresh on every open,
+  // and a schedule outliving it polls a view nobody is looking at
   disconnectedCallback() {
     this.refreshSchedule?.stop();
   }
@@ -202,9 +193,8 @@ class RdioAdminLogs extends HTMLElement {
     this.renderSourceCounts();
   }
 
-  // The counts describe everything the criteria match — except the subsystem filter itself, which is the
-  // point of them: a strip narrowed to the one subsystem already chosen would offer nothing to narrow to
-  // next.
+  // counts match the criteria except the subsystem filter itself:
+  // the strip would otherwise offer nothing to narrow to next
   renderSourceCounts() {
     const counts = logSourceCounts(this.query?.sources);
 

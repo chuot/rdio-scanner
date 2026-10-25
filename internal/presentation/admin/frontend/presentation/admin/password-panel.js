@@ -1,8 +1,6 @@
-// The password panel: the administrator password form lives in
-// Tools as a details panel, not in a section of its own. No username field —
-// the API takes only the current and the new password. The save flow is the
-// legacy one: disable → changePassword → snackbar → reset on success,
-// re-enable on failure. Validation rules live in domain/password.js.
+// the password panel is a Tools details panel, not a section; no username field;
+// save: disable, change, snackbar, reset on success, re-enable on failure
+// see the password-panel-flow maintainer note.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { validatePasswordChange } from '../../domain/password.js';
@@ -58,9 +56,8 @@ export function passwordPanel() {
 
     field.append(labelEl, input);
 
-    // The server takes the current and the new password and nothing else: every box of this form
-    // is one the webapp insists on, so each name carries the marker and the field host carries the
-    // other half of the pair, which is what the control announces.
+    // the server takes only the two passwords: every box here is the webapp's own, and
+    // each field shows the visible marker and announced pair on its host.
     markRequired(field, labelEl);
 
     form.append(field);
@@ -90,7 +87,7 @@ export function passwordPanel() {
   const touched = { value: false };
 
   const updateButtons = (errors = validatePasswordChange(values())) => {
-    // legacy: Save disabled while pristine or invalid, Reset while untouched.
+    // Save stays disabled while pristine or invalid.
     save.disabled = !touched.value || errors !== null;
     reset.disabled = !touched.value;
   };

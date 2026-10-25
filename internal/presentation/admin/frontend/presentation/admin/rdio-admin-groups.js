@@ -1,7 +1,5 @@
-// rdio-admin-groups: groups section (legacy config/groups). Rows are collapsible panels, one row
-// open at a time, and drag-sortable: label, audio alert select with audition, led color select.
-// New Group inserts first and opens alone; hidden id/order round-trip; per-section Save lives in
-// the shared bar.
+// rdio-admin-groups: collapsible panels, one row open at a time, drag-sortable
+// New Group inserts first, opens alone; hidden id/order round-trip; shared Save bar
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { playAlert } from './play-alert.js';
@@ -29,8 +27,7 @@ import { clearReached, harvestReached, restoreReached } from './sub-section-shel
 
 const NAME = 'groups';
 
-// The rows of this section carry its prefix on the panel, the way systems-tree rows carry theirs:
-// the open row follows the row the section remembers, not the place a render leaves it in.
+// the grp panel prefix keys open state: the open row follows what the section remembers
 const PANEL_PREFIX = 'grp';
 
 const LEDS = ['blue', 'cyan', 'green', 'magenta', 'orange', 'red', 'white', 'yellow'];
@@ -56,13 +53,11 @@ class RdioAdminGroups extends HTMLElement {
 
     const { store } = getAdminContext();
 
-    // The fields of this section's working copy remember the state of having been reached, the way
-    // the systems tree sections do: the key they are remembered by names this section's slice.
+    // reached fields of the groups working copy, keyed by the section:groups slice
     this.reached = new Set();
     this.rowKeyPrefix = `section:${NAME}`;
 
-    // Which rows of this section the operator holds open, carried across the rebuilds the store
-    // causes, exactly as the systems tree carries its open row.
+    // openState holds the operator's open rows across the store's rebuilds
     this.openState = new Map();
 
     this.unsubscribe = store.subscribe([`section:${NAME}`, 'alerts'], () => this.render());
@@ -87,17 +82,14 @@ class RdioAdminGroups extends HTMLElement {
 
     if (!slice || slice.working === this.internalEdit) return;
 
-    // The rows the operator left open ride the rebuild: the page is the state the operator reads,
-    // and the section's map is what reproduces it, so the open rows are read off the page before
-    // the rows are built again.
+    // open rows are read off the page into the map just before the rows are rebuilt
     for (const details of this.querySelectorAll('details[data-key]')) {
       this.openState.set(details.dataset.key, details.open);
     }
 
     harvestReached(this);
 
-    // A section whose working copy matches the server's baseline — saved, discarded, or pushed from
-    // the server — starts with every field unreached: the operator has touched nothing.
+    // a working copy matching the server baseline leaves every field unreached
     if (!slice.dirty) clearReached(this, this.rowKeyPrefix);
 
     const rows = this.rows;
@@ -136,8 +128,7 @@ class RdioAdminGroups extends HTMLElement {
 
     attachDragSort(list, (from, to) => this.commitRows(reorderAfterDrag(this.rows, from, to)));
 
-    // One row open at a time: the rows the operator is not working on shrink, so the list stays
-    // short and the save bar under it is reached without scrolling past the rows opened on the way.
+    // one open row keeps the list short: the save bar below needs no scrolling
     attachSingleOpenRule(list, this.openState);
 
     root.append(list);
@@ -156,8 +147,7 @@ class RdioAdminGroups extends HTMLElement {
   rowElement(row, index, alerts, errorFields) {
     const errors = groupRowErrors(row);
 
-    // The row is remembered on its panel by a key of its own, the way a systems-tree row is:
-    // the open row follows the row the operator works on, not the place a render leaves it in.
+    // grp:key panel key: the open row follows the operator's row, not the render place
     const key = `${PANEL_PREFIX}:${rowKey(row, index)}`;
 
     const panel = makePanel(this.openState, key, row.label || 'NewGroup', Object.keys(errors).length, { index, total: this.rows.length });
@@ -189,7 +179,7 @@ class RdioAdminGroups extends HTMLElement {
 
     if (errors.label) errorFields.push({ field: labelField, message: errors.label });
 
-    // alert — select with audition (legacy playAlert on selectionChange).
+    // audio alert select, audition through playAlert
     const alertRow = this.descriptionRow('Audio alert', 'Prefixes an alert sound to all calls assigned to this group. The alert assignment order is as follows: Group -> Tag -> System -> Talkgroup.');
 
     const alertField = document.createElement('rdio-form-field');
@@ -259,10 +249,9 @@ class RdioAdminGroups extends HTMLElement {
     this.commitRows(this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row)), true);
   }
 
-  // Every commit of this section's rows carries the section's validity: the Save control answers the
-  // rows the section holds, and adding, deleting, and moving a row change them. The move reads the
-  // rows as the store holds them at the moment of the drop, so a value the operator typed in a row
-  // that is deliberately not rebuilt is not left behind.
+  // every rows commit carries section validity for the Save control
+  // a drop re-reads the rows the store holds, not typed values left in rows not rebuilt
+  // see the rows-commit-validity maintainer note.
   commitRows(rows, selfEdit = false) {
     if (selfEdit) this.internalEdit = rows;
 
@@ -273,10 +262,9 @@ class RdioAdminGroups extends HTMLElement {
   add() {
     const fresh = markRowIdentity({ alert: '', label: '', led: '', order: 0 });
 
-    // The row the add control creates is the row the operator came to fill in, so it opens, and it
-    // is the section's one open row. The rows the operator left open close on the page as well as
-    // in the map: the render that follows reads the open rows off the page, and a row left open
-    // there would come back open.
+    // the added row opens as the section's one open row
+    // open details close on the page too: the next render reads open rows from the DOM
+    // see the open-row-dom-reset maintainer note.
     for (const row of this.querySelectorAll('details[data-key]')) row.open = false;
 
     this.openState.clear();

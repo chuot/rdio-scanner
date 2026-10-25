@@ -1,9 +1,5 @@
-// rdio-admin-dirwatch: dirwatch section (legacy config/dirwatch).
-// Rows are collapsible panels, one row open at a time: disabled / deleteAfter toggles, type select
-// driving conditional field visibility, directory, extension, system / site / talkgroup selects fed
-// by the systems working copy, mask with token help, frequency, delay. Drag sorting, Add inserts
-// first and opens the row it creates, per-row delete; hidden id/order round-trip and the
-// per-section Save live in the shared bar.
+// rdio-admin-dirwatch: the dirwatch section: collapsible row panels,
+// one open at a time: toggles, selects, mask, frequency, delay, drag sort
 
 import {
   attachDragSort,
@@ -21,8 +17,7 @@ import { DIRWATCH_MASK_TOKENS, validateDirwatchRow } from '../../domain/dirwatch
 
 const NAME = 'dirwatch';
 
-// The rows of this section carry its prefix on the panel, the way systems-tree rows carry theirs:
-// the open row follows the row the section remembers, not the place a render leaves it in.
+// dirwatch panels carry the 'dw' prefix: the open row follows the remembered row
 const PANEL_PREFIX = 'dw';
 
 const TYPE_OPTIONS = [
@@ -78,13 +73,11 @@ class RdioAdminDirwatch extends HTMLElement {
       bindSectionSlice('systems', () => this.render()),
     ];
 
-    // The fields of this section's working copy remember the state of having been reached, the way
-    // the systems tree sections do: the key they are remembered by names this section's slice.
+    // reached fields are remembered under keys naming the dirwatch slice
     this.reached = new Set();
     this.rowKeyPrefix = `section:${NAME}`;
 
-    // Which rows of this section the operator holds open, carried across the rebuilds the store
-    // causes, exactly as the systems tree carries its open row.
+    // openState: which dirwatch rows stay open across store rebuilds
     this.openState = new Map();
 
     this.render();
@@ -106,17 +99,15 @@ class RdioAdminDirwatch extends HTMLElement {
 
     if (!force && slice.working === this.internalEdit && systemsSlice?.working === this.systemsRef) return;
 
-    // The rows the operator left open ride the rebuild: the page is the state the operator reads,
-    // and the section's map is what reproduces it, so the open rows are read off the page before
-    // the rows are built again.
+    // open rows are read off the dirwatch page before rows are built again,
+    // and reproduced from the section's openState map
     for (const details of this.querySelectorAll('details[data-key]')) {
       this.openState.set(details.dataset.key, details.open);
     }
 
     harvestReached(this);
 
-    // A section whose working copy matches the server's baseline — saved, discarded, or pushed from
-    // the server — starts with every field unreached: the operator has touched nothing.
+    // a clean dirwatch slice starts with every field unreached
     if (!slice.dirty) clearReached(this, this.rowKeyPrefix);
 
     const rows = this.rows;
@@ -159,8 +150,8 @@ class RdioAdminDirwatch extends HTMLElement {
 
     attachDragSort(list, (from, to) => this.commitRows(reorderAfterDrag(this.rows, from, to)));
 
-    // One row open at a time: the rows the operator is not working on shrink, so the list stays
-    // short and the save bar under it is reached without scrolling past the rows opened on the way.
+    // one dirwatch row open at a time keeps the list short
+    // and the save bar reachable without scrolling
     attachSingleOpenRule(list, this.openState);
 
     root.append(list);
@@ -187,8 +178,7 @@ class RdioAdminDirwatch extends HTMLElement {
     const type = row.type ?? 'default';
     const view = { errors, fields: new Map() };
 
-    // The row is remembered on its panel by a key of its own, the way a systems-tree row is:
-    // the open row follows the row the operator works on, not the place a render leaves it in.
+    // the dirwatch panel key from PANEL_PREFIX and rowKey follows the row itself
     const key = `${PANEL_PREFIX}:${rowKey(row, index)}`;
 
     const panel = makePanel(this.openState, key, row.directory || 'New dirwatch', Object.keys(errors).length, { index, total: rows.length });
@@ -290,9 +280,8 @@ class RdioAdminDirwatch extends HTMLElement {
       panel.append(this.fieldRow('Delay', 'Depending on the recorder, audio files can be ingested too soon after the recorder has created the file. You can set a delay value in milliseconds for the audio file to settle before ingesting it.', delayField));
     }
 
-    // The fields the row builds carry the key this section remembers the state of having been
-    // reached by: the row's key and the field's name, so a rebuild hands the message back to the
-    // field it belongs to and not to the position a render happens to leave it in.
+    // markField keys each dirwatch field with rowKey(row, index) plus the field name,
+    // so a rebuild hands the message back to the field it belongs to
     for (const [key, field] of view.fields) markField(this, field, rowKey(row, index), key);
 
     const bottom = document.createElement('div');
@@ -401,11 +390,10 @@ class RdioAdminDirwatch extends HTMLElement {
     const input = document.createElement('input');
     input.type = 'text';
 
-    // The mark the operator reads as an asterisk is this section's declaration that the field
-    // cannot be left empty: it rides the field's own name, and the field host carries the other
-    // half so the control announces it. A field this section requires only for some rows — the
-    // system and talkgroup picks — is left plain, because the marker names what is required on
-    // every row.
+    // the asterisk mark declares the dirwatch field required on every row,
+    // split between the label and the field host so the control announces it
+    // a dirwatch field required only on some rows stays plain
+    // see the required-field-marker maintainer note.
     if (required) markRequired(field, labelEl);
 
     field.append(labelEl, input);
@@ -423,8 +411,8 @@ class RdioAdminDirwatch extends HTMLElement {
     select.setAttribute('options', JSON.stringify(options));
     select.setAttribute('value', String(value ?? ''));
     select.addEventListener('change', (ev) => {
-      // rdio-select re-dispatches the inner select's value as a CustomEvent;
-      // the native change event also bubbles here but carries no detail.
+      // dirwatch: rdio-select re-dispatches the inner select's value as a CustomEvent
+      // the native change event bubbles here too but carries no detail
       if (typeof ev.detail === 'string') onChange(ev.detail);
     });
 
@@ -445,8 +433,8 @@ class RdioAdminDirwatch extends HTMLElement {
       return;
     }
 
-    // Otherwise the store round-trip skips a full re-render to preserve
-    // focus, so refresh the edited row's title, icon and field errors live.
+    // no full re-render here: focus is preserved, so refresh the edited dirwatch row's
+    // title, icon and field errors live
     const view = this.views?.[index];
 
     if (!view) return;
@@ -461,10 +449,9 @@ class RdioAdminDirwatch extends HTMLElement {
     for (const [key, field] of view.fields) field.setError(errors[key] ?? '');
   }
 
-  // Every commit of this section's rows carries the section's validity: the Save control answers the
-  // rows the section holds, and adding, deleting, and moving a row change them. The move reads the
-  // rows as the store holds them at the moment of the drop, so a value the operator typed in a row
-  // that is deliberately not rebuilt is not left behind.
+  // every dirwatch commit carries section validity to the Save control:
+  // add, delete and move change the rows it checks
+  // a move reads this.rows at drop time to keep typed values
   commitRows(rows, selfEdit = false) {
     if (selfEdit) this.internalEdit = rows;
 
@@ -473,18 +460,15 @@ class RdioAdminDirwatch extends HTMLElement {
   }
 
   add() {
-    // The mask the section's rule accepts, and the server's reader uses to pull the system and
-    // talkgroup ids out of a recording's filename. A row created without one is saved with an empty
-    // mask, and the rule rejects the empty string the server answers for it: the row would mean one
-    // thing as a new row and another as a saved row. The frequency carries the same care: the server
-    // answers an unset one as the zero the rule rejects.
+    // new dirwatch rows start with mask '#SYS_#TG' and frequency 1:
+    // the server answers an unset mask or frequency with a value its rule rejects:
+    // an unset row would validate as new but not as saved
+    // see the new-row-defaults maintainer note.
     const fresh = markRowIdentity({ delay: 2000, deleteAfter: true, directory: '', disabled: false, frequency: 1, mask: '#SYS_#TG', order: 0, type: 'default' });
     const rows = [fresh, ...this.rows.map((row, i) => ({ ...row, order: i + 2 }))];
 
-    // The row the add control creates is the row the operator came to fill in, so it opens, and it
-    // is the section's one open row. The rows the operator left open close on the page as well as
-    // in the map: the render that follows reads the open rows off the page, and a row left open
-    // there would come back open.
+    // the added dirwatch row opens for filling in as the section's one open row;
+    // rows left open on the page close too: the next render reads them off the page
     for (const row of this.querySelectorAll('details[data-key]')) row.open = false;
 
     this.openState.clear();

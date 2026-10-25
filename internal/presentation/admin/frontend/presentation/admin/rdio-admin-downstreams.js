@@ -1,9 +1,6 @@
-// rdio-admin-downstreams: downstream connections section (legacy
-// config/downstreams). Rows are collapsible panels, one row open at a time:
-// disabled toggle, url, apikey, systems selection
-// dialog. The systems payload may carry `id_as` remote-id mappings (see
-// legacy admin.service.ts Downstream type) — no UI for it; the deep-cloned
-// working copy preserves those keys untouched.
+// rdio-admin-downstreams: downstream connections as collapsible row panels,
+// one open at a time: disabled, url, apikey, systems selection;
+// see the id-as-passthrough maintainer note.
 
 import { openSystemsSelectionDialog } from './rdio-systems-selection.js';
 import {
@@ -22,8 +19,7 @@ import { clearReached, harvestReached, refreshField, restoreReached } from './su
 
 const NAME = 'downstreams';
 
-// The rows of this section carry its prefix on the panel, the way systems-tree rows carry theirs:
-// the open row follows the row the section remembers, not the place a render leaves it in.
+// 'dwn' prefix: downstreams panels follow the row they remember, not render order
 const PANEL_PREFIX = 'dwn';
 
 export function downstreamRowErrors(row, index, rows) {
@@ -47,13 +43,11 @@ class RdioAdminDownstreams extends HTMLElement {
 
     this.unsubscribe = bindSectionSlice(NAME, () => this.render());
 
-    // The fields of this section's working copy remember the state of having been reached, the way
-    // the systems tree sections do: the key they are remembered by names this section's slice.
+    // reached fields are remembered under keys naming the downstreams slice
     this.reached = new Set();
     this.rowKeyPrefix = `section:${NAME}`;
 
-    // Which rows of this section the operator holds open, carried across the rebuilds the store
-    // causes, exactly as the systems tree carries its open row.
+    // openState: which downstreams rows stay open across store rebuilds
     this.openState = new Map();
 
     this.render();
@@ -72,17 +66,15 @@ class RdioAdminDownstreams extends HTMLElement {
 
     if (!slice || slice.working === this.internalEdit) return;
 
-    // The rows the operator left open ride the rebuild: the page is the state the operator reads,
-    // and the section's map is what reproduces it, so the open rows are read off the page before
-    // the rows are built again.
+    // open rows are read off the downstreams page before rows are built again,
+    // and reproduced from the section's openState map
     for (const details of this.querySelectorAll('details[data-key]')) {
       this.openState.set(details.dataset.key, details.open);
     }
 
     harvestReached(this);
 
-    // A section whose working copy matches the server's baseline — saved, discarded, or pushed from
-    // the server — starts with every field unreached: the operator has touched nothing.
+    // a clean downstreams slice starts with every field unreached
     if (!slice.dirty) clearReached(this, this.rowKeyPrefix);
 
     const rows = this.rows;
@@ -117,8 +109,8 @@ class RdioAdminDownstreams extends HTMLElement {
 
     attachDragSort(list, (from, to) => this.commitRows(reorderAfterDrag(this.rows, from, to)));
 
-    // One row open at a time: the rows the operator is not working on shrink, so the list stays
-    // short and the save bar under it is reached without scrolling past the rows opened on the way.
+    // one downstreams row open at a time keeps the list short
+    // and the save bar reachable without scrolling past open rows
     attachSingleOpenRule(list, this.openState);
 
     root.append(list);
@@ -137,14 +129,13 @@ class RdioAdminDownstreams extends HTMLElement {
   rowElement(row, index, rows) {
     const errors = downstreamRowErrors(row, index, rows);
 
-    // The row is remembered on its panel by a key of its own, the way a systems-tree row is:
-    // the open row follows the row the operator works on, not the place a render leaves it in.
+    // the downstreams panel key from PANEL_PREFIX and rowKey follows the row itself
     const key = `${PANEL_PREFIX}:${rowKey(row, index)}`;
 
     const panel = makePanel(this.openState, key, row.url || 'NewDownstream', Object.keys(errors).length, { index, total: rows.length });
 
-    // The row's warning icon follows the row's validity, recomputed from the rows as the section
-    // holds them: the row the operator is editing stays on the page, so the icon moves on the spot.
+    // the downstreams row's warning icon tracks its validity via refreshMarker,
+    // recomputed from this.rows since the edited row stays on the page
     const refreshMarker = () => {
       const rows = this.rows;
 
@@ -178,8 +169,8 @@ class RdioAdminDownstreams extends HTMLElement {
     onFieldEdit(urlInput, () => {
       this.updateRow(index, { url: urlInput.value });
 
-      // The message the field carries is the one its row has now, read from the rows as the
-      // section holds them: a URL another row has is a rule about the whole list.
+      // the url field's message comes from the current rows the section holds:
+      // a URL duplicated on another downstreams row is a whole-list rule
       const rows = this.rows;
 
       refreshField(this, urlField, downstreamRowErrors(rows[index], index, rows).url ?? '');
@@ -255,9 +246,8 @@ class RdioAdminDownstreams extends HTMLElement {
     const input = document.createElement('input');
     input.type = 'text';
 
-    // The mark the operator reads as an asterisk is this section's declaration that the field
-    // cannot be left empty: it rides the field's own name, and the field host carries the other
-    // half so the control announces it.
+    // the downstreams asterisk says the field cannot be empty: it rides the name,
+    // and the field host carries the other half for the control to announce it
     if (required) markRequired(field, labelEl);
 
     field.append(labelEl, input);
@@ -269,9 +259,8 @@ class RdioAdminDownstreams extends HTMLElement {
     this.commitRows(this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row)), true);
   }
 
-  // Every commit of this section's rows carries the section's validity: the Save control answers
-  // the rows the section holds, and adding, deleting, moving a row, and picking its systems all
-  // change them.
+  // every downstreams commit carries section validity to the Save control:
+  // add, delete, move and systems picks change the rows it checks
   commitRows(rows, selfEdit = false) {
     if (selfEdit) this.internalEdit = rows;
 
@@ -283,10 +272,8 @@ class RdioAdminDownstreams extends HTMLElement {
     const fresh = markRowIdentity({ id: 0, order: 0, apikey: '', disabled: false, systems: '*', url: '' });
     const rows = [fresh, ...this.rows.map((row, i) => ({ ...row, order: i + 2 }))];
 
-    // The row the add control creates is the row the operator came to fill in, so it opens, and it
-    // is the section's one open row. The rows the operator left open close on the page as well as
-    // in the map: the render that follows reads the open rows off the page, and a row left open
-    // there would come back open.
+    // the added downstreams row opens for filling in as the section's one open row;
+    // rows left open on the page close too: the next render reads them off the page
     for (const row of this.querySelectorAll('details[data-key]')) row.open = false;
 
     this.openState.clear();

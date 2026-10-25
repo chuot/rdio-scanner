@@ -1,31 +1,11 @@
-// Shared row builders for the administration webapp's row-list sections: the systems tree (the
-// systems section and the three per-level sections — sites, talkgroups, units) and the six
-// hand-built list sections (access, apikeys, dirwatch, downstreams, groups, tags) build the same
-// panels, captions, fields and delete rows, so the builders live once. The openState map keeps a
-// row's details open across re-renders, exactly as each section component did before.
-//
-// A field carries the key its section remembers it by — the row's panel key and the field's name —
-// so the section can hand the field back the state of having been reached when it rebuilds the row,
-// the same way it hands back the open state.
+// Shared row builders for the admin webapp's row-list sections.
+// openState keeps a row's details open across re-renders.
 
 import { rowsToClose, scrollCompensation } from '../../domain/row-open-rule.js';
 
-// The keyboard's route to a row's place in the list.
-//
-// The row's position is set by dragging its handle: a gesture the pointer owns. Two buttons beside
-// the handle give the same move to the keyboard — and to an operator who cannot hold a pointer steady
-// through a drag — and they go through the same reorder the drag goes through, so the save bar sends
-// the same order either way.
-//
-// The buttons name the row they move, in the row's own words: "Move up — Metro". A row the operator
-// renames takes its new name, because the name on the control is the name on the page.
-//
-// The ends of the list have nowhere to move: the first row's Move up and the last row's Move down are
-// disabled, so the keyboard is never left on a control that does nothing.
-//
-// The buttons sit inside the row's own control — the summary line that opens and closes the row — so
-// the click that moves the row has to take the row's activation away from the browser, which the
-// shared wiring in attachDragSort does.
+// Two buttons give the keyboard the drag handle's reorder.
+// Ends disable the impossible move; attachDragSort owns the click.
+// see the row-move-keyboard maintainer note.
 export function rowMoveButtons(label, index, total) {
   const buttons = [];
 
@@ -51,9 +31,7 @@ export function rowMoveButtons(label, index, total) {
   return buttons;
 }
 
-// The row the operator renamed carries its new name on the controls that move it: the name on the
-// control is the name on the page, and a control that names a row the operator has just renamed says
-// something the screen does not show.
+// A renamed row's move buttons carry its new name: control text matches the page.
 export function setRowMoveLabels(panel, label) {
   for (const button of panel.querySelectorAll('button[data-move]')) {
     button.setAttribute('aria-label', `Move ${button.dataset.move} — ${label}`);
@@ -96,15 +74,9 @@ export function makePanel(openState, key, title, invalid, position = {}) {
   return details;
 }
 
-// The row's warning icon names the row invalid, and follows the row's validity: it is added when
-// the row gains an error and taken away when it loses its last one. The row the operator is editing
-// stays on the page, so the icon is moved on the spot rather than rebuilt.
-// The rows the operator sees open, in the order the list presents them. The page is the state the
-// operator reads; the section's map is what reproduces it on the next render, so the rule reads the
-// rows off the list and keeps the map in step with it.
-//
-// A browser hands back a NodeList from a query: it carries its rows by index, `forEach`, and
-// iteration, and it carries no `filter`. The rows are put in an array before they are picked over.
+// A NodeList has no filter, so the open rows are put in an array first.
+// The rows open on the page, in list order; the section's map follows them.
+// The invalid-row icon rides the row the operator edits, moved on the spot.
 function openRowsOf(list) {
   return Array.from(list.querySelectorAll(':scope > details[data-key]')).filter((row) => row.open);
 }
@@ -113,9 +85,7 @@ function openKeysOf(list) {
   return openRowsOf(list).map((row) => row.dataset.key);
 }
 
-// The container the operator scrolls: the administration content area, the element that moves the rows
-// when the content above them changes. Walking up from the list to the first element that actually
-// scrolls answers nothing when nothing scrolls — outside a browser, and on a page that does not move.
+// scrollableAncestor walks up to the first element that scrolls, or null.
 function scrollableAncestor(list) {
   const scrolls = (el) => {
     if (typeof el.scrollHeight !== 'number' || typeof el.clientHeight !== 'number') return false;
@@ -133,20 +103,9 @@ function scrollableAncestor(list) {
   return null;
 }
 
-// One row open at a time. The systems-tree sections mount this on the rows of the list they build in
-// a render, so one handler covers every row the section renders, the rows added later included.
-//
-// The handler answers the toggle event a summary activation produces — the click and the keyboard's
-// Enter and Space leave the same event — and it answers it on the row, because the browser leaves
-// that event on the row the operator activated and does not bubble it up to the list. Opening a row
-// closes the rows that were open; closing a row records its own state and closes nothing. The
-// section's map follows the page, so the next render reproduces the one open row the operator is
-// looking at.
-//
-// Nothing here touches the store: reading a row is not a change, and the rows the operator is editing
-// stay on the page. The rows above the opened row are the content that disappears, so the section
-// measures how far the opened row moved and gives that distance back to the container the operator
-// scrolls, which keeps the row they clicked under their eyes.
+// One open row at a time: toggle fires on the row and never bubbles.
+// openState follows the page; scroll compensation keeps the opened row in view.
+// see the single-open-row-rule maintainer note.
 export function attachSingleOpenRule(list, openState) {
   let applying = false;
 
@@ -218,8 +177,8 @@ export function captionBlock(title, caption, typeList) {
     const captionEl = document.createElement('span');
     captionEl.className = 'caption';
 
-    // A caption is plain text, or a list of nodes with inline emphasis (the dirwatch
-    // mask tokens); assigning an array to textContent renders "[object Text]" literals.
+    // The caption is text, or nodes with inline emphasis (the dirwatch mask tokens).
+    // Assigning an array to textContent renders "[object Text]".
     if (typeof caption === 'string') captionEl.textContent = caption;
     else captionEl.append(...caption);
 
@@ -245,18 +204,14 @@ export function captionBlock(title, caption, typeList) {
   return help;
 }
 
-// The context a row's fields are built with: where the field hands its message over, the reached
-// state the section carries across its rebuilds, and the key the field's own key is built on — the
-// slice the section is showing, then the row's panel key, so a field is remembered by the row it
-// belongs to and not by the position a render happens to leave it in.
+// Field context: error targets, reached state, key from slice plus row panel key.
 export function rowContext(component, key) {
   const prefix = component.rowKeyPrefix ? `${component.rowKeyPrefix}:` : '';
 
   return { targets: component.errorTargets, reached: component.reached, key: `${prefix}${key}` };
 }
 
-// The sections that build their fields by hand mark them with the same key: the field is the node
-// the section hands back the state of having been reached, and it finds it by this key.
+// Hand-built fields take the same key, so the section finds the node to restore.
 export function markField(component, field, key, name) {
   const prefix = component.rowKeyPrefix ? `${component.rowKeyPrefix}:` : '';
 
@@ -279,9 +234,7 @@ export function formField(ctx, details, name, title, caption, control, error, ty
   field.append(label, control);
   field.dataset.field = `${ctx.key}:${name}`;
 
-  // The mark the operator reads as an asterisk is a declaration the section makes about the field,
-  // stated here once when the field is built: it names the field's own label, and the field host
-  // carries it too, so the primitive can announce the same fact on the control.
+  // The asterisk mark rides the field's own label and the field host, set at build.
   if (required) markRequired(field, label);
 
   if (error) ctx.targets.push({ field, error });
@@ -292,9 +245,8 @@ export function formField(ctx, details, name, title, caption, control, error, ty
   return field;
 }
 
-// The mark on a field whose name is not a label inside it. A hand-built row names its field with a
-// caption built outside the field — the options panel, the Groups list — and the mark rides that
-// caption, with the field host carrying it for the announcement on the control.
+// A field named by a caption outside it (options panel, Groups list): the mark
+// rides that caption, and the field host carries it for the announcement.
 export function markRequired(field, namingEl) {
   field.dataset.required = 'true';
   namingEl.dataset.required = 'true';
@@ -328,9 +280,8 @@ export function selectField(ctx, details, name, title, caption, options, value, 
   select.setAttribute('options', JSON.stringify(options));
   select.setAttribute('value', value);
   select.addEventListener('change', (ev) => {
-    // The primitive re-dispatches a CustomEvent with the string value; the
-    // bubbled native change carries null (trusted) or undefined (synthetic)
-    // detail and must be ignored, otherwise it clobbers the CustomEvent.
+    // Only the CustomEvent re-dispatched with a string value counts: the bubbled
+    // native change carries null/undefined detail and would clobber it.
     if (typeof ev.detail === 'string') onChange(ev.detail);
   });
 
@@ -340,8 +291,8 @@ export function selectField(ctx, details, name, title, caption, options, value, 
 export function toggleField(details, title, caption, checked, onChange) {
   const toggle = document.createElement('rdio-toggle');
   toggle.checked = !!checked;
-  // The switch's name is the words the caption block shows beside it; the primitive carries the
-  // name onto the control that holds the switch role.
+  // The switch's name is the caption block's title beside it: aria-label puts
+  // the name on the control that holds the switch role.
   toggle.setAttribute('aria-label', title);
   toggle.addEventListener('change', (ev) => onChange(ev.detail));
 
@@ -372,15 +323,9 @@ export function parseNumber(value) {
   return value === '' || value === null ? null : Number(value);
 }
 
-// The message a field carries is recomputed on the keystroke, not only when the operator leaves.
-//
-// The form field reveals its message the moment the value in the control changes. A message computed
-// when the operator leaves is therefore the message of the value the keystroke typed over: the first
-// digit of a valid identifier shows the complaint the empty field earned. Attaching the section's
-// commit to the keystroke as well makes the page answer the value the operator is typing.
-//
-// The handler sits on the control, so it runs before the form field's own reach listener on the field
-// that owns the control, and the message is recomputed before the field paints.
+// Recompute the field's message on the keystroke, not when leaving.
+// A leave-time message describes the value the keystroke typed over.
+// On the control, the handler runs before the field's own reach listener.
 export function onFieldEdit(control, handler) {
   for (const type of ['input', 'change']) {
     control.addEventListener(type, handler);
@@ -391,12 +336,9 @@ export function titleCase(value) {
   return value.replace(/[_-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// A row the operator added and has not saved is remembered by a mark the client gives it. The mark is
-// the client's own bookkeeping: it rides the row through every copy the section makes (an object
-// spread carries symbol-keyed properties), and it is invisible to everything that leaves the client —
-// a structured clone, a JSON stringify, and the store's structural comparison all read string keys
-// only. A saved payload therefore never carries it, and a row that differs from the server's copy by
-// the mark alone is not a change.
+// ROW_IDENTITY: a Symbol marks added unsaved rows; spreads keep symbol keys.
+// Structured clone, JSON, and the store's comparison read string keys only.
+// A saved payload never carries it; the mark alone is not a change.
 export const ROW_IDENTITY = Symbol('rdio-admin-row-identity');
 
 let nextRowIdentity = 1;

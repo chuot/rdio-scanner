@@ -1,7 +1,5 @@
-// rdio-admin-sites: the sites of one system, saved on their own.
-// A system dropdown picks the system; the rows are added, edited, deleted and
-// drag-sorted in the `subsection:sites:<systemId>` slice, and the save bar
-// issues the per-level PUT only.
+// rdio-admin-sites: sites of one system picked from a dropdown, edited and drag-sorted in
+// the subsection:sites:<systemId> slice; the save bar issues the per-level PUT only
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { siteErrors } from '../../domain/systems-validation.js';
@@ -19,9 +17,8 @@ function freshRows(component) {
 }
 
 function siteRow(component, site, index, rows) {
-  // The row's errors, recomputed from the rows as they are at the moment of the reading: a
-  // duplicate identifier is a rule about the whole list, and the row the operator's value collides
-  // with has to be found in the list as it now is.
+  // errorsFor recomputes siteErrors on the current list: a duplicate identifier check must
+  // find the row the value collides with as the list now is
   const errorsFor = (list) => siteErrors(list[index], list);
 
   const errors = errorsFor(rows);

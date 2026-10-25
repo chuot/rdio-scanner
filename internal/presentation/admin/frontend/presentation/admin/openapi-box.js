@@ -1,12 +1,6 @@
-// The OpenAPI entrypoint box:
-// the OpenAPI section renders one box per group derived from docs/openapi.json.
-// The box is presentational: the section hands it a group from
-// domain/openapi-view.js — title, icon, endpoints, and for Config the subgroups by
-// resource. Each endpoint is a detail row: its summary line names the method, the
-// path, and the summary, and it opens on the detail the contract states for the
-// operation — the description, the parameters, the request body fields, and the
-// response codes. The rows are closed by default, so the page reads as a table of
-// contents. The box is informational: it never issues requests.
+// presentational box: the section hands it a derived group; detail rows stay
+// closed by default; the box never issues requests
+// see the openapi-entrypoint-box maintainer note.
 
 class RdioAdminOpenApiBox extends HTMLElement {
   connectedCallback() {
@@ -162,8 +156,8 @@ class RdioAdminOpenApiBox extends HTMLElement {
 
       const method = span(`method ${endpoint.method.toLowerCase()}`, endpoint.method);
 
-      // A path has no spaces to break at. A zero-width break opportunity after each
-      // separator lets a long path wrap on a narrow viewport, at the separators.
+      // a zero-width break after each / lets a long path wrap at separators on narrow
+      // viewports.
       const path = code('endpoint-path', endpoint.path.replaceAll('/', '/\u200B'));
 
       summary.append(method, path);

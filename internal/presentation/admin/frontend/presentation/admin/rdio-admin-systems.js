@@ -1,7 +1,5 @@
-// rdio-admin-systems: systems section (legacy config/systems).
-// The system level only: sites, talkgroups and units are saved on their own in
-// the per-level sections, so the section submits and saves the fields of the system row and leaves
-// every level to the section that shows it. Validation lives in domain/systems-validation.js.
+// rdio-admin-systems: the system level only: sites, talkgroups and
+// units are saved on their own in the per-level sections.
 
 import { playAlert } from './play-alert.js';
 import { systemErrors, systemsSectionInvalid } from '../../domain/systems-validation.js';
@@ -147,8 +145,8 @@ class RdioAdminSystems extends HTMLElement {
 
     attachDragSort(list, (from, to) => this.commit(reorderAfterDrag(this.systems, from, to), false));
 
-    // One row open at a time: the rows the operator is not working on shrink, so the list stays short
-    // and the save bar below it is reached without scrolling past the rows opened on the way.
+    // attachSingleOpenRule: one row open at a time, so the save bar below
+    // the list stays reachable without scrolling past opened rows.
     attachSingleOpenRule(list, this.openState);
 
     root.append(list);
@@ -177,9 +175,8 @@ class RdioAdminSystems extends HTMLElement {
   }
 
   systemElement(system, index, systems, alerts) {
-    // The row's errors, recomputed from the rows as they are at the moment of the reading: a
-    // duplicate identifier is a rule about the whole list, and the row the operator's value collides
-    // with has to be found in the list as it now is.
+    // errorsFor recomputes systemErrors per read: duplicate identifier is
+    // a whole-list rule, so the colliding row must be in the current list.
     const errorsFor = (list) => systemErrors(list[index], list);
 
     const errors = errorsFor(systems);
@@ -253,10 +250,8 @@ class RdioAdminSystems extends HTMLElement {
   addSystem() {
     const rows = [newSystemRow(), ...this.systems.map((row, i) => ({ ...row, order: i + 2 }))];
 
-    // The row the add control creates is the row the operator came to fill in, so this section opens
-    // it the way the per-level sections open theirs, and it is the section's one open row. The rows
-    // the operator left open close on the page too: the render that follows reads the open rows off
-    // the page.
+    // open the row the add control creates: the render that follows reads
+    // the open rows off the page, so these stay closed until opened.
     for (const row of this.querySelectorAll('details[data-key]')) row.open = false;
 
     this.openState.clear();
