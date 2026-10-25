@@ -22,11 +22,9 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// TestCallSearchPageMatchesTheCapturedPage is the byte-for-byte half of the criterion for a history page,
-// and it is the reason the payload is written as fields in a fixed order instead of as a map: the
-// captured frame carries `count, dateStart, dateStop, options, results` and each row carries
-// `id, system, talkgroup, dateTime`, which is the order the legacy server declares them and not the
-// order a map would sort them into.
+// TestCallSearchPageMatchesTheCapturedPage pins the page bytes to the
+// captured frame, written as fields in a fixed order and
+// not as a map. see the call-search-page-ordering maintainer note.
 func TestCallSearchPageMatchesTheCapturedPage(t *testing.T) {
 	at := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 
@@ -55,9 +53,9 @@ func TestCallSearchPageMatchesTheCapturedPage(t *testing.T) {
 	}
 }
 
-// The listener gets back the criteria the server understood, and only those. A criterion that is the
-// wrong shape is not corrected, not reported, and not mentioned again: it is simply absent from the
-// answer, which is how the listener can tell that its date filter was ignored.
+// TestCallSearchPageEchoesOnlyTheCriteriaItUnderstood a
+// wrong-shaped criterion is simply absent from the answer,
+// so its filter reads as ignored. see the call-search-page-ordering maintainer note.
 func TestCallSearchPageEchoesOnlyTheCriteriaItUnderstood(t *testing.T) {
 	page := CallSearchPagePayload{
 		Criteria: map[string]any{
@@ -81,9 +79,9 @@ func TestCallSearchPageEchoesOnlyTheCriteriaItUnderstood(t *testing.T) {
 	}
 }
 
-// A criterion that is understood is echoed as the listener wrote it, even when the search itself will
-// not use that value: the legacy server clamps the page size when it runs the query and echoes what
-// it was asked for, so an answer can promise 600 and deliver 500.
+// TestCallSearchPageEchoesWhatWasAskedForNotWhatTheSearchUsed: an understood
+// criterion is echoed as asked, never clamped to the run's size.
+// see the call-search-page-ordering maintainer note.
 func TestCallSearchPageEchoesWhatWasAskedForNotWhatTheSearchUsed(t *testing.T) {
 	page := CallSearchPagePayload{Criteria: map[string]any{"limit": float64(600)}}
 
@@ -106,19 +104,19 @@ func TestCallSearchPageEchoesNothingAsAnEmptyObject(t *testing.T) {
 	}
 }
 
-// A search that matches nothing still answers with a list, and with the Unix epoch at both ends of a
-// span that does not exist — see TestSearchCallsWithNothingToReturnReportsTheUnixEpoch for where that
-// comes from and why it is kept.
+// TestCallSearchPageAnswersAnEmptySearchWithAnEmptyListAndTheUnixEpoch proves a
+// search matching nothing still answers with a list, with the
+// Unix epoch at both ends of a span that does not exist.
 func TestCallSearchPageAnswersAnEmptySearchWithAnEmptyListAndTheUnixEpoch(t *testing.T) {
 	got := marshal(t, CallSearchPagePayload{
 		Page:     ports.CallSearchPage{DateStart: time.UnixMilli(0), DateStop: time.UnixMilli(0)},
 		Criteria: map[string]any{"limit": float64(200)},
 	})
 
-	// The epoch is rendered in whatever time zone the server runs in, because the legacy server
-	// reaches it through time.UnixMilli. The capture was taken on a machine set to UTC and says
-	// 1970-01-01T00:00:00Z; a server in another zone says the same moment in its own offset, and a
-	// client sees the same thing it sees today.
+	// epoch is rendered in the server's own time zone, as the legacy server
+	// reached it through time.UnixMilli. The capture says
+	// 1970-01-01T00:00:00Z from a UTC machine; another zone names the same
+	// instant with its own offset.
 	epoch := time.UnixMilli(0).Format(time.RFC3339)
 
 	for key, want := range map[string]string{
@@ -133,11 +131,10 @@ func TestCallSearchPageAnswersAnEmptySearchWithAnEmptyListAndTheUnixEpoch(t *tes
 	}
 }
 
-// A history row renders the moment with its milliseconds and a call payload renders the same call
-// without them. The legacy server marshals the row's moment as a Go time and formats the call's by
-// hand, so a call recorded at half past a second appears in the two frames of one session with two
-// different timestamps. It is preserved because a client that lines a row up with the call it fetches
-// has to be able to make the same sense of it that a client today does.
+// TestCallSearchRowKeepsTheMillisecondsACallPayloadDrops proves a history row
+// renders the moment with milliseconds while a call payload
+// renders the same call without them.
+// see the call-payload-field-order maintainer note.
 func TestCallSearchRowKeepsTheMillisecondsACallPayloadDrops(t *testing.T) {
 	at := time.Date(2026, 10, 6, 12, 0, 0, 500_000_000, time.UTC)
 
@@ -150,10 +147,10 @@ func TestCallSearchRowKeepsTheMillisecondsACallPayloadDrops(t *testing.T) {
 	}
 }
 
-// The history row names its fields the way the legacy row always has — a struct always names
-// what it has — so the length is on every row, and the zero on a row the server stored before
-// any source could measure it is the server's own "never measured", the same zero the column
-// carries.
+// TestCallSearchRowCarriesTheAudioLengthOfTheCallInSeconds proves a struct
+// always names what it has, so the length is on every row,
+// and the zero on a row stored before any source measured
+// it is the server's own "never measured". see the call-search-page-ordering maintainer note.
 func TestCallSearchRowCarriesTheAudioLengthOfTheCallInSeconds(t *testing.T) {
 	at := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 
