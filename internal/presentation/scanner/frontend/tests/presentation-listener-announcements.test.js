@@ -1,13 +1,7 @@
-// The listener says what the screen shows.
-//
-// The listener's screen is the operator's window on what the scanner is doing: the talkgroup playing,
-// the queue filling, the calls the search answered with, the page the list is on. An operator who
-// cannot see that screen — a screen reader reading the page, a phone locked in a pocket — has nothing
-// that says the state changed. The page carries one polite region, empty of anything static, and
-// writes into it in the page's own words when a state the display and the search panel own changes.
-//
-// The readings are taken on the rendered shell and on the region's own text: what the page says, in
-// the words the contract fixes, after the state the operator caused.
+// the listener says what the screen shows: one polite region the page
+// writes into with the words the contract fixes, when a state the
+// display or the search panel owns changes.
+// see the display-state-announcements maintainer note.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -51,10 +45,9 @@ const CALL = {
   dateTime: Date.now(),
 };
 
-// The shell, rendered the way the page renders it: the shim connects every element the shell's markup
-// carries, as a browser does. The promo and the display's clock and progress are timers the browser
-// owns; the shim does not model the clock, so the timers are handed to the test during the render and
-// the real clock is put back before the reading is taken.
+// the shell, rendered the way the page renders it: the shim connects
+// every element the shell's markup carries. the promo and display
+// timers are handed to the test during the render and left unrun.
 function shell() {
   document.body.replaceChildren();
 
@@ -63,8 +56,8 @@ function shell() {
     config: CONFIG,
   });
 
-  // The search the panel asks for is the network's answer; the shim has no network, and the reading
-  // is about what the page says about an answer, so the answer is what the test hands the store.
+  // the search the panel asks for is the network's answer; the shim has
+  // no network, so the answer is what the test hands the store.
   getAppContext().useCases.searchCalls = () => {};
 
   const el = document.createElement('rdio-app');

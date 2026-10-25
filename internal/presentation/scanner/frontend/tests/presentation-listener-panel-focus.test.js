@@ -1,15 +1,7 @@
-// The listener's panels, and the keyboard that has to travel with them.
-//
-// The search and select panels are drawers the listener opens over its screen. The pointer's route is
-// obvious: the panel slides out, the operator works in it, the operator clicks the arrow that shuts
-// it. The keyboard's route has to be the same journey, and a panel that opens without taking the
-// keyboard with it leaves the operator on the button they pressed, with the panel they are looking at
-// sitting behind them in the tab order — every Tab key walks through the page to reach it. A panel
-// that closes without giving the keyboard back leaves the focus on a control that has just left the
-// page, and the browser puts the operator at the top of the document.
-//
-// The readings are taken on the control the operator pressed, through the click event a mouse leaves
-// and the keyboard's Enter and Space leave in the same shape.
+// the listener's panels and the keyboard that travels with them: a
+// panel that opens without taking the keyboard leaves it behind the
+// panel in the tab order, and a closing one can lose it to the top.
+// see the panel-keyboard-landing maintainer note.
 
 import './dom-shim.js';
 
@@ -29,19 +21,17 @@ import '../presentation/listener/rdio-status.js';
 
 import { findAll } from './dom-shim.js';
 
-// The shell, rendered the way the page renders it: the shim connects every element the shell's markup
-// carries, as a browser does, so the control bar's buttons and the panels' content are the ones the
-// page builds. The promo the shell schedules is a ten second timer the browser owns, and the display
-// keeps the clock and the progress bar moving on intervals of its own; the shim does not model the
-// clock, so the timers are handed to the test during the render and left unrun, and the real clock is
-// put back before the reading is taken.
+// the shell, rendered the way the page renders it: the shim connects
+// every element the shell's markup carries, as a browser does. the
+// shim does not model the clock, so the promo and display timers are
+// handed to the test and left unrun until the reading is taken.
 function shell() {
   document.body.replaceChildren();
 
-  // The control bar answers its buttons only when the listener has a configuration to work with —
-  // the same rule the page has: a listener with no systems has no call to search. The config the
-  // reading needs is the one the panels work in: a system with talkgroups to select, calls to
-  // search, and no contact address, so the help control stays off the page.
+  // the control bar answers its buttons only when the listener has a
+  // configuration to work with: a listener with no systems has no call
+  // to search. the config the reading needs has talkgroups to select,
+  // calls to search, and no contact address, so help stays off the page.
   getAppContext().store.setState({
     ...getAppContext().store.getState(),
     config: {

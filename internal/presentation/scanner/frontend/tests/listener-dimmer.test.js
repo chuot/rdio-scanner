@@ -1,7 +1,6 @@
-// The dimmer: the display lights when a call arrives or the
-// listener presses a control, and dims again 5000 ms after that. The delay is
-// the domain constant DIMMER_DELAY_MS; no administrator option controls it.
-// The fake clock makes the timer observable without waiting for real time.
+// the dimmer: the display lights when a call arrives or the listener
+// presses a control, and dims again after the domain constant
+// DIMMER_DELAY_MS. the fake clock makes the timer observable.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';

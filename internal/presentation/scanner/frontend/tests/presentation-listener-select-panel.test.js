@@ -1,10 +1,7 @@
-// The select panel's presses, pinned to the v6.6.3 selection panel: a talkgroup press flips the
-// talkgroup on or off through the flip use case — never the control bar's timed avoid cycle — and
-// beeps by the state the press leaves; a category press beeps by the status it leaves (partial
-// beeps activate); the mini buttons beep by the status they apply. The panel names each toggle's
-// state to assistive technology: the pressed value on talkgroup buttons, the timed window in text
-// beside a blinking button, the status word on category buttons. The blink that marks a timed
-// avoid armed by the control bar's AVOID stays.
+// the select panel's presses: a talkgroup press flips the talkgroup
+// through the flip use case, never the control bar's timed avoid cycle,
+// and beeps by the state the press leaves; a category press beeps by
+// the status it leaves. the panel names each toggle's state.
 
 import './dom-shim.js';
 

@@ -1,7 +1,7 @@
-// The listener webapp shares the form field primitive with the administration page, and declares
-// nothing: the unlock code panel and the search filters ask for no field the listener must fill. So
-// nothing on these surfaces carries the mark, and no control carries the attribute that answers it —
-// the mark is the section's declaration, and a page that declares nothing marks nothing.
+// the listener shares the form field primitive with the administration
+// page and declares nothing: the unlock code panel and the search
+// filters ask for no field the listener must fill, so nothing on these
+// surfaces carries the mark or the answering attribute.
 
 import './dom-shim.js';
 
@@ -43,9 +43,9 @@ function searchPanel() {
   return el;
 }
 
-// The mark a section declares, and the attribute the primitive stamps from it. Both are read straight
-// off the page: the listener's own stylesheet carries no rule drawing a mark, and the listener's
-// fields carry nothing for such a rule to draw on.
+// the mark a section declares, and the attribute the primitive stamps
+// from it, both read straight off the page: the listener's stylesheet
+// carries no rule drawing a mark, and its fields nothing to draw on.
 function marks(root) {
   return findAll(root, (node) => node.getAttribute?.('data-required') === 'true');
 }

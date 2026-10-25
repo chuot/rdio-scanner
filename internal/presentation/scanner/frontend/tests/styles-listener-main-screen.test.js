@@ -1,12 +1,7 @@
-// The main screen's picture, pinned to the v6.6.3 reading.
-//
-// The status light, the display rows, and the control buttons are the three surfaces the
-// listener looks at all day, and their shapes are statements the stylesheet makes: the light's
-// face and glow, the eight lit colours, the paused blink, the rows' space-between placement,
-// and the beveled buttons' bevel, pressed dip, and status dots. This suite reads the cascade
-// the browser is given — comments blanked, each rule's own declarations — and pins those
-// statements to the values the v6.6.3 client drew, so a later change to the screen's look is a
-// decision, not a drift.
+// the main screen's picture, pinned to the v6.6.3 reading. the status
+// light, the display rows, and the control buttons are the surfaces the
+// listener looks at all day, and their shapes are statements the
+// stylesheet makes; this suite pins those statements to the v6.6.3 look.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -89,10 +84,10 @@ const RULES = () => cascade(SHEET());
 const flat = (raw) => raw.replace(/\s+/g, '');
 const selectors = (rule) => rule.selector.split(',').map(flat);
 
-// Every rule whose selector list carries the target selector, with its declarations merged in
-// cascade order — the reading a control's own block leaves on the element. Media rules are the
-// cascade under a condition the platform may or may not run, so the resting reading takes the
-// top-level rules alone; a media block's own rules are read by naming its condition.
+// every rule whose selector list carries the target selector, with
+// its declarations merged in cascade order: the reading a control's
+// own block leaves on the element. the resting reading takes the
+// top-level rules alone; a media block's rules answer its condition.
 function declared(selector, media = null) {
   const out = {};
 
@@ -117,9 +112,9 @@ function expect(selector, property, want, media = null) {
   );
 }
 
-// Rules whose selectors reach out from a base selector — `rdio-status .led::after` reaches
-// from `rdio-status .led`. The resting cascade only: a media block's rules answer the
-// condition, not the picture.
+// rules whose selectors reach out from a base selector: `rdio-status
+// .led::after` reaches from `rdio-status .led`. the resting cascade
+// only: a media block's rules answer the condition, not the picture.
 function reaching(base, test) {
   return RULES().filter((rule) =>
     rule.media === null
@@ -193,9 +188,9 @@ describe('the reduced state — the paused light keeps a mark of its own', () =>
   });
 
   it('gives the quieted paused light a ring the live face does not wear', () => {
-    // The ring rides the lit face, so its rule must outrank the per-colour glow rules that
-    // dress the same face, and its two bands must read against both neighbours: the dark
-    // band against the lit face, the light band against the surface the light sits on.
+    // the ring rides the lit face, so its rule must outrank the per-
+    // colour glow rules dressing the same face, and its two bands must
+    // read against both neighbours.
     expect('rdio-status .led.on.paused', 'box-shadow', '0 0 0 2px rgb(20, 20, 20), 0 0 0 4px rgb(160, 160, 160)', REDUCED);
   });
 

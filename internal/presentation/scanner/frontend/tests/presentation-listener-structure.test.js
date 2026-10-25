@@ -1,15 +1,7 @@
-// The structure the listener's keyboard and screen reader travel through: the skip link that comes
-// before every control of the page, the region the listener's own content sits in, the heading that
-// names the application, and the headings that name the two panels the listener opens.
-//
-// The skip link is the page's own markup and the stylesheet's own rule, so those readings are taken
-// from the files the build ships. The rest is taken from the rendered shell, read the way a screen
-// reader reads a page: the landmarks it announces, the headings it can list, and the name each
-// region carries.
-//
-// The application name and the two panel names are written out here on purpose. They are the words
-// the listener reads on the screen; a test that took them from the code under test would pass
-// whatever the code decided to call them.
+// the structure the listener's keyboard and screen reader travel
+// through: the skip link before every control, the region holding the
+// listener's own content, and the headings naming the application and
+// the two panels, written out here because they are read on screen.
 
 import './dom-shim.js';
 
@@ -52,10 +44,10 @@ function skipLinkTarget(html) {
   return bodyElements(html)[0]?.attributes.match(/href="#([^"]+)"/)?.[1] ?? null;
 }
 
-// The shell, rendered the way the page renders it. The promo the shell schedules is a ten second
-// timer the browser owns, and the display keeps the clock and the progress bar moving on intervals of
-// its own; the shim does not model the clock, so the timers are handed to the test during the render
-// and left unrun, and the real clock is put back before the reading is taken.
+// the shell, rendered the way the page renders it. the promo is a ten
+// second timer the browser owns, and the display keeps its clock and
+// progress on intervals of its own: the shim does not model the clock,
+// so those timers are handed to the test and left unrun.
 function shell() {
   const el = document.createElement('rdio-app');
 
@@ -121,9 +113,9 @@ describe('listener structure — the route into the page', () => {
     assert.ok(base, 'the stylesheet has no resting rule for the skip link');
     assert.ok(focus, 'the stylesheet has no rule that reveals the skip link on focus');
 
-    // Parked by clipping itself, and revealed by taking the clip off. A link moved outside the
-    // page's scrollable area is dropped from the keyboard's route — the browser will not land on a
-    // control it cannot scroll into view — and this is the control the keyboard has to reach first.
+    // parked by clipping itself, revealed by taking the clip off: a link
+    // moved outside the scrollable area drops from the keyboard's route,
+    // and this is the control the keyboard has to reach first.
     assert.match(base[2], /clip-path:\s*inset\(\s*50%\s*\)/,
       'the skip link is not parked out of sight at rest, so it is on the page before the operator asks for it');
     assert.match(focus[1], /clip-path:\s*none/, 'the rule that reveals the skip link does not bring it back on screen');

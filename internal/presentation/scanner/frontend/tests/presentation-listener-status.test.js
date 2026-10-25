@@ -1,7 +1,7 @@
-// The status light: the colour an administrator configured at a group, a tag, a system, or a
-// talkgroup is the colour the light shows while that call plays, green when the call carries none,
-// and the light keeps its colour while the feed is paused. The rule that picks the colour is
-// domain/alert-priority; these cases are the component that applies it.
+// the status light: the colour an administrator configured at a
+// group, tag, system, or talkgroup shows while that call plays,
+// green when the call carries none, and it keeps its colour while
+// the feed is paused. domain/alert-priority picks the colour.
 
 import './dom-shim.js';
 

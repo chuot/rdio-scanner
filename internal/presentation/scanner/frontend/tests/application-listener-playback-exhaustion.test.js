@@ -1,7 +1,6 @@
-// Playback exhaustion goes live: when the playback list runs
-// out, the refreshed list is checked once more and the listener returns to the
-// live feed. The retired playback-goes-live option is gone; exhaustion always
-// starts the live feed.
+// playback exhaustion goes live: when the playback list runs out, the
+// refreshed list is checked once more and the live feed starts. the
+// retired playback-goes-live option is gone; exhaustion always starts it.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

@@ -1,17 +1,7 @@
-// The hourglass the flag row draws is not in any font the listener ships.
-//
-// The listener's own font rules carry `unicode-range` lists — latin and latin-ext — and the
-// hourglass the timed-avoid flag draws sits outside every one of them, so the glyph can only ever
-// come from a font the browser reaches for on its own. That is not a small detail on this row: the
-// fallback Linux takes by default does not carry the glyph at all, and neither does the older Noto
-// Sans Symbols, so left to chance the flag can render an empty box where the operator reads a window
-// on the feed.
-//
-// The cascade's answer is a family offered for that one codepoint. The `unicode-range` is what keeps
-// it surgical: the family is never offered a letter or a digit, so the flag's minutes and the words
-// beside it keep the face the rest of the display uses. These readings pin the family, the range that
-// limits it, the fact that it is a font already on the machine rather than one downloaded for a
-// single glyph, and the flag rule that puts it ahead of the page's text face.
+// the hourglass the flag row draws is in no font the listener ships:
+// the declared families' ranges exclude the codepoint and the default
+// Linux fallback lacks the glyph, so the cascade names a family for it.
+// see the timed-avoid-hourglass-glyph maintainer note.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -39,10 +29,10 @@ const declarations = (body) => {
   return out;
 };
 
-// The top-level rules, read the way the browser reads them: comments blanked, media blocks taken out
-// so a resting reading answers the resting cascade, and each rule's own declarations. The reader the
-// other stylesheet suites carry skips selectors beginning with `@`, so the declared font families are
-// read separately below.
+// the top-level rules, read the way the browser reads them: comments
+// blanked, media blocks taken out so a resting reading answers the
+// resting cascade, and each rule's own declarations. the declared
+// font families are read separately.
 function rules(text) {
   const top = blanked(text).replace(/@media[^{]+\{(?:[^{}]|\{[^{}]*\})*\}/g, '');
 

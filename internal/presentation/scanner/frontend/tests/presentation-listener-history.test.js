@@ -1,8 +1,7 @@
-// The history table, pinned to the v6.6.3 mechanics: five fixed rows, blank rows before any
-// entry is made, an entry recorded when the call after it arrives, the row being played set
-// bold, and the four columns reading the call's labels with the raw values as their fallbacks.
-// The ring itself is the domain's (domain-replay-history); these cases are the component that
-// records into it and renders it.
+// the history table: five fixed rows, blank before any entry is made,
+// an entry recorded when the call after it arrives, the row being
+// played set bold, and the four columns reading the call's labels
+// with the raw values as fallbacks. the ring is the domain's.
 
 import './dom-shim.js';
 
@@ -19,9 +18,9 @@ import '../presentation/listener/rdio-display.js';
 
 import { connectFields, findAll } from './dom-shim.js';
 
-// The display records the call it leaves behind into the history, and the call it leaves
-// behind lives inside the use-cases. The cases name it through the same reading the component
-// takes, and hand it back to the real reading when the case is done.
+// the display records the call it leaves behind into the history,
+// and that call lives inside the use-cases: the cases name it through
+// the same reading the component takes, and hand it back after.
 const previousSlot = () => {
   const { useCases } = getAppContext();
 

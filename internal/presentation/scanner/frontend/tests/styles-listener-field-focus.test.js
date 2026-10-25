@@ -1,18 +1,7 @@
-// The search and unlock fields' keyboard focus, pinned to the cascade that draws it.
-//
-// The six filter fields and the unlock field are light Material fields: the visible field is the
-// box — its fill, its corner radii, its underline, its arrow — and the control inside it is inset
-// 16px from the box's sides. A focus ring drawn on the control therefore frames the control, not
-// the field: it crosses the box's sides 14px inside them, pokes 2px above and below the box, and
-// its border-bottom duplicates the field's own underline at a narrower width. The field's ring
-// belongs on the box, at the same 2px shape and distance every other control on the page keeps,
-// and the control inside carries no ring of its own — the browser's native ring is taken off it
-// only because the box draws the replacement.
-//
-// The readings are taken from the cascade the browser is given — comments blanked, each rule's own
-// declarations, media blocks tagged with the condition that runs them — the way the main screen's
-// picture is pinned. The underline and arrow readings ride along so the field's other focus
-// behaviour cannot drift while the ring moves.
+// the search and unlock fields' keyboard focus: the visible field is
+// the box, the control inside it is inset, and a ring drawn on the
+// control frames the control, not the field; the ring belongs on the box.
+// see the field-focus-ring-on-box maintainer note.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -199,10 +188,10 @@ describe('the field\'s other focus behaviour — unchanged while the ring moves'
 });
 
 describe('the field\'s keyboard ring — drawn whole, not cut off', () => {
-  // The ring is drawn outside the field box, so it only reads as the field's focus indicator while
-  // nothing nearer paints over it. The display clips everything inside itself to keep its readout
-  // lines tight, and the card carrying the unlock field hugs that field exactly: left, top and
-  // right, the ring would be cut to its bottom edge alone.
+  // the ring is drawn outside the field box, so it only reads as the
+  // field's focus indicator while nothing nearer paints over it: the
+  // display clips everything inside itself, and the card carrying the
+  // unlock field hugs that field exactly.
   const BLANKET = 'rdio-display *';
 
   for (const wrapper of ['rdio-display .auth form', 'rdio-display .auth form rdio-form-field']) {

@@ -1,11 +1,7 @@
-// The control buttons' behavior, pinned to the v6.6.3 control row: the locked screen only
-// focuses the unlock field and beeps nothing; LIVE FEED beeps activate on the way into the
-// offline mode and deactivate on the way out; HOLD SYS and HOLD TG beep denied with no call
-// and toggle through the prior maps; REPLAY hands the history walk to the display; SKIP and
-// PAUSE carry the legacy beep styles; AVOID cycles through the avoid steps and beeps denied
-// with no call; SEARCH and SELECT are gated on the configuration and beep the plain keypad
-// beep. The dimmer arms on the controls that armed it in the v6.6.3 control row — every
-// control except the two panel openers, and except AVOID when there is no call to avoid.
+// the control row's behavior: the locked screen only focuses the unlock
+// field and beeps nothing; the toggles, replay, skip, pause, and avoid
+// cycle answer through the use cases and beep by the state they leave;
+// the panel buttons are gated on the configuration, the dimmer is not.
 
 import './dom-shim.js';
 
@@ -18,9 +14,9 @@ import '../presentation/listener/rdio-controls.js';
 
 const SPOOKED = ['beep', 'livefeed', 'skip', 'pause', 'avoid', 'holdSystem', 'holdTalkgroup'];
 
-// The control bar mounted with the use-cases recorded: every beep and every action the bar
-// asks for is noted, every event the bar dispatches is noted, and the recording is cleared
-// before each press so a case asserts only what its own press did.
+// the control bar mounted with the use-cases recorded: every beep,
+// action, and event is noted, and the recording is cleared before each
+// press, so a case asserts only what its own press did.
 function bar() {
   const { store, useCases } = getAppContext();
 

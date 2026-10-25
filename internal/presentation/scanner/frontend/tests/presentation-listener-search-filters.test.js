@@ -1,18 +1,7 @@
-// The search screen's filters, and the list they are supposed to narrow.
-//
-// The operator opens the search drawer, picks a system, a talkgroup, a group, or a tag, and the list
-// of calls is supposed to answer with the calls that filter names. The history is stored under
-// references and the operator reads labels, so the screen's job is to say which system the label
-// "Metro" stands for, and to keep saying it for the filters that are labels already.
-//
-// The readings are taken on the rendered shell: the request the screen sends when the operator picks
-// a filter, the rows the screen lists from the answer, the state the form reports while a search is
-// in flight, and the dates the date field will accept.
-//
-// The server is not in the room. The screen's request is answered by an archive the test owns, which
-// keeps the calls the criteria select by the same rule the history is filtered by: references for the
-// system and the talkgroup, labels for the group and the tag. A screen that sends a label where a
-// reference is required is answered by the whole archive, which is exactly what the operator sees.
+// the search screen's filters and the list they narrow: the operator
+// reads labels and the history is stored under references, so the
+// screen must answer with the calls the named filter selects.
+// see the search-date-window-bounds maintainer note.
 
 import './dom-shim.js';
 
@@ -94,8 +83,8 @@ const ARCHIVE = [
   },
 ];
 
-// The rule the history is filtered by, written here so the answer the screen gets is the answer the
-// criteria select — and so a criterion the screen never sent shows up as calls it never wanted.
+// the rule the history is filtered by, written here so a criterion the
+// screen never sent shows up as calls it never wanted.
 function matching(options) {
   return ARCHIVE.filter((row) => {
     if (options.system !== undefined && row.system !== options.system) return false;
@@ -107,9 +96,9 @@ function matching(options) {
   });
 }
 
-// The two ends of a match, as the server names them. A search that matches nothing reports the Unix
-// epoch at both ends and not an absent span: that is what the history's own read leaves behind when
-// no call matches, and what the empty answer frame carries.
+// the two ends of a match, as the server names them: a search that
+// matches nothing reports the Unix epoch at both ends, not an absent
+// span, which is what the history's own read leaves on no match.
 function endsOf(matched) {
   if (!matched.length) return { dateStart: '1970-01-01T00:00:00Z', dateStop: '1970-01-01T00:00:00Z' };
 
@@ -118,14 +107,10 @@ function endsOf(matched) {
   return { dateStart: times[0], dateStop: times[times.length - 1] };
 }
 
-// The server answers a search with a window of two hundred calls, and the list shows ten of them at
-// a time. A window the test hands the screen stands in for the answer the server already gave, so
-// the readings can be taken with a search in flight on top of an answered list.
-// The store the page runs on is one object shared by every screen in the process, and it only
-// notifies a screen when a slice it declared actually changed. A test that leaves the store holding
-// what the next test is about to write is a test the next test never sees, so every screen the
-// tests render starts from the same known state, and the screen the previous test rendered is taken
-// off the store before the next one is put on it.
+// the server answers with a window of two hundred calls, ten to a page,
+// and the test hands the screen a window standing in for an answer
+// already given. the store is shared by every screen and notifies only
+// on a changed slice, so every render starts from a known state.
 let live = null;
 
 function resetStore() {
@@ -149,12 +134,10 @@ function answeredWindow(window, count) {
   });
 }
 
-// The search screen, rendered the way the page renders it. The promo and the display's clock are
-// timers the browser owns and the shim does not model, so they are handed to the test during the
-// render.
-//
-// `answers` is the search the screen asks for: when it is on, the archive answers; when it is off,
-// the request is recorded and left unanswered, which is the search in flight.
+// the search screen, rendered the way the page renders it; the promo
+// and the display's clock are timers the shim does not model, so they
+// are handed to the test during the render. `answers` is the search
+// asked for: on, the archive answers; off, the request is left open.
 function searchScreen({ answers = true } = {}) {
   document.body.replaceChildren();
 
@@ -197,8 +180,8 @@ function searchScreen({ answers = true } = {}) {
 
   const panel = findAll(el, (node) => node.tag === 'rdio-search-panel')[0];
 
-  // The browser puts the sort order on the field from the markup's own selection; the shim has no
-  // selected option, and the request the operator makes is measured with the order they are shown.
+  // the browser puts the sort order on the field from the markup's own
+  // selection; the shim has none, so the request is measured with it.
   panel.form.elements.sort.value = '-1';
 
   panel.open();

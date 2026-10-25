@@ -82,9 +82,9 @@ describe('domain/search-filters — cascading recomputation', () => {
     });
 });
 
-// The criteria the call history is searched by. The operator reads labels; the history is stored
-// under references, so a filter that names a system or a talkgroup has to say which one, and a
-// group or a tag is filtered by its label.
+// the criteria the call history is searched by. the operator reads
+// labels; the history is stored under references, so a system or a
+// talkgroup must say which one, and a group or tag filters by label.
 
 describe('domain/search-filters — the chosen filters become the criteria the history is searched by', () => {
     it('names the reference of the system the chosen system label stands for', () => {

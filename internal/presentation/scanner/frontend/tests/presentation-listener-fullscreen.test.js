@@ -1,17 +1,7 @@
-// The listener's fullscreen, and the keyboard's route into it.
-//
-// The listener's screen goes fullscreen on a double-click: the display fills the monitor and the
-// operator watches the call list. A double-click is a pointer gesture — there is no keyboard
-// equivalent of it, so an operator at the keyboard has no way into the fullscreen screen at all, and
-// an operator who cannot hold a pointer steady for two presses in the same place has no way either.
-// The state needs a control the keyboard can stop on, that says which way it will move the page, and
-// that says where the page is.
-//
-// The double-click route stays: it is the gesture the listener's operators use today, and a control
-// beside it takes the same state the same page keeps.
-//
-// The shim carries no fullscreen of its own: the test hands the page the platform's two calls and the
-// state the browser reports, and the reading is taken on the control the operator activates.
+// the listener's fullscreen and its keyboard route: the display fills
+// the monitor on a double-click, a gesture with no keyboard equivalent,
+// so the state needs a control the keyboard can stop on.
+// see the fullscreen-keyboard-control maintainer note.
 
 import './dom-shim.js';
 
@@ -31,14 +21,10 @@ import '../presentation/listener/rdio-status.js';
 
 import { findAll } from './dom-shim.js';
 
-// The platform's fullscreen, as the page asks for it. The browser answers the page's request with
-// the state it keeps, and tells the page about it with the event the page listens for; the test
-// carries both, and records the calls the page makes.
-//
-// The way in is the element's own request. The way out is the document's: Chrome and Safari carry
-// it on the document, and only Firefox puts it on the element. A page that asks the element to
-// leave is asking a question the browser never put on the element, and the page is left with no
-// way out of the state it entered.
+// the platform's fullscreen, as the page asks for it: the way in is
+// the element's own request, the way out the document's, because the
+// element never carries it. the shim records both the page's calls.
+// see the fullscreen-exit-api maintainer note.
 function fullscreenPlatform() {
   const calls = [];
 
@@ -69,10 +55,10 @@ function shell() {
 
   const el = document.createElement('rdio-app');
 
-  // The promo the shell schedules is a ten second timer the browser owns, and the display keeps the
-  // clock and the progress bar moving on intervals of its own: the shim does not model the clock, so
-  // the timers are handed to the test during the render and left unrun, and the real clock is put
-  // back before the reading is taken.
+  // the promo is a ten second timer the browser owns and the display
+  // keeps its clock and progress on intervals of its own: the shim
+  // hands those timers to the test during the render, left unrun.
+  // the real clock comes back before the reading is taken.
   const realSetTimeout = globalThis.setTimeout;
   const realSetInterval = globalThis.setInterval;
 

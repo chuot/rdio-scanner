@@ -43,9 +43,9 @@ test('a length never measured renders blank', () => {
   assert.equal(formatDuration('12'), '');
 });
 
-// The bounds a date field is given from the two ends of what a search answered with. The field is
-// a datetime-local field, so it reads its bound as a wall-clock minute and nothing else: a value
-// written in any other shape is a bound the field ignores.
+// the bounds a date field is given from the two ends of a search
+// answer. a datetime-local field reads its bound only as a wall-clock
+// minute: any other shape is a bound the field ignores.
 
 test('an instant becomes the wall-clock minute the date field reads', () => {
   const local = new Date(2026, 9, 6, 23, 41, 7);

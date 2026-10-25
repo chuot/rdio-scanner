@@ -1,14 +1,7 @@
-// The progress row rides the audio clock.
-//
-// The elapsed reading the progress row shows is the recording's own position: the engine
-// anchors it to the instant the recording entered the graph, so it restarts on every new
-// recording, freezes with the audio across a pause, and reads zero when nothing is playing.
-// The wall clock this replaces keyed its start on the call id — a replay of the same call
-// kept the old elapsed, and a paused call rode through the pause: the row jumped a whole
-// minute across a 62-second pause.
-//
-// The tick is the component's own callback; the test captures it at mount and turns the
-// engine clock by hand, so the reading is taken without waiting on wall time.
+// the progress row rides the audio clock: the engine anchors the
+// elapsed reading to the recording's own position, which the replaced
+// wall clock could not keep true across a replay or a pause.
+// see the audio-clock-progress-row maintainer note.
 
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';

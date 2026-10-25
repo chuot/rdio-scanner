@@ -1,8 +1,7 @@
-// The listener's unlock code panel and the search filters, read through the same form field the
-// administration sections use: the panel tells the listener why the code was refused even when they
-// never left the field — they pasted it, the browser filled it in, they pressed Enter — and a panel
-// nobody has typed in says nothing. The search filters validate nothing, so they carry no message at
-// all, whatever the listener does with them.
+// the listener's unlock code panel and search filters, read through
+// the shared form field primitive: the panel tells the listener why
+// the code was refused even when they never left the field, and a
+// panel nobody typed in says nothing. the filters validate nothing.
 
 import './dom-shim.js';
 
@@ -100,9 +99,9 @@ describe('presentation/listener/rdio-display — the unlock code panel', () => {
     const { input, close } = display();
 
     try {
-      // The unlock code is user-specific: no generic autofill purpose describes it, so the
-      // field suppresses the browser's purpose (the SC 1.3.5 exception) and carries the words
-      // the panel shows on it as its name.
+      // the unlock code is user-specific: no generic autofill purpose
+      // describes it, so the field suppresses the browser's purpose, an
+      // identified-autofill exception, and carries the panel's words.
       assert.equal(input.getAttribute('aria-label'), 'Unlock code');
       assert.equal(input.getAttribute('autocomplete'), 'off');
     } finally {

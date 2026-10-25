@@ -1,15 +1,7 @@
-// The flag row says which talkgroups the listener has taken out of the live feed, and for how long.
-//
-// The timed-avoid flag is the one member of that row that is drawn instead of spelled: the window
-// the livefeed map holds becomes a glyph with the minutes beside it. The v6.6.3 display drew that
-// glyph as a monochrome symbol, so it took the pale cyan the flag row is written in; the port draws
-// U+231B with U+FE0F, the selector that asks the browser for the colour-emoji face and refuses the
-// text face, and a full-colour pictogram lands in the middle of a row of flat text.
-//
-// The readings are taken on the rendered display: the flag's own text after a call and a livefeed
-// map have been put through the store the display is bound to. The state the glyph rides on — which
-// window the map holds, whether the talkgroup is avoided at all, whether a patch keeps the flag
-// lit — is read here too, so a change to the glyph cannot quietly change what the flag states.
+// the flag row says which talkgroups left the live feed and for how
+// long; the timed-avoid flag is drawn as a glyph with the minutes
+// beside it, and the port asks the browser for its colour-emoji face.
+// see the timed-avoid-hourglass-glyph maintainer note.
 
 import './dom-shim.js';
 
@@ -24,9 +16,9 @@ import { connectFields, findAll } from './dom-shim.js';
 
 import { getAppContext } from '../application/context.js';
 
-// The glyph the flag is meant to draw, and the pair it draws today. Written as escapes because the
-// emoji-presentation selector is invisible, and a test that cannot name what it is rejecting cannot
-// tell the reader why it failed.
+// the glyph the flag is meant to draw, and the pair it draws today,
+// written as escapes because the selector is invisible: a test that
+// cannot name what it rejects cannot say why it failed.
 const HOURGLASS = '\u29D6';
 const EMOJI_HOURGLASS = '\u231B';
 const EMOJI_PRESENTATION = '\uFE0F';
@@ -41,10 +33,10 @@ const CALL = {
   dateTime: Date.now(),
 };
 
-// The display runs a clock and a progress tick, so it is mounted in beforeEach and closed in
-// afterEach — including when a case fails, which is why the closing is not left to the case itself.
-// The store the context carries is shared by every case in the file, so the keys this suite writes
-// are cleared on both sides of it: no case inherits another's call or map.
+// the display runs a clock and a progress tick, so it is mounted in
+// beforeEach and closed in afterEach, including when a case fails.
+// the context's store is shared by every case, so its keys are
+// cleared on both sides of it.
 let el;
 
 const store = () => getAppContext().store;
@@ -66,8 +58,8 @@ afterEach(() => {
 const span = (name) =>
   findAll(el, (node) => node.tag === 'span' && node.className.split(/\s+/).includes(name))[0];
 
-// The reading the operator takes: the text the flag shows for a call on system 1 / talkgroup 10
-// against a livefeed map, and the classes that say which flags are lit.
+// the reading the operator takes: the flag's text for system 1 and
+// talkgroup 10 against a livefeed map, and the classes naming the flags.
 function flagsFor(map, call = CALL) {
   store().setState({ call, map });
 

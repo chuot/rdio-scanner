@@ -1,29 +1,22 @@
-// The smallest DOM the listener presentation components need to be exercised outside a browser:
-// createElement, customElements, append/replaceChildren, textContent, attributes, and class names.
-// innerHTML is stored as the string it is and parsed into real child nodes, so a component that builds
-// its markup in innerHTML can be read from the inside by a test.
-//
-// The globals the application's composition point touches on the way in are here too, inert: a
-// WebSocket that never opens, an audio context that never produces sound, a localStorage of its own.
-// A component test is about what the component shows, and nothing here is meant to behave like a
-// browser beyond the nodes a test reads.
+// the smallest DOM the listener presentation components need outside a
+// browser: elements, attributes, events, and the inert application
+// globals a component test must not let reach the real world.
+// see the dom-shim-scope maintainer note.
 
 const FORM_FIELD = 'rdio-form-field';
 
-// connectFormField runs the primitive's own connectedCallback the moment a component appends the
-// field, which is the moment a browser runs it: the field already carries its control, and it is
-// connected before anything writes a message into it.
+// connectFormField runs the primitive's own connectedCallback the
+// moment a component appends the field, as a browser does: the field
+// carries its control before anything writes a message into it.
 function connectFormField(node) {
   if (node && node.tag === FORM_FIELD && typeof node.connectedCallback === 'function' && !node.dataset.bound) {
     node.connectedCallback();
   }
 }
 
-// connectCustom runs the connectedCallback of every custom element under a root, in the order a
-// browser runs them: the element first, then what it builds into its children. Markup a component
-// lays out through innerHTML is inserted as one tree, so every element in it is connected at that
-// moment — the shell that lays out its panels then reads the controls its own elements build inside
-// them.
+// connectCustom runs the connectedCallback of every custom element
+// under a root, in browser order: the element first, then what it
+// builds into its children, as one inserted tree connects at once.
 function connectCustom(node) {
   if (node.tag === '#text') return;
 
@@ -43,11 +36,10 @@ class ShimNode {
     this._text = '';
   }
 
-  // dataset and the data-* attributes are one thing in a browser: the builders write a row's key, a
-  // field's key, and the mark that says a row is sortable through dataset, the markup the components
-  // lay out carries the same facts as attributes, and the handlers read them back through dataset.
-  // The shim keeps them as one thing, so a control marked through dataset and a control marked in
-  // markup answer the same reading.
+  // dataset and the data-* attributes are one thing in a browser, so a
+  // control marked through dataset and a control marked in markup
+  // answer the same reading.
+  // see the dom-shim-one-node-facts maintainer note.
   get dataset() {
     const node = this;
 
@@ -69,10 +61,9 @@ class ShimNode {
     });
   }
 
-  // A control's name is one fact in a browser: the `name` attribute the markup carries is the
-  // property the page reads, and a form's handler that answers "which control changed?" reads it
-  // off the event's target. A shim that leaves it out makes a handler that names its controls
-  // answer nothing, and a test has to hand the control the name the markup already carries.
+  // a control's name is one fact in a browser: the markup's attribute is
+  // the property the page and the form's handler read off the target.
+  // see the dom-shim-one-node-facts maintainer note.
   get name() {
     return this.attributes.name ?? '';
   }
@@ -81,10 +72,10 @@ class ShimNode {
     this.attributes.name = String(value);
   }
 
-  // A date field's bounds are one fact in a browser, like its name: the `min` and `max` attributes
-  // the markup carries are the properties the page reads and writes, and the field accepts only the
-  // wall-clock shape they are written in. A shim that keeps them as loose properties lets a test set
-  // a bound the field would have thrown away.
+  // a date field's bounds are one fact, like its name: the markup's
+  // `min` and `max` are the properties the page reads and writes, and
+  // the field accepts only the wall-clock shape they are written in.
+  // see the dom-shim-one-node-facts maintainer note.
   get min() {
     return this.attributes.min ?? '';
   }
@@ -101,9 +92,9 @@ class ShimNode {
     this.attributes.max = String(value);
   }
 
-  // hidden is one fact in a browser: the attribute the markup carries and the property the page
-  // sets are the same state. A panel hidden in markup and opened by property, and a control the page
-  // takes off the screen, have to answer the same reading.
+  // hidden is one fact in a browser: the attribute the markup carries
+  // and the property the page sets are the same state.
+  // see the dom-shim-one-node-facts maintainer note.
   get hidden() {
     return this.attributes.hidden !== undefined;
   }
@@ -146,10 +137,10 @@ class ShimNode {
     this.children = [...nodes];
   }
 
-  // A browser puts the keyboard at the top of the document when the control it was standing on leaves
-  // the page. Rebuilding a subtree that holds the focused control is that: the control is gone, and
-  // the focus has nowhere to stand. A shim that keeps the keyboard on a node that is no longer on the
-  // page lets a test read a keyboard position no operator ever has.
+  // a browser puts the keyboard at the top of the document when the
+  // control it stood on leaves the page; keeping focus on a detached
+  // node lets a test read a position no operator ever has.
+  // see the dom-shim-one-node-facts maintainer note.
   dropFocusUnder() {
     const active = globalThis.document.activeElement;
 
@@ -172,9 +163,9 @@ class ShimNode {
     this._html = html;
     this.children = parseHTML(html);
 
-    // A browser connects every custom element the moment the tree it parsed is inserted, in document
-    // order: the element first, then what it builds into its children. The roots of a parsed tree
-    // hang under the node that was given the markup, and are connected with it.
+    // a browser connects every custom element the moment the parsed tree
+    // it belongs to is inserted, in document order: the element first,
+    // then what it builds into its children.
     for (const node of this.children) if (node && typeof node === 'object') node.parent = this;
 
     for (const node of this.children) connectCustom(node);
@@ -222,9 +213,9 @@ class ShimNode {
     this.attributes[name] = String(value);
   }
 
-  // An element's id is the attribute the page writes it as: `el.id = 'content'` is how a browser
-  // gives an element the name a skip link points at and a region is labelled by, and the tests read
-  // that name back through getAttribute, the way the accessibility tree does.
+  // an element's id is the attribute the page writes it as: a browser
+  // gives the element the name a skip link points at and a region is
+  // labelled by, and the tests read it back the way the acc tree does.
   get id() {
     return this.attributes.id ?? '';
   }
@@ -328,12 +319,10 @@ class ShimNode {
     this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn);
   }
 
-  // A click is answered with the event the browser hands the handler: the control the pointer was on
-  // is the event's target, and a handler sitting on a container — the shell's panel close buttons,
-  // the controls that open a panel — names the control through that target.
-  // The browser's click event carries preventDefault and stopPropagation; a handler that takes
-  // the activation away from a surrounding control needs them, and a click the test leaves on a
-  // control is the click the browser leaves.
+  // a click is answered with the event the browser hands the handler: the
+  // control the pointer was on is the target, and a handler on a container
+  // names the control through it. the browser's click event carries
+  // preventDefault and stopPropagation, which a suppressing handler needs.
   click() {
     this.dispatchEvent({
       type: 'click',
@@ -344,12 +333,9 @@ class ShimNode {
     });
   }
 
-  // The auth panel refocuses the unlock code field after a refused code; the shim records the
-  // focus so a test can see it happened.
-  //
-  // The focus lands where a browser puts it: on the control the keyboard is standing on, which the
-  // page reads back through document.activeElement — the panel that takes the keyboard in, and the
-  // control that gets it back when the panel closes, are both read through it.
+  // the auth panel refocuses the unlock code field after a refused code,
+  // and the focus lands where a browser puts it: on the control the
+  // keyboard is standing on, read back through document.activeElement.
   focus() {
     this.focused = true;
     document.activeElement = this;
@@ -361,9 +347,9 @@ class ShimNode {
     if (document.activeElement === this) document.activeElement = document.body;
   }
 
-  // Events bubble the way a browser bubbles them: the panel's handler sits on the form, the form
-  // field's own handler sits on the field that owns the control, and a change typed into a control
-  // reaches both.
+  // events bubble the way a browser bubbles them: the panel's handler
+  // sits on the form, the field's own handler on the field, and a
+  // change typed into a control reaches both.
   dispatchEvent(event) {
     for (let node = this; node; node = node.parent) {
       for (const fn of node.listeners?.[event.type] ?? []) fn(event);
@@ -462,9 +448,9 @@ globalThis.window = {
     },
   },
 
-  // The listener shell registers the guard a browser asks the page before it leaves, and takes it
-  // off again when the shell is taken off the page. The shim keeps the listeners it is given, so a
-  // test can render the shell and disconnect it the way the page does, and read what it registered.
+  // the listener shell registers the guard a browser asks the page
+  // before it leaves, and takes it off when the shell disconnects; the
+  // shim keeps the listeners it is given so a test can read what came.
   addEventListener(type, fn) {
     (this.listeners ??= {})[type] = [...(this.listeners?.[type] ?? []), fn];
   },
@@ -502,9 +488,9 @@ globalThis.AudioContext = class {
   }
 };
 
-// The primitives re-dispatch a CustomEvent carrying the value a control picked, and the controls
-// announce their presses as CustomEvents; a test that drives a component needs the constructor the
-// browser hands them.
+// the primitives re-dispatch a CustomEvent carrying the value a
+// control picked, and the controls announce their presses the same
+// way; driving a component needs the constructor the browser hands.
 globalThis.CustomEvent = class CustomEvent {
   constructor(type, init = {}) {
     this.type = type;
@@ -549,10 +535,10 @@ function parseHTML(html) {
       continue;
     }
 
-    // Every registered custom element is built through its own class, the way createElement builds
-    // it: a panel that lays its content out through innerHTML gets the primitives' own behaviour, as
-    // a browser upgrades what it inserts. The form field is the case the primitives write into from
-    // their own connectedCallback, and it is built the same way as the rest.
+    // every registered custom element is built through its own class, as
+    // createElement builds it: a browser upgrades what it inserts, and a
+    // panel laying out through innerHTML gets the primitives' own behaviour,
+    // the form field included, which primitives write into when connected.
     const tag = token.match(/^<([a-zA-Z][\w-]*)/)[1];
     const ctor = globalThis.customElements.registry.get(tag);
 
@@ -561,9 +547,9 @@ function parseHTML(html) {
     node.tag = tag;
 
     for (const attr of token.replace(/^<[a-zA-Z][\w-]*/, '').replace(/\/?>$/, '').matchAll(/([a-zA-Z-]+)(?:="([^"]*)")?/g)) {
-      // A bare attribute is a present attribute with an empty value: `material` on the paginator and
-      // `hidden` on a panel say the same thing to the page that `material=""` says. A parser that
-      // reads only the quoted spelling leaves the page's own markup answering "not present".
+      // a bare attribute is a present attribute with an empty value, and
+      // a quoted-only parser answers those markups as absent.
+      // see the dom-shim-parser maintainer note.
       node.attributes[attr[1]] = attr[2] ?? '';
 
       if (attr[1] === 'class') node.className = attr[2] ?? '';
@@ -628,9 +614,9 @@ function matches(node, selector) {
 
   if (attr && node.attributes[attr[1]] !== attr[2]) return false;
 
-  // A bare [attr] is the presence test the page uses to name the controls that carry a mark: the
-  // builders write it through dataset, the browser's data-* view, so both spellings count. Without
-  // it, a selector naming an attribute a control carries matches every node.
+  // a bare [attr] is the presence test naming the controls carrying a
+  // mark: the builders write it through dataset, the browser's data-*
+  // view, so both spellings count. without it, every node matches.
   const has = selector.match(/\[([a-zA-Z-]+)\]/);
 
   if (has) {
@@ -656,9 +642,9 @@ export function texts(nodes) {
   return nodes.map((node) => node.textContent);
 }
 
-// connectFields runs the form field primitive's connectedCallback on every field under a root, for
-// the tests that drive a panel whose markup arrived through innerHTML: a browser connects those
-// fields when the tree is inserted, and the shim inserts them by parsing, not by appending.
+// connectFields runs the form field primitive's connectedCallback on
+// every field under a root, for tests whose panel markup arrived
+// through innerHTML: a browser connects those fields on insertion.
 export function connectFields(root) {
   const fields = findAll(root, (node) => node.tag === FORM_FIELD);
 
@@ -667,9 +653,9 @@ export function connectFields(root) {
   return fields;
 }
 
-// fieldMessage is the text the listener sees under the control — the successor of mat-error. A
-// field whose primitive is not connected has no message element, which is itself a reading: the
-// message was never written on the page.
+// fieldMessage is the text the listener sees under the control, the
+// successor of mat-error. a field whose primitive is not connected
+// has no message element, itself a reading: no message on the page.
 export function fieldMessage(field) {
   const node = findAll(field, (child) => child.className?.split(/\s+/).includes('rdio-form-error'))[0];
 

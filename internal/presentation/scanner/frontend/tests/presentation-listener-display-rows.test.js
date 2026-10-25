@@ -1,11 +1,7 @@
-// The display's rows, built the way the v6.6.3 display built them: every row is a plain row
-// that places its children at the ends with space-between, the name row is the big row, and
-// the flag row carries each flag in its own cell, a direct child of the row. The three-column
-// grid the v7 baseline ran needed the `three` and `full` classes and the nested flag wrapper;
-// the v6.6.3 row needs none of them, and the markup that asks for the grid is the markup the
-// grid is guilty of. The system row keeps its type cell and the flag row keeps its DELAYED
-// flag — the v8 readings folded into the v6.6.3 shape — and the history keeps its four
-// columns.
+// the display's rows: every row is a plain row placing its children
+// at the ends with space-between, the name row is the big row, and
+// the flag row carries each flag in its own cell, a direct child.
+// the system row keeps its type cell and the flag row keeps DELAYED.
 
 import './dom-shim.js';
 
@@ -18,9 +14,9 @@ import '../presentation/listener/rdio-display.js';
 
 import { connectFields, findAll } from './dom-shim.js';
 
-// The display runs a clock and a progress tick; a component test hands it the store it reads
-// and disconnects it when the reading is taken, so no timer outlives the case — including a
-// case that fails, which is why the display is mounted in beforeEach and closed in afterEach.
+// the display runs a clock and a progress tick; the test hands it the
+// store it reads, mounts it in beforeEach and closes it in afterEach,
+// so no timer outlives the case, including a case that fails.
 let el;
 
 beforeEach(() => {

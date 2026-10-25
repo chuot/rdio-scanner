@@ -1,8 +1,7 @@
-// The notification the listener puts on the screen: the message, the surface it sits on, and the
-// way it leaves. The listener's box plays a 150ms enter and a 75ms exit, and the box is taken off
-// the page when the exit ends — so the hide is a promise about an animation running. An operator
-// who asks the platform for less motion gets the animations taken away, and the notification still
-// has to leave: the hide cannot depend on the animation that the preference removed.
+// the notification the listener puts on the screen: the message, the
+// surface it sits on, and the way it leaves. the box plays a 150ms enter
+// and a 75ms exit, and the animations go away when the operator asks
+// for less motion, so the hide cannot depend on them to leave the page.
 
 import './dom-shim.js';
 
@@ -20,9 +19,9 @@ function motionPreference(reduced) {
   });
 }
 
-// The host the page carries: the listener's own carries the `material` attribute, which is what
-// asks the primitive for the baseline's surface and animations; the administration application's
-// does not, and renders as it always did.
+// the host the page carries: the listener's own carries the `material`
+// attribute, which asks the primitive for the baseline's surface and
+// animations; the administration application's does not.
 function host({ material = true } = {}) {
   document.body.replaceChildren();
 

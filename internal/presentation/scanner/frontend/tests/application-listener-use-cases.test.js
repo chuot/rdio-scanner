@@ -355,10 +355,10 @@ describe('application/listener-use-cases — avoid / hold / category', () => {
     });
 });
 
-// The select panel's talkgroup press is a plain flip: it switches the talkgroup on or off and
-// never arms a timed avoid — the timed windows belong to the control bar's AVOID alone. A flip
-// on a talkgroup the AVOID control left in a timed window clears the window and cancels its
-// expiry, the way the v6.6.3 panel press cleared the timer.
+// the select panel's talkgroup press is a plain flip: it switches the
+// talkgroup on or off and never arms a timed avoid. a flip on a
+// talkgroup the AVOID control left in a timed window clears the window
+// and cancels its expiry.
 describe('application/listener-use-cases — the select panel flip', () => {
     it('toggleTalkgroup flips an active talkgroup off with no minutes and no armed timer', () => {
         const { useCases, socket, timers } = setup();
@@ -472,15 +472,14 @@ describe('application/listener-use-cases — playback mode (search PLAY)', () =>
     });
 });
 
-// The queue count on a searched playback is the number of calls that will play from the one
-// being played up to the newest of the searched history, the call being played among them.
-// Playback walks toward the newest call whichever way the page is sorted — a descending page
-// starts at its oldest row and walks back up to the newest, an ascending page walks forward to
-// it — so every SKIP NEXT takes one call off the number and the number never climbs.
+// the queue count on a searched playback is the calls that will play
+// from the one being played up to the newest of the searched history,
+// the played call among them. playback walks toward the newest call in
+// both sort orders, so every SKIP NEXT takes one off the number.
 describe('application/listener-use-cases — the queue count steps down on every skip', () => {
-    // Walks a searched playback from a row of the page the search answered with, `steps` skips
-    // deep. The call each skip asks for is read from the request the use case sent, so the walk
-    // itself is what the test sees.
+    // walks a searched playback from a row of the answered page, `steps`
+    // skips deep. the call each skip asks for is read from the request the
+    // use case sent, so the walk itself is what the test sees.
     function walkThrough({ sort, page, from, steps, offset = 0, count = page.length, limit = 200 }) {
         const { useCases, socket, store } = setup();
 
@@ -566,10 +565,10 @@ describe('application/listener-use-cases — the queue count steps down on every
     });
 });
 
-// The searched history is longer than the page the server answered with. The walk toward the
-// newest call runs off the end of the page it is on, and the calls it needs are on the page
-// beside it: the page at the lower offset for a descending page, the page at the higher offset
-// for an ascending one. With no page of newer calls left, the walk is exhausted.
+// the searched history is longer than the page the server answered:
+// the walk toward the newest call runs off the page, and the calls it
+// needs are on the page beside it, the lower offset for descending,
+// the higher for ascending. with no newer page left, the walk ends.
 describe('application/listener-use-cases — the searched playback crosses to the page of newer calls', () => {
     function playbackOn({ sort, page, from, offset = 0, count = page.length, limit = 200 }) {
         const { useCases, socket, store } = setup();
@@ -648,10 +647,10 @@ describe('application/listener-use-cases — the searched playback crosses to th
     });
 });
 
-// The search panel's progress bar is cleared by its store subscription on the playback list.
-// The store deep-compares slices, so an answer equal to the list already on screen notifies
-// nobody and the bar runs forever. Every call-list answer must carry a signal that cannot
-// compare equal: a sequence counter.
+// the search panel's progress bar clears on its store subscription to
+// the playback list, and the store deep-compares slices, so an answer
+// equal to the list on screen notifies nobody and the bar runs forever:
+// so every call-list answer carries a sequence counter that cannot match.
 describe('application/listener-use-cases — call-list answers always notify', () => {
     const page = { count: 0, options: { limit: 200, offset: 0, sort: -1 }, results: [] };
 
@@ -748,12 +747,10 @@ describe('application/listener-use-cases — auth', () => {
     });
 });
 
-// The alert tone in front of a live call. The fake engine below keeps, in the order it was asked,
-// the tone sequences it was given and the recordings it was asked to start, and holds each tone open
-// until the test ends it, the way the audio engine resolves a sequence when its last oscillator ends.
-//
-// The tone is a live arrival's: a call the listener replays, a call opened from the search panel, and
-// anything in playback mode start their recording with no tone in front of it.
+// the alert tone in front of a live call. the fake engine keeps the
+// tone sequences and recordings it is asked for, in order, and holds
+// each tone open until the test ends it. the tone is a live arrival's:
+// replayed, searched, and playback-mode calls start with no tone.
 
 function createToneAwareAudio() {
     const schedule = [];
@@ -925,11 +922,10 @@ describe('application/listener-use-cases — the alert tone in front of a live c
         assert.equal(useCases.call?.id, 2);
     });
 
-    // The queue is the number the operator watches while the tone is open: a call taken from
-    // the queue has left it, and a call that arrives during the tone is in it. The number
-    // moves when the queue moves, and the number carried when the recording starts is the
-    // queue as it stands then — not the one captured before the tone. Talkgroup 100 carries
-    // the tone; talkgroup 101 calls queue behind it with no tone of their own.
+    // the queue is the number the operator watches while the tone is open:
+    // a call taken from the queue has left it, and one arriving during the
+    // tone is in it. the number carried when the recording starts is the
+    // queue as it stands then, not the one captured before the tone.
     it('a skip behind an open tone decrements the queue count before the tone ends', async () => {
         const audio = createToneAwareAudio();
         const { useCases, socket, store } = setup({ audio });
@@ -986,10 +982,10 @@ describe('application/listener-use-cases — the alert tone in front of a live c
     });
 });
 
-// Every action that ends a call must silence the recording in flight: the use case keeps the
-// handle the engine hands back and uses it in its stop funnel. And a silenced recording must
-// never trigger the follow-on skip it was wired to — a browser fires `ended` on a manual stop
-// too, so the ended closure is guarded by the play it belongs to.
+// every action that ends a call silences the recording in flight: the
+// use case keeps the engine's handle and uses it in its stop funnel.
+// a silenced recording must never trigger its follow-on skip: a browser
+// fires `ended` on a manual stop too, so the ended closure checks its play.
 describe('application/listener-use-cases — every action that ends a call silences the recording', () => {
     function playingCall() {
         const harness = setup();
@@ -1056,9 +1052,9 @@ describe('application/listener-use-cases — every action that ends a call silen
     });
 });
 
-// The pause reaches the audio port: suspending the playback context is what silences a
-// recording in flight, and the engine's re-arm gate keeps it silenced. Unpausing resumes the
-// context and plays, so the recording continues where it stopped or the queued call starts.
+// the pause reaches the audio port: suspending the playback context
+// silences the recording in flight and the re-arm gate keeps it
+// silenced; unpausing resumes the context and continues or starts.
 describe('application/listener-use-cases — pause reaches the audio port', () => {
     it('PAUSE suspends the playback context; unpausing resumes it and the recording continues', async () => {
         const { useCases, socket, audio, timers } = setup();
@@ -1105,10 +1101,10 @@ describe('application/listener-use-cases — pause reaches the audio port', () =
     });
 });
 
-// The owner's report: in archive playback mode, PAUSE followed by SKIP NEXT made the queue
-// number read 0 even though the walk was full. While no call is playing — the gap a paused
-// skip opens — the reference counts from the call the walk last played, so the number never
-// zeroes mid-walk. Live mode's number is the queue length and never takes this path.
+// the owner's report: in archive playback mode, PAUSE then SKIP NEXT
+// read the queue as 0 though the walk was full. while nothing plays,
+// the gap a paused skip opens counts from the call the walk last played.
+// live mode's number is the queue length and never takes this path.
 describe('application/listener-use-cases — the queue number stays truthful across a paused skip', () => {
     it('a paused playback skip keeps the walk count and never reads zero', async () => {
         const { useCases, socket, store } = setup();
