@@ -25,9 +25,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// The administrator's configuration resources: the sections an operator inspects often enough to
-// read them directly, with no tool call in between. Two of them inventory credentials, and a
-// credential inventory read by an assistant must not hand out the credentials it inventories.
+// The administrator's configuration resources, read directly with no tool
+// call between. Two inventory credentials, and an inventory read must not
+// hand out the credentials it inventories.
 
 func TestTheAdministratorReadsEveryConfigurationResource(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
@@ -72,9 +72,9 @@ func TestTheAdministratorReadsEveryConfigurationResource(t *testing.T) {
 	}
 }
 
-// The credential inventories. The point of reading them is to know which listeners and which
-// capture tools exist and what they are entitled to; the secret itself is not part of that
-// question, and an assistant that repeats a code into a chat log has leaked it.
+// The credential inventories: read to know which listeners and capture tools
+// exist and what they are entitled to; the secret is not part of that question,
+// and an assistant repeating a code into a chat log has leaked it.
 func TestTheCredentialInventoriesAreMasked(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
 
@@ -95,8 +95,8 @@ func TestTheCredentialInventoriesAreMasked(t *testing.T) {
 		}
 	}
 
-	// The inventories still answer the questions they are read for: who the code belongs to,
-	// when it stops working, and what it is entitled to.
+	// The inventories still answer what they are read for: who the code belongs
+	// to, when it stops working, and what it is entitled to.
 	access := readText(t, s, accessURI)
 
 	var rows []struct {
@@ -116,9 +116,9 @@ func TestTheCredentialInventoriesAreMasked(t *testing.T) {
 	}
 }
 
-// The read-only tier reads no configuration resource: not in its catalog, and not by URI either.
-// The routing hands a caller the set its credential opens, so a resource the caller was never
-// handed is not there to read, and the answer says nothing about the deployment.
+// The read-only tier reads no configuration resource, in its catalog or by
+// URI: the routing hands a caller the set its credential opens, and the
+// answer says nothing about the deployment.
 func TestTheReadOnlyTierSeesNoConfigurationResource(t *testing.T) {
 	s := newCallerSession(t, readScoped())
 
@@ -147,9 +147,9 @@ func TestTheReadOnlyTierSeesNoConfigurationResource(t *testing.T) {
 	}
 }
 
-// One level of one system, read by a template a client fills in: the level lists are long enough
-// that an assistant asks for one system's talkgroups, not the whole tree, and the whole tree is
-// beside it as a resource.
+// One level of one system, read through a template a client fills in: the level
+// lists are long enough that an assistant asks for one system's talkgroups,
+// with the whole tree beside it as a resource.
 func TestTheSystemLevelTemplatesReadOneLevelOfOneSystem(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
 
@@ -227,8 +227,8 @@ func TestTheLogTemplateReadsOneSeverityOfOneDay(t *testing.T) {
 	}
 }
 
-// decodeInto reads a resource body into the shape the test asks about: a resource that declares
-// one shape and answers another is caught here.
+// decodeInto reads a resource body into the shape the test asks about: a
+// resource declaring one shape and answering another is caught here.
 func decodeInto(t *testing.T, text string, into any) {
 	t.Helper()
 
