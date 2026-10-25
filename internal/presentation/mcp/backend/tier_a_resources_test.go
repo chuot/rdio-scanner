@@ -25,9 +25,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// The read-only tier's resources: a browsable slice of the recorded history, and the projection of
-// the references it names its filters with. Resources are read directly, with no tool call, so what
-// a caller is allowed to see has to be decided by the read itself.
+// The read-only tier's resources: a browsable slice of the recorded history
+// and the projection of the references its filters name. Resources are read
+// directly, so the read itself decides what a caller may see.
 
 func TestTheReadOnlyTierListsItsResourcesAndNoConfiguration(t *testing.T) {
 	s := newCallerSession(t, readScoped())
@@ -88,8 +88,8 @@ func TestTheHistoryTemplateReadsASliceForTheCallersScope(t *testing.T) {
 			own.Count, own.Results)
 	}
 
-	// A slice naming a system outside the scope is answered as an empty slice, the same answer a
-	// talkgroup with nothing recorded gets. Refusing it by name would say what the caller is missing.
+	// A slice naming a system outside the scope answers the empty slice, as an
+	// empty talkgroup does: refusing it by name would say what is missing.
 	outside := read(t, s, "rdio-scanner://calls/10002/1514000")
 	if outside.Count != 0 || len(outside.Results) != 0 {
 		t.Fatalf("a slice outside the caller's scope answered %+v, want the empty slice", outside)
@@ -102,8 +102,8 @@ func TestTheHistoryTemplateSlicesByDay(t *testing.T) {
 	today := fixtureTime.Format("2006-01-02")
 	yesterday := fixtureTime.Add(-24 * time.Hour).Format("2006-01-02")
 
-	// The same window, narrowed to each of the two days the history is spread over. A date argument
-	// the server ignored would answer both the same way.
+	// The same window narrowed to each of the two days the history is spread over:
+	// a date argument the server ignored would answer both the same way.
 	sliced := read(t, s, "rdio-scanner://calls/10001/1514000?date="+today)
 	if sliced.Count != 2 {
 		t.Fatalf("the slice narrowed to %s answered %d calls, want the two recorded on it: %+v",
