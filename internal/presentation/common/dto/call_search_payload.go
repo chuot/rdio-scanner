@@ -22,23 +22,20 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// CallSearchPagePayload is the answer to a call search: the page, and the criteria the listener asked
-// with echoed back so the listener can tell which of its filters this server actually used.
+// CallSearchPagePayload is one search answer: the page and the criteria the
+// listener asked with, echoed back. see the call-search-page-ordering maintainer note.
 type CallSearchPagePayload struct {
 	Page ports.CallSearchPage
 
-	// Criteria is the search as it arrived on the wire, not the search the query ran. The echo says
-	// what the listener asked for, and the query says what this server could do about it.
+	// Criteria is the search as it arrived on the wire, not the
+	// search the query ran. see the call-search-page-ordering maintainer note.
 	Criteria map[string]any
 }
 
-// MarshalJSON writes the answer.
-//
-// Unlike a call payload, this object is not built from a map: the legacy server marshals it from a
-// struct, so its keys come out in the order its fields are declared — count, dateStart, dateStop,
-// options, results — and a row comes out as id, system, talkgroup, dateTime. A call and a history row
-// describing the same call therefore disagree about the order of the same keys, and the captured
-// frames say so.
+// MarshalJSON writes the answer. The legacy server marshaled
+// this one from a struct, so keys keep declaration order:
+// count, dateStart, dateStop, options, results, a row as id,
+// system, talkgroup, dateTime. see the call-search-page-ordering maintainer note.
 func (payload CallSearchPagePayload) MarshalJSON() ([]byte, error) {
 	return json.Marshal(callSearchEnvelope{
 		Count:     payload.Page.Count,
@@ -58,16 +55,10 @@ type callSearchEnvelope struct {
 	Results   []CallSearchRow `json:"results"`
 }
 
-// CallSearchRow is one call in a history page. It carries the four things a history view lists, and
-// the system is the system reference itself and not an object holding one — a listener that reads
-// `row.system.systemRef` gets nothing and does not say so.
-//
-// The moment is a Go time and so keeps its milliseconds, where the same call in a call payload is
-// formatted to the second.
-//
-// The length is on every row, named in seconds to the millisecond: the row is a struct, and a
-// struct always names its fields, so a row the server stored before any source could measure it
-// names the zero that means "never measured" — the same zero the column carries.
+// CallSearchRow is one call in a history page: the four things a
+// history view lists. The system is the system reference itself,
+// not an object holding one, the moment keeps milliseconds, and
+// the length is on every row. see the call-search-page-ordering maintainer note.
 type CallSearchRow struct {
 	ID          uint64          `json:"id"`
 	System      uint            `json:"system"`
@@ -92,10 +83,10 @@ func callSearchRows(summaries []ports.CallSummary) []CallSearchRow {
 	return rows
 }
 
-// callSearchEcho is the criteria the listener asked with, in the order the legacy server declares
-// them. A criterion that is absent is left out, which is what an `any` holding nothing means here: a
-// criterion that was asked for and happens to be zero is still there, and a criterion that was not
-// asked for is not.
+// callSearchEcho is the criteria the listener asked with, in the
+// order the legacy server declares them. An absent criterion is
+// left out; a zero criterion that was asked for is still there.
+// see the call-search-page-ordering maintainer note.
 type callSearchEcho struct {
 	Date      any `json:"date,omitempty"`
 	Group     any `json:"group,omitempty"`
@@ -107,10 +98,10 @@ type callSearchEcho struct {
 	Talkgroup any `json:"talkgroup,omitempty"`
 }
 
-// echoCallSearch accepts a criterion only in the shape the search understands it in, which is the same
-// rule domain.ParseCallSearch uses, with two differences that belong to the echo and not to the
-// search: a page size that was not asked for is not invented here, and a page size that was asked for
-// is not clamped here. The search clamps it to its own maximum and still answers with what was asked.
+// echoCallSearch accepts a criterion only in the shape the search
+// understands, as domain.ParseCallSearch does, except the echo
+// neither invents an unasked page size nor clamps an asked one.
+// see the call-search-page-ordering maintainer note.
 func echoCallSearch(criteria map[string]any) callSearchEcho {
 	echo := callSearchEcho{}
 
