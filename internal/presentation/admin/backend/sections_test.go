@@ -26,14 +26,13 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The per-section administrator endpoints, ported from the suite the legacy server carries for them.
-// They are the half of the configuration surface an administrator's page actually uses: it saves one
-// section at a time, and it is answered with that section and not with the whole configuration.
+// The per-section administrator endpoints, ported from the legacy server's suite: the
+// half of the configuration surface an administrator's page actually uses, saved and
+// answered one section at a time.
 
-// A section this server does not have is refused before anything else is looked at, including whether the
-// request carries a credential: the endpoint does not know what it would be protecting, and an
-// administrator's page that asks for a section that does not exist is told which of its assumptions is
-// wrong.
+// A section this server does not have is refused before anything else is looked at,
+// including the credential: the endpoint does not know what it would be protecting, and
+// the page is told which of its assumptions is wrong.
 func TestSectionEndpointRejectsASectionThisServerDoesNotHave(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -58,10 +57,9 @@ func TestSectionEndpointRejectsASectionThisServerDoesNotHave(t *testing.T) {
 	}
 }
 
-// The dashboard is a section of the administrator's page and not of the configuration: it reads the
-// server and replaces nothing. So the configuration path answers it exactly as it answers a name it has
-// never heard of, and an administrator's page that ever tried to save it is told there is nothing there
-// to save rather than being handed an empty list it would then write over the server's own state.
+// The dashboard is a section of the administrator's page and not of the configuration:
+// it reads the server and replaces nothing, so the configuration path answers it as a
+// name it has never heard of and a save against it is told there is nothing to save.
 func TestSectionEndpointRefusesTheDashboardBecauseItSavesNothing(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -138,9 +136,9 @@ func TestSectionEndpointAnswersOnlyTheSectionItIsAskedFor(t *testing.T) {
 	}
 }
 
-// A section save replaces that section and leaves every other section running. An administrator's page
-// saves one list at a time, and a server that replaced the whole configuration from a partial submission
-// would empty the sections the page did not show.
+// A section save replaces only that section and leaves every other section running: a
+// server that replaced the whole configuration from a partial submission would empty the
+// sections the page did not show.
 func TestSectionSaveReplacesOnlyTheSectionItSaves(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -181,9 +179,9 @@ func TestSectionSaveReplacesOnlyTheSectionItSaves(t *testing.T) {
 	}
 }
 
-// A section save stops the watched directories and starts them again, whatever section it saves: a save
-// can change the settings a watcher reads, and a watcher left running against a configuration that no
-// longer describes it keeps importing calls under rules the administrator just removed.
+// A section save of another section keeps the watched directories running: every save
+// stops them and starts them again, so a watcher never keeps importing calls under rules
+// the administrator just removed.
 func TestSectionSaveOfAnotherSectionKeepsTheWatchedDirectoriesRunning(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -224,10 +222,9 @@ func TestSectionSaveOfAnotherSectionKeepsTheWatchedDirectoriesRunning(t *testing
 	}
 }
 
-// The Systems section edits the system row's own fields, and its save stores those fields. The
-// sites, talkgroups, and units under a system are saved by the section for that level, which shows
-// one system at a time, so the systems-section save leaves them as the store holds them — and the
-// answer carries them as the store holds them, which is what the page that saved reads back.
+// The Systems section edits and stores the system row's own fields; the levels under a
+// system are saved by their own section, so this save leaves them as the store holds
+// them and answers them the same way.
 func TestSectionSaveSystemsWritesTheSystemRowAndAnswersTheLevelsAsTheStoreHoldsThem(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -277,9 +274,9 @@ func TestSectionSaveSystemsWritesTheSystemRowAndAnswersTheLevelsAsTheStoreHoldsT
 	}
 }
 
-// The settings are merged into the settings in effect, because the legacy server applies the submitted
-// settings onto the ones it is running with and an administrator's page submits only the settings that
-// page shows. The other sections are left running.
+// The settings section merges into the settings in effect, because the legacy server
+// applies submitted settings onto the ones it runs with; the other sections keep
+// running.
 func TestSectionSaveOptionsMergesIntoTheSettingsInEffect(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -318,10 +315,9 @@ func TestSectionSaveOptionsMergesIntoTheSettingsInEffect(t *testing.T) {
 	}
 }
 
-// A section save with a body the endpoint cannot read is answered with 400 — and the watched directories
-// are still stopped and started, because the legacy server stops them before it reads the body and its
-// deferred restart runs whatever happens to the read. A server that answered 400 without restarting them
-// would leave the watchers stopped by a request that changed nothing.
+// A section save with an unreadable body gets 400 - and the watched directories are
+// still stopped and started, because the legacy server stops them before reading the
+// body and its deferred restart runs whatever happens to the read.
 func TestSectionSaveRejectsABodyItCannotReadAndStillRestartsTheWatchedDirectories(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -358,12 +354,10 @@ func TestSectionSaveRejectsABodyItCannotReadAndStillRestartsTheWatchedDirectorie
 	}
 }
 
-// A section save that could not read its body files the fact with the administrator's own part of the log,
-// naming the section's path — and it is not filed as a failed save, because the save never started.
-//
-// The settings are included because they are read a different way from a list: they are merged into the
-// settings in effect, so their read is a separate one, and an operator whose settings page stopped saving
-// should not have to guess which half of the section path was at fault.
+// A section save that could not read its body files the fact in the administrator's log
+// naming the section's path, and not as a failed save, because the save never started.
+// The settings section is included: its read is a separate merge, and an operator should
+// not guess which half of the path was at fault.
 func TestSectionSavesFileARequestBodyTheyCouldNotRead(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -416,9 +410,9 @@ func TestSectionSavesFileARequestBodyTheyCouldNotRead(t *testing.T) {
 	}
 }
 
-// A section submitted as nothing is a save that replaces the section with nothing, and it is different
-// from a section submitted as something that is not a list at all: the legacy server looks at what was
-// submitted under the section's name, does not recognize a value that is not a list, and saves nothing.
+// A section submitted as nothing clears the section, and differs from a section
+// submitted as something that is not a list: the legacy server does not recognize a
+// value that is not a list and saves nothing.
 func TestSectionSaveOfNothingClearsTheSectionAndASectionThatIsNotAListSavesNothing(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -446,9 +440,9 @@ func TestSectionSaveOfNothingClearsTheSectionAndASectionThatIsNotAListSavesNothi
 	}
 }
 
-// A method the endpoint does not answer is refused, and so is a request that arrives as a websocket
-// upgrade: the whole-configuration path is where an administrator's socket is opened, and a section path
-// that accepted one would answer a socket with a list.
+// A method the section endpoint does not answer is refused, and so is a websocket
+// upgrade: the whole-configuration path is where an administrator's socket is opened,
+// and a section path that accepted one would answer a socket with a list.
 func TestSectionEndpointRefusesOtherMethodsAndAWebsocketUpgrade(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -475,10 +469,9 @@ func TestSectionEndpointRefusesOtherMethodsAndAWebsocketUpgrade(t *testing.T) {
 	}
 }
 
-// Every section an administrator reads, byte for byte, from the same captures the whole-configuration
-// comparison uses. The fixture is seeded through the parsers a save goes through, so each comparison is a
-// round trip through this server: what the legacy server stored, read by this server and written by this
-// server, is the same sequence of bytes.
+// Every section an administrator reads, byte for byte, from the captures the
+// whole-configuration comparison uses, seeded through the parsers a save goes through,
+// so each comparison is a round trip through this server.
 func TestSectionEndpointAnswersTheCapturedSections(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -511,9 +504,9 @@ func TestSectionEndpointAnswersTheCapturedSections(t *testing.T) {
 
 		want := capturedAnswer(t, capture.golden)
 
-		// The capture records every site as belonging to no system, because the legacy server's query for
-		// sites never asks for that column. This server reports the system the site is stored under, which
-		// is the approved divergence.
+		// The capture records every site as belonging to no system, because the legacy
+		// server's query for sites never asks for that column; this server reports the
+		// system the site is stored under, which is the approved divergence.
 		if capture.section == "systems" {
 			want = replaceExactly(t, want, `"systemId":0`, `"systemId":1`, 2)
 		}
@@ -524,11 +517,9 @@ func TestSectionEndpointAnswersTheCapturedSections(t *testing.T) {
 	}
 }
 
-// The per-level endpoints save one level of one system: sites, talkgroups or units.
-// They answer the same way a section does — 401 for a credential the server does not
-// accept, 404 for a system this server does not store, 400 for a body it cannot read,
-// 417 for a save that could not be stored — and a successful save is answered with the
-// level as re-read, and reaches every open administrator connection.
+// The per-level endpoints save one level of one system - sites, talkgroups or units -
+// answering as a section does: 401, 404, 400, 417 as each applies, and a successful save
+// answers the level as re-read and reaches every open administrator connection.
 
 // compactJSON marshals a decoded value so two answers can be compared as text.
 func compactJSON(t *testing.T, body string) string {
@@ -710,9 +701,9 @@ func TestSubSectionSaveReportsAPersistenceFailure(t *testing.T) {
 	}
 }
 
-// The talkgroups level takes the bare array of rows it has always taken, and the object that
-// carries its rows beside the blacklist the section edits with them. Both are answered with the
-// level as the store holds it, and the object's blacklist is stored by the same save.
+// The talkgroups level takes the bare array of rows it has always taken and the object
+// that carries its rows beside the blacklist the section edits with them, answering the
+// level as the store holds it for both.
 func TestSubSectionSaveOfTalkgroupsAnswersTheLevelForBothBodies(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -762,9 +753,9 @@ func TestSubSectionSaveOfTalkgroupsAnswersTheLevelForBothBodies(t *testing.T) {
 	}
 }
 
-// A body the level cannot read is refused before the save starts. The object body belongs to the
-// talkgroups level alone: the sites and units levels take the list of their rows, and a body that
-// is neither a list nor the shape this level takes names nothing this endpoint can store.
+// A body the level cannot read is refused before the save starts: the object body
+// belongs to the talkgroups level alone, and a body that is neither a list nor this
+// level's shape names nothing this endpoint can store.
 func TestSubSectionSaveRejectsABodyItCannotReadForTheShapeItIs(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
