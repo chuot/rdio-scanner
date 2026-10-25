@@ -33,9 +33,7 @@ import (
 )
 
 // The watched-directory tests are integration tests over real directories and real filesystem
-// notifications, so they wait for the two-second floor every watch has. They wait in parallel,
-// and each one waits for the shortest thing it can: a recording that is already in the directory
-// is read by the first pass over it, which is the fastest way a watch ever ingests anything.
+// notifications; they wait in parallel for the two-second floor every watch has.
 const (
 	settleWait = 3 * time.Second
 	liveWait   = 6 * time.Second
@@ -230,12 +228,8 @@ func (watched *watchedDirectory) logLines() []string {
 	return lines
 }
 
-// reportedAfterStarting is what the watching said once it was running.
-//
-// The entry naming the directory the server started watching is written by the start itself, and it is there
-// whether or not anything goes wrong. The tests that insist a particular problem cost exactly one line use
-// this, so that the line they are counting is the one they are talking about — and the start entry is pinned
-// by its own test rather than being quietly filtered out of the suite.
+// reportedAfterStarting is what the watch reported after it started, including the entry the
+// start itself writes, so a test counting one problem line knows which line is its own.
 func (watched *watchedDirectory) reportedAfterStarting() []string {
 	lines := []string{}
 
@@ -302,10 +296,8 @@ func TestARecordingAlreadyInTheWatchedDirectoryIsIngested(t *testing.T) {
 	}
 }
 
-// TestARecordingIsIngestedOnceEvenThoughWritingItIsTwoEvents is the reason the watch waits for a
-// file to stop changing, and the reason the wait is guarded: a recording tool produces a create
-// event and a write event for the same file, and a watch that read on both would record the call
-// twice.
+// TestARecordingIsIngestedOnceEvenThoughWritingItIsTwoEvents: writing one recording is a
+// create event and a write event for the same file; the watch ingests it once.
 func TestARecordingIsIngestedOnceEvenThoughWritingItIsTwoEvents(t *testing.T) {
 	t.Parallel()
 
@@ -396,10 +388,8 @@ func TestAWatchDeletesTheRecordingItIngested(t *testing.T) {
 	wantGone(t, path)
 }
 
-// wantGone waits for a file the watch is supposed to delete, and says what it found when it is still
-// there. The watch hands the call over before it deletes the files it read from, which is the order the
-// legacy server has them in, so the moment a test can see the call is a moment the files may not be gone
-// yet.
+// wantGone wants a file the watch must delete gone, and says what it found when the file is
+// still there: the call is handed over before the read file is deleted, the legacy order.
 func wantGone(t *testing.T, path string) {
 	t.Helper()
 
@@ -936,16 +926,10 @@ func TestTheWatchDelayNeverFallsBelowTheTwoSecondFloor(t *testing.T) {
 	}
 }
 
-// TestAPanicInAFilesSettledReadIsReportedAndTheWatchCarriesOn: the read a settle timer runs when a file's window runs out has no guard — a parser
-// or ingest path that panics there takes the whole process down from the server's own
-// clock, in a goroutine nobody started and nobody can see. The panic is caught and
-// reported, naming the recording and the panic's own text, and the watch stays alive: the
-// recordings that arrive after it are ingested.
-//
-// The watch keeps its files, which is what leaves the settle timer as the only reader: a
-// watch that keeps its recordings never reads what was in the directory when the server
-// started. A probe recording is ingested first, which is the test's own proof
-// that the subscription is live and the settle path is the one being read.
+// TestAPanicInAFilesSettledReadIsReportedAndTheWatchCarriesOn: the settle timer's read had no
+// guard; a parser or ingest path panicking there took the whole process down. The panic is
+// caught and reported, naming the recording and the panic's own text, and the watch keeps
+// ingesting later recordings. Only the settle path reads for a watch that keeps its files.
 func TestAPanicInAFilesSettledReadIsReportedAndTheWatchCarriesOn(t *testing.T) {
 	t.Parallel()
 
@@ -996,10 +980,8 @@ func TestAPanicInAFilesSettledReadIsReportedAndTheWatchCarriesOn(t *testing.T) {
 	}
 }
 
-// putRecordingUntilIngested keeps presenting a probe recording to the watch until the
-// settle path reads it. The subscription is only live once the startup pass has
-// registered the directory, and a file written before that is a file no event names;
-// every re-write is a fresh Write event for a watch that has begun listening.
+// putRecordingUntilIngested keeps presenting a probe recording until the settle path reads
+// it: a file written before the startup pass registered the directory is named by no event.
 func putRecordingUntilIngested(t *testing.T, watched *watchedDirectory, name string) {
 	t.Helper()
 
@@ -1138,10 +1120,8 @@ func putProbeUntilIngested(t *testing.T, watched *watchedDirectory, sink *blocki
 	t.Fatal("the watch never ingested the probe, want the settle path to read it")
 }
 
-// TestEventsKeepArmingWhileARecordingIsBeingIngested: the watch must
-// keep taking in new recordings while it is handing one over. Today the settle read holds
-// the watch's mutex through the whole ingest, and the event loop's arming of the next
-// file waits behind it — a slow ingest stops the watch.
+// TestEventsKeepArmingWhileARecordingIsBeingIngested: the event loop keeps arming new files
+// while an ingest is in progress; the legacy settle read held the mutex through the ingest.
 func TestEventsKeepArmingWhileARecordingIsBeingIngested(t *testing.T) {
 	t.Parallel()
 
@@ -1198,11 +1178,8 @@ func TestEventsKeepArmingWhileARecordingIsBeingIngested(t *testing.T) {
 	}
 }
 
-// TestAFileWrittenDuringTheStartupSettleWindowIsIngestedOnce: the
-// startup pass over a watched directory and the settle timer read the same files, and
-// today nothing claims a file while it is being read — a recording tool that writes the
-// file again while the startup pass is halfway through it gets the same recording
-// ingested twice.
+// TestAFileWrittenDuringTheStartupSettleWindowIsIngestedOnce: a file the startup pass is
+// handing over is not read again by a settle timer firing over it; the legacy read it twice.
 func TestAFileWrittenDuringTheStartupSettleWindowIsIngestedOnce(t *testing.T) {
 	t.Parallel()
 
@@ -1241,10 +1218,8 @@ func TestAFileWrittenDuringTheStartupSettleWindowIsIngestedOnce(t *testing.T) {
 	sink.noEventWithin(t, settleWait)
 }
 
-// TestStoppingTheWatchersDoesNotWaitForAnIngestInProgress: a
-// configuration save brackets the watchers by stopping them, and it may not wait for a
-// recording that is halfway through being handed over. Today the settle read holds the
-// watch's mutex through the ingest and the stop waits behind it.
+// TestStoppingTheWatchersDoesNotWaitForAnIngestInProgress: a configuration save stops the
+// watchers and must not wait for a recording halfway through being handed over.
 func TestStoppingTheWatchersDoesNotWaitForAnIngestInProgress(t *testing.T) {
 	t.Parallel()
 
@@ -1292,11 +1267,9 @@ func TestStoppingTheWatchersDoesNotWaitForAnIngestInProgress(t *testing.T) {
 	}
 }
 
-// TestASymlinkedDirectoryInsideAWatchedDirectoryIsNotWatched: a
-// symlink to a directory inside a watched tree is registered today — the watch follows
-// the link and reads recordings written into the directory it points at, which is
-// recordings from anywhere the link reaches. A linked directory is not a directory the
-// server was told to watch, and it watches nothing.
+// TestASymlinkedDirectoryInsideAWatchedDirectoryIsNotWatched: a linked directory is not one
+// the server was told to watch; the legacy watch followed the link and read recordings from
+// outside the watched tree.
 func TestASymlinkedDirectoryInsideAWatchedDirectoryIsNotWatched(t *testing.T) {
 	t.Parallel()
 
@@ -1322,10 +1295,9 @@ func TestASymlinkedDirectoryInsideAWatchedDirectoryIsNotWatched(t *testing.T) {
 	watched.calls.nothingArrivesWithin(t, settleWait+settleWait)
 }
 
-// TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart: a mask
-// carrying literal parentheses captures groups nobody named, and the filename's pieces
-// then line up with the wrong values. The mismatch is said when the watch starts, where
-// the operator can read it, not per file in the dark.
+// TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart: a mask carrying literal
+// parentheses captured groups nobody named and lined the filename's pieces up with the wrong
+// values; the mismatch is reported at start, where the operator can read it.
 func TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart(t *testing.T) {
 	t.Parallel()
 
@@ -1344,12 +1316,9 @@ func TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart(t *testing.T) {
 	}
 }
 
-// TestARecordingMovedIntoAWatchedDirectoryIsIngested: a recording
-// tool that finishes by moving the file into the watched directory — the shape of
-// mv /staging/x.wav /watched/x.wav on one filesystem — arrives as a rename whose name
-// is there. inotify says MOVED_TO, fsnotify sets both the create and the rename bits,
-// and today's exact-match switch sees neither: the recording sits in the watched
-// directory and is never read.
+// TestARecordingMovedIntoAWatchedDirectoryIsIngested: a file moved in on one filesystem
+// arrives as a rename whose name is there; the legacy exact-match event switch saw neither
+// bit and never read it.
 func TestARecordingMovedIntoAWatchedDirectoryIsIngested(t *testing.T) {
 	t.Parallel()
 
@@ -1380,12 +1349,9 @@ func TestARecordingMovedIntoAWatchedDirectoryIsIngested(t *testing.T) {
 	}
 }
 
-// TestARenameEventNamingAFileThatIsThereReArmsIt: the watch's own
-// reading of a rename event. The backends that report a moved-in file as a rename hand
-// over an event whose name is there, and today the watch ignores every rename event:
-// the recording sits in the watched directory and is never read. The file here is
-// placed before the watch starts, so no create event names it — the rename is the only
-// event this test gives the watch.
+// TestARenameEventNamingAFileThatIsThereReArmsIt: the watch re-arms a rename whose name is
+// there; the legacy watch ignored every rename event. The file is placed before the watch
+// starts, so the rename is the only event naming it.
 func TestARenameEventNamingAFileThatIsThereReArmsIt(t *testing.T) {
 	t.Parallel()
 
