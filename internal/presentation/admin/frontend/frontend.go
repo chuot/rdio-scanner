@@ -23,24 +23,14 @@ import (
 	"rdio-scanner/internal/presentation/common/spa"
 )
 
-// bundle is the administration application compiled into the binary.
-//
-// The directory has to be inside this package: a `go:embed` pattern cannot name a path
-// outside the package directory it is written in, so the client build writes its admin
-// output here, at `bundle/`, rather than somewhere this package could not reach.
-//
-// `all:` exists only so this package compiles before the client has ever been built:
-// `bundle/.gitkeep` keeps the directory in the repository, and a pattern without `all:`
-// refuses to match a directory whose only entry is a hidden file. A client build writes
-// no hidden files, so once the bundle is in place the two patterns embed the same set.
+// bundle is the administration application compiled into the binary; see the
+// webapp-bundle-location maintainer note.
 //
 //go:embed all:bundle
 var bundle embed.FS
 
-// bundleIsBuilt is the bundle question asked of a file set: the application shell is what a
-// built bundle is judged by, the same file the build tool judges a bundle's freshness by. A
-// bundle with nothing in it but the placeholder is a bundle no client build has ever written,
-// and the server says so at startup.
+// bundleIsBuilt is the bundle question asked of a file set; see the
+// webapp-bundle-location maintainer note.
 func bundleIsBuilt(files fs.FS) bool {
 	_, err := fs.Stat(files, "bundle/index.html")
 
@@ -53,13 +43,7 @@ func BundleIsBuilt() bool {
 }
 
 // Embedded returns the catch-all handler for the administration application, mounted at
-// /admin. The mount is removed before a path is resolved against the bundle, so the
-// bundle is flat and holds no copy of the prefix inside itself.
-//
-// The mount is written without its trailing slash because the composition root registers
-// the subtree pattern `/admin/`, and `http.ServeMux` redirects a request for `/admin` to
-// `/admin/` before this handler sees it. That redirect is what makes every relative URL
-// in the shell resolve inside the admin bundle.
+// /admin; see the webapp-bundle-location maintainer note.
 func Embedded() http.Handler {
 	return spa.New(bundle, "/admin")
 }

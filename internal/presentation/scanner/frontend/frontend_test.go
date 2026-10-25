@@ -21,20 +21,17 @@ import (
 	"testing/fstest"
 )
 
-// TestThePackageCompilesWithAnUnbuiltClient is the compile-time case. The bundle directory is
-// committed with nothing in it but `.gitkeep`, and `//go:embed all:bundle` is the pattern that
-// matches a directory whose only entry is a hidden file. A package that compiles on a fresh
-// checkout is what makes `go build./...` and `go test./...` green before any client build has
-// run; the embed failing would turn an unbuilt client into a compile error.
+// TestThePackageCompilesWithAnUnbuiltClient: the package compiles on a fresh checkout
+// with only the bundle placeholder committed.
 func TestThePackageCompilesWithAnUnbuiltClient(t *testing.T) {
 	if _, err := bundle.ReadFile("bundle/.gitkeep"); err != nil {
 		t.Fatalf("bundle/.gitkeep is not embedded, so this package would not compile against a placeholder-only bundle: %v", err)
 	}
 }
 
-// The bundle question is asked of a file set, so the placeholder-only case is testable: a file
-// set carrying the application shell is built, and a file set carrying only the placeholder is
-// not. The server warns about an unbuilt bundle, and the warning is judged by this question.
+// The bundle question is asked of a file set: a file set carrying the application shell
+// is built, one carrying only the placeholder is not; the unbuilt-bundle warning depends
+// on this question.
 func TestABundleIsBuiltWhenItCarriesTheApplicationShell(t *testing.T) {
 	built := fstest.MapFS{
 		"bundle/.gitkeep":   &fstest.MapFile{Data: []byte("")},

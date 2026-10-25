@@ -13,8 +13,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// Package frontend is the scanner webapp, and the small Go file that serves what
-// its build writes. The application's sources, its tests, and its built bundle all sit in this
-// one directory: a `go:embed` pattern cannot name a path outside the package directory it is
-// written in, so the bundle has to live where the embed is.
+// Package frontend is the scanner webapp plus the Go file that serves its built
+// bundle; see the webapp-bundle-location maintainer note.
 package frontend
