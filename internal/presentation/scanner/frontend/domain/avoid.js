@@ -1,5 +1,5 @@
-// AVOID button cycle state machine (legacy main.component.ts avoid()):
-// active → avoided indefinitely → 30M → 60M → 120M → active.
+// AVOID button cycle state machine: active, avoided indefinitely,
+// 30M, 60M, 120M, back to active.
 
 import { cloneMap } from './livefeed-map.js';
 
@@ -18,7 +18,7 @@ export function nextAvoidStep({ avoided, minutes }) {
   }
 }
 
-// Timed-avoid expiry (legacy setTimer callback): re-activates and clears.
+// timed-avoid expiry: re-activates and clears.
 export function expireAvoid(map, systemRef, talkgroupRef) {
   const next = cloneMap(map);
   const lfm = next?.[systemRef]?.[talkgroupRef];

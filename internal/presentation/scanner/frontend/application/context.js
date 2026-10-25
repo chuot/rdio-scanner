@@ -1,5 +1,5 @@
-// Application context: single composition point wiring the ports and the
-// listener use-cases. Imported by listener.js and the listener elements.
+// Application context: the single composition point wiring the ports
+// and the listener use-cases for the listener elements.
 
 import { createStorage } from '../infrastructure/storage.js';
 import { createListenerSocket } from '../infrastructure/listener-socket.js';

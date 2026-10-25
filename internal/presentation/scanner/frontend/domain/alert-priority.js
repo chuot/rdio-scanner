@@ -1,6 +1,6 @@
-// Alert and LED color priority resolution
-// (legacy rdio-scanner.service.ts playAlert, main.component.ts getLedColor):
-// group → tag → system → talkgroup.
+// Alert and LED color priority resolution: group, then tag, then
+// system, then talkgroup.
+// see the alert-priority-single-source maintainer note.
 
 export function resolveAlert(call, config) {
   for (const groupData of call?.groupsData ?? []) {
@@ -18,8 +18,8 @@ export function resolveAlert(call, config) {
   return undefined;
 }
 
-// The tone the winning level names, looked up in the tone table the server sends. A name the table
-// does not carry, or a table entry that is not a sequence, is no tone at all.
+// the tone the winning level names, from the server's tone table; a
+// missing name or non-sequence entry is no tone.
 export function resolveAlertSequence(call, config) {
   if (!call || !config) return undefined;
 

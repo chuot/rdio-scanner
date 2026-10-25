@@ -1,4 +1,4 @@
-// Replay history ring (legacy main.component.ts callHistory / replayOffset).
+// Replay history ring.
 
 export const HISTORY_SIZE = 5;
 
@@ -12,8 +12,8 @@ export function recordHistory(history, call) {
   return next;
 }
 
-// REPLAY presses walk the history within a 1s timer window:
-// first press replays the current call (offset 0), then 1st, 2nd, … history item.
+// REPLAY presses walk the history within a 1s timer window: first
+// press replays the current call, then 1st, 2nd, ... history item.
 export function advanceReplayOffset(offset, historyLength) {
   return Math.min(historyLength, offset + 1);
 }

@@ -1,6 +1,5 @@
-// Listener WebSocket adapter (legacy rdio-scanner.service.ts openWebsocket/
-// sendtoWebsocket/parseWebsocketMessage).
-// Wire frames are arrays [command, payload?, flag?].
+// Listener WebSocket adapter: wire frames are arrays
+// [command, payload?, flag?].
 
 export const RECONNECT_DELAY_MS = 2000;
 

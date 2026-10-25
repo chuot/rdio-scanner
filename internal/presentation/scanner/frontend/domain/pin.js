@@ -1,6 +1,6 @@
-// PIN storage and listener auth state machine.
-// Legacy: pin persisted base64 under rdio-scanner-pin (window.btoa/atob);
-// server sends PIN on restricted/wrong pin, MAX after 5 attempts, XPR on expiry.
+// PIN storage and listener auth state machine: the pin is persisted
+// base64, the server answers restricted routes with PIN, MAX after 5
+// attempts, XPR on expiry.
 
 export const PIN_STORAGE_KEY = 'rdio-scanner-pin';
 

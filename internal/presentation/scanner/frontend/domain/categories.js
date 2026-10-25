@@ -1,7 +1,7 @@
-// Category tri-state derivation and toggle semantics.
-// Categories derive from the config groups map { label: { systemRef: [talkgroupRef...] } }
-// (legacy rebuildCategories derives from config.groups only; tag categories exist
-// as a toggle type matching talkgroup tag labels).
+// Category tri-state derivation and toggle semantics: categories
+// derive from the config groups map, label to systems to talkgroups;
+// tag categories exist as a toggle type matching talkgroup tag
+// labels.
 
 export function deriveCategories(groupsMap, livefeedMap) {
   const categories = Object.keys(groupsMap ?? {}).map((label) => {
@@ -22,9 +22,9 @@ export function deriveCategories(groupsMap, livefeedMap) {
   return categories;
 }
 
-// Pressing an on category deactivates all its talkgroups; pressing an off or
-// partial category activates all its talkgroups. Affected entries get their
-// timed-avoid minutes cleared to 0 (legacy clearTimer in toggleCategory).
+// pressing an on category deactivates all its talkgroups; pressing an
+// off or partial category activates all its talkgroups. affected
+// entries get their timed-avoid minutes cleared to 0.
 export function toggleCategory(map, systems, category) {
   const next = {};
   for (const [sys, tgMap] of Object.entries(map)) {

@@ -1,8 +1,7 @@
-// Audio engine adapter (legacy rdio-scanner.service.ts bootstrapAudio/play/
-// download/playOscillatorSequence).
-// Dual contexts: `playback` for call audio, `interactive` for keypad/alert
-// oscillators. Contexts are created lazily on the first user gesture and kept
-// resumed via an onstatechange re-arm loop.
+// Audio engine adapter: dual contexts, playback for call audio and
+// interactive for keypad and alert oscillators. contexts are created
+// lazily on the first user gesture and kept resumed by a statechange
+// re-arm loop.
 
 import { scheduleOscillators } from '../../../common/frontend/domain/oscillator.js';
 
@@ -19,8 +18,8 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
 
   function keepResumed(context, isPaused = () => false) {
     const resume = () => {
-      // An intentional pause outranks the re-arm loop: without this gate the statechange
-      // a suspension itself fires would resume the paused context right back.
+      // an intentional pause outranks the re-arm loop: the statechange a
+      // suspension itself fires would resume the paused context right back.
       if (isPaused()) return;
 
       if (context.state === 'suspended') {
@@ -76,8 +75,8 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
           onEnded?.();
         };
 
-        // The elapsed reading is anchored here, at the instant the recording enters the
-        // graph — the same point the reference recorded its start time.
+        // the elapsed reading is anchored here, where the recording enters the
+        // graph, the same point the reference recorded its start time.
         sourceStartedAt = playbackContext.currentTime;
         source.start();
       },
@@ -88,8 +87,8 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
       stop: () => {
         if (!source) return;
 
-        // Browsers fire `ended` on a manual stop too. Disarming it first is what keeps a
-        // silenced recording from triggering the follow-on skip it was wired to.
+        // browsers fire ended on a manual stop too; disarming it first keeps a
+        // silenced recording from triggering the skip it was wired to.
         source.onended = null;
         source.stop();
         source.disconnect();
@@ -102,10 +101,10 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
     return scheduleOscillators(interactiveContext, sequence);
   }
 
-  // Pause silences the call audio by suspending the playback context mid-call; the recording
-  // resumes where it stopped because a suspended context freezes its whole graph. The gate in
-  // keepResumed is what keeps the pause standing. The interactive context is never suspended:
-  // keypad and alert tones keep playing during a pause.
+  // pause silences the call audio by suspending the playback context
+  // mid-call, and the recording resumes where it stopped because a
+  // suspended context freezes its whole graph. the interactive context is
+  // never suspended: keypad and alert tones keep playing.
   function suspend() {
     if (!playbackContext) return;
 
@@ -120,9 +119,9 @@ export function createAudioEngine({ AudioContextImpl = globalThis.AudioContext, 
     playbackContext.resume();
   }
 
-  // Seconds since the recording in flight entered the graph, or null when nothing is
-  // playing. A suspended context freezes its currentTime, so this reading freezes with
-  // the audio across a pause instead of riding through it on a wall clock.
+  // seconds since the recording in flight entered the graph, or null
+  // when nothing is playing. a suspended context freezes its currentTime,
+  // so this reading freezes with the audio across a pause.
   function playbackElapsed() {
     if (!playbackContext || sourceStartedAt === null) return null;
 

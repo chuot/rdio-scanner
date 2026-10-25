@@ -1,6 +1,6 @@
-// Scanner storage adapter: exact legacy keys.
-// localStorage: rdio-scanner (legacy livefeed fallback), rdio-scanner-lfm-<id>,
-// rdio-scanner-pin (handled by domain/pin against `local`).
+// Scanner storage adapter: exact legacy keys, rdio-scanner as the
+// livefeed fallback, rdio-scanner-lfm-<id> per listener, and
+// rdio-scanner-pin handled by domain/pin.
 
 import { STORAGE_KEY_LEGACY, STORAGE_KEY_LFM } from '../domain/livefeed-map.js';
 

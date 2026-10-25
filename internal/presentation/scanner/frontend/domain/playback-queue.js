@@ -1,4 +1,4 @@
-// Playback/listening queue (legacy rdio-scanner.service.ts queue/cleanQueue).
+// Playback/listening queue.
 
 export function enqueue(queue, call, options = {}) {
   return options.priority ? [call, ...queue] : [...queue, call];
@@ -13,10 +13,10 @@ export function clearQueue() {
   return [];
 }
 
-// Keeps calls whose talkgroup — or one of its patches — is active.
-// Deviation from legacy: patches are resolved across all systems because
-// talkgroupRefs are globally unique (legacy looked only in the call's own
-// system and missed cross-system patches).
+// keeps calls whose talkgroup, or one of its patches, is active.
+// patches are resolved across all systems because talkgroup refs are
+// globally unique; the legacy queue looked only in the call's own
+// system and missed cross-system patches.
 export function filterActive(queue, livefeedMap) {
   const isActive = (sys, tg) => livefeedMap?.[sys]?.[tg]?.active === true;
 
@@ -28,12 +28,9 @@ export function filterActive(queue, livefeedMap) {
   });
 }
 
-// Remaining calls of a searched playback, relative to a reference id inside a fetched server
-// page: the calls that will play from the reference up to the newest of the result set, the
-// reference among them. Playback walks toward the newest call in both sort orders — a descending
-// page starts at its oldest row and walks back up to the newest, an ascending page walks forward
-// to it — so the calls left to play are the ones between the reference and the newest end of the
-// page, and the page's own total and offset say how many the search filters left there.
+// calls left to play, from the reference up to the newest row of the
+// fetched page; the page's total and offset say what the filters left.
+// see the playback-walk-page-order maintainer note.
 export function playbackQueueCount(list, callId) {
   const index = list.results.findIndex((call) => call.id === callId);
   if (index < 0) return 0;

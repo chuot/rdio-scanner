@@ -1,8 +1,7 @@
-// Livefeed map: per-listener talkgroup activation state.
-// Internal shape: { [systemRef]: { [talkgroupRef]: { active, minutes? } } }
-// Wire/storage shape (LFM message, localStorage): { [systemRef]: { [talkgroupRef]: boolean } }
-// All operations are immutable: they return a new map, the input stays intact
-// (the prior-to-hold snapshot must survive hold toggling).
+// Livefeed map: per-listener talkgroup activation state, held as
+// system to talkgroup to { active, minutes? }, and carried on the wire
+// and in storage as system to talkgroup to boolean. all operations are
+// immutable: the prior-to-hold snapshot must survive hold toggling.
 
 export const STORAGE_KEY_LEGACY = 'rdio-scanner';
 export const STORAGE_KEY_LFM = 'rdio-scanner-lfm';
@@ -48,8 +47,8 @@ export function cloneMap(map) {
   return next;
 }
 
-// options: { status?: boolean, minutes?: number } — legacy avoid() semantics:
-// status forces the new active state, minutes arms a timed avoid.
+// options: { status?, minutes? }: status forces the new active state,
+// minutes arms a timed avoid.
 export function toggleTalkgroup(map, systemRef, talkgroupRef, options = {}) {
   const next = cloneMap(map);
   const lfm = next?.[systemRef]?.[talkgroupRef];
@@ -104,9 +103,9 @@ export function isPatched(map, call) {
     (call.patches ?? []).some((tg) => map?.[call.system]?.[tg]?.active === true);
 }
 
-// Reconciles the stored map with the CFG config: entries that still exist are
-// kept, new talkgroups default to active unless a category containing them is
-// off, entries gone from the config are dropped.
+// reconciles the stored map with the config: entries that still exist
+// are kept, new talkgroups default to active unless a category
+// containing them is off, entries gone from the config are dropped.
 export function rebuildMap(systems, storedMap, categories) {
   const map = {};
   for (const system of systems ?? []) {

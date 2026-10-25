@@ -1,5 +1,5 @@
-// Listener orchestration use-cases: the single owner of live-listener state,
-// replacing the legacy RdioScannerService god-service. Coordinates the socket,
+// Listener orchestration use-cases: the single owner of live-listener
+// state, replacing the legacy god-service. Coordinates the socket,
 // storage, audio engine, store, and the pure domain modules.
 
 import { normalizeListenerConfig, transformCall } from '../../../common/frontend/domain/config.js';
@@ -110,8 +110,8 @@ export function createListenerUseCases({
   function play(next) {
     if (livefeedPaused || skipDelay) return;
 
-    // A call handed in is one the listener asked to hear again or opened from the search panel; a
-    // call taken from the queue is an arrival. Only an arrival carries an alert tone.
+    // a call handed in is one the listener asked to hear again; a call
+    // from the queue is an arrival. only an arrival carries an alert tone.
     const arrival = !next?.audio;
 
     if (next?.audio) {
@@ -128,10 +128,10 @@ export function createListenerUseCases({
       return;
     }
 
-    // The queue number is the operator's live reading of the waiting calls: it moves the moment
-    // the queue moves — a call taken out for its tone has left it — and the number carried when
-    // a recording starts is the queue as it stands then, counting any call that arrived while
-    // the tone was open. Only the recording waits on the tone; the queue never does.
+    // the queue number is the operator's live reading: it moves the moment
+    // the queue moves, and the number carried when a recording starts is
+    // the queue as it stands then, counting calls that arrived during the
+    // tone. only the recording waits on the tone; the queue never does.
     const liveQueue = () => (livefeedMode === LivefeedMode.Playback ? playbackQueueCount() : callQueue.length);
 
     emit({ queue: liveQueue() });
@@ -141,15 +141,15 @@ export function createListenerUseCases({
     const token = playbackToken;
 
     const start = () => {
-      // A tone opens a window: the call can be skipped, stopped, taken out of the selection, or
-      // left behind by the queue before its recording begins. Only the call the listener is still
-      // hearing starts one.
+      // a tone opens a window: the call can be skipped, stopped, taken out
+      // of the selection, or left behind by the queue before its recording
+      // begins. only the call the listener is still hearing starts one.
       if (token !== playbackToken) return;
 
-      // The handle is kept because the stop funnel uses it: a recording only goes silent when
-      // its handle is stopped. The ended closure carries this play's token so a recording that
-      // was silenced — whose `ended` a browser still fires on a manual stop — cannot trigger
-      // the skip it was wired to.
+      // the handle is kept for the stop funnel: a recording only goes silent
+      // when its handle is stopped. the ended closure carries this play's
+      // token so a silenced recording, whose ended a browser still fires on
+      // a manual stop, cannot trigger the skip it was wired to.
       activeHandle = audio.playCall(call, {
         onEnded: () => {
           if (token === playbackToken) skip({ delay: true });
@@ -166,9 +166,9 @@ export function createListenerUseCases({
   function playbackQueueCount() {
     if (!playbackList) return 0;
 
-    // While no call is playing — the gap a paused skip opens while the next call is on its
-    // way — the number counts from the call the walk last played. The walk is still at that
-    // call; the number must not read zero.
+    // while no call is playing, the number counts from the call the walk
+    // last played: the walk is still at that call, and the number must not
+    // read zero.
     const id = call?.id ?? callPrevious?.id;
 
     if (!id) return 0;
@@ -177,8 +177,8 @@ export function createListenerUseCases({
   }
 
   function stop(options = {}) {
-    // Every action that ends a call moves this, including the ones that happen while a tone is
-    // still playing, so a recording that was waiting on its tone knows it is no longer wanted.
+    // every action that ends a call moves this, so a recording waiting on
+    // its tone knows it is no longer wanted.
     playbackToken += 1;
 
     if (activeHandle) {
@@ -238,12 +238,9 @@ export function createListenerUseCases({
       }
     };
 
-    // Playback walks toward the newest call of the searched history in both sort orders. A
-    // descending page keeps its newest call in its first row, so the walk runs back through the
-    // page and on to the page of newer calls the server has behind it; an ascending page runs
-    // forward through the page and on to the page of newer calls after it. A reference the page
-    // does not hold — a page the walk stepped into, or one the search redrew — resumes at the
-    // row the walk starts from.
+    // playback walks toward the newest searched call in both sort orders,
+    // running through the page and on to newer pages in the named direction.
+    // see the playback-walk-page-order maintainer note.
     if (!results.length) {
       refresh();
     } else if (options?.sort === -1) {
@@ -331,9 +328,9 @@ export function createListenerUseCases({
     return isAvoided(livefeedMap, target.system, target.talkgroup);
   }
 
-  // Select-panel talkgroup press: the plain flip. It switches the talkgroup on or off and
-  // clears any timed window the control bar's AVOID had armed, cancelling its expiry — the
-  // timed cycle belongs to the AVOID button alone.
+  // select-panel talkgroup press: the plain flip switches the talkgroup
+  // on or off and clears any timed window the control bar's AVOID had
+  // armed; the timed cycle belongs to the AVOID button alone.
   function toggleTalkgroup(systemRef, talkgroupRef) {
     clearHoldPriors();
 
@@ -349,7 +346,6 @@ export function createListenerUseCases({
   }
 
   function holdSystem(callRef) {
-    // legacy holdSystem(): const call = this.call || this.callPrevious
     const held = call ?? callPrevious;
     const target = callRef ?? { system: held?.system, talkgroup: held?.talkgroup };
     if (target?.system === undefined) return;
@@ -374,7 +370,6 @@ export function createListenerUseCases({
   }
 
   function holdTalkgroup(callRef) {
-    // legacy holdTalkgroup(): const call = this.call || this.callPrevious
     const held = call ?? callPrevious;
     const target = callRef ?? { system: held?.system, talkgroup: held?.talkgroup };
     if (target?.system === undefined) return;
@@ -424,7 +419,7 @@ export function createListenerUseCases({
     emit({ categories, holdSys: false, holdTg: false, map: livefeedMap, queue: callQueue.length });
   }
 
-  // Per-system ALL ON/OFF (legacy avoid({ system, status })).
+  // per-system ALL ON/OFF.
   function setSystemStatus(systemRef, status) {
     clearHoldPriors();
 
@@ -441,9 +436,9 @@ export function createListenerUseCases({
   function pause(status = !livefeedPaused) {
     livefeedPaused = status;
 
-    // Suspending the playback context silences the recording in flight mid-call and freezes
-    // its clock; the engine's re-arm gate keeps the pause standing. Resuming continues the
-    // recording where it stopped.
+    // suspending the playback context silences the recording in flight
+    // mid-call and freezes its clock; the engine's re-arm gate keeps the
+    // pause standing, and resuming continues where it stopped.
     if (status) audio.suspend();
     else {
       audio.resume();
@@ -513,9 +508,9 @@ export function createListenerUseCases({
   function queue(incoming, options) {
     if (!incoming?.audio || livefeedMode === LivefeedMode.Offline) return;
 
-    // Defensive client-side mirror of the server's per-client livefeed filter
-    // (same active-or-patched semantics as cleanQueue); the legacy client
-    // relied on the server alone.
+    // defensive client-side mirror of the server's per-client livefeed
+    // filter, same active-or-patched semantics as the queue drain; the
+    // legacy client relied on the server alone.
     if (!filterActive([incoming], livefeedMap).length) return;
 
     callQueue = enqueue(callQueue, incoming, options);
@@ -581,10 +576,10 @@ export function createListenerUseCases({
       case 'LCL': {
         playbackList = event.payload ?? null;
 
-        // The store deep-compares slices, so an answer equal to the list already on screen
-        // notifies nobody. The counter rides every answer so the search panel's progress bar
-        // always learns the search ended - identical answers, empty pages, and payloads
-        // without a results array alike.
+        // the store deep-compares slices, so an answer equal to the list
+        // already on screen notifies nobody. the counter rides every answer so
+        // the search panel's progress bar always learns the search ended,
+        // for identical answers, empty pages, and bad payloads alike.
         playbackListSeq += 1;
 
         if (playbackList && Array.isArray(playbackList.results)) {

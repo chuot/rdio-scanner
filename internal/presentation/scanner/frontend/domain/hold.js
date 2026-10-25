@@ -1,14 +1,14 @@
-// HOLD SYS / HOLD TG snapshot semantics (legacy holdSystem/holdTalkgroup).
-// The caller keeps the pre-hold map as the restore snapshot; these functions
-// only derive the held map.
+// HOLD SYS / HOLD TG snapshot semantics: the caller keeps the pre-hold
+// map as the restore snapshot; these functions only derive the held
+// map.
 
 export function holdSystemMap(map, call) {
   const held = {};
 
   for (const [sys, tgMap] of Object.entries(map)) {
-    // Intended legacy semantics: a fully inactive current system is switched
-    // on as a whole. (Legacy bug: `every((tg) => !this.livefeedMap[sys][tg])`
-    // tests object truthiness, so allOn was always false.)
+    // intended legacy semantics: a fully inactive current system is
+    // switched on as a whole. the legacy allOn test read object
+    // truthiness and was always false.
     const allOff = Object.values(tgMap).every((lfm) => lfm.active !== true);
 
     held[sys] = {};
