@@ -30,22 +30,23 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The read-only tier's resources. A resource is read directly, with no tool call and no arguments,
-// so the caller's reach is decided inside the read: the same scope the gate decided for the tools
-// projects what these answer.
+// The read-only tier's resources. A resource is read directly, with no tool
+// call and no arguments, so the caller's reach is decided inside the read:
+// the same scope the gate decided for the tools.
 
 const (
 	// systemsURI is the caller's own view of the systems, talkgroups, sites, and units.
 	systemsURI = "rdio-scanner://systems"
 
-	// callURITemplate is a browsable slice of the recorded history: one talkgroup on one system,
-	// optionally narrowed to one day. The history is large and paged, which is why it is a template
-	// a client fills in and reads, and not one resource per talkgroup.
+	// callURITemplate is a browsable slice of the recorded history: one
+	// talkgroup on one system, optionally narrowed to one day. The history is
+	// large and paged, which is why it is a template.
 	callURITemplate = "rdio-scanner://calls/{systemRef}/{talkgroupRef}{?date}"
 )
 
-// registerReadResources adds the two resources the read-only tier reaches. The administrator reads
-// the same two, unscoped, and gains the configuration resources beside them.
+// registerReadResources adds the two resources the read-only tier reaches.
+// The administrator reads the same two, unscoped, and gains the
+// configuration resources beside them.
 func registerReadResources(target *mcp.Server, deps Deps) {
 	target.AddResource(&mcp.Resource{
 		URI:      systemsURI,
@@ -67,8 +68,8 @@ func registerReadResources(target *mcp.Server, deps Deps) {
 			return nil, err
 		}
 
-		// The projection is the one the listener's own configuration payload uses, so an assistant
-		// and a listener at a desk are naming the same set of things.
+		// The projection is the one the listener's own configuration payload
+		// uses, so an assistant and a listener at a desk name the same set.
 		view := configuration.Systems.Scoped(scopeOf(who), configuration.Tags)
 
 		return jsonResource(systemsURI, systemsAnswer(view))
@@ -92,8 +93,8 @@ func registerReadResources(target *mcp.Server, deps Deps) {
 
 		criteria, readable := parseHistorySlice(req.Params.URI)
 		if !readable {
-			// A window that names nothing real looks onto nothing: the empty slice, the same
-			// answer a talkgroup with nothing recorded gets.
+			// A window that names nothing real looks onto nothing: the empty
+			// slice, the same answer a talkgroup with nothing recorded gets.
 			return jsonResource(req.Params.URI, pageAnswer(ports.CallSearchPage{}, defaultHistorySlice()))
 		}
 
@@ -109,8 +110,9 @@ func registerReadResources(target *mcp.Server, deps Deps) {
 	})
 }
 
-// parseHistorySlice reads the system, the talkgroup, and the optional day out of a slice URI. The
-// second answer says whether the URI named two real numbers at all.
+// parseHistorySlice reads the system, the talkgroup, and the optional day
+// out of a slice URI. The second answer says whether the URI named two
+// real numbers at all.
 func parseHistorySlice(uri string) (domain.CallSearch, bool) {
 	parsed, err := url.Parse(uri)
 	if err != nil {
@@ -140,16 +142,15 @@ func parseHistorySlice(uri string) (domain.CallSearch, bool) {
 	}), true
 }
 
-// defaultHistorySlice is the page an unreadable slice echoes: the page the server would have
-// applied to a window naming real numbers, so an empty slice answers with the same page shape a
-// filled-in window answers.
+// defaultHistorySlice is the page an unreadable slice echoes: the page the
+// server would have applied to a window naming real numbers.
 func defaultHistorySlice() domain.CallSearch {
 	return domain.CallSearch{Limit: domain.DefaultCallSearchLimit, Sort: 1}
 }
 
-// dayOf is the day argument as the history reads it. The history's own criterion is an instant
-// inside the day it should slice to, so a bare day becomes the instant that opens it, and an
-// instant is taken as given.
+// dayOf is the day argument as the history reads it: the history's
+// criterion is an instant inside the day, so a bare day becomes the instant
+// that opens it.
 func dayOf(argument string) string {
 	if argument == "" {
 		return ""
@@ -167,8 +168,8 @@ func dayOf(argument string) string {
 	return day.Format(time.RFC3339)
 }
 
-// jsonResource is a resource read as one JSON text, which is what every resource on this surface
-// answers: a client parses it rather than reading it as prose.
+// jsonResource is a resource read as one JSON text, which is what every
+// resource on this surface answers.
 func jsonResource(uri string, payload any) (*mcp.ReadResourceResult, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
