@@ -31,10 +31,10 @@ import (
 	"rdio-scanner/internal/presentation/common/dto"
 )
 
-// The intervals a listener connection is held to. They are the protocol's own and are not choices
-// this server makes: a client is written to expect a ping nine tenths of the way through the window in
-// which it must answer, and a server that asks on a different schedule is a server its clients have to
-// be written around.
+// The keepalive intervals a listener connection is held to. They are the
+// protocol's own values, not choices this server makes: a client is
+// written to expect this schedule; see the listener-keepalive-intervals-
+// are-the-protocols maintainer note.
 const (
 	// pongWait is how long a connection may go without answering before it is given up on.
 	pongWait = 60 * time.Second
@@ -46,22 +46,20 @@ const (
 	// writeWait is how long the server waits for one frame to leave.
 	writeWait = 10 * time.Second
 
-	// maxFrameSize is the largest frame the server reads from one listener. A bigger frame
-	// is not something the server can act on — the protocol's frames are small JSON
-	// documents — and reading it is a way to make the server hold a message it will never
-	// use. The socket ends the connection at the limit.
+	// maxFrameSize is the largest frame the server reads from one listener;
+	// a bigger frame is unusable and reading it spends memory on a message
+	// that is never used. The socket ends the connection at the limit.
 	maxFrameSize = 1 << 20
 
-	// sendBuffer is how many frames may be waiting for one listener before the server stops and waits
-	// for it to catch up. A listener that cannot keep up holds up the delivery that is going to it,
-	// which is what the legacy server does and what a slow client therefore cannot silently cost a
-	// server its calls. The queue is bounded: the frames waiting for a slow
-	// listener are server memory, and thousands of them per listener is a way to spend it.
+	// sendBuffer is how many frames may wait for one listener before the
+	// server stops and waits for it to catch up, as the legacy server does.
+	// A slow client must not silently lose a server its calls, and a bounded
+	// queue keeps waiting frames from spending unbounded server memory.
 	sendBuffer = 256
 
-	// accessAttemptsWindow is the interval an address's access-code attempts are measured over,
-	// the same budget shape as the login one: quiet time renews it, and a history older than the
-	// window is dropped rather than kept.
+	// accessAttemptsWindow is the interval an address's access-code attempts
+	// are measured over, the same budget shape as the login one; see the
+	// per-address-access-code-attempt-budget maintainer note.
 	accessAttemptsWindow = 10 * time.Minute
 
 	// closeWorkers is how many connections the stopping hub says goodbye to at the same
@@ -69,9 +67,10 @@ const (
 	closeWorkers = 64
 )
 
-// Settings are the things about the server a hub has to know before it delivers anything to a
-// listener: whether listeners must present an access code, how many of them the server admits at once,
-// and the branding and contact address the server reports about itself.
+// Settings are what a hub must know about the server before it delivers
+// anything to a listener: whether listeners must present an access code,
+// how many connections the server admits, and the branding and contact
+// address the server reports about itself.
 type Settings struct {
 	Branding   string
 	Email      string
@@ -79,49 +78,44 @@ type Settings struct {
 	Restricted bool
 }
 
-// ServerSettings answers what the server is currently configured to do about listeners. It is asked at
-// the moment of the question rather than remembered by the hub, because the two things it answers can
-// change while listeners are already connected — and the listeners already connected are the ones the
-// change affects. Adding the first access code asks every listener that is already watching for its
-// code; lowering the client limit decides who is admitted from then on.
+// ServerSettings answers what the server is currently configured to do
+// about listeners, asked at the moment of the question rather than
+// remembered by the hub: the settings can change while listeners are
+// already connected, and those listeners are who the change affects;
+// see the broadcast-delivery-gating maintainer note.
 type ServerSettings interface {
 	Settings() Settings
 }
 
-// ListenerChanges is what the hub says when a listener joins or leaves: not who joined or left, only
-// that the number of listeners is no longer what it was. Whoever is told answers that occurrence on
-// its own schedule, because a client that connects and drops repeatedly should cost one report and not
-// one per connection.
+// ListenerChanges is what the hub says when a listener joins or leaves:
+// only that the listener count changed. Whoever is told answers that
+// occurrence on its own schedule, debouncing repeated connects; see the
+// a-listener-is-a-registered-session maintainer note.
 type ListenerChanges interface {
 	ListenerChanged()
 }
 
-// Dispatch hands one frame to the server that owns this hub, and reports a failure the hub files in the server
-// log and then ignores. A frame the server cannot act on is not a reason to end the connection it
-// arrived on: a client that sends one frame the server does not know is still a client, and the native
-// applications send commands older servers do not have.
-//
-// The context belongs to the session and not to the request that opened it: a listener connection outlives
-// the handler that upgraded it, and the work the server is doing for that listener should stop when the
-// listener goes away rather than when the request that started it was answered.
+// Dispatch hands one frame to the server that owns this hub, and reports
+// a failure to the server log and ignores it: a frame the server cannot
+// act on is not a reason to end the connection it arrived on. The
+// context belongs to the session, which outlives the request that opened
+// it; see the a-bad-frame-does-not-end-the-connection maintainer note.
 type Dispatch func(ctx context.Context, clientID string, message Message) error
 
-// Hub is the set of listener connections the server is holding, and the thing the application talks
-// to when it has something to tell a listener.
-//
-// A session and a listener are not the same thing. A session is a connection the server has taken over;
-// a listener is a session it has told what it is watching, which happens the moment a configuration is
-// written on the connection. Only listeners are counted, only listeners are sent calls, and only
-// listeners are against the client limit — which is why a restricted server, which writes nothing until
-// an access code is accepted, can hold a room full of connections and report no listeners at all.
+// Hub is the set of listener connections the server is holding, and the
+// thing the application talks to when it has something to tell listeners.
+// A session is a taken-over connection; only a registered session is a
+// listener, counted and sent calls; see the a-listener-is-a-
+// registered-session maintainer note.
 type Hub struct {
 	settings ServerSettings
 	changes  ListenerChanges
 	logs     ports.LogRepository
 
-	// clock is the server's one clock. The hub used to stamp its own entries with the wall clock of the
-	// machine it was running on, which is how a join and the ingest line about the same recording could
-	// disagree — and the log view is read most when the machine's clock is the thing that cannot be trusted.
+	// clock is the server's one clock, injected into every writer, so log
+	// entries order against each other. The hub used to stamp its entries
+	// with the machine's wall clock; see the listener-log-entries-share-the-
+	// server-clock maintainer note.
 	clock ports.Clock
 
 	mutex    sync.Mutex
@@ -129,29 +123,29 @@ type Hub struct {
 	listens  map[string]*listener
 	nextID   uint64
 
-	// accessAttempts counts the access-code attempts spent per address, in a window that ages
-	// like the login budget. The per-session counter alone is bypassable by reconnecting — a
-	// guessing tool opens a fresh session per guess — so the address counter is what makes
-	// "five tries" mean five tries per machine, and the warned flag is what keeps a hundred
-	// guesses from writing a hundred lines into the operator's log view.
+	// accessAttempts counts access-code attempts per address, in a window
+	// that ages like the login budget. The per-session counter alone is
+	// bypassable by reconnecting, so the address counter is what makes
+	// "five tries" mean five tries per machine; see the per-address-access-
+	// code-attempt-budget maintainer note.
 	accessAttempts map[string]*accessWindow
 
-	// held counts the goroutines that read the connections the hub has taken over. A server that is stopping
-	// has to finish them before it closes the database the log lives in: a departure is written by the
-	// goroutine that was reading the connection, and it is written after that goroutine has already taken the
-	// session out of the hub, so nothing else can tell that the entry is still on its way.
+	// held counts the goroutines reading taken-over connections. A stopping
+	// server must finish them before it closes the database the log lives
+	// in; see the the-hub-close-drains-log-entries-before-the-database
+	// maintainer note.
 	held sync.WaitGroup
 
-	// closed marks a hub whose close has run: a connection arriving after it is refused,
-	// because the close has already waited for every goroutine the hub had started, and a
-	// session attached after it would start goroutines on a WaitGroup the close is already
-	// waiting on.
+	// closed marks a hub whose close has run: a connection arriving after it
+	// is refused, because attaching one would add goroutines to a WaitGroup
+	// the close is already waiting on; see the the-hub-close-drains-log-
+	// entries-before-the-database maintainer note.
 	closed bool
 
-	// The intervals above are what every hub starts with. They are fields rather than constants used
-	// inline so that this package's own tests can hold a connection to a shorter version of them: a
-	// test that checks a dropped connection has to wait for one, and no server should be able to pick
-	// a value that breaks the protocol instead.
+	// The intervals above are what every hub starts with, held as fields so
+	// this package's tests can shorten them; nothing outside this package
+	// may pick values that break the protocol; see the listener-keepalive-
+	// intervals-are-the-protocols maintainer note.
 	handshakeWait time.Duration
 	pongWait      time.Duration
 	pingPeriod    time.Duration
@@ -160,14 +154,12 @@ type Hub struct {
 
 var _ ports.Hub = (*Hub)(nil)
 
-// NewHub builds the hub from what it needs to know about the server, who it tells about listeners, where its
-// log goes, and the server's clock to stamp the entries it writes.
-//
-// The hub has no console of its own, and that is deliberate: every line it says about a connection is an entry
-// in the server log, and the composition root is what says those entries out loud. A listener that joined, a
-// frame that could not be encoded and a message that could not be read are then findable by filtering the log
-// view for the live feed, which is what an operator actually has, rather than by having been watching the
-// terminal at the moment they happened.
+// NewHub builds the hub from what it needs to know about the server,
+// who it tells about listener changes, where its log goes, and the
+// server's clock to stamp the entries it writes. The hub keeps no
+// console of its own: every line it says about a connection goes into
+// the server log, which the composition root reads out loud; see the
+// listener-log-entries-share-the-server-clock maintainer note.
 func NewHub(settings ServerSettings, changes ListenerChanges, logs ports.LogRepository, clock ports.Clock) *Hub {
 	return &Hub{
 		accessAttempts: map[string]*accessWindow{},
@@ -185,29 +177,28 @@ func NewHub(settings ServerSettings, changes ListenerChanges, logs ports.LogRepo
 	}
 }
 
-// accessWindow is one address's access-attempt history: how many tries have been spent in the
-// current window, when the most recent one was, and whether the refused-code warning for this
-// window has been written.
+// accessWindow is one address's access-attempt history: tries spent in
+// the current window, when the most recent one was, and whether the
+// refused-code warning for this window has been written.
 type accessWindow struct {
 	count  uint
 	warned bool
 	date   time.Time
 }
 
-// Attach takes over one upgraded listener connection and returns the identifier this session is known
-// by. It reports false when the server already holds as many connections as it allows, in which case the
-// connection is closed and nothing is said on it — a client that is refused because the server is full
-// is refused in silence, which is what today's clients see.
-//
-// The connection is not yet a listener. It becomes one when a configuration is written on it.
+// Attach takes over one upgraded listener connection and returns the
+// session identifier it is known by. It reports false, closing the
+// connection in silence, when the server already holds as many
+// connections as it allows; see the a-listener-is-a-registered-session
+// maintainer note.
 func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatch) (string, bool) {
 	if conn == nil {
 		return "", false
 	}
 
-	// The read limit is set before the connection is held: a frame bigger than the server
-	// will ever read ends the connection at the socket, and is never read into memory to be
-	// looked at.
+	// The read limit is set before the connection is held: an oversized
+	// frame ends the connection at the socket and is never read into memory
+	// to be looked at.
 	conn.SetReadLimit(maxFrameSize)
 
 	max := hub.settings.Settings().MaxClients
@@ -224,10 +215,10 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 		return "", false
 	}
 
-	// The gate is on the connections the server is holding, not on the ones that finished
-	// becoming listeners: a client that never answers must not keep the slot open forever
-	//. The listeners-count broadcast keeps counting registered listeners, as
-	// the contract fixes it.
+	// The admission gate is on the connections the server holds, not the
+	// ones that finished registering: a client that never answers must not
+	// keep a slot open; see the a-listener-is-a-registered-session
+	// maintainer note.
 	if uint(len(hub.sessions)) >= max {
 		hub.mutex.Unlock()
 
@@ -245,10 +236,10 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 
 	hub.mutex.Unlock()
 
-	// Both goroutines a connection runs are counted, because both write to the server log: the one that
-	// reads reports the connection leaving, and the one that writes reports the connection joining and any
-	// frame it could not write. Closing the hub waits for them, so that not one of those entries is still on
-	// its way when the server goes on to close the database the log lives in.
+	// Both goroutines a connection runs are counted, because both write to
+	// the server log, and closing the hub waits for them so no entry is
+	// still on its way when the log's database closes; see the the-hub-
+	// close-drains-log-entries-before-the-database maintainer note.
 	hub.held.Add(2)
 
 	go func() {
@@ -266,13 +257,11 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 	return id, true
 }
 
-// BroadcastCall delivers a recorded call to every listener it is for.
-//
-// Two things have to say so. The listener's live-watch selection has to ask for that system or
-// talkgroup, and — on a server that requires access codes — the listener's access has to grant the call.
-// On a server that requires nothing, the access is not consulted at all: that is how an anonymous
-// listener on an open server sees every call the server records, and it is why an access that names no
-// systems is not treated as a grant of nothing on such a server.
+// BroadcastCall delivers a recorded call to every listener it is for:
+// the listener's live-watch selection must ask for that system or
+// talkgroup, and on a server that requires access codes the listener's
+// access must grant it; see the broadcast-delivery-gating maintainer
+// note.
 func (hub *Hub) BroadcastCall(call domain.Call) {
 	settings := hub.settings.Settings()
 
@@ -319,13 +308,10 @@ func (hub *Hub) SendConfig(clientID string, cfg ports.ConfigSnapshot) {
 	}
 }
 
-// BroadcastConfig delivers the configuration to every listener, each scoped to what that listener is
-// allowed to see.
-//
-// On a server that requires access codes it is not delivered as a configuration at all: every listener
-// is asked for its code again, because the change that prompted it may be the access that decides what
-// that listener may see, and a server that re-sent the old view would be showing a listener something
-// it may no longer be entitled to.
+// BroadcastConfig delivers the configuration to every listener, each
+// scoped to what that listener is allowed to see. On a server that
+// requires access codes it arrives as a fresh request for the code;
+// see the broadcast-delivery-gating maintainer note.
 func (hub *Hub) BroadcastConfig(cfg ports.ConfigSnapshot) {
 	settings := hub.settings.Settings()
 
@@ -383,12 +369,11 @@ func (hub *Hub) LivefeedWatchesNothing(clientID string) bool {
 	return session.livefeed.AllOff()
 }
 
-// SendLivefeedMap answers a listener's live-watch selection with whether anything is now switched on.
-// The answer is the only thing the listener is told, and it is told even when it is no.
-//
-// The session is chosen under the lock and delivered outside it, like every other delivery: the answer
-// waits for room in a slow listener's queue, and it waits there without holding the hub — a listener
-// that cannot keep up must not stop the server from reaching everyone else.
+// SendLivefeedMap answers a listener's live-watch selection with whether
+// anything is now switching on it, told even when the answer is no. The
+// session is chosen under the hub lock and delivered outside it, like
+// every other delivery: a stalled listener must not stop the server
+// from reaching everyone else.
 func (hub *Hub) SendLivefeedMap(clientID string, watching bool) {
 	hub.mutex.Lock()
 
@@ -465,24 +450,11 @@ func (hub *Hub) CloseClient(clientID string, code int) {
 	}
 }
 
-// Close ends every connection the server has taken over, and reports each one leaving.
-//
-// This is what a server that is stopping needs. Shutting an address down does not wait for a connection the
-// server has handed over: the moment the listener endpoint upgrades one, the address stops tracking it. So
-// the hub is still holding its connections at the point where the stop closes the database the log lives in,
-// and a departure left to the goroutine that was reading one of them is an entry written to a log that has
-// just been closed — an entry nobody can read afterwards, and a log view that holds a connection which began
-// and never ended.
-//
-// The departure is filed first, while the log can still be written to. The close frame is what ends the
-// connection, and the read loop it unblocks finds nothing left to report: disconnect reports only a session
-// the hub still holds.
-// The close is made session by session in parallel: the goodbye is a
-// delivery, and a listener whose writer is stuck in the socket holds that delivery for its
-// full write deadline. Made one session at a time, a wall of stalled listeners takes a
-// deadline per session and blows past the server's own shutdown window — which is how a
-// stopping server ends up needing the kill signal. The workers are bounded, like the
-// administrator socket's goodbyes.
+// Close ends every connection the server has taken over and reports
+// each one leaving, filing the departure while the log can still be
+// written, and making the goodbyes together within the shutdown
+// deadline; see the the-hub-close-drains-log-entries-before-the-
+// database maintainer note.
 func (hub *Hub) Close(ctx context.Context) {
 	hub.mutex.Lock()
 
@@ -513,26 +485,28 @@ func (hub *Hub) Close(ctx context.Context) {
 
 			hub.disconnect(session)
 
-			// The code is the protocol's answer to a server that is going away, which is the only reason this
-			// method is called: a listener that reads it knows the connection ended at the far end and can ask
-			// for the next server rather than waiting out a read timeout on one that has already gone.
+			// The close code is the protocol's answer to a server that is going
+			// away: a listener that reads it knows the connection ended at the far
+			// end and can look for the next server instead of waiting out a read
+			// timeout; see the the-hub-close-drains-log-entries-before-the-
+			// database maintainer note.
 			hub.deliver(session, delivery{code: websocket.CloseGoingAway})
 		}(session)
 	}
 
 	wg.Wait()
 
-	// And the close waits for the goroutines that were reading and writing those connections. A departure is
-	// written by the goroutine that was reading a connection, after it has already taken the session out of
-	// the hub, so a close that only ended the connections would report its own departures and return while
-	// someone else's was still on its way — into a log whose database is closed on the next line.
+	// The close also waits for the goroutines that were reading and writing
+	// those connections, so it reports its own departures without leaving
+	// someone else's on its way; see the the-hub-close-drains-log-entries-
+	// before-the-database maintainer note.
 	hub.held.Wait()
 }
 
-// GrantAccess attaches an access to a session, which is what makes that session authenticated. It is
-// kept even when the attempt that presented it is then refused for a reason that does not throw the
-// access away — an expired access, or one that is already at its connection limit — which is why the
-// server can name the identity a refused session was trying to use when it disconnects.
+// GrantAccess attaches an access to a session, which is what makes that
+// session authenticated. The access is kept even when the presenting
+// attempt is then refused for a reason that does not take it away,
+// so the server can name the identity a refused session was using.
 func (hub *Hub) GrantAccess(clientID string, access domain.Access) {
 	hub.mutex.Lock()
 	defer hub.mutex.Unlock()
@@ -543,9 +517,9 @@ func (hub *Hub) GrantAccess(clientID string, access domain.Access) {
 	}
 }
 
-// AccessOf returns the access a session holds, if it has been given one. A session that has not
-// presented an access code holds nothing: it is not unauthenticated by way of an empty access, it simply
-// has not been given one.
+// AccessOf returns the access a session holds, if it has been given one;
+// a session that has never presented a code is not unauthenticated by
+// an empty access, it has not been given one.
 func (hub *Hub) AccessOf(clientID string) (domain.Access, bool) {
 	hub.mutex.Lock()
 	defer hub.mutex.Unlock()
@@ -574,10 +548,10 @@ func (hub *Hub) RecordAccessAttempt(clientID string) uint {
 	return session.attempts
 }
 
-// ResetAccessAttempts clears a session's attempt counter, which happens only when an access code is
-// accepted — and with it the history of the address the session connected from: an accepted code
-// renews the budget of the machine it was accepted from, exactly as a successful sign-in renews the
-// login budget.
+// ResetAccessAttempts clears a session's attempt counter, which happens
+// only when an access code is accepted, and with it the history of the
+// address the session connected from; see the per-address-access-code-
+// attempt-budget maintainer note.
 func (hub *Hub) ResetAccessAttempts(clientID string) {
 	hub.mutex.Lock()
 	defer hub.mutex.Unlock()
@@ -588,10 +562,10 @@ func (hub *Hub) ResetAccessAttempts(clientID string) {
 	}
 }
 
-// RecordAddressAccessAttempt counts one access-code attempt against the address the session
-// connected from and reports how many attempts that address has spent in the current window. A
-// window that has passed starts over, and histories quiet for longer than the window are dropped:
-// a map that only ever grows is a memory a guessing tool fills with the addresses it spoofs.
+// RecordAddressAccessAttempt counts one attempt against the address the
+// session connected from and reports the attempts spent in the current
+// window; see the per-address-access-code-attempt-budget maintainer
+// note.
 func (hub *Hub) RecordAddressAccessAttempt(clientID string) uint {
 	hub.mutex.Lock()
 	defer hub.mutex.Unlock()
@@ -626,9 +600,9 @@ func (hub *Hub) RecordAddressAccessAttempt(clientID string) uint {
 	return history.count
 }
 
-// ShouldWarnAccessAttempt reports whether the refused-code warning is due for this session's
-// address: the first refused attempt of the window writes the line, the rest of the window stays
-// quiet, so a tool that guesses a hundred codes leaves one line, not a hundred.
+// ShouldWarnAccessAttempt reports whether the refused-code warning is
+// due for this session's address, once per window; see the per-address-
+// access-code-attempt-budget maintainer note.
 func (hub *Hub) ShouldWarnAccessAttempt(clientID string) bool {
 	hub.mutex.Lock()
 	defer hub.mutex.Unlock()
@@ -648,9 +622,10 @@ func (hub *Hub) ShouldWarnAccessAttempt(clientID string) bool {
 	return true
 }
 
-// AccessSessionCount reports how many listeners are watching under one access. A session that is open
-// but has not been told what it is watching is not watching, and is not counted — which is what makes a
-// limit of one allow two connections and refuse the third.
+// AccessSessionCount reports how many listeners are watching under one
+// access: a session attached but not yet registered is not watching and
+// is not counted, which is how an access with a limit of one admits
+// exactly one listener.
 func (hub *Hub) AccessSessionCount(accessID uint64) uint {
 	hub.mutex.Lock()
 	defer hub.mutex.Unlock()
@@ -688,12 +663,10 @@ func (hub *Hub) RemoteAddrOf(clientID string) string {
 	return session.remoteAddr
 }
 
-// Send hands one frame to one session.
-//
-// It is not part of ports.Hub, and that is the point: the application does not get to write an arbitrary
-// frame to a listener, because what the application holds are commands, queries, and domain values. The
-// listener endpoint does, because the answers it writes are frames of the protocol built from payloads
-// that belong to the presentation layer.
+// Send hands one frame to one session. It is deliberately not part of
+// ports.Hub: the application holds commands, queries, and domain events,
+// not protocol frames, and only the listener endpoint builds frames.
+// Frames come from presentation.
 func (hub *Hub) Send(clientID string, frame Message) {
 	hub.mutex.Lock()
 
@@ -714,19 +687,11 @@ func configDelivery(session *listener, cfg ports.ConfigSnapshot) delivery {
 	}
 }
 
-// deliver hands one thing to a session's writer.
-//
-// A session whose writer has stopped is skipped, and a send that has to wait for room stops waiting the
-// moment that writer stops, so a connection that has already gone cannot hold the server. A listener
-// that is merely slow does hold it: the frame waits for room in that listener's queue, which is what the
-// legacy server does and what means a server does not quietly throw calls away because one client cannot
-// keep up.
-//
-// The hub lock is deliberately not held while this waits. The legacy server holds its clients lock
-// across the whole delivery, and a listener that cannot keep up therefore blocks the server that is
-// trying to reach it; here the sessions are chosen under the lock and delivered outside it, so a slow
-// listener cannot stop the server from doing the one thing it would need the lock for — finishing the
-// registration of a session whose queue is full.
+// deliver hands one thing to a session's writer. A stopped writer is
+// skipped, and a send waiting for room stops the moment the writer
+// stops, while a merely slow listener does hold its delivery. The hub
+// lock is not held while this waits; see the deliveries-wait-outside-
+// the-hub-lock maintainer note.
 func (hub *Hub) deliver(session *listener, out delivery) {
 	if session.stopped.Load() {
 		return
@@ -765,9 +730,10 @@ func (hub *Hub) register(session *listener) {
 	hub.logf(domain.LogLevelInfo, "a listener joined from %s", session.remoteAddr)
 }
 
-// disconnect forgets a session and says so. Every connection the server has taken over is reported when
-// it goes, including one that never became a listener, because a connection that arrived and left is
-// something the person running the server can see happening.
+// disconnect forgets a session and says so. Every connection the server
+// has taken over is reported when it goes, including one that never
+// became a listener, because a connection that came and went is
+// something the operator can see happening.
 func (hub *Hub) disconnect(session *listener) {
 	hub.mutex.Lock()
 
@@ -783,9 +749,10 @@ func (hub *Hub) disconnect(session *listener) {
 
 	session.cancel()
 
-	// Every connection the server has taken over is reported when it goes, even one that never became
-	// a listener: the legacy server reports the departure of a connection it was holding, and the
-	// listeners count is re-reported five seconds later either way.
+	// Every taken-over connection is reported when it goes, even one that
+	// never became a listener: the legacy server reports the departures it
+	// was holding, and the listeners count is re-reported five seconds
+	// later either way.
 	hub.changes.ListenerChanged()
 
 	if len(session.access.Ident) > 0 {
@@ -797,13 +764,10 @@ func (hub *Hub) disconnect(session *listener) {
 	hub.logf(domain.LogLevelInfo, "a listener left from %s", session.remoteAddr)
 }
 
-// logf files one notice about a listener session in the server log. Every line the hub writes is about
-// feeding listeners, so the hub files them itself: a join, a departure and a message that went wrong are the
-// things an operator filters the log view for, and an entry that does not name its author cannot be filtered
-// for.
-//
-// The level is part of the call because a join is a notice and a frame the server could not act on is a
-// problem, and an operator narrowing the log view to what went wrong is asking about the second one.
+// logf files one notice about a listener session in the server log. The
+// hub files them itself because joins, departures and unreadable
+// messages are what operators filter the log view for, and the level is
+// part of the call: a join is a notice, an unreadable frame a problem.
 func (hub *Hub) logf(level string, format string, args ...any) {
 	if hub.logs == nil {
 		return
@@ -826,9 +790,10 @@ type delivery struct {
 	code  int
 }
 
-// queued is what a broadcast has to say to one session. The frames are chosen while the hub lock is
-// held, because choosing them means reading what that session is allowed to see, and they are written
-// after the lock is given back.
+// queued is what a broadcast hands one session: frames chosen while the
+// hub lock is held, because choosing them reads what that session may
+// see, and delivered after the lock is given back; see the deliveries-
+// wait-outside-the-hub-lock maintainer note.
 type queued struct {
 	frames  []Message
 	session *listener
@@ -847,15 +812,16 @@ type listener struct {
 	quit    chan struct{}
 	stopped atomic.Bool
 
-	// ctx belongs to the session and not to the request that opened it: a listener connection outlives
-	// the handler that upgraded it, and it is the session going away that should stop the work the
-	// server is still doing for it.
+	// ctx belongs to the session and not to the request that opened it: a
+	// listener connection outlives the handler that upgraded it, and the
+	// session going away is what should stop the work done for it.
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	// handshake is the window a connection has to become a listener. It is stopped by the first
-	// configuration written on the connection, and when it is not stopped the connection is ended —
-	// which is what drops a connection on a restricted server whose access code never arrives.
+	// handshake is the window a connection has to become a listener. The
+	// first configuration written on the connection stops it, and an
+	// unstopped window ends the connection, dropping a restricted server's
+	// sessions whose access code never arrives.
 	handshake *time.Timer
 
 	// The per-session state is guarded by the hub lock, because the hub reaches it while it is
@@ -887,12 +853,10 @@ func newListener(hub *Hub, id string, conn *websocket.Conn, remoteAddr string) *
 	}
 }
 
-// read takes the frames a session sends, in the order they arrive, and hands each one to the server
-// behind the hub.
-//
-// A frame the server cannot read, or cannot act on, is filed in the log view and skipped: the connection
-// stays open and the next frame is read. Ending a connection over one bad frame is how a server loses a
-// client that is sending something the server is too old to know.
+// read takes the frames a session sends, in order, and hands each to
+// the server behind the hub. A frame the server cannot read or act on
+// is filed in the log and skipped, keeping the connection open; see
+// the a-bad-frame-does-not-end-the-connection maintainer note.
 func (session *listener) read(dispatch Dispatch) {
 	defer func() {
 		session.hub.disconnect(session)
