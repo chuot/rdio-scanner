@@ -28,15 +28,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The administrator's configuration resources: the sections an operator inspects often enough to
-// read them directly, with no tool call in between, and the two long lists a client browses by
-// template. A resource is read with no arguments to decide over, so the administrator's credential
-// is asked inside the read.
-//
-// Two of these inventory credentials, and a credential inventory read by an assistant must not hand
-// out the credentials it inventories: the secret fields are replaced by a stated marker, and the
-// inventory answers the questions it is read for — who a code belongs to, when it stops working,
-// and what it is entitled to.
+// The configuration resources: sections an operator reads directly, with
+// the administrator's credential asked inside the read. The two
+// credential inventories replace secret fields with a stated marker, so
+// an inventory never hands out what it inventories.
 
 const (
 	optionsURI       = "rdio-scanner://config/options"
@@ -52,8 +47,8 @@ const (
 	logSliceURI      = "rdio-scanner://logs/{level}{?date}"
 )
 
-// maskedCredential marks the field a credential inventory replaced, so a reader of the inventory
-// knows the value is deliberately absent and not simply missing.
+// maskedCredential marks the field a credential inventory replaced, so a
+// reader knows the value is deliberately absent.
 const maskedCredential = "masked"
 
 // registerConfigResources adds the administrator's configuration resources.
@@ -195,8 +190,8 @@ func registerConfigResources(target *mcp.Server, deps Deps) {
 			return alerts()
 		})
 
-	// One level of one system, read by a template: the level lists are long enough that an
-	// assistant asks for one system's talkgroups, and the whole tree is beside it.
+	// One level of one system, read by a template: an assistant asks for one
+	// system's talkgroups, and the whole tree is beside it.
 	target.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: systemLevelURI,
 		Name:        "system-level",
@@ -244,8 +239,8 @@ func registerConfigResources(target *mcp.Server, deps Deps) {
 		return jsonResource(req.Params.URI, []jsonRow{})
 	})
 
-	// A browsable slice of the log: one severity, one day. The search tool takes every filter;
-	// this is what a client reads while it is browsing.
+	// A browsable slice of the log: one severity, one day. The search tool
+	// takes every filter; this is what a client reads while browsing.
 	target.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: logSliceURI,
 		Name:        "log-slice",
@@ -302,10 +297,10 @@ type optionsView struct {
 	Masked []string `json:"masked"`
 }
 
-// optionsViewOf is the settings section as this surface answers it. The view is shared by the
-// resource and by the configuration change tool, so the settings an assistant reads and the
-// settings it is shown before it confirms a change are the same shape, and the secrets are kept
-// out of both.
+// optionsViewOf is the settings section as this surface answers it. The
+// view is shared by the resource and the configuration change tool, so the
+// settings read and the settings shown before a change are one shape, with
+// the secrets kept out of both.
 func optionsViewOf(deps Deps, options domain.Options) optionsView {
 	return optionsView{
 		AudioConversion:           options.AudioConversion,
@@ -470,10 +465,10 @@ func talkgroupsOf(talkgroups domain.Talkgroups) []talkgroupRow {
 	return answer
 }
 
-// talkgroupRowOf is one talkgroup as a row of the answer. The row builders are shared by the
-// resources and by the configuration change tool, so what an assistant reads of a section and what
-// it is shown before it confirms a change to that section are the same shape, and the credentials
-// are masked in both.
+// talkgroupRowOf is one talkgroup as a row of the answer. The row builders
+// are shared by the resources and the configuration change tool, so the
+// section read and the section shown before a change are one shape, with
+// the credentials masked in both.
 func talkgroupRowOf(talkgroup domain.Talkgroup) talkgroupRow {
 	return talkgroupRow{
 		ID:           talkgroup.ID,
@@ -524,8 +519,8 @@ func unitRowOf(unit domain.Unit) unitRow {
 	}
 }
 
-// groupsOf is the group inventory, and tagsOf the tag inventory: the same shape, because the
-// operator reads them the same way.
+// groupsOf is the group inventory, and tagsOf the tag inventory: the same
+// shape, because the operator reads them the same way.
 func groupsOf(groups domain.Groups) []labelRow {
 	answer := []labelRow{}
 
@@ -611,8 +606,9 @@ func downstreamRowOf(downstream domain.Downstream) downstreamRow {
 	}
 }
 
-// scopeView is what a credential is entitled to, in the shape the configuration payloads use: the
-// star for everything the server holds, or the systems it names with the talkgroups under each.
+// scopeView is what a credential is entitled to, in the shape the
+// configuration payloads use: the star for everything, or the systems it
+// names with the talkgroups under each.
 func scopeView(scope domain.AccessScope) any {
 	if !scope.Present {
 		return nil
@@ -645,8 +641,8 @@ func scopeView(scope domain.AccessScope) any {
 	return answer
 }
 
-// parseSystemLevel reads the system reference and the level out of a level URI. The second answer
-// says whether the URI named a number at all.
+// parseSystemLevel reads the system reference and the level out of a level
+// URI. The second answer says whether the URI named a number at all.
 func parseSystemLevel(uri string) (uint, string, bool) {
 	parsed, err := url.Parse(uri)
 	if err != nil {
@@ -666,8 +662,9 @@ func parseSystemLevel(uri string) (uint, string, bool) {
 	return uint(systemRef), fields[1], true
 }
 
-// parseLogSlice reads the severity and the day out of a log slice URI. A severity outside the
-// vocabulary the server files entries under is not readable as a slice.
+// parseLogSlice reads the severity and the day out of a log slice URI. A
+// severity outside the vocabulary the server files entries under is not
+// readable as a slice.
 func parseLogSlice(uri string) (string, string, bool) {
 	parsed, err := url.Parse(uri)
 	if err != nil {
