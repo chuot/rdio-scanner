@@ -28,14 +28,13 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The status read is the one thing the administrator's landing page asks for, and it is the only
-// published boundary in the server that answers what the server is doing right now. It has no legacy
-// capture to be compared against — the server this one replaced had no status read at all — so the
+// The status read is the one thing the administrator's landing page asks for, and it has
+// no legacy capture - the server this one replaced had no status read at all - so the
 // shape it is held to is the one written down for it.
 
-// The status read is answered with the identity the administrator surface already carries beside the
-// snapshot the use case measured: the version, the container answer, and the folder the server was told
-// to serve.
+// The status read is answered with the identity the administrator surface carries beside
+// the snapshot the use case measured: the version, the container answer, and the folder
+// the server was told to serve.
 func TestStatusEndpointAnswersWhatTheServerIsAndWhatItIsRunning(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -50,8 +49,8 @@ func TestStatusEndpointAnswersWhatTheServerIsAndWhatItIsRunning(t *testing.T) {
 	}
 }
 
-// A snapshot with nothing recorded is answered with empty lists and no last call, and not with nulls.
-// A page that has to check each list for being absent before it can count it is a page that will
+// A snapshot with nothing recorded is answered with empty lists and no last call, and
+// not with nulls: a page that has to check each list for absence before counting it will
 // eventually stop checking.
 func TestStatusEndpointAnswersEmptyListsRatherThanNothingWhenNothingIsRecorded(t *testing.T) {
 	fixture := newStatusFixture()
@@ -115,9 +114,9 @@ func TestStatusEndpointAnswersEmptyListsRatherThanNothingWhenNothingIsRecorded(t
 	}
 }
 
-// The status read is asked for by a page that polls it, and a page polls with a GET. A method this
-// endpoint does not answer is refused, and it is refused after the credential has been settled: the
-// endpoint does not tell an anonymous caller which methods it answers.
+// A page polls the status read with a GET, and a method this endpoint does not answer is
+// refused, after the credential has been settled: the endpoint does not tell an
+// anonymous caller which methods it answers.
 func TestStatusEndpointRefusesMethodsItDoesNotAnswer(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -129,9 +128,10 @@ func TestStatusEndpointRefusesMethodsItDoesNotAnswer(t *testing.T) {
 		}
 	}
 
-	// A request that asks to become a websocket connection is answered as the ordinary read it is. The
-	// composition root's websocket takeover covers the pages, and this path is not one of them; a status
-	// read that quietly became a connection would leave the page polling a socket it never asked for.
+	// A request that asks to become a websocket connection is answered as the ordinary read
+	// it is: this path is not covered by the composition root's websocket takeover, and a
+	// status read that quietly became a connection would leave the page polling a socket it
+	// never asked for.
 	rec := fixture.serve(adminRequest{method: http.MethodGet, path: "/api/admin/status", token: captureToken, Upgrade: true})
 
 	if rec.Code != http.StatusOK {
@@ -139,9 +139,9 @@ func TestStatusEndpointRefusesMethodsItDoesNotAnswer(t *testing.T) {
 	}
 }
 
-// A status read is asked for by a page that shows it to whoever is looking at it. Without a credential
-// the endpoint answers 401, and it answers it without reading anything: an anonymous request that cost
-// the server six statements is a way for anyone to make this server work.
+// A status read is shown to whoever is looking at the page, and without a credential the
+// endpoint answers 401 without reading anything: an anonymous request that cost the
+// server six statements is a way for anyone to make this server work.
 func TestStatusEndpointRefusesARequestWithoutACredentialWithoutReadingAnything(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -184,10 +184,10 @@ func TestStatusEndpointRefusesACredentialItDidNotIssue(t *testing.T) {
 	}
 }
 
-// A status that cannot be read is answered with the failure status every other administrator read uses,
-// and with nothing in the body. The page has to be able to tell "the server could not be read" apart
-// from "the server is fine and has nothing to report", and a body that is a zeroed snapshot is how it
-// would fail to.
+// A status that cannot be read is answered with the failure status every other
+// administrator read uses, with nothing in the body: the page has to tell a server that
+// could not be read apart from a server with nothing to report, and a zeroed snapshot
+// body is how it would fail to.
 func TestStatusEndpointReportsAFailureToReadTheStatus(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -215,9 +215,9 @@ func TestStatusEndpointReportsAFailureToReadTheStatus(t *testing.T) {
 	}
 }
 
-// The container answer and the folder the server serves are named by the administrator surface beside
-// the version it already carries, so the status read says the same thing about the deployment as the
-// configuration read does.
+// The container answer and the served folder are named by the administrator surface
+// beside the version it already carries, so the status read says the same thing about the
+// deployment as the configuration read does.
 func TestStatusEndpointNamesTheDeploymentTheConfigurationReadNames(t *testing.T) {
 	fixture := newStatusFixture()
 
@@ -297,9 +297,9 @@ func newStatusFixture() *adminFixture {
 	return fixture
 }
 
-// statusWindowEnd is the end of the whole hour the clock sits in, and statusWindowStart is 24 hours
-// before it: the window the activity tallies are read over, which is the window's shape and not the
-// history's.
+// statusWindowEnd is the end of the whole hour the clock sits in, and statusWindowStart
+// is 24 hours before it: the window the activity tallies are read over, the window's
+// shape and not the history's.
 func statusWindowEnd() time.Time {
 	return captureTime.Truncate(time.Hour).Add(time.Hour)
 }
@@ -314,9 +314,9 @@ func localDayStart() time.Time {
 	return time.Date(captureTime.Year(), captureTime.Month(), captureTime.Day(), 0, 0, 0, 0, captureTime.Location())
 }
 
-// statusReads counts the reads the status use case actually ran against the fixtures. A request that was
-// refused costs none of them: the status read is six statements over a database that can hold years of
-// calls, and an anonymous request that cost them would be a way for anyone to make this server work.
+// statusReads counts the reads the status use case actually ran against the fixtures: a
+// refused request costs none of them, because the status read is six statements over a
+// database that can hold years of calls.
 func (fixture *adminFixture) statusReads() int {
 	return len(fixture.activity.SinceAsked) + len(fixture.activity.HoursAsked) +
 		len(fixture.activity.BusiestAsked) + len(fixture.activity.RecentAsked) +
