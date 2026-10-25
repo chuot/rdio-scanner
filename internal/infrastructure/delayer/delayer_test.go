@@ -31,9 +31,9 @@ import (
 // is asked about happened.
 var heldAt = time.Date(2026, 10, 6, 16, 0, 0, 0, time.UTC)
 
-// A call that is held back is written down with the instant it stops being held back, is armed for
-// that instant, and is handed over carrying the mark that says it was held back — and none of it
-// happens until that instant.
+// A call that is held back is written down with the instant it stops being
+// held back, is armed for that instant, and is handed over carrying the mark
+// that says it was held back, and none of it happens until that instant.
 func TestACallWithADelayIsHeldAndHandedBackWhenTheHoldRunsOut(t *testing.T) {
 	fixture := newDelayerFixture()
 
@@ -157,9 +157,9 @@ func TestAHoldThatCannotBeWrittenDownIsReportedAndTheCallLeftUndelivered(t *test
 	}
 }
 
-// A hold that ran out but cannot be taken off the waiting list is reported, and the call is delivered
-// anyway: the recording is finished and its hold is over, and a row left behind is not a reason to
-// keep it from the operators who were waiting for it.
+// A hold that ran out but cannot be taken off the waiting list is reported,
+// and the call is delivered anyway: the recording is finished and its hold
+// is over, and a row left behind is not a reason to keep it from operators.
 func TestAHoldThatCannotBeClearedIsReportedAndTheCallStillDelivered(t *testing.T) {
 	fixture := newDelayerFixture()
 
@@ -240,9 +240,9 @@ func TestAStoredHoldThatCannotBeWrittenDownAgainIsReported(t *testing.T) {
 	}
 }
 
-// The calls this server was holding when it last stopped are picked up: the ones whose hold ran out
-// while the server was not running are handed over at once, and the ones still holding are armed
-// again and written down again.
+// The calls this server was holding when it last stopped are picked up: the
+// ones whose hold ran out while the server was not running are handed over
+// at once, and the ones still holding are armed and written down again.
 func TestTheCallsHeldWhenTheServerLastStoppedArePickedUp(t *testing.T) {
 	fixture := newDelayerFixture()
 
@@ -272,9 +272,9 @@ func TestTheCallsHeldWhenTheServerLastStoppedArePickedUp(t *testing.T) {
 		t.Errorf("Restore handed over call %d marked %v, want call 7 marked as held back", ran[0].ID, ran[0].Delayed)
 	}
 
-	// The hold still running is armed again, for the instant its delay names now, and written down
-	// again with that instant. The call that is no longer in the history is left behind without
-	// stopping the startup.
+	// The hold still running is armed again, for the instant its delay names
+	// now, and written down again with that instant. The call that is no longer
+	// in the history is left behind without stopping the startup.
 	if got := fixture.scheduler.PendingCount(); got != 1 {
 		t.Fatalf("Restore armed %d holds, want the one still running", got)
 	}
@@ -296,9 +296,9 @@ func TestTheCallsHeldWhenTheServerLastStoppedArePickedUp(t *testing.T) {
 	}
 }
 
-// A hold that was written down under one delay is re-armed for the delay the configuration names now,
-// which is what lets an administrator change a talkgroup's delay and have the calls already waiting
-// follow the new one.
+// A hold that was written down under one delay is re-armed for the delay the
+// configuration names now, which is what lets calls already waiting follow
+// a changed delay.
 func TestAStoredHoldIsRewrittenWithTheDelayTheConfigurationNamesNow(t *testing.T) {
 	fixture := newDelayerFixture()
 
@@ -427,9 +427,9 @@ func heldCall(id uint64, at time.Time, delayMinutes uint) domain.Call {
 	return call
 }
 
-// delivered takes the calls the delayer has handed over and are waiting to be collected. It never
-// waits: a delayer that has handed over nothing has handed over nothing. A closed stream is the end
-// of the stream — it hands over nothing, and nothing is read from it.
+// delivered takes the calls the delayer has handed over and are waiting to
+// be collected. It never waits: a delayer that has handed over nothing has
+// handed over nothing, and a closed stream hands over nothing and is not read.
 func delivered(delayer *Delayer) []domain.Call {
 	got := []domain.Call{}
 
@@ -468,10 +468,9 @@ func (unwritable *unwritableDelayed) ScheduleDelayed(ctx context.Context, callID
 	return errors.New("the row will not be written")
 }
 
-// The status view counts the calls that are waiting out a hold right now. It is not the number of rows
-// the waiting list holds: a hold whose time has come and gone is no longer holding anything, and a
-// server that counted it would report a call the operator can find neither in the history nor in the
-// holds.
+// The status view counts the calls that are waiting out a hold right now,
+// not the rows the waiting list holds: a hold whose time has come and gone
+// is no longer holding anything.
 func TestHoldingCountsTheHoldsThatAreArmedAndNotYetRun(t *testing.T) {
 	fixture := newDelayerFixture()
 
@@ -514,9 +513,9 @@ func TestHoldingCountsTheHoldsThatAreArmedAndNotYetRun(t *testing.T) {
 	}
 }
 
-// A call with no hold to wait out is not counted, and neither is a call whose hold has already run out
-// by the time it arrives. Counting them would make the status view report a backlog that does not
-// exist.
+// A call with no hold to wait out is not counted, and neither is a call
+// whose hold has already run out by the time it arrives: counting them
+// would report a backlog that does not exist.
 func TestHoldingCountsNothingForACallThatIsNotWaiting(t *testing.T) {
 	fixture := newDelayerFixture()
 	defer fixture.delayer.Close()
