@@ -1,4 +1,4 @@
-// Admin panel todo list derivation (legacy todos.component.ts rebuildTodos).
+// admin panel todo list derivation.
 
 export function computeTodos(config, { passwordNeedChange } = {}) {
   const todos = [];
@@ -14,8 +14,7 @@ export function computeTodos(config, { passwordNeedChange } = {}) {
     todos.push({
       level: 'info',
       message: 'No systems defined. Define one from the Systems menu, or turn on Options ▸ Auto Populate to have them created for you.',
-      // The todo names the control that clears it, so the operator can follow the
-      // path the sentence states instead of hunting for it.
+      // the todo names the control that clears it: the operator follows the stated path.
       step: { section: 'options', control: 'autoPopulate' },
     });
   }

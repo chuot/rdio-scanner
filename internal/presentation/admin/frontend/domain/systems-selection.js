@@ -1,17 +1,6 @@
-// Tri-state systems/talkgroups selection model.
-// Pure state machine behind rdio-systems-selection: the tree is
-// Everything → Groups / Tags / Systems → Talkgroups, and checks cascade in
-// all four directions (legacy config/systems-selection semantics).
-//
-// Ids are business refs: system.systemRef, talkgroup.talkgroupRef, group.id,
-// tag.id. Indeterminate states are display-only, never stored as values;
-// parent checks are derived from their children (legacy {emitEvent:false}
-// writes).
-//
-// A row also carries the label its configuration row carries, for the tree to
-// name it with. A label is display state like the indeterminate states: every
-// cascade, every hydration, and the emitted selection key on the identifiers
-// alone, and a label never reaches the stored value.
+// tri-state systems/talkgroups selection: cascades check in all four directions;
+// ids are business refs; indeterminate states and labels are display-only
+// see the systems-selection-model maintainer note.
 
 export function createSelectionModel(config) {
   const groups = (config.groups ?? []).map((group) => ({ id: group.id, label: group.label, checked: false }));
@@ -177,8 +166,7 @@ function recompute(model) {
 
   if (model.systems.length) model.all = !off && !!on;
 
-  // talkgroups → groups and tags (recounted across all systems, legacy
-  // rebuildGroupIndeterminates / rebuildTagIndeterminates)
+  // recount group and tag indeterminate states across all systems.
   for (const [index, group] of model.groups.entries()) {
     let covered = 0;
     let uncovered = 0;

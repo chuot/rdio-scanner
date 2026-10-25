@@ -1,5 +1,5 @@
-// Admin password change validation (legacy Angular password validators:
-// currentPassword required, newPassword required + minLength 8, group match).
+// admin password change validation:
+// current and new password required, new at least 8, confirmation matches.
 
 export function validatePasswordChange({ currentPassword, newPassword, verifyNewPassword } = {}) {
   const errors = {};

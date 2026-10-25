@@ -1,5 +1,5 @@
-// Admin REST adapter (legacy admin.service.ts HttpClient calls).
-// Auth: raw JWT in Authorization, no Bearer prefix. 401 → clear token, end session.
+// admin REST adapter. Auth: raw JWT in Authorization, no Bearer. 401 clears it.
+// token and ends the session.
 
 import { ADMIN_CONFIG_SECTIONS, SYSTEM_SUB_LEVELS } from '../../../common/frontend/domain/config.js';
 
@@ -73,10 +73,9 @@ export function createAdminApi({ fetchImpl = globalThis.fetch, storage, onUnauth
       return request('GET', `/config/systems/${systemId}/${level}`);
     },
 
-    // The talkgroups level of a system is saved as the list of its rows. It is also saved as the
-    // object that carries those rows beside the system's blacklist, so the save that drops a
-    // talkgroup stores the entry that refuses it in the same request. A level save that names no
-    // blacklist sends the list it has always sent.
+    // the talkgroups level saves beside the system's blacklist: a drop and storing
+    // the entry that refuses it share one request; a save naming no blacklist sends
+    // sends the list it has always sent.
     async saveSubSection(systemId, level, value, blacklists) {
       assertSubLevel(level);
 
@@ -89,9 +88,8 @@ export function createAdminApi({ fetchImpl = globalThis.fetch, storage, onUnauth
       return request('GET', '/alerts');
     },
 
-    // The live status of the server: one read that answers the whole snapshot the dashboard is built from.
-    // A 417 — the server's own answer to a read it could not complete — arrives here as a rejection, which
-    // is what lets the page say the read failed instead of showing a server that looks idle and healthy.
+    // one read answers the whole dashboard snapshot; the server's 417 arrives as a
+    // rejection, so the page says the read failed instead of showing an idle server.
     getStatus() {
       return request('GET', '/status');
     },

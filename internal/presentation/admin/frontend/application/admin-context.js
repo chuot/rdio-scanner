@@ -1,6 +1,5 @@
-// Admin page context: composition root for the /admin entry only. Wires the
-// admin REST adapter, the config WebSocket, the admin store, and the admin
-// use-cases. Never touches the listener socket or the listener context.
+// admin page context: wires the admin adapter, config socket, store, use-cases
+// never touches the listener socket or the listener context.
 
 import { createTokenStorage } from '../infrastructure/token-storage.js';
 import { createAdminApi } from '../infrastructure/admin-api.js';
@@ -24,12 +23,10 @@ export function createAdminContext({ location, sessionStorage }) {
     config: null,
     todos: [],
     alerts: {},
-    // The live status snapshot the dashboard is built from, and the two things that make it honest: the
-    // instant the server says it read, and whether the read that produced it failed. A failed read keeps
-    // the numbers the page was holding and marks them as not current.
+    // live snapshot, the instant the server read it, and whether that read failed.
+    // a failed read keeps the held numbers, marked not current.
     status: { snapshot: null, failed: false, fetchedAt: null },
-    // A request for the operator's attention on one control of one section, raised by
-    // a todo that names the control and consumed by the section that owns it.
+    // a focus request names one control of one section, consumed once by its owner.
     focus: null,
     ...sections,
   });

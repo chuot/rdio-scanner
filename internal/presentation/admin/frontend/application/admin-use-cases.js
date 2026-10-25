@@ -1,7 +1,5 @@
-// Admin use-cases: login/logout orchestration, session lifecycle, the admin
-// config socket wiring, and per-section config state:
-// each of the 8 sections lives in a `section:<name>` store slice holding
-// { baseline, working, dirty, invalid, conflict }.
+// admin use-cases: login/logout, session lifecycle, config socket, per-section.
+// each section is a `section:<name>` slice: baseline, working, dirty, invalid.
 
 import { computeTodos } from '../domain/todos.js';
 import { normalizeDirwatchRow } from '../domain/dirwatch.js';
@@ -21,14 +19,12 @@ const sliceKey = (name) => `section:${name}`;
 
 const subSliceKey = (level, systemId) => `subsection:${level}:${systemId}`;
 
-// The blacklist a system's talkgroups section edits beside its rows. It is stored on the system row,
-// and it is saved with the talkgroups that were edited next to it, so it travels as its own slice
-// keyed by the system rather than riding in the Systems section's working copy.
+// the blacklist edited by a talkgroups section travels as its own keyed slice.
+// see the blacklist-slice-coupling maintainer note.
 const blacklistsSliceKey = (systemId) => `blacklists:${systemId}`;
 
-// The dirwatch rows the server answers carry the shape the server stores: a delay clamped to one
-// day, below the floor the section's rule accepts. They load through the legacy form's own clamp,
-// so a saved row reads valid and is not a change. Every other section loads as it is.
+// the stored dirwatch delay sits below the section minimum; the loader applies the
+// section's own clamp, so a saved row reads valid and unchanged. Others load.
 function loadSectionRows(name, rows) {
   return name === 'dirwatch' && rows ? rows.map(normalizeDirwatchRow) : rows;
 }
@@ -73,9 +69,7 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     store.setState({ auth: { ...store.getState().auth, ...patch } });
   }
 
-  // A todo that names the control clearing it asks the section that owns that control
-  // to show it. The request is one-shot: the section consumes it, so the mark does not
-  // outlive the visit that asked for it.
+  // asks the owning section to show the control a todo names; one-shot request.
   function focusControl(section, control) {
     store.setState({ focus: { section, control } });
   }
@@ -96,9 +90,8 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
       if (event.type === 'config') {
         applyConfig(event.config);
 
-        // A save changes what the server is running: a watch turned on, a downstream removed, a system
-        // renamed. The dashboard is the page that shows what the server is running, so waiting for the next
-        // interval to show the operator what they just did is showing them a stale answer on purpose.
+        // a save changes what the server runs; the dashboard shows that, so it reloads
+        // see the dashboard-status-reload maintainer note.
         loadStatus();
       }
 
@@ -138,10 +131,8 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
       }
     }
 
-    // Every level of every system gets its own slice, with the same
-    // dirty/conflict preservation the sections use. The blacklist the talkgroups section edits
-    // beside its rows gets one too, keyed by the system it belongs to: it is stored on the system
-    // row and saved with the rows it was edited next to.
+    // every system level gets its own slice, plus one for its talkgroups blacklist.
+    // see the blacklist-slice-coupling maintainer note.
     for (const system of config?.systems ?? []) {
       for (const level of SYSTEM_SUB_LEVELS) {
         const key = subSliceKey(level, system.id);
@@ -163,10 +154,9 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     store.setState(patch);
   }
 
-  // The systems section answers a save with the systems as the store holds them, blacklist text
-  // included. The talkgroups section edits that text beside its rows, so a systems save re-seeds
-  // each system's blacklist slice the way a server broadcast does: a slice the operator has not
-  // changed follows the stored text, and a slice holding their own edit is flagged as a conflict.
+  // a systems save re-seeds blacklist slices: untouched slices follow stored text,
+  // an edited slice conflicts.
+  // see the blacklist-slice-coupling maintainer note.
   function blacklistsState(system, current) {
     const baseline = system.blacklists ?? '';
 
@@ -224,11 +214,8 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     }
   }
 
-  // The live status snapshot the dashboard is built from.
-  //
-  // One read at a time: the dashboard's own schedule and a configuration save can ask in the same moment,
-  // and the read is several statements over a history that can hold years of recorded calls. Two reads of
-  // the same instant are those statements twice, for an answer the page already has.
+  // the dashboard's live status snapshot; one read at a time
+  // see the status-read-serialization maintainer note.
   let statusRead = null;
 
   async function loadStatus() {
@@ -240,17 +227,15 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
       try {
         const snapshot = await api.getStatus();
 
-        // The instant the server says it read is the instant the answer is about, which is the only instant
-        // a page can honestly attach to the figures it is showing.
+        // fetchedAt is the instant the server says it read: the only honest stamp.
         const status = { snapshot, failed: false, fetchedAt: snapshot?.server?.now ?? null };
 
         store.setState({ status });
 
         return status;
       } catch {
-        // A read that failed keeps the numbers the page was already showing and puts the failure beside
-        // them. Dropping them throws away the last thing the operator can act on; keeping them without the
-        // failure presents them as current, which is the lie the failure state exists to prevent.
+        // a failed read keeps the held numbers, marked failed: dropping them loses them
+        // actionable data, and unmarked they would read as current.
         const status = { ...held, failed: true };
 
         store.setState({ status });
@@ -304,9 +289,8 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
 
       return 'ok';
     } catch (error) {
-      // A fetch that never reached the server is a TypeError; a wrong password or
-      // a rate limit is the adapter's Unauthorized. The operator must be told
-      // which one happened: "Invalid password" over a stopped server is a lie.
+      // a TypeError never reached the server; Unauthorized is a wrong password or limit
+      // the message must say which, or it is false.
       return error instanceof TypeError ? 'unreachable' : 'invalid';
     }
   }
@@ -416,13 +400,9 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
       }
     }
 
-    // The system's blacklist is a field of the system row, and the Systems section saves every row it
-    // holds, so the list that section is holding is the list the server ends up storing. A level save
-    // that stored the entry therefore has to leave that section holding the list the server now holds,
-    // in the saved copy and in the copy the operator is working on: a section that kept the text it was
-    // showing would write that text back over the entry the operator just asked for, and the talkgroup
-    // row the entry names is already gone. The section keeps asking to be saved for the edits the
-    // operator made in the other fields, which is what the copy they are working on still carries.
+    // a level save that changes a blacklist must leave Systems holding the server list
+    // server's new list, baseline and working copy, or its next save overwrites it.
+    // see the blacklist-slice-coupling maintainer note.
     const systems = store.getState()[sliceKey('systems')];
 
     if (systems && blacklists !== undefined) {
@@ -463,8 +443,7 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
 
     if (!current || current.invalid) return false;
 
-    // The talkgroups level is edited beside the system's blacklist, and the save that drops a
-    // talkgroup stores the entry that refuses it: the two halves of one action leave in one request.
+    // dropping a talkgroup and storing the entry that refuses it: one request.
     const blacklists = level === 'talkgroups' ? store.getState()[blacklistsSliceKey(systemId)] : null;
 
     if (blacklists?.invalid) return false;
@@ -485,8 +464,7 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     try {
       const value = await api.getSubSection(systemId, level);
 
-      // The level answers its rows. The blacklist saved with them is the text the last save of this
-      // level stored, so a reload starts from that text and drops an entry the operator has not saved.
+      // reload starts from the last save's text, not the working copy.
       updateSubSectionAndConfig(level, systemId, value, store.getState()[blacklistsSliceKey(systemId)]?.baseline);
 
       return true;
@@ -509,8 +487,7 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
       },
     };
 
-    // The blacklist an entry was added to is part of the same unsaved change: Discard in the
-    // talkgroups section takes the entry back out with the row it put back.
+    // the added entry is part of the same unsaved change: Discard removes it too.
     if (level === 'talkgroups') {
       const key = blacklistsSliceKey(systemId);
       const blacklists = store.getState()[key];
@@ -545,8 +522,7 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     });
   }
 
-  // Blacklisting a talkgroup: the entry joins the system's blacklist and the row leaves the
-  // talkgroups. Both are unsaved until the talkgroups section is saved, which stores them together.
+  // the entry joins the blacklist, the row leaves talkgroups: one save stores both.
   function blacklistTalkgroup(systemId, talkgroupRef) {
     const current = store.getState()[blacklistsSliceKey(systemId)];
 

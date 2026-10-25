@@ -1,6 +1,5 @@
-// Admin token session: sessionStorage rdio-scanner-admin-token, the raw JWT.
-// The admin application is the only one that holds a session, and it holds no
-// listener state: no livefeed map, no pin, no localStorage at all.
+// admin token session: sessionStorage rdio-scanner-admin-token, the raw JWT.
+// the admin app holds no listener state and never touches localStorage.
 
 export const ADMIN_TOKEN_KEY = 'rdio-scanner-admin-token';
 

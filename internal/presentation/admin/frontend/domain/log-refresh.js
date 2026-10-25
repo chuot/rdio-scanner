@@ -1,7 +1,6 @@
-// The log view's auto-refresh: what the toggle decides, with no clock and no DOM in it. The element hands
-// in the poll and the timer, so that starting, stopping, and the two things that matter about them — that
-// starting twice does not double the polling, and that a refresh does not stack a request on top of one
-// already in flight — can be seen without waiting for anything.
+// the log view's auto-refresh decision: no clock, no DOM; the element hands in the
+// poll and the timer
+// see the log-refresh-scheduling maintainer note.
 
 export const LOG_REFRESH_DELAY = 10000;
 
@@ -15,9 +14,8 @@ export function createRefreshSchedule({
   let timer = null;
 
   function step() {
-    // The next poll is scheduled before this one runs, so a poll that fails does not quietly end the
-    // refresh: an operator who turned auto-refresh on asked to be kept current, not to be kept current
-    // until something went wrong.
+    // the next poll is scheduled before this one runs: a failed poll does not end the
+    // refresh.
     timer = setTimer(step, delay);
 
     if (isBusy()) return;

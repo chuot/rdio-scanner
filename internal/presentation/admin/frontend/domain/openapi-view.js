@@ -1,20 +1,6 @@
-// The OpenAPI section's view of the contract: the endpoint
-// groups the administrator reads are derived from docs/openapi.json, the complete
-// API contract, so the section can only ever name endpoints the server
-// answers. The contract carries no tags, so the grouping is by path: the admin
-// surface splits into Authentication, Config, Alerts, Logs, Password and Users,
-// the ingestion endpoints form Capture, and the static applications form
-// Applications. The domain test asserts every path of the contract lands in a
-// group: a contract edit that adds an endpoint fails the test until the view
-// names it.
-//
-// Each endpoint also carries the detail the section expands into: the description
-// the contract gives the operation (its summary when the entry states none), the
-// parameters declared for the path and the operation, the request body with the
-// fields of the schema it states, and the response codes with their descriptions.
-// The contract's schemas are read one level deep — a reference names the component
-// schema, an array names what it holds, a oneOf names every shape it accepts — and
-// a reference the contract does not define is named as unresolved, never dropped.
+// the OpenAPI groups come from the contract itself: answered endpoints only;
+// schemas read one level deep, and an undefined reference is named, not dropped
+// see the openapi-contract-grouping maintainer note.
 
 const GROUPS = [
   { title: 'Authentication', icon: 'vpn_key', match: (path) => path === '/api/admin/login' || path === '/api/admin/logout' },
@@ -31,8 +17,7 @@ const GROUPS = [
 
 const METHODS = ['get', 'post', 'put', 'delete', 'patch'];
 
-// The config endpoints read as one block; the sub-group names the resource each
-// path saves, the way the Config section's own menus name them.
+// config endpoints form one block; the subgroup names the Config menu's resource.
 function configSubgroup(path) {
   for (const resource of ['sites', 'talkgroups', 'units']) {
     if (path.endsWith(`/${resource}`)) return resource;
@@ -47,8 +32,7 @@ function componentSchema(contract, name) {
   return contract?.components?.schemas?.[name];
 }
 
-// A schema is named by what it is: the component it references, the item an array
-// holds, every shape a oneOf accepts, the type (and format) it states.
+// a schema is named by what it is: component, array item, oneOf, type or format.
 function schemaType(schema, contract) {
   if (!schema) return 'object';
 
@@ -65,10 +49,8 @@ function schemaType(schema, contract) {
   return 'object';
 }
 
-// The fields a body carries are the properties of the schema it states, reached
-// through one level of references: a component schema's own properties, an array's
-// item properties, every variant of a oneOf. A reference the contract does not
-// define carries no fields: the schema name is still shown, marked unresolved.
+// body fields are the schema's properties through one level of references:
+// array item, oneOf variants; an undefined reference shows its name unresolved.
 function schemaFields(schema, contract, seen = new Set()) {
   if (!schema) return [];
 
@@ -142,8 +124,7 @@ function endpointRequestBody(operation, contract) {
       fields: schemaFields(media?.schema, contract),
     };
 
-    // A body the contract fully states needs no mark: only a reference the
-    // contract does not define is named, so the section says so.
+    // only a reference the contract does not define gets the unresolved mark.
     if (schemaIsUnresolved(media?.schema, contract)) body.unresolved = true;
 
     return body;
@@ -209,8 +190,8 @@ export function buildOpenApiGroups(contract) {
   return groups;
 }
 
-// Every path-and-method pair of the contract, for the coverage assertion: the
-// section must name all of them, and nothing it does not answer.
+// every path and method of the contract, for the assertion that the section
+// names all of them.
 export function contractEndpoints(contract) {
   const endpoints = [];
 

@@ -1,17 +1,10 @@
-// Systems section validation. Pure port of the legacy admin.service.ts
-// validators for the systems tree: system → sites / talkgroups / units.
-//
-// Cross-references (talkgroup groupIds / tagId) are validated against the
-// current groups/tags working copies so a save can never hit a server foreign
-// key. Legacy quirk kept: a single-number groupIds value is membership-checked
-// the same way; arrays are checked too (legacy skipped arrays, which let stale
-// ids reach the server and fail with 417).
+// systems tree validation: pure rules, system to sites, talkgroups, and units;
+// cross-refs check the current groups/tags working copies, arrays included
+// see the systems-foreign-key-validation maintainer note.
 
 const BLACKLISTS_PATTERN = /^[0-9]+(,[0-9]+)*$/;
 
-// The one rule a system's blacklist is held to, wherever the list is edited: the Systems section's
-// field and the talkgroups section's blacklist both answer through this, so a list the section shows
-// as valid is a list the server will accept.
+// the one blacklist rule, shared wherever a list is edited: valid means accepted.
 export function blacklistsTextInvalid(text) {
   return typeof text === 'string' && text.length > 0 && !BLACKLISTS_PATTERN.test(text);
 }
@@ -157,9 +150,8 @@ export function systemsSectionInvalid(systems, groups, tags) {
   return false;
 }
 
-// Per-level invalid flag: the rows of one level of one system,
-// validated the same way the systems tree validated them, against the current
-// groups/tags working copies for the talkgroup foreign keys.
+// one level of one system's rows, validated as the tree validated them, against
+// the current groups/tags working copies for the talkgroup foreign keys.
 export function subSectionInvalid(level, rows, groups, tags) {
   const knownGroupIds = (groups ?? []).map((group) => group.id);
   const knownTagIds = (tags ?? []).map((tag) => tag.id);

@@ -1,7 +1,6 @@
-// Admin config WebSocket adapter (legacy admin.service.ts configWebSocket*).
-// Handshake: raw JWT as the first text message. Server pushes the full Config
-// JSON on every change. Close 1000 → session ended; other codes → reconnect
-// after 2000 ms.
+// admin config WebSocket: the handshake is the raw JWT as the first text message;
+// the server pushes the full Config on every change; close 1000 ends the session,
+// other close codes reconnect after 2000 ms.
 
 export const RECONNECT_DELAY_MS = 2000;
 

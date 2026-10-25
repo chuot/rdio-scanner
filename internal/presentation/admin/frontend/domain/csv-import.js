@@ -1,5 +1,4 @@
-// Admin tools CSV import (legacy import-talkgroups / import-units components).
-// Legacy parsing: split lines, strip surrounding quotes, split on /"*,"*/,
+// admin tools CSV import: split lines, strip quotes, split on /[",]*,/ (sic),
 // keep rows whose first column is numeric, dedupe by first column.
 
 export function parseCsv(text) {
@@ -14,9 +13,8 @@ function nextId(collection) {
   return (collection ?? []).reduce((prev, cur) => (typeof cur.id === 'number' && cur.id >= prev ? cur.id + 1 : prev), 1);
 }
 
-// Columns: 0 talkgroupRef, 2 label, 4 name, 5 tag, 6 group.
-// Missing groups/tags are created with the next free id; imported talkgroups
-// are prepended (legacy unshift: last row ends up first).
+// imported talkgroups are prepended: the last CSV row lands first; missing groups
+// and tags get the next free id.
 export function importTalkgroups(config, system, rows) {
   const next = structuredClone(config);
   const target = next.systems.find((s) => s.id === system.id);
