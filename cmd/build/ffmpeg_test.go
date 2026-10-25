@@ -27,9 +27,9 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// These are component tests of what the ffmpeg phase decides. Nothing here compiles anything: the
-// whole point is that the build says what it is going to run, and refuses what it cannot honour,
-// before it runs any of it.
+// Component tests of what the ffmpeg phase decides: the build says what
+// it will run, and refuses what it cannot honour, before running any of
+// it. Nothing here compiles anything.
 
 // aManifestWith is the manifest the repository carries, with the parts a test cares about changed.
 func aManifestWith(ffmpeg string, recipe []string) bundle.Manifest {
@@ -46,9 +46,9 @@ func anUncompiledTree() ffmpegState {
 	return ffmpegState{program: podmanProgram}
 }
 
-// aManifestWithOtherTarget is the manifest the repository carries with one target's record replaced, which is
-// how a test asks what would move if a record moved. The manifest struct copies by value and its targets map is
-// shared, so the replaced record goes into a map of its own.
+// aManifestWithOtherTarget is the repository's manifest with one target's
+// record replaced, which is how a test asks what would move if a record
+// moved. The struct copies by value but shares its targets map.
 func aManifestWithOtherTarget(target string, record bundle.Target) bundle.Manifest {
 	manifest := bundle.ReadManifest()
 
@@ -125,8 +125,8 @@ func TestTheBuildRefusesATargetItCannotName(t *testing.T) {
 	}
 }
 
-// A target the manifest has no record for is not a release target this project ships, and asking for it
-// is not a failure the build has to fight: it says there is nothing to compile and does nothing.
+// A target the manifest has no record for is not a release target this
+// project ships: asking for it says there is nothing to compile.
 func TestATargetTheManifestHasNoRecordForProducesNothing(t *testing.T) {
 	for _, target := range []string{"netbsd-amd64", "openbsd-amd64"} {
 		plan, err := planFFmpeg(options{target: target}, t.TempDir(), bundle.ReadManifest(), anUncompiledTree(), theReleaseHost)
@@ -192,27 +192,10 @@ func TestTheFfmpegBuildUsesTheContainerAndToolchainTheManifestRecords(t *testing
 	}
 }
 
-// What each container target is compiled with, and where its compiled programs are run to be checked, is
-// recorded one target at a time. The plan is where the build commits to that answer, so the values below are
-// written out instead of read back off the manifest: the container work this release is doing reaches those
-// records, and a record that moves by mistake has to trip a test rather than quietly recompile eight targets
-// under a toolchain nobody chose.
-//
-// The configure recipe is not repeated here. It is the one list these targets share, and it is gated where it
-// lives; what belongs to a target alone is its container, the file that image is built from, what gets
-// installed in it, the image a sysroot is copied out of when the target's operating system is not the one the
-// build container runs, the compiler invocation a cross compile names, what makes the compile cross, the flags
-// it links with, the container its programs are checked in when a run is what proves them, and the things the
-// build reads out of the pair when no run can.
-//
-// Every container named below is named at the digest its record pins, because that reference — not the tag — is
-// what the build hands the container program. A compile asked of wherever `stable` or `latest` happens to point
-// tomorrow is another toolchain wearing this target's name, and the pair it produced would still be filed under
-// this target's release.
-//
-// None of these targets is compiled with the toolchain of the machine that runs this build, and none is left
-// uncompiled. The two macOS records are here because the machine that produces the releases compiles them in a
-// container like every other target; what a Mac does instead is gated where the host is the target.
+// What each container target is compiled with, and where its compiled
+// programs are checked, is pinned one target at a time here, written
+// out rather than read back off the manifest, containers at digests.
+// see the ffmpeg-check-component-tests maintainer note.
 func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -458,16 +441,10 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 	}
 }
 
-// The machine a build runs on is not part of what a container target is compiled with: the container carries the
-// compiler and the headers, libraries and startup files of the operating system the target runs on. A Mac
-// producing a release compiles the FreeBSD ffmpeg exactly as this host does, and compiles the macOS ffmpeg in a
-// container too — the sysroot that compile reads is mounted inside the container, and the host is asked for
-// nothing beside its own container engine. The hosts below are every host but the one a target's own toolchain
-// belongs to: the host that is asked for its own compiler is gated where the host is the target.
-//
-// The pair is proven the same way on every host the compile runs on, because the proof travels with the record
-// and not with the machine: what none of these hosts can start is read out of the binaries, and the step that
-// compiled them says so.
+// The machine a build runs on is not part of what a container target is
+// compiled with: the container carries the target's own compiler and
+// headers, and a macOS sysroot is mounted inside the container.
+// see the targets-and-platforms maintainer note.
 func TestEveryContainerTargetIsCompiledInAContainerWhateverHostRunsTheBuild(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -660,8 +637,8 @@ func TestTheBuildRefusesToCompileAnFfmpegItHasNoToolchainFor(t *testing.T) {
 	}
 }
 
-// The pinned digest is the integrity anchor: ffmpeg.org publishes a GPG signature and no checksum,
-// so the build checks the digest it recorded when the release was chosen.
+// ffmpeg.org publishes no checksum, only the recorded digest can verify the source.
+// see the ffmpeg-source-digest-anchor maintainer note.
 func TestTheBuildRefusesASourceTarballThatIsNotTheReleaseItPinned(t *testing.T) {
 	dir := t.TempDir()
 
@@ -699,16 +676,10 @@ func TestTheBuildAcceptsTheSourceTarballItPinned(t *testing.T) {
 	}
 }
 
-// Everything the ffmpeg compile reads is part of the name of the cache entry its binaries land in, and the name
-// is computed from the manifest and the target rather than carried in either: a warm entry is the binaries that
-// exact compile produced, and a compile asked with anything else in it is a different set of binaries. The
-// inputs are the release and its source, the recipe, the target, and what that target's record names — its
-// container and the file that image is built from, what gets installed in it, the image a sysroot is copied out
-// of, the compiler invocation a cross compile names, the flags it compiles and links with, the sysroot an
-// operator prepared, and the flags and make program of the compile this machine's own toolchain runs.
-//
-// What proves a pair is not among them, because a cache hit re-runs no proof: a proof name in the key would
-// throw away warm entries for a change that changed nothing that was compiled.
+// Everything the ffmpeg compile reads is part of the name of the cache
+// entry its binaries land in: the release, source, recipe, target, and
+// what its record names. What proves a pair is not among them: a cache
+// hit re-runs no proof, and a proof name would drop warm entries.
 func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -902,16 +873,10 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 		t.Error("macos-amd64 and macos-arm64 share a cache key, and one machine compiling both writes one entry")
 	}
 
-	// The eight keys are pinned by value. A warm cache is the only reason a release run takes minutes rather
-	// than hours, and a manifest that gains fields must not throw away the entries a compile that did not
-	// change produced. Every one of the eight values below moved when these records gained the digest each of
-	// them pins its images at, and that is the change this list exists to catch rather than absorb: a record
-	// pinned at another digest names another toolchain, and an entry warmed under the old one holds binaries
-	// built with compilers nobody named. Each value here is the key the run that moved them reported. The two
-	// macOS values are the keys of the compiles those records name, and they moved with the toolchain their
-	// records name — which is what happened when the two Darwin records gained the archiver and the indexer their
-	// link needs an index out of, and again when they gained the switch that keeps their programs exactly as that
-	// link wrote them.
+	// The eight cache keys are pinned by value: a warm cache is why a
+	// release run takes minutes, and a manifest gaining fields must not
+	// drop the entries an unchanged compile produced.
+	// see the ffmpeg-cache-key-inputs maintainer note.
 	want := map[string]string{
 		"freebsd-amd64": "6a24ce46b1a94ae369f59356cb0694fdc78d3ec6ba7a366fcac3008d073128ea",
 		"linux-386":     "b461ab25eae7520a8b422b81a216fb7656894f976008d4e53f06ecbca48d695f",
@@ -952,8 +917,8 @@ func TestAFfmpegAlreadyCompiledForTheSameRecipeIsNotCompiledAgain(t *testing.T) 
 	}
 }
 
-// The source is fetched once and kept, because a release tarball that is already there does not have
-// to be downloaded again.
+// The source is fetched once and kept: a release tarball already there
+// does not have to be downloaded again.
 func TestTheBuildFetchesTheSourceOnlyWhenItDoesNotHaveIt(t *testing.T) {
 	plan, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", bundle.ReadManifest(), anUncompiledTree(), theReleaseHost)
 	if err != nil {
@@ -984,9 +949,9 @@ func TestTheBuildFetchesTheSourceOnlyWhenItDoesNotHaveIt(t *testing.T) {
 	}
 }
 
-// The ffmpeg check reaches the compiled ffmpeg through the container it was built in, and the
-// container has to be named before the program: without it podman reads the program as the image to
-// run, and says "invalid reference format".
+// The ffmpeg check reaches the compiled ffmpeg through the container it
+// was built in, and the container has to be named before the program:
+// otherwise podman reads the program as the image to run.
 func TestTheFFMPEGCheckNamesTheContainerItRunsTheCompiledFfmpegIn(t *testing.T) {
 	argv := containerRun(
 		theContainerProgram{name: podmanProgram},
@@ -1016,8 +981,8 @@ func TestTheFFMPEGCheckNamesTheContainerItRunsTheCompiledFfmpegIn(t *testing.T) 
 	}
 }
 
-// A release archive has to say what ffmpeg is inside it, under what licence, and compiled from what.
-// The text is written from the manifest, so it cannot name a release the build did not compile.
+// A release archive has to say what ffmpeg is inside it, under what
+// licence, and compiled from what, all written from the manifest itself.
 func TestTheBuildSaysWhatTheFfmpegItCompiledIsAndUnderWhatLicence(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -1202,10 +1167,10 @@ func TestTheBuildSaysWhatTheFfmpegItCompiledIsAndUnderWhatLicence(t *testing.T) 
 	}
 }
 
-// The licence text says the program is compiled for audio, and the switches that make that true are the
-// recipe's. The text is composed from the recipe, so a recipe that drops a switch stops promising the
-// build that switch makes: a notice that promises what the recipe does not produce is a notice the
-// release cannot stand behind, and the archive carries it into every deployment.
+// The licence text says the program is compiled for audio, and the
+// switches that make that true are the recipe's. The text is composed
+// from the recipe, so a recipe that drops a switch drops it from the
+// notice too: the archive never promises a build it no longer produces.
 func TestTheLicenceSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -1236,8 +1201,8 @@ func TestTheLicenceSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 	}
 }
 
-// aRecipeWithout is the recipe with one switch taken out, which is how a test shows a licence text
-// promising a build its own recipe does not produce.
+// aRecipeWithout is the recipe with one switch taken out, which shows a
+// licence text promising a build its own recipe does not produce.
 func aRecipeWithout(recipe []string, flag string) []string {
 	kept := []string{}
 
@@ -1252,8 +1217,8 @@ func aRecipeWithout(recipe []string, flag string) []string {
 	return kept
 }
 
-// A reused compile has to leave the same tree a fresh one does, licence text included: what a release
-// archive carries cannot depend on whether the cache happened to be warm.
+// A reused compile leaves the same tree a fresh one does, licence text
+// included: what a release archive carries cannot depend on a warm cache.
 func TestAReusedFfmpegIsPublishedTheWayAFreshOneIs(t *testing.T) {
 	repo := t.TempDir()
 	manifest := bundle.ReadManifest()
@@ -1291,8 +1256,8 @@ func hasArg(args []string, want string) bool {
 	return false
 }
 
-// carries reports whether a command line names something anywhere in it, which is how a build argument
-// is checked: the container is named inside --build-arg base=....
+// carries reports whether a command line names something anywhere in it,
+// how a build argument is checked: the container rides inside --build-arg.
 func carries(args []string, want string) bool {
 	for _, arg := range args {
 		if strings.Contains(arg, want) {
@@ -1303,13 +1268,9 @@ func carries(args []string, want string) bool {
 	return false
 }
 
-// aDropOfSuppliedBinaries drops the binaries a maintainer builds for one target and returns the manifest this
-// repository carries. Nothing is recorded about them: the run that adopts them is the run that proves them.
-//
-// A drop is the way binaries reach this build from the machine they run on: they are compiled there, dropped
-// where the build finds them, and run by the run that adopts them. These are the decisions the ffmpeg phase
-// makes about binaries it must run to know anything about them, and the plan takes them before anything is
-// written.
+// aDropOfSuppliedBinaries drops the binaries a maintainer builds for one
+// target and returns the repository's manifest. Nothing is recorded about
+// them: the run that adopts them is the run that proves them.
 func aDropOfSuppliedBinaries(t *testing.T, repo string, target string) bundle.Manifest {
 	t.Helper()
 
@@ -1343,10 +1304,9 @@ func aDropOfSuppliedBinariesWith(t *testing.T, repo string, target string, ffmpe
 	return bundle.ReadManifest()
 }
 
-// A drop is read by the same rule that reads a pair this build compiled, and which architecture's machine code the
-// file holds is one of the things that rule answers. An Apple Silicon Mac runs the arm64 binaries and the x86-64 ones
-// alike, so the only thing that says the Intel archive carries Intel code is the header. The refusal names the
-// architecture in both words, because the operator has to see which one is in front of them.
+// A drop is read by the same rule that reads a compiled pair, and an Apple
+// Silicon Mac runs arm64 and x86-64 alike, so only the header says the
+// Intel archive carries Intel code. The refusal names the architecture.
 func TestTheBuildRefusesSuppliedBinariesOfTheOtherArchitecture(t *testing.T) {
 	repo := t.TempDir()
 
@@ -1364,11 +1324,10 @@ func TestTheBuildRefusesSuppliedBinariesOfTheOtherArchitecture(t *testing.T) {
 	}
 }
 
-// A pair dropped into a target's bundle directory is adopted by the targets this build adopts on, and after
-// this feature that is the two macOS targets on a Mac. On the machine that produces the releases a macOS
-// target is a target it compiles in a container, and the pair sitting in that target's directory is not read:
-// it stays there, and every server binary built for that target embeds it beside the gzipped pair, which is
-// the cost COMPILING.md names.
+// A pair dropped into a target's bundle directory is adopted by the
+// targets this build adopts on: the two macOS targets on a Mac. On the
+// release host a macOS target compiles in a container, its drop is not
+// read, and every server built there embeds it beside the gzipped pair.
 func TestADroppedPairIsAdoptedOnlyForAMacOSTargetOnAMacHost(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		repo := t.TempDir()
@@ -1399,9 +1358,9 @@ func TestADroppedPairIsAdoptedOnlyForAMacOSTargetOnAMacHost(t *testing.T) {
 	}
 }
 
-// Binaries that are already in the cache are not adopted again, and the drop is not needed for them: the
-// cache is keyed by the manifest's record and the target, so a warm entry is what this machine's own run
-// produced.
+// Binaries already in the cache are not adopted again: the cache is keyed
+// by the manifest's record and the target, so a warm entry is what this
+// machine's own run produced.
 func TestSuppliedBinariesAlreadyInCacheAreNotAdoptedAgain(t *testing.T) {
 	repo := t.TempDir()
 
@@ -1438,9 +1397,9 @@ func TestSuppliedBinariesAlreadyInCacheAreNotAdoptedAgain(t *testing.T) {
 	}
 }
 
-// The drop is consumed: the binaries move out of the directory a server binary embeds, and what stays
-// there are the gzipped binaries and their licence. Raw binaries left in that directory are embedded next to the
-// gzipped ones, and every server built for that target carries about ten megabytes of uncompressed program.
+// The drop is consumed: the binaries move out of the directory a server
+// embeds, leaving the gzipped ones and their licence. Raw binaries left
+// there are embedded as well, ten megabytes per built server.
 func TestSuppliedBinariesAreAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T) {
 	repo := t.TempDir()
 
@@ -1496,9 +1455,9 @@ func TestSuppliedBinariesAreAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T)
 		t.Errorf("the cache entry %s carries no licence text, so a reusing run has nothing to put in the archive", paths.cached)
 	}
 
-	// The binaries the server writes out of its own binary are the binaries that were dropped: gzip is
-	// lossless, and the ad-hoc code signature signed binaries carry is a hash over those exact bytes. The
-	// bundle package's own tests are what prove a directory holding them is a directory it materializes.
+	// The binaries the server writes out of its own binary are the binaries
+	// that were dropped: gzip is lossless, and the ad-hoc code signature is a
+	// hash over those exact bytes.
 	for _, program := range []struct {
 		name   string
 		digest string
@@ -1519,8 +1478,8 @@ func TestSuppliedBinariesAreAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T)
 	}
 }
 
-// aRunOfTheBinaries is the run of a working build: the host that is the target, the codecs the audio-only
-// recipe registers, and the six recordings of the server's own audio.
+// aRunOfTheBinaries is the run of a working build: the target host, the
+// codecs the audio-only recipe registers, and the server's own recordings.
 func aRunOfTheBinaries() theRunOfTheBinaries {
 	return theRunOfTheBinaries{
 		Host:        "darwin-arm64",
@@ -1538,10 +1497,10 @@ func aRunOfTheBinaries() theRunOfTheBinaries {
 	}
 }
 
-// The licence a supplied archive carries says what those ffmpeg binaries are and where they came from: the
-// host that compiled them, the source and recipe they were built from, the command that built them, and the
-// codecs the run recorded. It names no digest of a program, because the build checks nothing about these
-// binaries beyond that they run and which machine code they hold.
+// The licence a supplied archive carries names the host that compiled the
+// binaries, the source and recipe, the command that built them, and the
+// codecs the run recorded. It names no program digest: the build checks
+// nothing beyond that they run and which machine code they hold.
 func TestTheBuildSaysWhatSuppliedBinariesAreAndUnderWhatLicence(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -1580,8 +1539,8 @@ func TestTheBuildSaysWhatSuppliedBinariesAreAndUnderWhatLicence(t *testing.T) {
 	}
 }
 
-// A cache entry older than the licence text travelling with it says only what the manifest says, and
-// names this machine's cache as where the binaries came from. It invents no host and no run.
+// A cache entry older than the licence text travelling with it says only
+// what the manifest says, and names this machine's cache as the source.
 func TestTheLicenceOfBinariesReusedFromCacheNamesNoRunItDidNotSee(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -1635,11 +1594,10 @@ func readGzip(path string) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
-// The target an operator who named none is building for is the release target this machine belongs to,
-// named the way the release names it. On a Mac that is macos-arm64, the target the manifest records, and
-// not the darwin-arm64 name go builds for: a phase that named the machine by go's word asked the manifest
-// about a target this project has no record for, and answered with the uncovered-target message on the very
-// machine a macOS ffmpeg is compiled on with its own toolchain.
+// The target an operator who named none is building for is the release
+// target this machine belongs to, named the way the release names it:
+// macos-arm64 on a Mac, the target the manifest records, not the
+// darwin-arm64 name go builds for.
 func TestTheFFmpegTargetOfARunThatNamedNoTargetIsTheMachinesReleaseTarget(t *testing.T) {
 	want := releaseTargetWordFor(runtime.GOOS, runtime.GOARCH)
 
@@ -1648,16 +1606,10 @@ func TestTheFFmpegTargetOfARunThatNamedNoTargetIsTheMachinesReleaseTarget(t *tes
 	}
 }
 
-// The two macOS targets are the ones a build can be standing on the host of, and there the host's own
-// toolchain is the compile: the operator on the Apple Silicon Mac asked for the ffmpeg of the machine they are
-// on, and the repository in front of them names the source, its digest, the recipe, the flags that floor sets,
-// the make program that build needs, and the codesign step that signs what it produced. The compile is what
-// that run asked for, and it is what only that machine can do.
-//
-// The flags it passes are the record's host flags and nothing beside them: --sysroot= names a directory that
-// exists only inside a container, and -fuse-ld= names a linker a Mac does not run — a Mac links with the one
-// Apple ships, and what makes its binaries runnable is the codesign step, which the container route has no
-// equivalent of.
+// The host macOS targets compile with the host toolchain: the manifest names
+// source, digest, recipe, host flags, make program, and the codesign step,
+// and the flags passed are the record's host flags only: a Mac has no
+// /sysroot and links with the linker Apple ships.
 func TestTheMacOSTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		manifest := bundle.ReadManifest()
@@ -1775,13 +1727,10 @@ func TestTheMacOSTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
 	}
 }
 
-// ffmpeg's configure writes its build files into the directory it is run from: the config.mak its
-// Makefile includes on its second line, the config headers, and the directory skeleton of the tree it is
-// configuring. Run it from anywhere else and two things happen: the tree it configured has no
-// config.mak, so the make that follows fails reading its own Makefile, and the directory it was run from
-// gains the source tree's directories. The compile's own steps therefore run in the tree the compile
-// unpacked, and the repository is where the tar command is run from, not where the source is configured
-// or built.
+// The compile's steps run inside the unpacked ffmpeg tree, and the tar
+// command alone runs from the repository: configure writes its build
+// files into the directory it is run from.
+// see the ffmpeg-cross-build maintainer note.
 func TestTheNativeCompileRunsItsStepsInTheTreeItUnpacked(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		manifest := bundle.ReadManifest()
@@ -1818,9 +1767,9 @@ func TestTheNativeCompileRunsItsStepsInTheTreeItUnpacked(t *testing.T) {
 	}
 }
 
-// The two macOS architectures ship one toolchain: the Command Line Tools' clang produces x86_64 on an
-// Apple Silicon Mac and arm64 on an Intel Mac, the macOS SDK carries the libraries of both, and codesign
-// signs a program of either architecture on either machine.
+// The two macOS architectures ship one toolchain: the Command Line Tools'
+// clang produces either architecture on either Mac, the SDK carries the
+// libraries of both, and codesign signs either on either.
 func TestAMacOSHostCompilesTheOtherArchitecturesBinaries(t *testing.T) {
 	for _, tc := range []struct {
 		target  string
@@ -1841,11 +1790,10 @@ func TestAMacOSHostCompilesTheOtherArchitecturesBinaries(t *testing.T) {
 	}
 }
 
-// The cache entry a macOS target's binaries are looked for in is named by the manifest's record and the
-// target, and not by the machine computing it: the Mac that compiled them and a Mac reusing them look for the
-// same entry. Each machine's cache is its own tree and gitignored, so an Apple Silicon Mac and an Intel Mac
-// compiling the Intel target key the same entry in their own caches, and each cache holds what that machine
-// compiled.
+// The cache entry a macOS target's binaries are looked for in is named by
+// the record and the target, not by the machine computing it: the Mac
+// that compiled them and a Mac reusing them look for the same entry, and
+// each machine's cache is its own tree, holding what that machine compiled.
 func TestTheCacheEntryOfAMacOSTargetIsTheSameEntryOnEveryMac(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -1868,11 +1816,10 @@ func TestTheCacheEntryOfAMacOSTargetIsTheSameEntryOnEveryMac(t *testing.T) {
 	}
 }
 
-// A compile across the two macOS architectures names the architecture it is building for: ffmpeg's own
-// architecture switch, the switch that tells configure not to run a test program of an architecture the
-// host may not execute, and clang's -arch in the compiler and linker flags, beside the flags the manifest
-// record names. A compile on the target's own host names none of them, because there the host's own
-// architecture is the target's and the compiler's default is the right answer.
+// A cross macOS compile names its architecture: ffmpeg's architecture
+// switch, the switch keeping configure from running foreign test
+// programs, and clang's -arch in compiler and linker flags. A native
+// macOS compile names none of them: the compiler's default is correct.
 func TestACompileAcrossTheTwoArchitecturesNamesTheTargetArchitecture(t *testing.T) {
 	for _, tc := range []struct {
 		target     string
@@ -1926,15 +1873,10 @@ func TestACompileAcrossTheTwoArchitecturesNamesTheTargetArchitecture(t *testing.
 	}
 }
 
-// A record that pins an SDK names a tree this machine has to have before its compile can read headers, libraries
-// and startup files out of it, and the run is refused before a container is built or a source is fetched. The
-// refusal names the target, the SDK version the record pins, the directory the build looked in, and the variable
-// that names another directory: an operator who keeps the tree somewhere else has to be able to tell from one line
-// whether they have not prepared it, or have prepared it where the build does not look.
-//
-// A release run answers the same absent tree with the same sentence and a different ending. It was asked for the
-// archives of several targets, and one target whose compile cannot start is one archive it does not write: it says
-// so about that target and carries on to the archives it can write.
+// A record pinning an SDK names a tree this machine must have, and the
+// run is refused before any container or fetch. The refusal names target,
+// SDK version, the directory looked in, and the variable naming another,
+// so one line says whether the tree is unprepared or prepared elsewhere.
 func TestTheBuildRefusesAMacOSTargetWhosePreparedSysrootIsAbsent(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -1990,9 +1932,9 @@ func TestTheBuildRefusesAMacOSTargetWhosePreparedSysrootIsAbsent(t *testing.T) {
 	}
 }
 
-// A directory standing where the build looks is not a sysroot. The tree a compile reads is the one that carries the
-// library a Darwin link reads, and a directory that is empty, half prepared, or one level too high is refused with
-// the same sentence as an absent one, because what the operator has to do is the same either way.
+// A directory standing where the build looks is not a sysroot: the tree a
+// compile reads carries the library a Darwin link reads, and an empty,
+// half prepared, or one-level-too-high directory is refused like absent.
 func TestTheBuildRefusesADirectoryThatCarriesNoSysroot(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -2027,10 +1969,10 @@ func TestTheBuildRefusesADirectoryThatCarriesNoSysroot(t *testing.T) {
 	}
 }
 
-// The tree a record pins is looked for where the record says this machine keeps it: the directory under the
-// operator's home that the harness which prepares it writes it into, or the directory the operator named with
-// RDIO_FFMPEG_DARWIN_SDK. The variable names the tree itself, because the tree is what the container mounts, and
-// what the build reports as prepared is what carries the library a Darwin link reads.
+// The tree a record pins is looked for where the record says this machine
+// keeps it: the directory under the operator's home the preparing harness
+// writes, or the directory named with RDIO_FFMPEG_DARWIN_SDK. The variable
+// names the tree itself, because the tree is what the container mounts.
 func TestTheBuildLooksForItsSysrootWhereItsRecordSaysTheMachineKeepsIt(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -2065,13 +2007,10 @@ func TestTheBuildLooksForItsSysrootWhereItsRecordSaysTheMachineKeepsIt(t *testin
 	}
 }
 
-// A directory standing where the build looks, carrying the library a Darwin link reads, is a sysroot the build can
-// name — but it is the sysroot its record pins only when the digest recorded beside it is the digest the record
-// names. The preparation that writes a tree also records its digest in a file named `sha256` in the directory that
-// holds the tree, and re-checks the tree against that record. A tree swapped in under the pinned version's name, and
-// a tree copied or assembled by hand with nothing recorded beside it, are two ways of standing in the right place
-// with the wrong tree, and the build compiles against neither: the pair it produces would be cached, licensed and
-// released under a digest it never read.
+// A candidate sysroot ties to its record only through the sha256 digest
+// file its preparation left beside it: the recorded digest must be the
+// digest the record names. A swapped or hand-assembled tree records
+// nothing, and the build compiles against neither.
 func TestTheBuildRefusesASysrootWhoseRecordedDigestIsNotTheOneItsRecordPins(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -2158,9 +2097,9 @@ func TestTheBuildRefusesASysrootWhoseRecordedDigestIsNotTheOneItsRecordPins(t *t
 	}
 }
 
-// The prepared sysroot reaches the compile as a mount and not as a layer: the image the compile runs in is built
-// with nothing of Apple's in it, and the tree is put where the record says the compiler looks for it, read-only,
-// for the steps that run the compiler and the linker. The steps that only carry files around are not given it.
+// The prepared sysroot reaches the compile as a read-only mount and not a
+// layer: the compile image is built with nothing of Apple's in it, and
+// the tree goes where the record says the compiler looks for it.
 func TestTheMacOSCompileMountsItsPreparedSysrootReadOnly(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -2216,8 +2155,8 @@ func TestTheMacOSCompileMountsItsPreparedSysrootReadOnly(t *testing.T) {
 	}
 }
 
-// The mount names the path the record says the compile reads, which is the same path the record spells into its own
-// compiler and linker flags: a build that hardcoded one of the two would mount a tree where nothing looks for it.
+// The mount names the path the record says the compile reads, the same
+// path the record spells into its own compiler and linker flags.
 func TestTheSysrootIsMountedWhereItsRecordSaysTheCompileReadsIt(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -2246,9 +2185,9 @@ func TestTheSysrootIsMountedWhereItsRecordSaysTheCompileReadsIt(t *testing.T) {
 	}
 }
 
-// A Mac compiling its own ffmpeg needs no prepared tree, because the SDK that compile reads is the one its own
-// toolchain carries: the host route is planned on a machine the build asked nothing of, and it refuses nothing and
-// mounts nothing.
+// A Mac compiling its own ffmpeg needs no prepared tree: the SDK that
+// compile reads is the one its own toolchain carries, so the host route
+// refuses nothing and mounts nothing.
 func TestTheMacOSCompileOnItsOwnHostNeedsNoPreparedSysroot(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -2273,15 +2212,10 @@ func TestTheMacOSCompileOnItsOwnHostNeedsNoPreparedSysroot(t *testing.T) {
 	}
 }
 
-// What a record names about its container compile reaches that compile through configure's own options, which is
-// where a toolchain a record names belongs: configure writes both tools into the Makefile it produces, that Makefile
-// archives every library with the named tool, and the named indexer writes the archive's symbol table after it. The
-// choice not to strip travels the same way, because it is a switch configure answers for. A record naming none of
-// them is left to configure's own defaults, which is the right answer for a compile whose objects its container's
-// own archiver can read and whose binaries carry no signature to keep — and naming one for such a compile would move
-// the cache entry its binaries are named by with nothing measured behind it. A Mac compiling its own ffmpeg is told
-// nothing at all: the archiver of its own toolchain is the one it has, the container's names are programs its PATH
-// does not carry, and its own build signs what its own strip step leaves behind.
+// A record's container toolchain names reach the compile through
+// configure's own options, which write them into the generated Makefile:
+// archiver, indexer, and the choice not to strip. Naming none leaves
+// configure's defaults, and naming one unmeasured moves its cache entry.
 func TestTheCompileIsToldTheToolchainItsRecordNames(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -2340,9 +2274,9 @@ func TestTheCompileIsToldTheToolchainItsRecordNames(t *testing.T) {
 	}
 }
 
-// aTreeReadyFor is the state of a machine a plan is asked on: the container program it has, and, when the target's
-// record pins an SDK tree its compile reads, that tree prepared in the machine's own cache directory. A record that
-// names no tree gets the plain state, because nothing is asked of the machine for it.
+// aTreeReadyFor is the state of a machine a plan is asked on: the
+// container program it has and, when the record pins an SDK tree its
+// compile reads, that tree prepared in the machine's own cache directory.
 func aTreeReadyFor(t *testing.T, manifest bundle.Manifest, target string) ffmpegState {
 	t.Helper()
 
@@ -2356,10 +2290,10 @@ func aTreeReadyFor(t *testing.T, manifest bundle.Manifest, target string) ffmpeg
 	return state
 }
 
-// aTreeWithTheSysrootPreparedFor is the state of a machine that has the SDK tree a record pins: the tree is written
-// in a home directory of the test's own, in the layout the harness that prepares it writes it into — the tree, and
-// the digest that preparation recorded beside it — and the state carries what the build resolved from that home. The
-// tree's directory comes back too, because a test that asks what a container was mounted has to name it.
+// aTreeWithTheSysrootPreparedFor is a machine holding the SDK tree a
+// record pins: the tree and its preparation's recorded digest, in a home
+// of the test's own in the harness's layout, plus the tree's directory so
+// a test can name the mount a container should get.
 func aTreeWithTheSysrootPreparedFor(t *testing.T, record bundle.Target) (ffmpegState, string) {
 	t.Helper()
 
@@ -2391,8 +2325,8 @@ func aTreeWithTheSysrootPreparedFor(t *testing.T, record bundle.Target) (ffmpegS
 	return state, tree
 }
 
-// writeASysrootTree writes the one file a macOS link reads, which is what a directory has to carry before this build
-// takes it for the SDK its record pins.
+// writeASysrootTree writes the one file a macOS link reads, which is what
+// a directory has to carry before this build takes it for a pinned SDK.
 func writeASysrootTree(dir string) error {
 	if err := os.MkdirAll(filepath.Join(dir, "usr", "lib"), 0755); err != nil {
 		return err
@@ -2401,19 +2335,18 @@ func writeASysrootTree(dir string) error {
 	return os.WriteFile(filepath.Join(dir, "usr", "lib", "libSystem.tbd"), []byte("text-based stub library\n"), 0644)
 }
 
-// writeTheSysrootDigestRecordedFor writes, in the directory holding the tree, the record the preparation of a sysroot
-// tree leaves for it: the tree's sha256, in a file named after the digest it holds. A fixture standing for a prepared
-// tree writes what the preparation writes, because carrying the library a link reads makes a directory a sysroot and
-// the digest recorded beside it makes it the one a record pins.
+// writeTheSysrootDigestRecordedFor writes the record a prepared sysroot
+// leaves beside its tree: the tree's sha256, in a file named after the
+// digest it holds, because carrying the library a link reads makes a
+// directory a sysroot and the digest beside it makes it the pinned one.
 func writeTheSysrootDigestRecordedFor(record bundle.Target, tree string) error {
 	return os.WriteFile(filepath.Join(filepath.Dir(tree), theSysrootDigestFile), []byte(record.Sysroot.SHA256+"\n"), 0644)
 }
 
-// aHomeWithTheSysrootPreparedInIt is the home directory a whole run finds a prepared SDK tree in: the tree, and the
-// digest its preparation recorded beside it, are written where this build looks for them, and the run is moved into
-// that home for the length of the test. The variable a record's tree can be named by is emptied for the same reason:
-// a run is asked to answer the same way on the machine that built it as on the machine that ships it, and a tree
-// sitting in somebody's own environment would make this test answer to that machine.
+// aHomeWithTheSysrootPreparedInIt is the home a whole run finds a prepared
+// SDK tree in: the tree and its recorded digest where this build looks,
+// and the run moves into it for the test. The record's tree variable is
+// emptied, so the test cannot answer to the operator's own environment.
 func aHomeWithTheSysrootPreparedInIt(t *testing.T, record bundle.Target) string {
 	t.Helper()
 
@@ -2451,9 +2384,9 @@ func theFlagNamed(args []string, prefix string) string {
 	return ""
 }
 
-// A run asked for the machine it is standing on, in the words go names that machine by, compiles the
-// ffmpeg binaries of the release target that machine is: the alias is a spelling, and the phase that compiles sees the
-// target, not the spelling.
+// A run asked for the machine it stands on, in the words go names that
+// machine by, compiles the ffmpeg binaries of the release target that
+// machine is: the alias is a spelling, and the phase sees the target.
 func TestTheFFmpegPhaseAskedForTheWordGoNamesTheMachineByPlansTheReleaseTarget(t *testing.T) {
 	o, err := parseArgs([]string{"ffmpeg", "darwin-arm64"})
 	if err != nil {
@@ -2486,11 +2419,10 @@ func argAfter(args []string, flag string) string {
 	return ""
 }
 
-// Binaries the maintainer dropped are adopted on their own host exactly as they are adopted anywhere
-// else: the compile is what the build does when there is nothing to adopt, not a replacement for the drop.
-// The plan carries the adoption, because the licence text the archive carries is written from the run that
-// adopted the binaries. Both macOS targets are pinned, because the host route is the two of them and a route
-// that adopted only the Mac's own architecture would send the other target's operator back to a compile.
+// Binaries the maintainer dropped are adopted on their own host exactly
+// as anywhere else: the compile is what the build does when there is
+// nothing to adopt, not a replacement for the drop. Both macOS targets
+// are pinned: a route adopting only the native target strands the other.
 func TestSuppliedBinariesDroppedOnTheirOwnHostAreAdoptedAndNotCompiled(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		repo := t.TempDir()
@@ -2520,9 +2452,9 @@ func TestSuppliedBinariesDroppedOnTheirOwnHostAreAdoptedAndNotCompiled(t *testin
 	}
 }
 
-// The host's own build tools are what a native compile runs, and a program that is not there is a build
-// that cannot start: the operator is told which program, and what installs it, before a minute of work is
-// spent finding out.
+// The host's own build tools are what a native compile runs, and the
+// operator is told which program is missing and what installs it before a
+// minute of work is spent finding out.
 func TestTheNativeCompileRefusesAHostWithNoToolchain(t *testing.T) {
 	for _, missing := range []string{"tar", "cc", "strip", "make", "codesign"} {
 		repo := t.TempDir()
@@ -2551,8 +2483,8 @@ func aMachineForTarget(target string) host {
 	return host{goos: tr.goos, goarch: tr.goarch}
 }
 
-// theReleaseHost is the machine that produces the releases: a Linux host, which is not a host either macOS
-// target is compiled on with its own toolchain.
+// theReleaseHost is the machine that produces the releases: a Linux host,
+// not a host either macOS target is compiled on with its own toolchain.
 var theReleaseHost = host{goos: "linux", goarch: "amd64"}
 
 // aNativeTree is a tree with nothing compiled in it, and the host's own build tools in front of it.
@@ -2579,8 +2511,8 @@ func aToolchainFor(target string) map[string]string {
 	return tools
 }
 
-// aMakeProgramFor is the make program the host compile of a target runs, which is what a test that asks what a
-// host compile runs needs.
+// aMakeProgramFor is the make program the host compile of a target runs,
+// which is what a test that asks what a host compile runs needs.
 func aMakeProgramFor(target string) string {
 	record, ok := bundle.ReadManifest().Targets[target]
 	if !ok || record.Host.Make == "" {
@@ -2634,10 +2566,10 @@ func sameWords(got []string, want []string) bool {
 	return true
 }
 
-// Every step that speaks to a container names the program the run resolved. A step that names a program
-// the machine does not have is a step that fails on a machine that can build the image, and a plan that
-// names the program in its image builds and composes it into its runs is a plan whose steps disagree
-// about who they are talking to.
+// Every step that speaks to a container names the program the run
+// resolved: a step naming a program the machine does not have fails on a
+// machine that can build the image, and a plan whose steps disagree about
+// who they are talking to is a plan that should not exist.
 func TestEveryContainerStepOfTheFfmpegPlanNamesTheProgramTheRunResolved(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -2657,9 +2589,9 @@ func TestEveryContainerStepOfTheFfmpegPlanNamesTheProgramTheRunResolved(t *testi
 			}
 		}
 
-		// The steps that enter a container say it in the vocabulary that program understands, and every
-		// image build names the file it builds from: docker looks for Dockerfile and does not find
-		// Containerfile.
+		// The steps that enter a container say it in the vocabulary that program
+		// understands, and every image build names the file it builds from:
+		// docker looks for Dockerfile and does not find Containerfile.
 		for _, s := range plan.Steps {
 			if len(s.args) == 0 {
 				t.Fatalf("the %s step carries no arguments", s.label)

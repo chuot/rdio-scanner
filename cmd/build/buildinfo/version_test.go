@@ -22,10 +22,8 @@ import (
 	"testing"
 )
 
-// VERSION.txt is the one place a core version is written, and a build that guessed one is a build
-// that told its clients something the repository never said. These tests are about the reading of
-// that file: what it accepts, what it assumes when the file is not there, and what it refuses
-// instead of making the best of it.
+// the tests pin how VERSION.txt is read: what it accepts, what is
+// assumed when the file is absent, and what is refused.
 
 func writeVersionFile(t *testing.T, contents string) string {
 	t.Helper()
@@ -63,9 +61,7 @@ func TestReadCoreIgnoresTheWhitespaceAroundTheCore(t *testing.T) {
 	}
 }
 
-// A repository with no VERSION.txt is a repository that has not said what version it is, and the
-// owner's rule for that is 0.0.0: a version no release ever had, which is loud enough that nobody
-// mistakes the binary for one.
+// ReadCore assumes 0.0.0 when the file is not there.
 func TestReadCoreAssumesZeroWhenTheFileIsNotThere(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "VERSION.txt")
 
@@ -79,10 +75,8 @@ func TestReadCoreAssumesZeroWhenTheFileIsNotThere(t *testing.T) {
 	}
 }
 
-// Everything here is a version somebody meant well, and each one is refused rather than repaired.
-// A core with a v is a tag name, a core with two parts is an incomplete one, and a core with a
-// prerelease or a commit in it is a whole derived version written into the file that only the core
-// belongs in.
+// ReadCore refuses cores that are not bare, whether tagged,
+// partial, or already a whole derived version.
 func TestReadCoreRefusesAnythingThatIsNotABareCore(t *testing.T) {
 	for _, contents := range []string{
 		"v8.0.0",

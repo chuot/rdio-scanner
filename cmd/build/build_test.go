@@ -28,12 +28,12 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// The tool's four contacts with the machine it runs on: which tree it builds, which programs it can
-// run, whether a directory is there, and what one step does when it is executed. The plan is composed
-// in commands.go and tested there; what is tested here is the half that touches the machine.
+// The tool's four contacts with the machine it runs on: which tree it builds,
+// which programs it can run, whether a directory is there, and what one step
+// does. The plan itself is composed and tested in commands.go.
 
-// The tree the tool builds is the one git says. A tree without git is built where the operator stood,
-// which is where `go run` stood too, and the tool is run from inside the tree either way.
+// the tool builds the tree git names, and without git it builds
+// the directory it was run from
 func TestTheRepositoryRootIsTheTreeGitSays(t *testing.T) {
 	repo, err := repositoryRoot()
 	if err != nil {
@@ -47,9 +47,8 @@ func TestTheRepositoryRootIsTheTreeGitSays(t *testing.T) {
 	}
 }
 
-// A program the tool has to run is looked up by the name the machine answers, and the name that was
-// looked for is named in the failure: the difference between "npm is not installed" and a confusing
-// failure.
+// a required program is found by the name the machine answers,
+// and the failure names the program that was looked for
 func TestTheExecutableIsTheOneTheMachineHas(t *testing.T) {
 	path, err := resolveExecutable("go")
 	if err != nil {
@@ -65,8 +64,8 @@ func TestTheExecutableIsTheOneTheMachineHas(t *testing.T) {
 	}
 }
 
-// A directory is known by its existence: the client dependencies are installed once, and the tool
-// looks at the tree to find out whether they already are.
+// a directory is known by its existence: the tool looks at the tree to see
+// whether the client dependencies are already installed
 func TestADirectoryIsKnownByItsExistence(t *testing.T) {
 	dir := t.TempDir()
 
@@ -89,9 +88,8 @@ func TestADirectoryIsKnownByItsExistence(t *testing.T) {
 	}
 }
 
-// A step runs in its own directory, with the machine's environment in front of its own, and the
-// program's own exit is the step's result: a step that says no ends the run, and the steps after it
-// do not happen.
+// a step runs in its own directory, the machine's environment in front of its
+// own, and the program's exit is the step's result: a failing step ends the run
 func TestAStepRunsInItsOwnDirectoryWithItsOwnExit(t *testing.T) {
 	dir := t.TempDir()
 
@@ -101,8 +99,8 @@ func TestAStepRunsInItsOwnDirectoryWithItsOwnExit(t *testing.T) {
 		t.Fatalf("writing the file: %v", err)
 	}
 
-	// The same program, asked the same question, in two directories: the one that holds the file and
-	// the one that does not. Only the first can answer yes.
+	// the same program asked the same question in two directories:
+	// only the one holding the file answers yes
 	if err := runStep(step{name: "sh", args: []string{"-c", "test -f a-file"}, dir: dir}); err != nil {
 		t.Errorf("a step run in %q could not find the file it is standing next to: %v", dir, err)
 	}
@@ -127,9 +125,8 @@ func TestAStepRunsInItsOwnDirectoryWithItsOwnExit(t *testing.T) {
 	}
 }
 
-// A clean run removes the release output, the client dependencies, and the contents of both bundles,
-// and leaves the `.gitkeep` files that keep a plain go build compiling. The placeholders are the reason
-// the bundle contents are removed one by one and the bundle directory itself is left standing.
+// a clean run removes the release output, the client dependencies, and the bundle
+// contents, and leaves the .gitkeep placeholders that keep a plain go build compiling
 func TestCleanRemovesTheReleaseOutputAndTheBundleContentsAndLeavesThePlaceholders(t *testing.T) {
 	repo := t.TempDir()
 
@@ -191,8 +188,8 @@ func writeTreeFile(t *testing.T, repo string, path string, contents string) {
 	}
 }
 
-// The server binary is current when it is newer than every Go file the server is built from. The
-// ffmpeg the server embeds is not a Go file, and the ffmpeg phase has its own cache check.
+// the server binary is current when it is newer than every Go file it is built
+// from; the embedded ffmpeg is not a Go file and has its own cache check
 func TestTheServerBinaryIsCurrentWhenItIsNewerThanEveryGoFileItIsBuiltFrom(t *testing.T) {
 	repo := t.TempDir()
 
@@ -227,10 +224,8 @@ func TestTheServerBinaryIsCurrentWhenItIsNewerThanEveryGoFileItIsBuiltFrom(t *te
 	}
 }
 
-// The ffmpeg phase writes two kinds of thing: the configured source trees it compiles in, the tarball it
-// extracted them from, the container context it built in, and the working copy of the binaries it ran —
-// all of it read by no later build — and the compiled programs, which every later build reads. A clean
-// run that threw away the reusable 41 MB to keep the disposable 1.1 GB has the split backwards.
+// the ffmpeg phase writes disposable scratch no later build reads and a cache every
+// later build reads; a clean run removes the first and leaves the second standing
 func TestACleanRunRemovesTheFfmpegScratchAndLeavesTheCacheStanding(t *testing.T) {
 	repo := t.TempDir()
 
@@ -269,10 +264,9 @@ func TestACleanRunRemovesTheFfmpegScratchAndLeavesTheCacheStanding(t *testing.T)
 	}
 }
 
-// The cache key is a digest of the release, the pinned source, the target, the recipe, the toolchain, and
-// the check environment. An entry whose key no target the manifest records computes is an entry the
-// manifest as it is now cannot ask for, and deleting it costs nothing a build would have reused. An
-// entry kept because it is old, or deleted because it is old, is a rule that guesses.
+// a clean run prunes cache entries whose key no target the manifest records computes;
+// age decides nothing, only whether the manifest as it is now could ask for the entry.
+// see the ffmpeg-cache-pruning maintainer note.
 func TestACleanRunPrunesTheCacheEntriesTheManifestCannotProduce(t *testing.T) {
 	repo := t.TempDir()
 
@@ -283,7 +277,7 @@ func TestACleanRunPrunesTheCacheEntriesTheManifestCannotProduce(t *testing.T) {
 	// The entry a manifest edit replaced: the same release, a key nothing computes now.
 	staleKey := filepath.Join(".build", "ffmpeg", manifest.FFmpeg, "a-key-the-manifest-replaced")
 
-	// The whole cache of a release the manifest no longer pins.
+	// the whole cache of a release the manifest no longer pins
 	older := filepath.Join(".build", "ffmpeg", "8.9.0")
 
 	writeTreeFile(t, repo, live, "the ffmpeg the manifest asks for")
@@ -310,9 +304,8 @@ func TestACleanRunPrunesTheCacheEntriesTheManifestCannotProduce(t *testing.T) {
 	}
 }
 
-// carriesAPath says whether a list of removed paths names a path, repo-relative names included: the
-// clean run reports what it removed, and a removal nobody is told about is a tree that changed in
-// silence.
+// carriesAPath says whether a list of removed paths names a path,
+// repo-relative names included: a removal nobody is told about is a silent tree change.
 func carriesAPath(paths []string, want string) bool {
 	for _, path := range paths {
 		if path == want || strings.HasSuffix(path, string(filepath.Separator)+want) {
@@ -323,11 +316,9 @@ func carriesAPath(paths []string, want string) bool {
 	return false
 }
 
-// The server compiles of a release run are independent, and the bound on them is about the machine's
-// memory and the log's readability, not about correctness. The operator can bound it lower: a release
-// run on a small machine giving every core a server compile at once is a run that trades the release for a
-// machine that stops responding. A value that is not a count of work is refused, because a run that
-// quietly ignored it would be a run doing more than the operator said.
+// the bound on a release run's independent server compiles is about the machine's
+// memory and the log's readability, not correctness: too many at once stalls a
+// small machine, and a value that is not a count of work is refused.
 func TestTheReleaseRunBoundsItsServerCompiles(t *testing.T) {
 	cpus := runtime.NumCPU()
 
@@ -341,8 +332,8 @@ func TestTheReleaseRunBoundsItsServerCompiles(t *testing.T) {
 		t.Errorf("%d workers for %d ready targets on %d cores, want the cores", workers, cpus+3, cpus)
 	}
 
-	// Fewer ready targets than cores: the bound is the targets, because a worker with nothing to do is
-	// a worker that does nothing.
+	// fewer ready targets than cores: the bound is the targets,
+	// a worker with nothing to do does nothing
 	workers, err = distWorkers(2, noEnvironment)
 	if err != nil {
 		t.Fatalf("distWorkers: %v", err)
@@ -400,8 +391,8 @@ func TestTheReleaseRunBoundsItsServerCompiles(t *testing.T) {
 	}
 }
 
-// noEnvironment and anEnvironment answer the question a run asks of the machine's environment, so the
-// bound is a fact a test can state without changing the environment the tests run in.
+// noEnvironment and anEnvironment answer the questions a run asks of the
+// machine's environment, so a test states the bound without changing the environment.
 func noEnvironment(string) (string, bool) { return "", false }
 
 func anEnvironment(values map[string]string) func(string) (string, bool) {
@@ -412,10 +403,8 @@ func anEnvironment(values map[string]string) func(string) (string, bool) {
 	}
 }
 
-// The version a server binary reports is stamped from the file the release declares its core version
-// in, and the binary is compiled from the module files its dependencies are resolved from. A binary
-// that is not rebuilt when one of those files changes reports a version the release does not ship,
-// under an archive named for the version the release does ship.
+// the version file and the module files are sources of the server binary:
+// a binary not rebuilt when they change reports a version the release does not ship
 func TestTheVersionFileAndTheModuleFilesAreSourcesOfTheServerBinary(t *testing.T) {
 	repo := t.TempDir()
 
@@ -450,8 +439,8 @@ func TestTheVersionFileAndTheModuleFilesAreSourcesOfTheServerBinary(t *testing.T
 	}
 }
 
-// A tree the test made is not a tree git has ever seen, and the tool asks git for the repository root.
-// The dates the tests set are the dates the files have, so the suite does not depend on the clock.
+// setMTime gives a test-made tree the file dates the suite relies on.
+// see the build-test-harness maintainer note.
 func setMTime(t *testing.T, repo string, path string, when time.Time) {
 	t.Helper()
 
@@ -466,9 +455,8 @@ func date(year int, month time.Month, day int) time.Time {
 	return time.Date(year, month, day, 12, 0, 0, 0, time.UTC)
 }
 
-// The release matrix builds a server binary for each target, so a release run asks the same question a
-// server run asks: is the binary newer than every file it is built from. A matrix that never asks it
-// compiles every target on every run.
+// the release matrix asks each target's binary the same currentness question
+// a single server run asks, instead of compiling every target on every run
 func TestAReleaseRunAsksWhetherTheServerBinaryIsCurrent(t *testing.T) {
 	repo := t.TempDir()
 
@@ -495,15 +483,9 @@ func TestAReleaseRunAsksWhetherTheServerBinaryIsCurrent(t *testing.T) {
 	}
 }
 
-// The build command runs with the tool newTool makes, and every part the phases ask for has to be wired
-// into it. A part left unwired is a nil function a phase calls on the machine the operator is standing
-// on, and the one host route the ffmpeg phases still take — a Mac compiling a macOS pair with its own
-// toolchain — runs on a machine this suite cannot reach: the panic is in the operator's terminal, and no
-// test here runs that code.
-//
-// The order the wiring is written in is part of what this pins. Taking a method value of the tool
-// captures the tool as it is at that moment, so a phase bound before the fields it asks for are set
-// carries a copy that does not have them.
+// every part the phases ask for is wired into the tool newTool makes,
+// and the order the wiring is written in is part of what this pins.
+// see the tool-wiring-order maintainer note.
 func TestTheBuildToolCarriesEveryPartThePhasesAskFor(t *testing.T) {
 	tl := newTool("/repo")
 
@@ -527,15 +509,10 @@ func TestTheBuildToolCarriesEveryPartThePhasesAskFor(t *testing.T) {
 	}
 }
 
-// The phases bound in newTool are method values, and a method value carries the tool as it was when it
-// was taken: the copy the phase runs on is not the tool the command holds. Checking the tool's own
-// fields says nothing about the copies, so the wiring is measured by asking a bound phase to do the
-// work it does on the operator's machine.
-//
-// The run that adopts a drop is the phase that runs programs here, and a drop of the other macOS
-// architecture is the case that reaches it on any machine: the machine-code rule lets it through on a
-// Linux host, and the Linux host cannot execute it. The answer is the refusal naming the host that runs
-// those binaries — not a crash in the operator's terminal.
+// bound phases carry copies of the tool, so the wiring is measured by asking a
+// bound phase to run a drop's binaries here: a cross-architecture drop is refused
+// by naming its host, and not a crash in the operator's terminal.
+// see the tool-wiring-order maintainer note.
 func TestTheToolTheCommandRunsRunsTheBinariesOfADropOnThisMachine(t *testing.T) {
 	repo := t.TempDir()
 
@@ -582,14 +559,9 @@ func TestTheToolTheCommandRunsRunsTheBinariesOfADropOnThisMachine(t *testing.T) 
 	}
 }
 
-// A step's own output is the program's words and not the tool's: they reach the operator's streams, so
-// the compiler's explanation and the container's log arrive as they were written. A step whose output
-// the tool folded into its own log would put the tool's summary in front of the explanation the
-// operator needs, and a step whose complaint the tool swallowed would leave the operator reading a
-// failure with no reason in it.
-//
-// git is a prerequisite of this build, and it writes to both streams: its version to standard output,
-// and its complaint about a tree that is not a repository to standard error.
+// a step's own output reaches the operator's streams as the program wrote it,
+// and git writes to both streams as a prerequisite of this build.
+// see the operator-streams maintainer note.
 func TestAStepsOwnOutputReachesTheOperator(t *testing.T) {
 	dir := scratchWithoutARepository(t)
 
@@ -613,9 +585,8 @@ func TestAStepsOwnOutputReachesTheOperator(t *testing.T) {
 	}
 }
 
-// theOperatorsStreams stands in for the streams the process was started with, and gives back the way
-// to put them back. The tool writes its own lines to the writer it is given, so a test that asks where
-// a program's output lands has to be the process's standard output and standard error.
+// theOperatorsStreams stands in for the process's own standard output and
+// standard error, and gives back the way to put them back.
 func theOperatorsStreams(t *testing.T) (*os.File, *os.File, func()) {
 	t.Helper()
 

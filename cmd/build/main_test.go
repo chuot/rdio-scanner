@@ -33,20 +33,17 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// The tool's whole job is to run the right commands in the right order with the resolved version in
-// them. The plan it composes is tested in commands_test.go and the machine it touches in
-// build_test.go; what is tested here is the run itself: the order the steps happen in, what the
-// process exits with when a step says no, what the version subcommand prints, and what the run says
-// about the version it resolved.
+// These tests exercise the build run itself: the order its steps happen in, its exit status
+// when a step says no, what the version subcommand prints, and what it says about the resolved
+// version.
 
 // fakeRun is a tool that records what it was told to run instead of running it.
 
 func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 	var ran []step
 
-	// The dist run compiles and archives the ready targets at once, one goroutine per target, and
-	// every step of such a run lands in this recorder. An append to a shared slice from several
-	// workers loses entries, so every recording is taken under one lock.
+	// The recorder takes its appends under this lock because a dist run records from one
+	// goroutine per target.
 	var mu sync.Mutex
 
 	record := func(s step) {
@@ -70,13 +67,12 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 			return true
 		},
 
-		// The operator's standard error is where a failure goes. A test that reads the run's own lines
-		// is not the operator, and says so by naming the stream it wants the failure written to.
+		// A test that reads the run's own lines names the stream it wants failures
+		// written to, because it is not the operator.
 		errout: io.Discard,
 
-		// The container image's build time is a fact the run reads off the clock, so the stand-in says
-		// what the clock said: a test that reads the command line the run composed has to know the
-		// moment it was composed at.
+		// The stand-in fixes the clock so a test reading the composed command lines
+		// knows the moment they were composed at.
 		now: func() time.Time {
 			return time.Date(2026, 10, 13, 12, 30, 45, 0, time.UTC)
 		},
@@ -90,17 +86,17 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 			return nil
 		},
 
-		// The ffmpeg phase is not one external command, so the stand-in records that it ran rather than
-		// what it ran. What it does is tested in ffmpeg_test.go.
+		// The ffmpeg stand-in records that the phase ran rather than what command it
+		// ran; the phase itself is tested in ffmpeg_test.go.
 		ffmpeg: func(o options, stdout io.Writer) (bool, error) {
 			record(step{label: subFFmpeg, result: o.target})
 
 			return false, nil
 		},
 
-		// The archive is not an external command. The stand-in records that it was written, and what it
-		// does is tested in archive_test.go. The archive reads the program the release wrote into the
-		// tree, so the run's order is what is under test here.
+		// The archive stand-in records that it was written; what it does is tested in
+		// archive_test.go, and the pairing of the run's steps is what is under test
+		// here.
 		releaseFiles: func(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
 			return []archiveFile{{name: "rdio-scanner", body: []byte("the binary")}}, nil
 		},
@@ -111,16 +107,16 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 			return nil
 		},
 
-		// A clean run removes files from the tree. The stand-in records that it ran; what it removes is
-		// tested in build_test.go, in a tree the test made.
+		// The clean stand-in records the removal; what is removed is tested in
+		// build_test.go, in a tree the test builds.
 		clean: func(repo string) ([]string, error) {
 			record(step{label: subClean, result: repo})
 
 			return []string{"removed"}, nil
 		},
 
-		// The state is what the tree says about what has already been built. The stand-in says nothing is
-		// built, which is the first run on a fresh clone; what the checks do is tested in build_test.go.
+		// The state stand-in reports nothing built yet, the state of a first run on a
+		// fresh clone; the checks themselves live in build_test.go.
 		state: func(repo string, o options) (planState, error) {
 			return planState{}, nil
 		},
@@ -147,9 +143,8 @@ func TestRunningWithNoSubcommandBuildsBothApplicationsAndThenTheServer(t *testin
 		got = append(got, s.label)
 	}
 
-	// Each bundle is written beside the Go package that embeds it, so a server built before both
-	// applications existed would embed a stale one. The ffmpeg is compiled before the server for the
-	// same reason: it is embedded in it too.
+	// The server build comes after the two application bundles and the ffmpeg because the
+	// server embeds all three.
 	want := []string{"scanner", "admin", "ffmpeg", "server"}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("steps ran in the order %v, want %v", got, want)
@@ -187,9 +182,8 @@ func TestEachSubcommandRunsOnlyTheStepsItNames(t *testing.T) {
 	}
 }
 
-// The version reaches the server through the linker and the applications through the environment.
-// Neither is rewritten in a source file, which is the mechanism that produced the drift this tool
-// exists to remove.
+// The version reaches the server through the linker and the applications through the
+// environment, never rewritten into a source file.
 func TestAPreReleaseNameThatIsNotAPrereleaseIsRejectedBeforeAnythingIsBuilt(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
@@ -235,8 +229,8 @@ func TestACommandTheToolDoesNotKnowIsRejectedBeforeAnythingRuns(t *testing.T) {
 	}
 }
 
-// A step that fails ends the run, and the steps that would have followed it do not run: a server
-// built after a failed application build would embed a bundle that is not there.
+// A failed step ends the run and the steps after it do not run, because a server built after a
+// failed bundle build would embed a bundle that is not there.
 func TestAStepThatFailsEndsTheRunAndStopsTheStepsAfterIt(t *testing.T) {
 	tl, out, ran := fakeRun(released, "admin")
 
@@ -273,8 +267,8 @@ func TestTheVersionSubcommandPrintsTheResolvedVersionAndBuildsNothing(t *testing
 	}
 }
 
-// The log says what was resolved and why, because a version nobody can explain is the drift this
-// tool replaced with a file.
+// The run logs the version it resolved and where it came from, because a resolved version has
+// to be explainable.
 func TestTheRunSaysWhatVersionItResolvedAndWhy(t *testing.T) {
 	tl, out, _ := fakeRun(development, "")
 
@@ -291,13 +285,9 @@ func TestTheRunSaysWhatVersionItResolvedAndWhy(t *testing.T) {
 	}
 }
 
-// A release run asked for the whole matrix builds the applications once, because the bundles are the same
-// for every target, then every target's ffmpeg, serially and in the matrix's order, and then the server
-// compiles and the archive writes of all those targets at once. The order within the phases is what the
-// release's correctness rests on: a server built before the ffmpeg its target carries exists is a server
-// that ships without one, and a target's archive is read from the path its own compile wrote to. Which
-// target finished its compile first is the machine's business, and the run's log says which target every
-// line is about.
+// A dist run builds the applications once, then each target's ffmpeg serially, then every
+// target's compile and archive at once; the ordering rules live in the note.
+// see the dist-run-order maintainer note.
 func TestADistRunBuildsTheApplicationsOnceThenEveryFfmpegThenTheTargetsAtOnce(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -332,8 +322,8 @@ func TestADistRunBuildsTheApplicationsOnceThenEveryFfmpegThenTheTargetsAtOnce(t 
 		}
 	}
 
-	// The compiles and the writes are the rest, and their order is the machine's: the steps that ran
-	// are exactly the steps the matrix asks for, and each target's archive follows its own compile.
+	// The remaining recorded steps are exactly the matrix's compiles and archives, each
+	// archive following its own target's compile.
 	rest := theStepsCounted(got[2+len(releaseTargets):])
 
 	want2 := theStepsCounted(want[2+len(releaseTargets):])
@@ -370,8 +360,8 @@ func TestADistRunBuildsTheApplicationsOnceThenEveryFfmpegThenTheTargetsAtOnce(t 
 	}
 }
 
-// theStepsCounted counts the steps a run recorded, so a test can say which steps ran without saying
-// which order the machine finished them in.
+// theStepsCounted counts recorded steps so a test can name which steps ran without naming the
+// order the machine finished them in.
 func theStepsCounted(steps []string) map[string]int {
 	counts := map[string]int{}
 
@@ -408,17 +398,15 @@ func TestADistRunForOneTargetBuildsThatTarget(t *testing.T) {
 	}
 }
 
-// The archive is read from the path the server step writes to. A release run that read the program from
-// a path it chose for itself shipped whatever was standing at that path. The compiles of a matrix run
-// finish in whatever order the machine scheduled them, so the pairing is stated per target: the archive
-// of a target reads the path that target's server step wrote to.
+// A dist run reads each target's archive from the path that target's server step wrote to,
+// never a path it chose for itself.
 func TestADistRunReadsTheArchiveFromThePathTheServerStepWritesTo(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
 	var read []string
 
-	// The archive reads are recorded from the matrix run's workers, one goroutine per target, so
-	// this recorder takes its appends under a lock of its own.
+	// The archive reads are recorded from per-target workers, so this recorder takes its
+	// appends under a lock of its own.
 	var readMu sync.Mutex
 
 	tl.releaseFiles = func(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
@@ -449,9 +437,8 @@ func TestADistRunReadsTheArchiveFromThePathTheServerStepWritesTo(t *testing.T) {
 	}
 }
 
-// A release run's archive carries the bytes of the binary that run compiled, written by the real archive
-// writer into a real tree: the binary standing at the path from an earlier build is replaced by the one
-// this run compiled before anything reads it.
+// The archive of a release run carries the binary that same run compiled, replaced before
+// anything reads it.
 func TestADistRunArchivesTheBinaryItCompiled(t *testing.T) {
 	repo := t.TempDir()
 
@@ -473,8 +460,8 @@ func TestADistRunArchivesTheBinaryItCompiled(t *testing.T) {
 		return writeArchive(filepath.Join(repo, path), files)
 	}
 
-	// The stand-in compiles the way the compiler does: it writes the binary where the step says it
-	// writes it, and nowhere else.
+	// The stand-in compile writes its binary where the step says it writes and nowhere
+	// else.
 	tl.execute = func(s step) error {
 		if s.label != subServer {
 			return nil
@@ -543,10 +530,8 @@ func theOutputPathOf(s step) string {
 	return ""
 }
 
-// theTargetOf reads the target a step was composed for out of the environment the step runs with, in
-// the name the release matrix calls a target by: the matrix sets GOOS and GOARCH for each target, and a
-// test that pairs a compile with the archive that read it needs the target, because the compiles finish
-// in whatever order the machine scheduled them.
+// theTargetOf reads a step's target out of its environment by the GOOS and GOARCH values the
+// matrix sets for each target.
 func theTargetOf(s step) string {
 	name, goarch := "", ""
 
@@ -575,10 +560,9 @@ var theTargetNames = map[string]string{
 	"windows": "windows",
 }
 
-// A release run refuses a tree with uncommitted changes. The archive is named for the commit it was
-// built from, and a tree with work in it is not that commit: the person who downloads the archive has
-// no way to know which of the two the binary came from. The refusal comes before anything is built, and
-// names the paths and the override.
+// A release run refuses a tree with uncommitted changes before building anything and names the
+// paths and the override.
+// see the dirty-tree-refusal maintainer note.
 func TestADistRunRefusesATreeWithUncommittedChanges(t *testing.T) {
 	tl, out, ran := fakeRun(uncommitted, "")
 
@@ -601,9 +585,8 @@ func TestADistRunRefusesATreeWithUncommittedChanges(t *testing.T) {
 	}
 }
 
-// The override is a maintainer building a pre-release from work in progress, and it is only worth
-// having because the log says, on the run that used it, that the release is built from an uncommitted
-// tree.
+// A run that used the override says on its own log that the release is built from an
+// uncommitted tree.
 func TestADistRunBuiltFromAnUncommittedTreeSaysSo(t *testing.T) {
 	tl, out, _ := fakeRun(uncommitted, "")
 
@@ -616,9 +599,8 @@ func TestADistRunBuiltFromAnUncommittedTreeSaysSo(t *testing.T) {
 	}
 }
 
-// A release run says what it wrote and what it wrote none for, and its exit status says whether the
-// release it was asked for is complete. A matrix that ships five of eight archives is doing what this
-// machine can do, and that is a different fact from "something broke".
+// A release run reports the archives it wrote and the targets it wrote none for, and its exit
+// status says whether the release is complete.
 func TestADistRunReportsTheArchivesItWroteAndSaysTheReleaseIsComplete(t *testing.T) {
 	tl, out, _ := fakeRun(released, "")
 
@@ -641,12 +623,9 @@ func TestADistRunReportsTheArchivesItWroteAndSaysTheReleaseIsComplete(t *testing
 	}
 }
 
-// An incomplete matrix is not a release, and the run that wrote it says so with its exit status, so a
-// script can tell "these are the whole release this machine can make" from "the release is missing archives".
-//
-// The two targets are the ones the stand-in writes no ffmpeg for, and they stand for any target whose ffmpeg
-// the phase could not produce: the summary line and the exit status are what this defends, whichever target a
-// real run ends up reporting that way.
+// A dist run asked for a target that wrote no archive ends non-zero so scripts can tell an
+// incomplete machine from a broken run.
+// see the incomplete-matrix-reporting maintainer note.
 func TestADistRunExitsNonZeroWhenATargetItWasAskedForWroteNoArchive(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
@@ -663,8 +642,8 @@ func TestADistRunExitsNonZeroWhenATargetItWasAskedForWroteNoArchive(t *testing.T
 	}
 }
 
-// A release run asked for one target that wrote no ffmpeg wrote none of the one archive it was asked for, and
-// says so instead of shipping a server that would embed nothing.
+// A run asked for one target whose ffmpeg phase produced nothing exits non-zero instead of
+// shipping a server that embeds nothing.
 func TestADistRunAskedForOneTargetThatWroteNoFfmpegExitsNonZero(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
@@ -685,11 +664,9 @@ func TestADistRunAskedForOneTargetThatWroteNoFfmpegExitsNonZero(t *testing.T) {
 	}
 }
 
-// The tests above stand in for a phase that produced nothing for a target. This is the phase producing it for
-// real: the Linux host that produces the releases, asked for a macOS archive, with no prepared SDK tree in the
-// cache directory its record's SDK version names. The ffmpeg phase names the tree it looked for, reports the
-// target as one it wrote no archive for, and the run ships nothing it did not produce and says by its exit
-// status that the release it was asked for is not the release it wrote.
+// A release run reports a macOS target whose prepared SDK tree is absent as one it wrote no
+// archive for.
+// see the incomplete-matrix-reporting maintainer note.
 func TestAReleaseRunReportsAMacOSTargetWhoseSysrootIsAbsentAsWritingNoArchive(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -720,8 +697,8 @@ func TestAReleaseRunReportsAMacOSTargetWhoseSysrootIsAbsentAsWritingNoArchive(t 
 		}
 	}
 
-	// A target whose compile cannot start has no container built for it, no compile, and no archive: the run
-	// writes no server either, because a server compiled now would embed no ffmpeg.
+	// A target whose compile cannot start gets no container, no compile, and no archive,
+	// and no server either: it would embed no ffmpeg.
 	for _, s := range *ran {
 		if s.label == subArchive || s.label == subServer || s.label == "image" || s.label == "configure" {
 			t.Errorf("%s ran for %s, a target whose compile this machine cannot start", s.label, s.result)
@@ -729,11 +706,9 @@ func TestAReleaseRunReportsAMacOSTargetWhoseSysrootIsAbsentAsWritingNoArchive(t 
 	}
 }
 
-// The tree a machine has prepared is found, and asked what its preparation recorded for it, by the phase that gathers
-// what this machine has — before a plan is composed and before a container is built. A tree standing in the pinned
-// version's directory, carrying the library a Darwin link reads, and recording some other tree's digest beside it is
-// refused on the operator's own stream, and nothing is fetched or built for it: a run that compiled against it would
-// publish binaries under a digest it never read.
+// The ffmpeg phase refuses a target whose prepared tree records another tree's digest, and
+// fetches and builds nothing for it.
+// see the prepared-sysroot-record maintainer note.
 func TestARunAskedForTheFfmpegOfATargetWhoseSysrootRecordsAnotherTreeIsRefused(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -796,15 +771,13 @@ func TestARunAskedForTheFfmpegOfATargetWhoseSysrootRecordsAnotherTreeIsRefused(t
 	}
 }
 
-// The release folder is where the archives sit side by side until they are uploaded by hand. The
-// archives of the version a run released, sitting next to the archives of the versions it did not
-// release, is how the wrong file gets uploaded.
+// A dist run removes release archives of versions it did not release, so an upload cannot grab
+// the wrong file sitting beside the right one.
 func TestADistRunRemovesTheArchivesOfTheVersionsItDidNotRelease(t *testing.T) {
 	repo := t.TempDir()
 
-	// The release folder a run of an older version left behind, an archive of the version this run
-	// releases for a target it is not building, an archive whose prerelease name carries a second `-v`,
-	// and a file that is not an archive.
+	// The release folder fixtures: an older version's leftover folder, an archive for a
+	// target this run does not build, a double-v prerelease name, and a non-archive file.
 	writeRepoFile(t, repo, "dist/rdio-scanner-linux-amd64-v7.9.0.zip", "the archive of a release that happened before")
 	writeRepoFile(t, repo, "dist/rdio-scanner-linux-arm64-v8.0.0.zip", "the archive of this version, for a target this run is not building")
 	writeRepoFile(t, repo, "dist/rdio-scanner-windows-amd64-v8.0.0-v1+g1.zip", "a prerelease archive whose name carries a second -v")
@@ -845,10 +818,8 @@ func TestADistRunRemovesTheArchivesOfTheVersionsItDidNotRelease(t *testing.T) {
 	}
 }
 
-// The version in an archive's name is what the release folder's pruning compares. The name is
-// `rdio-scanner-<target>-v<version>.zip`, and the target is the part whose shape the tool knows, so the
-// separator between them is found by the target's shape and not by the last hyphen a prerelease name
-// happens to carry.
+// The version part of an archive name is split after the known target, not at the last hyphen,
+// because prerelease names carry hyphens.
 func TestTheVersionInAnArchiveNameIsReadByTheTargetTheNameNames(t *testing.T) {
 	for name, want := range map[string]string{
 		"rdio-scanner-linux-amd64-v8.0.0.zip":              "8.0.0",
@@ -870,10 +841,7 @@ func TestTheVersionInAnArchiveNameIsReadByTheTargetTheNameNames(t *testing.T) {
 	}
 }
 
-// A release run compiles the server binaries of the targets it can at once, and a log written by
-// several targets at once is a log that has to say which target each line is about: an operator reading
-// a line that says `server  dist/linux-arm64/rdio-scanner` in a log of five targets is reading a line
-// whose owner the line itself has to name.
+// Every per-target line of a release run's log names the target the line is about.
 func TestAReleaseRunNamesTheTargetEveryLineOfItsLogIsAbout(t *testing.T) {
 	tl, out, _ := fakeRun(released, "")
 
@@ -890,9 +858,8 @@ func TestAReleaseRunNamesTheTargetEveryLineOfItsLogIsAbout(t *testing.T) {
 
 		word := strings.Fields(line)[0]
 
-		// The version line, the notes, the two applications the whole run builds once for every
-		// target, the summary, and the removals are the run's own lines: they are about the run and not
-		// about one target's work.
+		// The run's own untagged lines are the version line, the notes, the two shared
+		// application builds, the summary, and the removals.
 		if word == "version" || word == "note" || word == subDist || word == subScanner || word == subAdmin {
 			continue
 		}
@@ -903,9 +870,8 @@ func TestAReleaseRunNamesTheTargetEveryLineOfItsLogIsAbout(t *testing.T) {
 	}
 }
 
-// The ffmpeg phase builds container images, runs qemu and wine, and saturates the machine inside one
-// target. It stays serial, and it finishes before the server compiles start, so the log that records
-// what was adopted is one target's block of lines at a time.
+// The ffmpeg phase stays serial and finishes before any server compile starts, so the log
+// records one target's block of lines at a time.
 func TestAReleaseRunFinishesTheFfmpegPhaseBeforeTheServerCompilesStart(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -934,16 +900,14 @@ func TestAReleaseRunFinishesTheFfmpegPhaseBeforeTheServerCompilesStart(t *testin
 	}
 }
 
-// The archives are the release's product, and their bytes must not depend on the order the targets ran
-// in. A run that read a target's binary after another target's compile had written over it, or that
-// wrote one target's archive from the bytes of the target beside it, would write a release that is not
-// the release the serial run writes.
+// The archives a release run writes must not depend on the order its targets ran in, and each
+// archive reads only its own target's binary.
+// see the dist-run-order maintainer note.
 func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T) {
 	repo := t.TempDir()
 
-	// The tree a release run writes its archives from: each target's binary, the two guides, and the
-	// licence of the ffmpeg each ready target carries. The times are fixed, because an archive carries the time
-	// of the file it carries, and both runs are reading the same tree.
+	// The fixture tree holds each target's binary, the two guides, and each ready target's
+	// ffmpeg licence, with every file time fixed so both runs archive one identical tree.
 	for _, tr := range releaseTargets {
 		target := tr.targetWord()
 
@@ -961,16 +925,16 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 	tl.repo = repo
 	tl.ffmpeg = func(options, io.Writer) (bool, error) { return false, nil }
 
-	// The binaries are the ones this tree's sources produce, so the run copies them into its archives
-	// and compiles nothing: the bytes the two runs compare are the bytes of one tree.
+	// The binaries are the ones this tree's sources produce, so the runs copy them into
+	// their archives and compile nothing.
 	tl.state = func(string, options) (planState, error) {
 		return planState{serverCurrent: true}, nil
 	}
 
 	tl.releaseFiles = archiveFiles
 
-	// The archive paths the run composes are relative to the tree it builds, and this tree is the
-	// temporary one: the real writer writes there.
+	// The run composes archive paths relative to the tree it builds, and this harness
+	// points that tree at the temporary one.
 	tl.archive = func(path string, files []archiveFile) error {
 		return writeArchive(filepath.Join(repo, path), files)
 	}
@@ -1002,13 +966,10 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 	}
 }
 
-// wroteNoFfmpegFor is the ffmpeg phase of a stand-in build that wrote no ffmpeg for the targets it is given,
-// which is the state a release run has to answer for: it ships the archives it can and says the release is not
-// the one it was asked for. The stand-in names whichever targets a test wants reported that way, so that the
-// summary line and the exit status are exercised for a matrix half of which cannot be filled; the phase that
-// reports it for real is exercised beside these.
-//
-// The targets it produces for are recorded, when the caller is counting the steps that ran.
+// wroteNoFfmpegFor is the ffmpeg phase of a stand-in run that produced no ffmpeg for the
+// targets it names, exercising the summary line and exit status for a partly unfillable
+// matrix.
+// see the incomplete-matrix-reporting maintainer note.
 func wroteNoFfmpegFor(ran *[]step, targets ...string) func(options, io.Writer) (bool, error) {
 	return func(o options, stdout io.Writer) (bool, error) {
 		for _, target := range targets {
@@ -1027,8 +988,8 @@ func wroteNoFfmpegFor(ran *[]step, targets ...string) func(options, io.Writer) (
 	}
 }
 
-// fixEveryFileTime gives every file in a tree the same time, so the times the archives carry are the
-// tree's and not the moment the test ran.
+// fixEveryFileTime gives every file in a tree the same time, so the archives carry the tree's
+// times and not the moment the test ran.
 func fixEveryFileTime(t *testing.T, repo string, when time.Time) {
 	t.Helper()
 
@@ -1076,9 +1037,8 @@ func theArchivesOfTheRelease(t *testing.T, repo string) map[string]string {
 	return archives
 }
 
-// The verification run runs the two suites and builds nothing: the same command a developer runs before
-// pushing is the command a release is gated on, and a run that built something first reported the
-// build's result and not the suites'.
+// The verification run runs the two test suites and builds nothing, and it is the command a
+// release is gated on.
 func TestATestRunRunsTheTwoSuitesAndBuildsNothing(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1102,9 +1062,7 @@ func TestATestRunRunsTheTwoSuitesAndBuildsNothing(t *testing.T) {
 	}
 }
 
-// A suite that fails ends the run, and the run names the suite that failed. The release is gated on
-// this command, so a run that carried on past a failing suite would report success to whatever gates on
-// it.
+// A failing suite ends the verification run non-zero and names the suite that failed.
 func TestATestRunEndsNonZeroWhenASuiteFails(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
@@ -1135,11 +1093,8 @@ func TestATestRunEndsNonZeroWhenASuiteFails(t *testing.T) {
 	}
 }
 
-// A target whose ffmpeg fails ends the run, and the run names the target it stopped at. The targets
-// after it are not built, and no server is compiled for the targets before it either: the ffmpeg phase
-// finishes before any compile starts, so a run that stopped in that phase stopped with nothing compiled
-// at all. A half matrix is not a release, and a run that carried on would leave an archive directory
-// with a server in it and no ffmpeg to embed.
+// The target whose ffmpeg fails ends the dist run, which names that target and leaves nothing
+// compiled: the ffmpeg phase finishes before any compile starts.
 func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
@@ -1183,8 +1138,8 @@ func TestADistRunStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
 	}
 }
 
-// A release run that named no target and asked for no matrix builds the archive for the platform it is
-// standing on: the run a developer does to try what they just built is one archive, not eight cross-builds.
+// A dist run that names no target builds the single archive for the platform it is standing
+// on, not the whole cross matrix.
 func TestADistRunBuildsTheArchiveForThePlatformItIsRunOn(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1211,9 +1166,8 @@ func TestADistRunBuildsTheArchiveForThePlatformItIsRunOn(t *testing.T) {
 	}
 }
 
-// The container image builds the server inside itself, so the run that prepares it builds the
-// applications and the ffmpeg the image's architecture embeds, and then asks podman to build the image.
-// Building a server binary here would be a binary the image throws away.
+// A container run builds the two application bundles and the image architecture's ffmpeg, then
+// asks podman to build the image, which compiles the server inside itself.
 func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1238,12 +1192,9 @@ func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T
 	}
 }
 
-// The version the image reports is the one the run resolved, through the build argument the
-// Containerfile reads, and the image is tagged with that version beside `latest` so a machine reading
-// the tags knows which release it is standing on. An image built without it reports the development
-// fallback, which is the sign that nobody said what the image is. The run asks the container program the
-// machine has, and names the file the image is built from, because docker looks for Dockerfile and does
-// not find Containerfile.
+// The container step passes the resolved version to podman as a build argument and tags the
+// image with it beside latest, naming the Containerfile explicitly.
+// see the container-image-build maintainer note.
 func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1288,8 +1239,8 @@ func TestTheContainerImageOfADevelopmentBuildCarriesTheDevelopmentVersion(t *tes
 	}
 }
 
-// The image is linux-amd64, because that is the architecture the Containerfile's guard checks for. A
-// container run asked for another target is a run that would build an ffmpeg the image never embeds.
+// A container run is for linux-amd64, the architecture the Containerfile's own guard checks
+// for.
 func TestAContainerRunIsForTheArchitectureTheContainerfileChecksFor(t *testing.T) {
 	o, err := parseArgs([]string{"container"})
 	if err != nil {
@@ -1305,9 +1256,8 @@ func TestAContainerRunIsForTheArchitectureTheContainerfileChecksFor(t *testing.T
 	}
 }
 
-// A clean run removes what a release and a client build leave behind, and builds nothing: the
-// dependencies, the release output, and the contents of both bundles. A run that cleaned and then
-// rebuilt is a run that answered a question nobody asked.
+// A clean run removes the release output, the dependencies, and both bundles' contents, and
+// builds nothing.
 func TestACleanRunRemovesTheReleaseOutputTheDependenciesAndTheBundleContents(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1340,9 +1290,8 @@ func TestACleanRunIsACommandTheToolHonours(t *testing.T) {
 	}
 }
 
-// A second release run over the same sources compiles nothing: the bundles are current, the server
-// binary is current, and the phases that have nothing to do do not run. The ffmpeg and the archive are
-// what the run still does, because the archive is the thing a release run is for.
+// A second release run over current sources runs no client step and no server step, and still
+// writes the ffmpeg and the archive.
 func TestASecondRunForTheSameTargetRunsNoClientStepAndNoServerStep(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1384,17 +1333,14 @@ func TestARunSkipsTheServerStepWhenTheBinaryIsAlreadyBuilt(t *testing.T) {
 	}
 }
 
-// The server embeds both bundles, so a bundle built in this run makes the binary that embeds it out of
-// date. The tree says the binary is newer than every Go file it is built from, and the bundles are not
-// built: a run that rebuilt a bundle and left the binary standing ships the bundles the binary was built
-// before.
+// Rebuilding a bundle makes the embedding server binary out of date, so a run that rebuilds a
+// bundle rebuilds the server too.
 func TestARunThatRebuildsABundleRebuildsTheServer(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
 	tl.state = func(repo string, o options) (planState, error) {
-		// Before the run builds them, the bundles are not there and the binary is newer than every Go
-		// file. After the run builds them, the bundles are newer than the binary, which is what the tree
-		// says when a bundle is rebuilt.
+		// Before the run the bundles are absent and the binary is newer than every Go
+		// file; after it the bundles are newer than the binary.
 		for _, s := range *ran {
 			if s.label == subScanner || s.label == subAdmin {
 				return planState{scannerCurrent: true, adminCurrent: true}, nil
@@ -1444,13 +1390,12 @@ func TestAFirstRunBuildsTheApplicationsTheFfmpegAndTheServer(t *testing.T) {
 	}
 }
 
-// The native run is the build standing on the host the ffmpeg binaries are compiled on. The two
-// boundaries it crosses are the external commands and the source arriving from the network, and both are
-// stood in for here. The tree is a real tree, because what the run writes is a cache entry and a bundle
-// directory, and those are the directories the release reads.
+// The native run is the build standing on the host that compiles the binaries, with the
+// external commands and the network source stood in.
+// see the native-run maintainer note.
 
-// whatRan is what the native run touched, gathered by the fakes: the order it ran in, and the mode the
-// binaries the compile produced arrived with in the directory the build embeds from.
+// whatRan is what the native run harness recorded: the order the steps ran in and the mode the
+// produced binaries arrived with.
 type whatRan struct {
 	ran      []string
 	dropMode map[string]os.FileMode
@@ -1463,9 +1408,8 @@ func aNativeRun(t *testing.T, target string, failAt string) (*tool, *bytes.Buffe
 	return aNativeRunOn(t, target, failAt, aMachineForTarget(target))
 }
 
-// aNativeRunOn is the build standing on a host of a chosen architecture. The machine that is the target is
-// the one that compiles its own binaries; a compile across the two macOS architectures stands the host of
-// the other architecture in front of the same harness.
+// aNativeRunOn builds the harness on a host of a chosen architecture; a cross-architecture
+// macOS compile borrows it with the other host.
 func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*tool, *bytes.Buffer, *whatRan, string) {
 	t.Helper()
 
@@ -1473,8 +1417,8 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 
 	theManifestFile(t, repo)
 
-	// The directory the binaries are dropped into is the directory the server embeds, and the repository
-	// carries it empty for every target in the release matrix.
+	// The bundle directory receives the compiled binaries and is the directory the server
+	// embeds, kept empty in the repository for every matrix target.
 	if err := os.MkdirAll(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", target), 0755); err != nil {
 		t.Fatalf("the tree has no bundle directory for %s: %v", target, err)
 	}
@@ -1489,8 +1433,8 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 		installed: func(string) bool { return true },
 		errout:    io.Discard,
 
-		// The harness is the build standing on the host the binaries are compiled on, which is the one fact
-		// that makes the plan run the host's own toolchain instead of a container.
+		// The host the build stands on is the one fact that makes the plan use the
+		// host's own toolchain instead of a container.
 		machine: func() host { return theHost },
 
 		source: func(src ffmpegSource, manifest bundle.Manifest) error {
@@ -1514,9 +1458,8 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 
 			seen.ran = append(seen.ran, s.label)
 
-			// The directory the step works in is what the step before it made: the unpack is the
-			// command that creates the source tree, and a harness that runs no command makes the
-			// directory the way the command that would have run makes it.
+			// The step's working directory is what the unpack command would have
+			// created, and the fake creates it the same way.
 			if err := os.MkdirAll(s.dir, 0755); err != nil {
 				return err
 			}
@@ -1558,15 +1501,9 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 	return tl, out, seen, repo
 }
 
-// The binaries a host compiles are run by that host, adopted into the cache entry the manifest's record
-// names, and published. The run is not a skip: the operator asked for the ffmpeg of the machine they are
-// on, and the server and the archive that carry it are what that run was for. The targets a host compiles
-// are the two macOS ones, and this harness is theirs: what a container compiles is proven by the run the
-// container does, which the check tests cover.
-//
-// The manifest is the file the release reads, and the run leaves it byte for byte as it found it: nothing
-// the build learns about binaries it ran is written into a tracked file, because running them is the whole
-// of what the build needs to know about them.
+// The native run compiles its host's targets, runs the binaries, adopts them into the cache
+// entry the manifest names, and publishes; the manifest is never rewritten.
+// see the native-run maintainer note.
 func TestTheNativeRunCompilesRunsTheBinariesAndPublishes(t *testing.T) {
 	for _, target := range []string{"macos-arm64"} {
 		tl, out, seen, repo := aNativeRun(t, target, "")
@@ -1584,17 +1521,16 @@ func TestTheNativeRunCompilesRunsTheBinariesAndPublishes(t *testing.T) {
 			continue
 		}
 
-		// The sign is the host's own: the macOS compile signs what it compiled with the host's codesign, and
-		// the program the host signed is the program that host's loader accepts.
+		// The sign step is the host's own codesign, so the program that host signed is
+		// the program that host's loader accepts.
 		want := []string{"source", "unpack", "configure", "make", "strip", "sign", "prove"}
 
 		if !sameWords(seen.ran, want) {
 			t.Errorf("%s: the run did %v, want %v", target, seen.ran, want)
 		}
 
-		// The binaries are dropped where the build embeds from, and executable: the server materializes
-		// them from the cache and runs them, and binaries dropped unreadable are binaries the server
-		// cannot start.
+		// The binaries land in the embedded bundle directory as executables, because
+		// the server materializes and runs them from there.
 		for _, name := range []string{"ffmpeg", "ffprobe"} {
 			if seen.dropMode[name] != 0755 {
 				t.Errorf("%s: the %s was run as mode %o, want 0755", target, name, seen.dropMode[name])
@@ -1610,9 +1546,8 @@ func TestTheNativeRunCompilesRunsTheBinariesAndPublishes(t *testing.T) {
 			t.Errorf("%s: the run wrote into the manifest, the file the release reads and the operator commits", target)
 		}
 
-		// The cache entry is the one the manifest's record names, because that is the entry the next run
-		// looks for: binaries gzipped into an entry named some other way are binaries the next run
-		// compiles again.
+		// The binaries are adopted into the cache entry the manifest's record names,
+		// because that is the entry the next run looks in.
 		paths := ffmpegPathsFor(repo, bundle.ReadManifest(), target)
 
 		for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
@@ -1629,8 +1564,8 @@ func TestTheNativeRunCompilesRunsTheBinariesAndPublishes(t *testing.T) {
 			t.Errorf("%s: the bundle carries no licence text, and the archive quotes the one it ships", target)
 		}
 
-		// The licence text travels with the cache entry, so the run that reuses these binaries publishes
-		// the words this run wrote about them.
+		// The licence text travels inside the cache entry, so a run reusing these
+		// binaries publishes this run's licence text.
 		if !aFileIsThere(filepath.Join(paths.cached, "LICENCE.md")) {
 			t.Errorf("%s: the cache entry carries no licence text, so a reusing run has nothing to put in the archive", target)
 		}
@@ -1649,13 +1584,10 @@ func TestTheNativeRunCompilesRunsTheBinariesAndPublishes(t *testing.T) {
 	}
 }
 
-// Binaries the run refused are not cached and not published, and the manifest is left exactly as it was:
-// the build writes nothing into the file the release reads, before, during, or after a run of the binaries
-// it compiled.
-//
-// The same is true of the binaries a host compiled for the other macOS architecture: the compile runs on
-// that host, the run is the binaries' own execution, and when the host cannot execute what it compiled, the
-// run stops there with the binaries sitting in the bundle directory for the other Mac to run.
+// Binaries whose proving run failed are not cached and not published, the manifest stays
+// exactly as found, and the binaries wait in the bundle directory for the host that can run
+// them.
+// see the native-run maintainer note.
 func TestTheNativeRunPublishesNothingWhenTheRunOfTheBinariesFails(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -1698,8 +1630,8 @@ func TestTheNativeRunPublishesNothingWhenTheRunOfTheBinariesFails(t *testing.T) 
 			t.Errorf("%s: the licence text names binaries the run refused", tc.name)
 		}
 
-		// The binaries the refused run left behind are where the host that can run them looks for them,
-		// which is what the refusal names.
+		// The refused run leaves its binaries in the bundle directory of the host that
+		// can run them, which is what the refusal names.
 		for _, name := range []string{"ffmpeg", "ffprobe"} {
 			if !aFileIsThere(suppliedDropFor(paths, "macos-arm64")[name]) {
 				t.Errorf("%s: the %s the compile produced is not in %s for the other Mac to run", tc.name, name, paths.bundle)
@@ -1708,9 +1640,8 @@ func TestTheNativeRunPublishesNothingWhenTheRunOfTheBinariesFails(t *testing.T) 
 	}
 }
 
-// A failure is the one line the operator has to see on a machine whose output is being captured, and
-// the one line a log of the run should not carry as if it were progress. It reaches the operator's
-// standard error; the writer the run was given carries the run's own lines.
+// A failure reaches the operator's standard error, and the run's own writer carries only the
+// run's own lines.
 func TestAFailureReachesTheOperatorsStandardErrorAndNotTheRunsWriter(t *testing.T) {
 	tl, out, _ := fakeRun(released, "server")
 
@@ -1732,8 +1663,8 @@ func TestAFailureReachesTheOperatorsStandardErrorAndNotTheRunsWriter(t *testing.
 	}
 }
 
-// The run's own lines — the version it resolved, the notes, and every label and result — reach the
-// writer the run was given, and a run that succeeded leaves the operator's standard error empty.
+// The run's own lines reach the writer it was given, and a successful run leaves the
+// operator's standard error empty.
 func TestTheRunsOwnLinesReachTheWriterItWasGiven(t *testing.T) {
 	tl, out, _ := fakeRun(released, "")
 

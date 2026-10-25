@@ -26,10 +26,9 @@ import (
 	"rdio-scanner/cmd/build/buildinfo"
 )
 
-// The release run names the paths it refused to release, so the operator sees the work to commit. git
-// writes its porcelain status with the two status characters first, and the tool reads git's output
-// trimmed, which takes the leading space off the first line: a rule that counted characters from the
-// start of the line loses the first character of the first path.
+// the changed paths are the paths git says are not committed, so the
+// operator sees the work to commit.
+// see the version-changed-paths maintainer note.
 func TestTheChangedPathsAreThePathsGitSaysAreNotCommitted(t *testing.T) {
 	status := strings.TrimSpace(strings.Join([]string{
 		" M cmd/build/build.go",
@@ -52,16 +51,15 @@ func TestTheChangedPathsAreThePathsGitSaysAreNotCommitted(t *testing.T) {
 	}
 }
 
-// readSource is the only part of the tool that talks to git, so these tests ask it the questions in
-// the two places the answers matter: this repository, which is what gets built, and a scratch
-// repository that can be made to be the states this one is not — tagged, and tagged with something
-// that disagrees with the version it declares.
+// readSource is the only part of the tool that talks to git, so these
+// tests ask it in the two places the answers matter: this repository,
+// which is what gets built, and a scratch repository made to be the
+// states this one is not.
 
-// scratchRepository makes a repository in a temporary directory, with one empty commit and, when a
-// tag name is given, that tag naming the commit.
-//
-// The tag is written as a ref file rather than with git tag: a test has no business running the
-// command that creates tags, and git reads a loose ref the same way it reads one it made itself.
+// scratchRepository makes a repository in a temporary directory, with
+// one empty commit and, when a tag name is given, that tag naming it.
+// The tag is written as a ref file rather than with the git tag command.
+// see the version-test-scratch maintainer note.
 func scratchRepository(t *testing.T, tag string) string {
 	t.Helper()
 
@@ -126,8 +124,8 @@ func writeScratchVersionFile(t *testing.T, dir, contents string) {
 	}
 }
 
-// This is the state this repository is in right now, and the state every developer's clone is in:
-// a declared core, a commit no tag names.
+// readSource reads this repository's own state: a declared core and
+// a commit no tag names, the state every developer's clone is in.
 func TestReadSourceReadsThisRepositorysOwnState(t *testing.T) {
 	repo, err := repositoryRoot()
 	if err != nil {
@@ -157,12 +155,8 @@ func TestReadSourceReadsThisRepositorysOwnState(t *testing.T) {
 		t.Errorf("tag = %q, want what git says names HEAD exactly: %q", src.tag, want)
 	}
 
-	// Whether this tree happens to be dirty at the moment a test runs is not a fact about the tool, and
-	// asking git twice — once inside the tool and once here — lets anything else that touches the tree
-	// in between decide the answer. A suite running alongside this one created a directory, the tool saw
-	// it, and it was gone by the time this test asked. Dirtiness is proven where it can be made and held
-	// still: TestReadSourceReportsADirtyWorkingTreeWithoutLettingItIntoTheVersion and the clean scratch
-	// repositories beside it.
+	// A suite running alongside created a directory the tool saw and that was
+	// gone again; dirtiness is proven in the scratch repository beside it.
 }
 
 func TestReadSourceReportsTheTagThatNamesTheCommit(t *testing.T) {
@@ -190,8 +184,8 @@ func TestReadSourceReportsTheTagThatNamesTheCommit(t *testing.T) {
 	}
 }
 
-// A tag that names a different commit is not a tag on this build, and treating it as one would
-// suppress the commit hash for a reason nobody chose.
+// readSource reports no tag when the tag names another commit: a tag
+// elsewhere must not suppress this build's commit hash.
 func TestReadSourceReportsNoTagWhenTheTagNamesAnotherCommit(t *testing.T) {
 	dir := scratchRepository(t, "v7.9.0")
 	writeScratchVersionFile(t, dir, "8.0.0\n")
@@ -217,8 +211,8 @@ func TestReadSourceReportsNoTagWhenTheTagNamesAnotherCommit(t *testing.T) {
 	}
 }
 
-// The two sources disagreeing about the same commit is the state the owner asked to fail loudly, and
-// this is it against a real git repository rather than a table of strings.
+// readSource stops the build when a real tag disagrees with the
+// declared core: two sources disagreeing about one commit fails loudly.
 func TestARealTagThatDisagreesWithTheDeclaredCoreStopsTheBuild(t *testing.T) {
 	dir := scratchRepository(t, "v7.9.0")
 	writeScratchVersionFile(t, dir, "8.0.0\n")
@@ -244,8 +238,8 @@ func TestARealTagThatDisagreesWithTheDeclaredCoreStopsTheBuild(t *testing.T) {
 	}
 }
 
-// A dirty working tree is said out loud and kept out of the version: the version describes a commit,
-// and uncommitted changes are not one.
+// readSource reports a dirty working tree without letting it into
+// the version: the version describes a commit, not uncommitted work.
 func TestReadSourceReportsADirtyWorkingTreeWithoutLettingItIntoTheVersion(t *testing.T) {
 	dir := scratchRepository(t, "")
 	writeScratchVersionFile(t, dir, "8.0.0\n")
@@ -277,8 +271,8 @@ func TestReadSourceReportsADirtyWorkingTreeWithoutLettingItIntoTheVersion(t *tes
 	}
 }
 
-// A repository with no VERSION.txt has not said what version it is, and the scratch repository is
-// the only place that can be made to be one.
+// readSource reports an undeclared version as assumed: a repository
+// with no VERSION.txt has not said what version it is.
 func TestReadSourceReportsAVersionTheRepositoryNeverDeclaredAsAssumed(t *testing.T) {
 	dir := scratchRepository(t, "")
 
@@ -296,14 +290,9 @@ func TestReadSourceReportsAVersionTheRepositoryNeverDeclaredAsAssumed(t *testing
 	}
 }
 
-// A scratch directory with no repository above it. Both tests below are about git refusing a tree it cannot answer
-// for, and git answers by walking upward: when the scratch a test makes sits inside a repository — which is where this
-// repository's own tooling puts its scratch — git finds that enclosing tree and answers for it, and the premise the
-// test states would depend on wherever the operator happened to point TMPDIR. GIT_CEILING_DIRECTORIES names the
-// boundary git agrees not to cross, and the tree git is asked about has to sit strictly inside that boundary, because
-// git treats a ceiling it is pointed at as the tree it was asked about and walks past it. The paths are resolved
-// because git compares resolved paths, and scratch made under a symlinked temporary directory would otherwise be
-// searched beyond the boundary.
+// scratchWithoutARepository is a scratch directory no repository
+// covers, which is what the tests below need git to refuse.
+// see the version-test-scratch maintainer note.
 func scratchWithoutARepository(t *testing.T) string {
 	t.Helper()
 
@@ -323,8 +312,8 @@ func scratchWithoutARepository(t *testing.T) string {
 	return dir
 }
 
-// A directory that is not a repository cannot answer what it is built from, and saying so is better
-// than building something whose version is a guess.
+// readSource refuses a directory that is not a repository: saying so
+// beats building something whose version is a guess.
 func TestReadSourceRefusesADirectoryThatIsNotARepository(t *testing.T) {
 	dir := scratchWithoutARepository(t)
 	writeScratchVersionFile(t, dir, "8.0.0\n")
@@ -334,8 +323,8 @@ func TestReadSourceRefusesADirectoryThatIsNotARepository(t *testing.T) {
 	}
 }
 
-// A VERSION.txt that holds something else stops the tool before it asks git anything, which is the
-// order the contract states.
+// readSource refuses an unreadable VERSION.txt before asking git
+// anything, the order the contract states.
 func TestReadSourceRefusesAVersionFileItCannotReadBeforeAskingGit(t *testing.T) {
 	dir := scratchRepository(t, "")
 	writeScratchVersionFile(t, dir, "v8.0.0\n")
@@ -350,10 +339,10 @@ func TestReadSourceRefusesAVersionFileItCannotReadBeforeAskingGit(t *testing.T) 
 	}
 }
 
-// A tree git cannot answer for is the failure the operator can do something about, and the message has
-// to say who was asked, where the tool asked, and what was asked. git's own complaint is the part that
-// says what to do — a tree that is not a repository, a commit no tag names — and an error that says
-// only "exit status 128" sends the operator to run git themselves to learn what the tool already knew.
+// a tree git cannot answer for names git, the directory, and the
+// command, because git's own complaint is the part that says what
+// to do and exit status 128 alone does not.
+// see the version-git-errors maintainer note.
 func TestATreeGitCannotAnswerForNamesGitTheDirectoryAndTheCommand(t *testing.T) {
 	dir := scratchWithoutARepository(t)
 

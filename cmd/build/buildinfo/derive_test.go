@@ -20,9 +20,8 @@ import (
 	"testing"
 )
 
-// Derive is where the version a build carries is decided, from the core the repository declared and
-// what git says about the commit being built. There are exactly four shapes it can produce, and a
-// build that produced a fifth would be a version no client can compare against another.
+// Derive decides the version a build carries from the declared core
+// and what git says about the commit, and produces four shapes.
 
 func TestDeriveProducesTheFourShapesAndNoOther(t *testing.T) {
 	cases := []struct {
@@ -109,8 +108,8 @@ func TestDeriveProducesTheFourShapesAndNoOther(t *testing.T) {
 				t.Errorf("version = %q, want %q", got, c.want)
 			}
 
-			// Whatever a prerelease or a commit adds, the core stays the part a pinned wire
-			// contract can pin.
+			// whatever a prerelease or a commit adds, the core stays the part
+			// a pinned wire contract can pin.
 			if version.Core() != c.core {
 				t.Errorf("core = %q, want the declared core %q", version.Core(), c.core)
 			}
@@ -118,8 +117,7 @@ func TestDeriveProducesTheFourShapesAndNoOther(t *testing.T) {
 	}
 }
 
-// A tag that names a different core than VERSION.txt is two sources saying two different things about
-// the same commit, and the only honest answer is to stop and show both.
+// Derive refuses a tag naming a different core than the declared one.
 func TestDeriveRefusesATagThatDisagreesWithTheDeclaredCore(t *testing.T) {
 	_, err := Derive("8.0.0", "v7.9.0", "db79311", "")
 	if err == nil {
@@ -133,8 +131,7 @@ func TestDeriveRefusesATagThatDisagreesWithTheDeclaredCore(t *testing.T) {
 	}
 }
 
-// A tag that is not a version at all cannot be compared with the declared core, so it is refused
-// rather than treated as "some tag", which is what would silently suppress the commit hash.
+// Derive refuses a tag that is not a version instead of treating it as some tag.
 func TestDeriveRefusesATagThatIsNotAVersion(t *testing.T) {
 	for _, tag := range []string{"release-2026", "v8", "v8.0.0+gdb79311", "v8.0.0-beta..1"} {
 		_, err := Derive("8.0.0", tag, "db79311", "")
@@ -149,8 +146,7 @@ func TestDeriveRefusesATagThatIsNotAVersion(t *testing.T) {
 	}
 }
 
-// A prerelease is a slot with rules, and a name that does not fit them is a name that would produce
-// a version string a client cannot parse.
+// Derive refuses a prerelease name that is not a semver prerelease.
 func TestDeriveRefusesAPreReleaseNameThatIsNotASemverPrerelease(t *testing.T) {
 	for _, pre := range []string{"beta 1", "beta..1", "beta.", "beta+", "beta1+gdb79311", "01"} {
 		_, err := Derive("8.0.0", "", "db79311", pre)
@@ -165,8 +161,7 @@ func TestDeriveRefusesAPreReleaseNameThatIsNotASemverPrerelease(t *testing.T) {
 	}
 }
 
-// An untagged build is identified by the commit it was built from. Without one, the version would
-// claim to be a release while saying nothing about which build it was.
+// Derive refuses an untagged build that does not know its commit.
 func TestDeriveRefusesAnUntaggedBuildThatDoesNotKnowItsCommit(t *testing.T) {
 	_, err := Derive("8.0.0", "", "", "")
 	if err == nil {
@@ -178,8 +173,7 @@ func TestDeriveRefusesAnUntaggedBuildThatDoesNotKnowItsCommit(t *testing.T) {
 	}
 }
 
-// The core a build carries is what the pinned wire contract compares against, so it has to be
-// readable on its own and not only by taking the version string apart.
+// the version exposes its core apart from its string, for the pinned wire contract.
 func TestTheVersionCarriesItsPartsApartFromItsString(t *testing.T) {
 	version, err := Derive("8.0.0", "", "db79311", "beta1")
 	if err != nil {

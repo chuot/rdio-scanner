@@ -27,14 +27,13 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// The reads a record names are held against files, not against programs: the targets that carry them are
-// targets no program on the build host runs. These fixtures are the shapes each read was written to refuse,
-// and the two pairs this build has really produced, both read out of the files they are: the FreeBSD pair the
-// pinned recipe compiled, which the reads must accept, and the linux-amd64 pair this build already publishes,
-// which the FreeBSD reads must refuse.
+// The reads hold against files: no host runs these targets. The fixtures are the shapes each
+// read refuses plus two measured pairs: the FreeBSD pair the pinned recipe produced and the
+// published linux-amd64 pair to refuse.
+// see the elf-check-fixtures maintainer note.
 
-// The program headers the two measured pairs declare, read out of the files themselves with readelf -lW. The
-// read that asks whether a loader was linked in asks it of a file with these in it.
+// program headers of the two measured pairs, read out of the files with readelf -lW: the
+// loader-linked-in read is asked of a file with these.
 const (
 	elfSegmentLoad        = 1
 	elfSegmentNote        = 4
@@ -61,9 +60,9 @@ type anELFProgramFixture struct {
 	noSegments bool // the file declares no program headers at all
 }
 
-// The pair the pinned FreeBSD recipe produced, read out of the files that pair is: the ten program headers it
-// declares, and the three lines its own comment section carries. A rule that refused this pair would refuse
-// the release.
+// theMeasuredFreeBSDPair is the pinned recipe's FreeBSD pair, read off the files: its ten
+// program headers and three comment lines. The reads must accept it: refusing this pair would
+// refuse the release.
 var theMeasuredFreeBSDPair = anELFProgramFixture{
 	class:    elfClass64,
 	fileType: elfTypeExec,
@@ -85,10 +84,9 @@ var theMeasuredFreeBSDPair = anELFProgramFixture{
 	},
 }
 
-// The ffmpeg this build already publishes for linux-amd64, read out of the gzip in that target's bundle
-// directory: the same source, a static link, and neither the FreeBSD sysroot nor FreeBSD's own objects in the
-// link. The FreeBSD reads have to refuse it, because a read that accepted a Linux pair would be accepting a
-// program the release it was attached to cannot start.
+// thePairThisBuildCompilesForLinux is the published linux-amd64 ffmpeg, read off the bundle's
+// gzip: static, no FreeBSD sysroot or FreeBSD objects in the link. The FreeBSD reads must
+// refuse it: that release cannot start it.
 var thePairThisBuildCompilesForLinux = anELFProgramFixture{
 	class:    elfClass64,
 	fileType: elfTypeExec,
@@ -105,8 +103,8 @@ var thePairThisBuildCompilesForLinux = anELFProgramFixture{
 	comments: []string{"GCC: (Debian 14.2.0-19) 14.2.0"},
 }
 
-// theShapeOf copies the accepted shape and changes one thing about it, which is how a table of refusals
-// says "this one part of the pair is wrong" instead of writing a different file for every row.
+// theShapeOf copies the accepted shape and changes one thing, so a table of refusals says one
+// part is wrong without writing a new file per row.
 func theShapeOf(change func(*anELFProgramFixture)) anELFProgramFixture {
 	fixture := theMeasuredFreeBSDPair
 
@@ -118,9 +116,8 @@ func theShapeOf(change func(*anELFProgramFixture)) anELFProgramFixture {
 	return fixture
 }
 
-// anELFProgramWrittenTo writes a program of that shape into a directory and answers with its path. The
-// bytes are the ones a read reaches: the ident, the header, the program header table, the sections, and
-// the table that names them, each at the width the file's own class says it has.
+// anELFProgramWrittenTo writes a program of the fixture's shape into dir and answers with its
+// path; the bytes sit at the file's own class widths.
 func anELFProgramWrittenTo(t *testing.T, dir string, name string, fixture anELFProgramFixture) string {
 	t.Helper()
 
@@ -151,8 +148,8 @@ func theELFProgramBytes(fixture anELFProgramFixture) []byte {
 		headerSize, entrySize, shentsize = 64, 56, 64
 	}
 
-	// The code is four bytes of padding: no read looks inside a program's machine code, and the point of
-	// these fixtures is what the file says about how it was made.
+	// The code is four bytes of padding: no read looks inside machine code, and the
+	// fixtures speak only of how the file claims it was made.
 	code := []byte{0x2c, 0x60, 0x75, 0x02}
 
 	comment := []byte{0}
@@ -288,9 +285,8 @@ func theELFProgramBytes(fixture anELFProgramFixture) []byte {
 	return body
 }
 
-// anELFByteLayout writes the same ELF field at the width the file's class says it has: a 32-bit program
-// header table read at 64-bit widths invents numbers, and a fixture that a read refuses for the wrong
-// reason proves nothing.
+// anELFByteLayout writes each ELF field at the width the file's class names, so a fixture is
+// never refused for the wrong reason.
 type anELFByteLayout struct {
 	body    []byte
 	at      int
@@ -319,8 +315,8 @@ func (l *anELFByteLayout) word(v uint64) {
 	l.at += 4
 }
 
-// The pair the pinned FreeBSD recipe produced is what the reads have to accept: it is the pair the release
-// ships, and a rule that refused it would refuse the release.
+// the reads accept the exact pair the pinned FreeBSD recipe produced, the pair the release
+// ships.
 func TestTheELFReadsAcceptThePairTheFreeBSDCompileProduced(t *testing.T) {
 	record := bundle.ReadManifest().Targets["freebsd-amd64"]
 
@@ -335,9 +331,8 @@ func TestTheELFReadsAcceptThePairTheFreeBSDCompileProduced(t *testing.T) {
 	}
 }
 
-// Every name a record carries exists to refuse one shape, and the sentence is what the operator acts on:
-// it names what was read, what the record asked for, and that the machine standing here runs none of these
-// programs.
+// each read name refuses the one shape it was written for, and the refusal sentence names what
+// was read, what was asked, and that nothing was run.
 func TestEveryELFReadRefusesTheShapeItWasWrittenToRefuse(t *testing.T) {
 	record := bundle.ReadManifest().Targets["freebsd-amd64"]
 
@@ -367,8 +362,8 @@ func TestEveryELFReadRefusesTheShapeItWasWrittenToRefuse(t *testing.T) {
 			says:    []string{"AArch64", "x86-64"},
 		},
 		{
-			// What Debian's own ld.bfd stamps on this same source and this same sysroot: a valid x86-64
-			// ELF program that is not a FreeBSD one.
+			// what Debian's own ld.bfd stamps on this source and sysroot: a valid
+			// x86-64 ELF program that is not a FreeBSD one.
 			read:    "osabi_freebsd",
 			fixture: theShapeOf(func(f *anELFProgramFixture) { f.osABI = elfOSABILinux }),
 			says:    []string{"GNU (3)", "FreeBSD (9)"},
@@ -386,8 +381,8 @@ func TestEveryELFReadRefusesTheShapeItWasWrittenToRefuse(t *testing.T) {
 			says: []string{"PT_INTERP", "PT_DYNAMIC"},
 		},
 		{
-			// The pair a build host that ignored its own --sysroot would produce: linked by the host's
-			// linker, against the host's own libraries.
+			// the pair a host producing past its own --sysroot would leave: the
+			// host's linker, the host's libraries.
 			read: "comment",
 			fixture: theShapeOf(func(f *anELFProgramFixture) {
 				f.comments = []string{"GCC: (Debian 14.2.0-19) 14.2.0"}
@@ -395,8 +390,8 @@ func TestEveryELFReadRefusesTheShapeItWasWrittenToRefuse(t *testing.T) {
 			says: []string{"lld", "GCC: (Debian 14.2.0-19) 14.2.0", "/sysroot"},
 		},
 		{
-			// Linked by lld, against the sysroot, and the FreeBSD startup file and library never made it
-			// into the link: the comment section says so by naming no FreeBSD build.
+			// lld with the sysroot but no FreeBSD crt or libc in the link: the
+			// comment section names no FreeBSD build.
 			read: "comment",
 			fixture: theShapeOf(func(f *anELFProgramFixture) {
 				f.comments = []string{"Linker: Debian LLD 19.1.7", "Debian clang version 19.1.7 (3+b1)"}
@@ -450,8 +445,8 @@ func TestEveryELFReadRefusesTheShapeItWasWrittenToRefuse(t *testing.T) {
 	}
 }
 
-// A pair whose program headers are gone says nothing about whether a loader was linked in, and a read that
-// accepted it would be accepting a pair it had not read.
+// a pair with no program headers says nothing about a linked-in loader, and a read that
+// accepted it would accept a pair it had not read.
 func TestAProgramWithNoProgramHeadersSaysNothingAboutHowItWasLinked(t *testing.T) {
 	record := bundle.ReadManifest().Targets["freebsd-amd64"]
 
@@ -469,11 +464,10 @@ func TestAProgramWithNoProgramHeadersSaysNothingAboutHowItWasLinked(t *testing.T
 	}
 }
 
-// aBuildCompilingInAContainer is the ffmpeg phase standing on a Linux host that has the container program, whose
-// container steps are answered by writing what the compile step is told to produce: the pair the test describes, in
-// the directory the container mounts. The read that follows is the build's own, reaching real files. Where a target's
-// record pins a software development kit its compile reads, the home directory this run stands in has that tree
-// prepared in it, because the plan asks for the tree before it asks for a container.
+// aBuildCompilingInAContainer stands the ffmpeg phase on a host with the container program:
+// the steps write the test's pair into the mounted directory, and the build's own read then
+// reaches real files.
+// see the container-compile-test-harness maintainer note.
 func aBuildCompilingInAContainer(t *testing.T, repo string, target string, produced func(t *testing.T, dir string, name string)) (*tool, *bytes.Buffer) {
 	t.Helper()
 
@@ -502,8 +496,8 @@ func aBuildCompilingInAContainer(t *testing.T, repo string, target string, produ
 				return nil
 			}
 
-			// The container compiles in the directory the build mounts at /work, and the pair it produced
-			// is sitting there when the plan's steps are done. That is where the build looks for it.
+			// the container compiles in the directory mounted at /work, and the
+			// pair it produced sits there when the plan's steps end.
 			dir := filepath.Join(ffmpegPathsFor(repo, manifest, target).scratch, sourceDir(manifest))
 
 			if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -521,9 +515,8 @@ func aBuildCompilingInAContainer(t *testing.T, repo string, target string, produ
 	return tl, out
 }
 
-// A FreeBSD run compiles the pair in the container, reads it, and says what it read: no conformance
-// container is prepared, nothing is run, and the line the operator is given names the reads instead of
-// conversions nobody made.
+// a FreeBSD run compiles the pair in the container, reads it, and reports what it read, with
+// no conformance container prepared and nothing run.
 func TestAFreeBSDRunReadsThePairItCompiledAndSaysWhatItReads(t *testing.T) {
 	repo := t.TempDir()
 
@@ -576,10 +569,9 @@ func TestAFreeBSDRunReadsThePairItCompiledAndSaysWhatItReads(t *testing.T) {
 	}
 }
 
-// A pair that fails one read is refused before any of it is cached, licensed, or published, because a release
-// that carried it would carry a program this feature cannot say anything about. The pair here is the one this
-// build already compiles for linux-amd64: a static x86-64 ELF program that is not a FreeBSD one, which is what
-// a cross compile that never read its sysroot leaves behind.
+// a pair failing one read is refused before any of it is cached, licensed, or published: the
+// pair here is the published linux-amd64 one, left by a cross compile that never read its
+// sysroot.
 func TestAFreeBSDRunKeepsNothingForAPairItsReadRefuses(t *testing.T) {
 	repo := t.TempDir()
 

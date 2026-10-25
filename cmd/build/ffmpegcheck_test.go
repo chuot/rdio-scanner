@@ -24,27 +24,25 @@ import (
 	"testing"
 )
 
-// These are component tests of the ffmpeg check: the compiled ffmpeg is run through the argument
-// list the converter actually uses, and what comes back is read the way the server's audio endpoints
-// read it. The commands are answered by a stand-in so that the check itself is what is being tested;
-// the real compiled binaries are run by the build itself, not by these tests.
+// Component tests of the ffmpeg check: the commands are answered by a stand-in, so
+// the check itself is what these tests exercise.
+// see the ffmpeg-check-shipping-gate maintainer note.
 
 // anM4A is a converted recording whose first boxes say it is what the server stores.
 func anM4A() []byte {
 	return []byte{0, 0, 0, 24, 'f', 't', 'y', 'p', 'M', '4', 'A', ' ', 0, 0, 0, 0}
 }
 
-// aStandIn answers the ffmpeg check's commands the way a working ffmpeg answers them, and keeps
-// what it was asked to run. A duration or a set of tags it does not override is the one a working
-// build reports.
+// aStandIn answers the ffmpeg check's commands the way a working ffmpeg does, and
+// keeps what it was asked to run. Any duration or tags it does not override are
+// the ones a working build reports.
 type aStandIn struct {
 	runs     []string
 	duration map[string]string
 	tags     map[string]map[string]string
 
-	// codecs are the registry lines the program answers its codec probe with. A stand-in that does
-	// not override them is a working build: the audio codecs the converter asks of ffmpeg, and
-	// nothing that decodes or encodes video.
+	// codecs are the registry lines the program answers its codec probe with. The
+	// default is a working build: the converter's audio codecs, no video codec.
 	codecs []string
 }
 
@@ -117,8 +115,8 @@ func isProbe(argv []string) bool {
 	return false
 }
 
-// aCheckThatRefuses answers the conversions with one failure and the probes with nothing, which is
-// what a trimmed build that left something out looks like.
+// aCheckThatRefuses answers the conversions with one failure and the probes with
+// nothing, which is what a trimmed build that left something out looks like.
 func aCheckThatRefuses(reason string) command {
 	return func(argv []string, stdin []byte) ([]byte, error) {
 		if isProbe(argv) {
@@ -149,8 +147,8 @@ func anFFMPEGCheck(t *testing.T, execute command) (checkReport, error) {
 	}, t.TempDir())
 }
 
-// The check is only worth having if it runs the argument list the server actually runs, so that list
-// comes from the converter itself and the two cannot drift apart.
+// the check runs the converter's own argument list, taken from the converter itself
+// so the two cannot drift apart.
 func TestTheFFMPEGCheckRunsTheCompiledFfmpegThroughTheConvertersOwnArgumentList(t *testing.T) {
 	stand := &aStandIn{}
 
@@ -192,15 +190,15 @@ func TestTheFFMPEGCheckRunsTheCompiledFfmpegThroughTheConvertersOwnArgumentList(
 		t.Error("the check never ran the recording the loudness-target level asks for")
 	}
 
-	// The question about what the program registers is asked of that program, quietly, and asks for
-	// nothing else: it is the program's own list, read the way the operator reads it.
+	// the codec probe asks only for the program's own list, quietly, read the way the
+	// operator reads it.
 	if !wasRun(registry, "-hide_banner -codecs") {
 		t.Errorf("the check asked what the program registers with %s", strings.Join(registry, " and "))
 	}
 }
 
-// splitTheCodecProbe takes the runs of one program apart into the conversions and the question about
-// what the program registers.
+// splitTheCodecProbe takes one program's runs apart into the conversions and the
+// codec probe.
 func splitTheCodecProbe(runs []string) (conversions []string, registry []string) {
 	for _, run := range runs {
 		if strings.Contains(run, "-codecs") {
@@ -214,8 +212,8 @@ func splitTheCodecProbe(runs []string) (conversions []string, registry []string)
 	return conversions, registry
 }
 
-// A trimmed build that left out something the converter needs is exactly what this check exists to
-// catch, and it has to stop the build rather than warn about it.
+// a trimmed build missing something the converter needs stops the build instead of
+// warning about it.
 func TestTheFFMPEGCheckRefusesACompiledFfmpegThatCannotConvert(t *testing.T) {
 	_, err := anFFMPEGCheck(t, aCheckThatRefuses("Error opening output files: Invalid argument"))
 	if err == nil {
@@ -235,8 +233,8 @@ func TestTheFFMPEGCheckRefusesAnOutputThatIsNotTheRecordingTheServerStores(t *te
 	}
 }
 
-// The filters pad the recording to three seconds. A build whose normalised output is not that long is
-// not the build the converter was written for.
+// the padded conversion comes back the three seconds the filters ask for, the length
+// the converter was written for.
 func TestTheFFMPEGCheckConfirmsThePaddedRecordingIsTheLengthTheFiltersAskFor(t *testing.T) {
 	stand := &aStandIn{duration: map[string]string{
 		"wav-norm.m4a": "1.500000",
@@ -247,8 +245,8 @@ func TestTheFFMPEGCheckConfirmsThePaddedRecordingIsTheLengthTheFiltersAskFor(t *
 	}
 }
 
-// The plain level does not pad, and a plain recording that came back three seconds long is a build
-// that applied filters nobody asked for.
+// the plain level does not pad: a plain recording back at three seconds means
+// filters nobody asked for ran.
 func TestTheFFMPEGCheckConfirmsThePlainRecordingIsNotPadded(t *testing.T) {
 	stand := &aStandIn{duration: map[string]string{
 		"wav-enabled.m4a": "3.010667",
@@ -269,8 +267,8 @@ func TestTheFFMPEGCheckConfirmsTheTagsReachTheConvertedRecording(t *testing.T) {
 	}
 }
 
-// The duration and the tags are read out of the converted recording with the bundled ffprobe, given a
-// file rather than a pipe: ffprobe cannot get a duration from a stream it cannot seek.
+// the check probes the converted recording as a file, because ffprobe gets no
+// duration from an unseekable stream.
 func TestTheFFMPEGCheckProbesTheConvertedRecordingAsAFile(t *testing.T) {
 	probed := []string{}
 
@@ -316,8 +314,8 @@ func TestTheFFMPEGCheckProbesTheConvertedRecordingAsAFile(t *testing.T) {
 	}
 }
 
-// The recordings the check feeds ffmpeg are the ones the dirwatch hands the converter: the same tone,
-// as a WAV and as an MP3.
+// the check feeds ffmpeg the recordings the dirwatch hands the converter: the same
+// tone as a WAV and as an MP3.
 func TestTheFFMPEGCheckFeedsItTheRecordingsTheServerAccepts(t *testing.T) {
 	inputs := checkInputs()
 
@@ -342,10 +340,10 @@ func TestTheFFMPEGCheckFeedsItTheRecordingsTheServerAccepts(t *testing.T) {
 	}
 }
 
-// theAudioCodecLines are what a working build's ffmpeg answers its codec probe with: the PCM and MP3
-// decoders the converter demuxes and decodes, and the AAC encoder it writes the recording with. The
-// last line is a codec descriptor — every ffmpeg carries those, and a program that registers no video
-// decoder and no video encoder is audio-only with that line in its list.
+// theAudioCodecLines are a working build's answer to its codec probe: the PCM and
+// MP3 decoders the converter demuxes and decodes, the AAC encoder it writes with,
+// and a codec descriptor. Every ffmpeg carries descriptors, and no video decoder or
+// encoder in the list still means an audio-only program.
 var theAudioCodecLines = []string{
 	"D.A..S pcm_s16le            PCM signed 16-bit little-endian",
 	"D.A..S pcm_s16be            PCM signed 16-bit big-endian",
@@ -365,9 +363,8 @@ var theAudioCodecNames = []string{
 	"mp3float", "mp3", "aac",
 }
 
-// aCodecRegistry is the answer ffmpeg gives `-codecs`: the legend, the separator, and the lines it is
-// given. The legend and the separator are the ones the pinned release prints, so the check reads the
-// answer the way the program prints it.
+// aCodecRegistry is ffmpeg's answer to `-codecs`: the legend, the separator, and the
+// lines it is given, pinned to what the release the build uses prints.
 func aCodecRegistry(lines ...string) []byte {
 	body := "Codecs:\n" +
 		" D..... = Decoding supported\n" +
@@ -400,10 +397,9 @@ func namesTheCodecProbe(argv []string) bool {
 	return false
 }
 
-// The ffmpeg this project ships is compiled for audio: the recipe says --disable-everything and enables
-// audio components only. Binaries that register a video decoder or encoder are not that program, and
-// the check is the gate every ffmpeg binary passes through — the compiled ones inside the container that
-// can run them, and the adopted ones on the host that is their target.
+// the shipped ffmpeg is compiled for audio: the recipe disables everything and
+// enables audio components only, so a program registering a video codec is refused.
+// see the ffmpeg-check-shipping-gate maintainer note.
 func TestTheFFMPEGCheckRefusesAFfmpegThatRegistersVideoCodecs(t *testing.T) {
 	stand := &aStandIn{codecs: []string{
 		"D.A.L. mp3                  MP3 (MPEG audio layer 3)",
@@ -422,16 +418,16 @@ func TestTheFFMPEGCheckRefusesAFfmpegThatRegistersVideoCodecs(t *testing.T) {
 		}
 	}
 
-	// The question is asked of the compiled program, inside the container the check runs it in: the
-	// refusal is about the binaries the build is about to ship, and not about the machine the build stands on.
+	// the codec probe is asked of the compiled program inside the container, so the
+	// refusal is about the binaries the build ships, not the build host.
 	if !wasRun(stand.asked("/work/ffmpeg-9.0.2/ffmpeg"), "-codecs") {
 		t.Error("the check asked the machine it stands on what it registers, and not the compiled binaries")
 	}
 }
 
-// The check records the codecs the program registers, so the run's report says what the binaries are
-// and not only what they converted. The codec descriptors every ffmpeg carries are not codecs the
-// program registers: they decode and encode nothing.
+// the check records the codecs the program registers, so the report says what the
+// binaries are, not only what they converted; descriptors that convert nothing do
+// not count as registered codecs.
 func TestTheFFMPEGCheckRecordsTheCodecsTheProgramRegisters(t *testing.T) {
 	report, err := anFFMPEGCheck(t, (&aStandIn{}).run)
 	if err != nil {

@@ -24,14 +24,14 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// The release matrix is one list, and the two facts it carries are kept apart: the platforms this
-// project ships, and which of them carry an ffmpeg. The first is a product decision and lives here;
-// the second is a build fact and lives in the manifest. These tests read the list the tool composes
-// from, and refuse a target the matrix has no place for.
+// the release matrix is one list, and the two facts it carries are
+// kept apart: the platforms this project ships, a product decision
+// that lives here, and which of them carry an ffmpeg, a build fact
+// that lives in the manifest.
 
-// The eight platforms are the release, and the names are the names the archives carry. macos is the
-// name this project ships, and darwin is the operating system go builds it for: the two are not the
-// same word, and a matrix that used one for both builds a macos release for the wrong binary.
+// the eight platforms are the release, named as the archives are
+// named: macos is the shipped name and darwin the operating system
+// word go builds it for, and they are not interchangeable.
 func TestTheReleaseMatrixIsTheEightPlatformsThisProjectShips(t *testing.T) {
 	want := []string{
 		"freebsd-amd64",
@@ -53,10 +53,10 @@ func TestTheReleaseMatrixIsTheEightPlatformsThisProjectShips(t *testing.T) {
 		t.Errorf("the release matrix is %v, want %v", got, want)
 	}
 
-	// The operating instructions an administrator reads are in the guide the archive carries: the service
-	// chapter carries a sub-section named for each system the release matrix ships. A matrix that named a
-	// system the guide has no sub-section for ships an archive whose only document says nothing about the
-	// system the reader is installing on.
+	// the guide the archive carries has a service sub-section named for each
+	// system the matrix ships, and a matrix naming a system the guide has
+	// none for ships an archive whose document says nothing about the
+	// system the reader installs on.
 	repo, err := repositoryRoot()
 	if err != nil {
 		t.Fatalf("the tool cannot find the repository it is releasing: %v", err)
@@ -111,9 +111,9 @@ func TestTheReleaseMatrixIsTheEightPlatformsThisProjectShips(t *testing.T) {
 	}
 }
 
-// serviceChapterHeadings lists the subsection titles of the guide's service chapter: the h3 headings
-// between the chapter's own heading and the next chapter. The release matrix names the systems the
-// guide has to carry instructions for, and these headings are where the guide says so.
+// serviceChapterHeadings lists the subsection titles of the guide's
+// service chapter: the h3 headings before the next chapter, where
+// the guide says which systems it carries instructions for.
 func serviceChapterHeadings(guide string) []string {
 	const chapter = `id="ch-21-running-as-a-service"`
 
@@ -148,9 +148,9 @@ func serviceChapterHeadings(guide string) []string {
 	return headings
 }
 
-// Which targets carry an ffmpeg is answered by the manifest, not by a second list. Every release target has
-// a record, and every record names a container this build compiles the ffmpeg pair in: after this feature no
-// target's ffmpeg is something the build is handed instead of compiled.
+// the targets that carry an ffmpeg are the ones the manifest records,
+// not a second list: every release target has a record, and every
+// record names a container this build compiles the pair in.
 func TestTheTargetsThatCarryAnFfmpegAreTheOnesTheManifestRecords(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -203,10 +203,10 @@ func TestADistRunBuildsTheTargetItIsAskedFor(t *testing.T) {
 	}
 }
 
-// The list a release run walks is decided once, before any of it runs: the target the operator named,
-// every platform the matrix releases when the whole matrix was asked for, and the release target of the
-// machine running it when neither was. A machine the project releases nothing for is refused naming the
-// flag that asks for the matrix, because building nothing at all is not what a release run is for.
+// the dist target list is the named target, the whole matrix, or the
+// machine's release target, decided once before the run walks it; a
+// machine nothing is released for is refused naming the matrix flag,
+// because building nothing at all is not what a release run is for.
 func TestTheDistTargetListIsTheNamedTargetTheMatrixOrTheMachine(t *testing.T) {
 	named, err := distTargets(options{target: "windows-amd64"}, "linux", "arm64")
 	if err != nil {
@@ -235,8 +235,8 @@ func TestTheDistTargetListIsTheNamedTargetTheMatrixOrTheMachine(t *testing.T) {
 		t.Errorf("dist walks %v, want the release target of the machine running it", targetWords(machine))
 	}
 
-	// The macOS name is not the operating system go builds it for: a machine running darwin is a
-	// macos release target, and the archive it builds is named for macos.
+	// a machine running darwin is a macos release target, and the archive
+	// it builds is named for macos.
 	apple, err := distTargets(options{}, "darwin", "arm64")
 	if err != nil {
 		t.Fatalf("distTargets: %v", err)
@@ -266,8 +266,8 @@ func targetWords(targets []releaseTarget) []string {
 	return words
 }
 
-// A target outside the matrix is a mistake in the command line, and refusing it here names the target
-// the operator typed rather than building something they did not ask for.
+// the dist run refuses a target outside the matrix at once, naming
+// the word the operator typed rather than building something else.
 func TestADistRunAskedForATargetOutsideTheMatrixIsRefused(t *testing.T) {
 	_, err := parseArgs([]string{"dist", "netbsd-amd64"})
 	if err == nil {
@@ -284,19 +284,10 @@ func TestADistRunAskedForATargetOutsideTheMatrixIsRefused(t *testing.T) {
 	}
 }
 
-// The machine running the build is named by the release target it belongs to, because the manifest, the
-// output path, and every message an operator reads name the target by the name the release uses. The name
-// go builds a macOS binary for is darwin, and the release is named macos: a machine named by go's word
-// asks the manifest about a target this project has no record for, and the operator standing on the Mac
-// the ffmpeg binaries are built on is told that no ffmpeg is compiled for a platform they are standing on.
-//
-// A machine the matrix has no entry for keeps the name go gives it: a hand-named target is built for the
-// platform its own name names, and the phase asked to build for it says what it can do there.
-// go builds a macOS binary for darwin, and the release names the same machine macos. A person naming the
-// target their own machine is types the word go gave it, and the release word is what the manifest records,
-// what the archive is named for, and what the guide uses. The word typed is resolved to the release word
-// where the run reads it, so every phase downstream sees one name; a word the matrix has no target for
-// keeps the words it was typed with, and the phase asked to build for it says what it can do there.
+// the word go names a machine by resolves to the release word: the
+// manifest, the output path, and every operator message name the
+// target the way the release names it.
+// see the targets-and-platforms maintainer note.
 func TestTheWordGoNamesAMachineByIsTheReleaseWord(t *testing.T) {
 	for _, typed := range []struct{ word, release string }{
 		{"darwin-amd64", "macos-amd64"},

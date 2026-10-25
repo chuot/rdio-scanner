@@ -20,9 +20,8 @@ import (
 	"testing"
 )
 
-// CoreOf is the other half of the rule Derive enforces: a version a build carries says which release
-// it is, which prerelease of it, and which commit of that. Only the first of those is what a pinned
-// wire contract can pin, so it has to be readable out of a version somebody hands over.
+// CoreOf is the other half of the rule Derive enforces: only the
+// core of a version is what a pinned wire contract can pin.
 
 func TestCoreOfTakesTheReleaseOutOfEveryShapeADerivedVersionTakes(t *testing.T) {
 	for _, version := range []string{
@@ -44,8 +43,7 @@ func TestCoreOfTakesTheReleaseOutOfEveryShapeADerivedVersionTakes(t *testing.T) 
 	}
 }
 
-// A prerelease and a commit hash describe a build of a release. They cannot make it a different
-// release, which is the whole reason a pinned contract compares cores.
+// the core of a prerelease built from a commit is the release it is a prerelease of.
 func TestCoreOfOfAPrereleaseBuiltFromACommitIsTheReleaseItIsAPrereleaseOf(t *testing.T) {
 	core, err := CoreOf("8.0.0-beta1+gdb79311")
 	if err != nil {
@@ -57,8 +55,7 @@ func TestCoreOfOfAPrereleaseBuiltFromACommitIsTheReleaseItIsAPrereleaseOf(t *tes
 	}
 }
 
-// Something with no core at its start is not a version, and saying so is what stops a contract test
-// from comparing an empty string against another empty string and calling that a pass.
+// CoreOf refuses anything without a core at its start.
 func TestCoreOfRefusesAnythingWithoutACoreAtItsStart(t *testing.T) {
 	for _, version := range []string{"", "dev", "8.0", "v8.0.0", "beta1", "8.0.0.1", "+gdb79311"} {
 		_, err := CoreOf(version)

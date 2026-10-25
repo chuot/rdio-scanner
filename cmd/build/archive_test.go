@@ -28,18 +28,11 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// One archive per release target. What it carries is the release-archive contract this command carries:
-// the program, the two guides that operate it, and the licence of the ffmpeg the build embeds: the
-// administrator guide for whoever installs and runs the server, and the guide for whoever hears calls
-// on the web application.
-//
-// Each guide carries its own pictures, its own stylesheet, and its own mark, so the archive carries no
-// pictures and needs no network for the reader to read it. It carries no markdown: a guide absorbed
-// the pages the archive used to carry, and a markdown file beside a guide is a document the reader is
-// told to open and does not have.
+// One archive per release target, carrying the release-archive contract:
+// the program, the two guides that operate it, and the ffmpeg licence.
+// see the archive-contract maintainer note.
 
-// The archive's name is the name the guide's installation chapter tells the reader to download, so a
-// release that writes a file the guide does not name is a release a reader cannot follow.
+// the archive name matches the name the guide's installation chapter names
 func TestTheArchiveIsNamedForTheTargetAndTheVersionTheReleaseResolved(t *testing.T) {
 	got := archivePath("linux-amd64", "8.0.0+g19042cd")
 
@@ -50,11 +43,8 @@ func TestTheArchiveIsNamedForTheTargetAndTheVersionTheReleaseResolved(t *testing
 	}
 }
 
-// A release archive that stamps every entry with the moment the archive was written says nothing about
-// when the files inside it were written: the binary the run compiled, the two guides the repository
-// has, and the licence the ffmpeg phase wrote are four files with four histories, and a reader who
-// extracts them and finds four identical timestamps has learned nothing from the timestamps. The
-// archive is required to state when the files it carries were written.
+// every archive entry carries the time of the file it carries,
+// never the moment the archive was written
 func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
 	repo := t.TempDir()
 
@@ -68,8 +58,8 @@ func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
 	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeArchiveLicence(t, repo, target, "the licence")
 
-	// Four files, four histories. The times are distinct, in the range a zip archive records, and on
-	// even seconds, which is the resolution the archive's own timestamp field carries.
+	// four files, four distinct times, on even seconds,
+	// the resolution the zip timestamp field carries
 	want := []struct {
 		name     string
 		path     string
@@ -106,8 +96,7 @@ func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
 		}
 	}
 
-	// The times have to survive the archive: a reader's `unzip` is the consumer this rule is about, and
-	// a time the writer does not put in the header is a time the reader never sees.
+	// the times survive the archive into the header where a reader's unzip reads them
 	path := filepath.Join(t.TempDir(), "release.zip")
 
 	if err := writeArchive(path, files); err != nil {
@@ -137,18 +126,14 @@ func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
 		}
 	}
 
-	// The program is a program the reader runs: the mode is the fact the archive has to carry for a
-	// standard tool to restore an executable binary.
+	// the archive carries the executable mode a standard tool restores
 	if mode := reader.File[0].Mode().Perm(); mode != 0o755 {
 		t.Errorf("the archive's program entry has mode %o, want 0755", mode)
 	}
 }
 
-// The archive is the program and the two documents that operate it, at the names the repository
-// writes them at: a reader who extracts the archive finds each guide at the path the guide itself
-// states — the administrator guide for whoever installs and runs the server, the listening guide for
-// whoever hears calls on the web application — and finds the ffmpeg licence under the name a reader
-// looks for.
+// the archive carries the program and the documents that operate it,
+// each at the name the repository writes it at
 func TestTheArchiveCarriesTheProgramTheGuidesAndTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 	repo := t.TempDir()
 
@@ -181,8 +166,7 @@ func TestTheArchiveCarriesTheProgramTheGuidesAndTheLicenceOfTheFfmpegItCarries(t
 		}
 	}
 
-	// The licence is read by its name, not by its position: the archive's layout is the repository's
-	// own, and a document added to it moves what sits after the documents.
+	// documents are found by name, not by position: the layout is the repository's own
 	licence := ""
 
 	for _, f := range files {
@@ -196,10 +180,8 @@ func TestTheArchiveCarriesTheProgramTheGuidesAndTheLicenceOfTheFfmpegItCarries(t
 	}
 }
 
-// A release archive carries no markdown file. The markdown this repository tracks — its change log, its
-// front page, its compiling notes, and its security notes among them — are the project's own documents and
-// stay in the repository; each guide the archive carries says what its reader needs in its own words, so a
-// markdown file in the archive is a document the reader is told to open and does not have.
+// the archive carries no markdown file;
+// the repository's own documents stay in the repository
 func TestTheArchiveCarriesNoMarkdownFile(t *testing.T) {
 	repo := t.TempDir()
 
@@ -226,16 +208,14 @@ func TestTheArchiveCarriesNoMarkdownFile(t *testing.T) {
 	}
 }
 
-// The archive carries the binary the run compiled. Reading the program from a path the tool chose for
-// itself, instead of from the path the run wrote to, is how a release ships a binary the release never
-// built: what stands at that path is whatever the last build, or the last hand that typed there, left
-// behind.
+// the archive carries the binary this run compiled, read from the path it wrote,
+// never a file left standing at some other path
 func TestTheArchiveCarriesTheBinaryTheRunWroteAndNotTheFileStandingAtThePathItReadsFrom(t *testing.T) {
 	repo := t.TempDir()
 
 	target := releaseTargets[4].targetWord()
 
-	// The file standing at the path the archive used to read from, before the run wrote anywhere.
+	// a decoy file standing at the read path before the run wrote anywhere
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary the run never compiled")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
@@ -260,9 +240,8 @@ func TestTheArchiveCarriesTheBinaryTheRunWroteAndNotTheFileStandingAtThePathItRe
 	}
 }
 
-// The guides are read where nothing else is: an extracted archive on a machine with no network. The
-// copy in the archive is the file the repository has, pictures and all, so the reader who opens either
-// guide offline gets every picture it shows.
+// each guide in the archive shows every picture offline,
+// on an extracted archive with no network
 func TestTheGuidesInTheArchiveCarryEveryPictureInsideThemselves(t *testing.T) {
 	repo := t.TempDir()
 
@@ -304,9 +283,8 @@ func TestTheGuidesInTheArchiveCarryEveryPictureInsideThemselves(t *testing.T) {
 	}
 }
 
-// The guides are the repository's own documents, written by hand. The release carries each as it is
-// written, with the pictures it was committed with: a tool that rewrote a guide on the way into the
-// archive would be a tool that published a document nobody read.
+// the guides in the archive are the repository's bytes,
+// rewritten by no tool on the way in
 func TestTheGuidesInTheArchiveAreTheGuidesTheRepositoryHas(t *testing.T) {
 	real, err := repositoryRoot()
 	if err != nil {
@@ -317,8 +295,8 @@ func TestTheGuidesInTheArchiveAreTheGuidesTheRepositoryHas(t *testing.T) {
 
 	target := releaseTargets[4].targetWord()
 
-	// Both guides are read from the repository the release is being built from, so what the archive
-	// holds is compared with the bytes the published repository actually carries.
+	// the guides are read from the repository being built,
+	// so the archive is compared with the published bytes
 	committed := map[string]string{}
 
 	for _, name := range []string{"admin-guide.html", "user-guide.html"} {
@@ -362,9 +340,7 @@ func TestTheGuidesInTheArchiveAreTheGuidesTheRepositoryHas(t *testing.T) {
 	}
 }
 
-// A release without either guide is a release whose reader has the program and nothing that operates
-// it. Each guide is named in the failure, because whoever builds a release from a tree that is short
-// one document has to be told which one the release refuses to ship without.
+// a release missing either guide stops, naming the guide it refuses to ship without
 func TestAGuideThatIsNotInTheTreeStopsTheRelease(t *testing.T) {
 	guides := []string{guideSource, "docs/user-guide.html"}
 
@@ -396,10 +372,8 @@ func TestAGuideThatIsNotInTheTreeStopsTheRelease(t *testing.T) {
 	}
 }
 
-// Every release target carries an ffmpeg inside its binary, so every release archive carries the licence of
-// the one it carries, whatever route produced that pair: a pair this build compiled in a container, a pair a
-// Mac compiled with its own toolchain, or a pair its maintainer built and dropped. An archive that quietly left
-// the licence out shipped the terms of a component it embedded with none of the terms.
+// every release target embeds an ffmpeg, so every archive carries its licence,
+// whatever route produced that pair
 func TestEveryReleaseTargetCarriesTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 	for _, tr := range releaseTargets {
 		target := tr.targetWord()
@@ -440,11 +414,9 @@ func TestEveryReleaseTargetCarriesTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 	}
 }
 
-// The archive of a target whose ffmpeg binaries were adopted says what the ffmpeg inside its binary is, in
-// the text the ffmpeg phase writes for binaries it ran and did not compile in a container: the licence terms,
-// the source release the manifest pins, the configure recipe, the audio-only posture, the host that compiled
-// them, the command that built them, and the codecs the run recorded. The archive carries that text under the
-// name a reader looks for, and carries no markdown file beside it.
+// an adopted ffmpeg's archive carries the ffmpeg phase's own notice:
+// terms, source release, recipe, posture, host, command, and codecs.
+// see the ffmpeg-licence-in-archive maintainer note.
 func TestTheArchiveOfATargetWhoseFfmpegWasAdoptedCarriesWhatItsFfmpegIs(t *testing.T) {
 	repo := t.TempDir()
 
@@ -512,9 +484,7 @@ func TestTheArchiveOfATargetWhoseFfmpegWasAdoptedCarriesWhatItsFfmpegIs(t *testi
 	}
 }
 
-// A target whose ffmpeg the build compiles has the licence the ffmpeg phase wrote. A release that
-// quietly left it out is a release that shipped the terms of a component it embedded with none of the
-// terms.
+// a missing ffmpeg licence stops the release, not a quiet shipping without terms
 func TestAMissingFfmpegLicenceStopsTheRelease(t *testing.T) {
 	repo := t.TempDir()
 
@@ -534,8 +504,7 @@ func TestAMissingFfmpegLicenceStopsTheRelease(t *testing.T) {
 	}
 }
 
-// A windows target's program has the suffix its operating system puts on a program it runs, which is the
-// rule the ffmpeg phase already follows.
+// a windows target's program carries the suffix its system runs, the way the ffmpeg phase does
 func TestTheWindowsArchiveCarriesTheProgramItsOperatingSystemRuns(t *testing.T) {
 	repo := t.TempDir()
 
@@ -554,8 +523,7 @@ func TestTheWindowsArchiveCarriesTheProgramItsOperatingSystemRuns(t *testing.T) 
 	}
 }
 
-// Info-Zip restores the mode it stored, so a release archive has to carry the mode a program needs. A
-// binary that arrives not executable is a release a reader cannot run.
+// the archive carries the executable mode the archiver restores.
 func TestTheBinaryInTheArchiveIsExecutable(t *testing.T) {
 	repo := t.TempDir()
 
@@ -681,8 +649,8 @@ func fileNames(files []archiveFile) []string {
 	return names
 }
 
-// writeArchiveSource puts one file a release archive carries into the tree, in the directory the release
-// writes the target into.
+// writeArchiveSource puts one file the archive carries into the tree,
+// in the directory the release writes the target into.
 func writeArchiveSource(t *testing.T, repo string, target string, name string, contents string) {
 	t.Helper()
 
@@ -712,9 +680,8 @@ func writeRepoFile(t *testing.T, repo string, path string, contents string) {
 	}
 }
 
-// writeArchiveLicence puts the licence the ffmpeg phase writes into the bundle directory the server
-// embeds. The phase writes it from the manifest the ffmpeg build records; the archive carries it under
-// the name a reader looks for, which is not the name the bundle directory uses.
+// writeArchiveLicence puts the licence the ffmpeg phase writes into the bundle
+// directory the server embeds, the phase's own name, not the reader-facing one.
 func writeArchiveLicence(t *testing.T, repo string, target string, contents string) {
 	t.Helper()
 

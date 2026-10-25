@@ -30,18 +30,16 @@ import (
 	"rdio-scanner/cmd/build/buildinfo"
 )
 
-// The command line and the server and container steps are the two halves of the tool that can be
-// read without running anything: what the operator asked for, and the commands that asking composes.
-// The plan the tool composes for the applications is tested in webapps_test.go. These tests refuse
-// the command lines the tool cannot honour and read the server binary and the container image the
-// run composes. Nothing here runs a build.
+// these tests refuse the command lines the tool cannot honour and
+// read the server and container steps it composes; the webapps plan
+// is tested in webapps_test.go, and nothing here runs a build.
 
-// theMoment is the moment a plan is composed at: the clock the run reports is a fact of the machine,
-// and a test that reads the command line the run composes has to be told what the clock said.
+// theMoment is the moment a plan is composed at: the clock a run
+// reports is a fact of the machine, so a test must fix what it said.
 var theMoment = time.Date(2026, 10, 13, 12, 30, 45, 0, time.UTC)
 
-// theVersion is the version a plan is composed for: an untagged build of the declared core, which is
-// the shape a development build has.
+// theVersion is the version a plan is composed for: an untagged
+// build of the declared core, the shape a development build has.
 func theVersion(t *testing.T) buildinfo.Version {
 	t.Helper()
 
@@ -63,9 +61,7 @@ func contains(haystack []string, needle string) bool {
 	return false
 }
 
-// The version reaches the server through the linker. It reaches the bundles through the environment.
-// Neither is rewritten in a source file, which is the mechanism that produced the drift this tool
-// exists to remove.
+// the server step carries the resolved version in its linker flags.
 func TestTheServerBuildCarriesTheResolvedVersionInTheLinkerFlags(t *testing.T) {
 	o, err := parseArgs([]string{"server"})
 	if err != nil {
@@ -85,10 +81,7 @@ func TestTheServerBuildCarriesTheResolvedVersionInTheLinkerFlags(t *testing.T) {
 	}
 }
 
-// The image a container run builds is the artifact an operator pushes and a machine pulls. One tag
-// named `latest` says which machine it is on and not which release it is, and an image carrying no
-// labels says nothing about where it came from: the tags and the labels are the image's own account of
-// what it is, read from the image and not from a document beside it.
+// the container step tags the image with the resolved version and latest.
 func TestTheContainerStepTagsTheImageWithTheVersionTheRunResolved(t *testing.T) {
 	s := containerStep(options{}, "/repo", theVersion(t), theMoment, podmanProgram)
 
@@ -112,10 +105,7 @@ func TestTheContainerStepTagsTheImageWithTheVersionTheRunResolved(t *testing.T) 
 	}
 }
 
-// An image tag's grammar is letters, digits, dots, dashes and underscores, and it has no `+`. The
-// version a release resolves carries a `+` the moment the commit is not tagged, so a run that asked
-// podman for a tag spelled like the version is a run podman refuses: the tag is the version spelled the
-// way the grammar allows, and the image's own version label carries the version itself.
+// the image tag is the version spelled the way an image tag's grammar allows.
 func TestTheImageTagIsTheVersionSpelledTheWayAnImageTagAllows(t *testing.T) {
 	for _, version := range []string{"8.0.0", "8.0.0+g1885b7e2", "8.0.0-rc1+g1885b7e2"} {
 		tag := imageTagFor(version)
@@ -128,8 +118,8 @@ func TestTheImageTagIsTheVersionSpelledTheWayAnImageTagAllows(t *testing.T) {
 			t.Errorf("the tag for %s is %q, which is not a tag a registry accepts", version, tag)
 		}
 
-		// The tag says the same release the version says: the same digits, the same prerelease name,
-		// and the same commit, with only the sign that introduces the git metadata written as a dash.
+		// the tag says the same release as the version, and rewrites only
+		// the sign introducing the git metadata as a dash.
 		if tag != strings.Replace(version, "+", "-", 1) {
 			t.Errorf("the tag for %s is %q, want the version with the sign that introduces the git metadata written as a dash", version, tag)
 		}
@@ -139,10 +129,7 @@ func TestTheImageTagIsTheVersionSpelledTheWayAnImageTagAllows(t *testing.T) {
 // theImageTagGrammar is the tag grammar a registry accepts.
 var theImageTagGrammar = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
 
-// A base image named `latest` is a different image every week: the image built today is not the image
-// built last week, and nothing in the image says which one it is standing on. The labels are the
-// image's own account of its version, its source, its build time, and its documentation, and the
-// version and the build time are facts the container run knows and passes in.
+// the Containerfile names its base image by version and carries the image labels.
 func TestTheContainerfileNamesItsBaseImageByVersionAndCarriesTheImageLabels(t *testing.T) {
 	text, err := os.ReadFile(filepath.Join("..", "..", "Containerfile"))
 	if err != nil {
@@ -185,8 +172,8 @@ func TestTheContainerfileNamesItsBaseImageByVersionAndCarriesTheImageLabels(t *t
 		}
 	}
 
-	// The labels the image carries, and the build arguments its version and its build time arrive
-	// through: a label repeating a literal is a label that goes stale the moment the release moves.
+	// the labels the image carries and the build arguments they arrive
+	// through: a label repeating a literal goes stale with the release.
 	for _, label := range []string{
 		"org.opencontainers.image.title=",
 		"org.opencontainers.image.source=",
@@ -243,10 +230,7 @@ func TestTheOutputPathIsTheOneTheOperatorNamed(t *testing.T) {
 	}
 }
 
-// `-o` is where a run writes the one server binary it compiles. A run that builds the web applications,
-// an ffmpeg, a container image, a release archive, or nothing at all compiles no server binary, so the
-// path it names is a path nothing is written to — and a release run that honoured one wrote its archive
-// from a binary the run never compiled.
+// -o is accepted only by the runs that compile one server binary.
 func TestTheOutputPathIsAcceptedOnlyByTheRunsThatCompileAServerBinary(t *testing.T) {
 	for _, args := range [][]string{
 		{"-o", "./built"},
@@ -291,10 +275,7 @@ func TestTheOutputPathIsAcceptedOnlyByTheRunsThatCompileAServerBinary(t *testing
 	}
 }
 
-// The verification run runs the two suites this project's checks are made of and builds nothing: a
-// release is gated on them, and a run that built something first reports the build's result and not the
-// suites'. The command lines are composed as data, so what each suite is told to run, and where it runs,
-// is something a test can read.
+// the test run composes this project's two suites and builds nothing.
 func TestTheTestRunComposesTheTwoSuitesOfThisProject(t *testing.T) {
 	o, err := parseArgs([]string{"test"})
 	if err != nil {
@@ -328,10 +309,8 @@ func TestTheTestRunComposesTheTwoSuitesOfThisProject(t *testing.T) {
 	}
 }
 
-// A test run builds nothing, so the words that decide what a build builds, for which platform, where it
-// writes, which version it stamps, whether it walks the matrix, and whether it releases an uncommitted
-// tree have nothing to decide on it. Each refusal names the test run, whichever side of the flag the
-// command arrived on.
+// the test run refuses the flags that would decide what a build
+// builds, whichever side of the flag the command arrived on.
 func TestTheTestRunRefusesWhatItCannotRun(t *testing.T) {
 	for _, args := range [][]string{
 		{"test", "linux-amd64"},
@@ -356,9 +335,7 @@ func TestTheTestRunRefusesWhatItCannotRun(t *testing.T) {
 	}
 }
 
-// The release is built from a commit, and a tree with uncommitted changes is not that commit. The flag
-// that says "release it anyway" is an instruction about the release, so it belongs to the release run
-// and to nothing else.
+// --allow-dirty is an instruction about a release, so only the release run accepts it.
 func TestTheAllowDirtyFlagIsAcceptedOnlyByTheReleaseRun(t *testing.T) {
 	for _, args := range [][]string{
 		{"dist", "--allow-dirty"},
@@ -399,12 +376,8 @@ func TestTheAllowDirtyFlagIsAcceptedOnlyByTheReleaseRun(t *testing.T) {
 	}
 }
 
-// A server binary a release ships has to run on machines the release machine has never seen. With cgo
-// enabled, the target equal to the machine running the release is compiled against that machine's C
-// library and every cross-compiled target is static, which makes the most-downloaded archive the one
-// whose binary stops at the C library of the machine that built it. The debug information is bytes for
-// a debugger, and the ffmpeg binaries the same tool produces are stripped by the compile that makes
-// them.
+// the shipped server binary is compiled static and stripped so it
+// runs on machines the release machine has never seen.
 func TestTheServerBinaryIsCompiledStaticAndStripped(t *testing.T) {
 	o, err := parseArgs([]string{"server"})
 	if err != nil {
@@ -432,8 +405,7 @@ func TestTheServerBinaryIsCompiledStaticAndStripped(t *testing.T) {
 	}
 }
 
-// A prerelease is an instruction about the version, so a name that does not fit the grammar is a
-// command line the tool cannot honour rather than a build that fails halfway through.
+// a prerelease name that does not fit the grammar is rejected at the command line.
 func TestAPreReleaseNameThatIsNotAPrereleaseIsRejected(t *testing.T) {
 	_, err := parseArgs([]string{"--pre", "beta 1"})
 	if err == nil {
@@ -469,10 +441,7 @@ func TestACommandTheToolDoesNotKnowIsRejected(t *testing.T) {
 	}
 }
 
-// A server built for a target is built for that target, not for the machine the tool happens to be
-// running on. The ffmpeg phase already cross-builds for a named target, and the server embeds it: a
-// linux-arm64 ffmpeg inside an amd64 binary is a bundle nothing loads, and a server built for the host
-// while its ffmpeg was built for arm64 is a release that ships neither.
+// the server is built for the target the run is building for, not the host.
 func TestTheServerIsBuiltForTheTargetTheRunIsBuildingFor(t *testing.T) {
 	o := options{target: "linux-arm64", output: defaultOutputPath("linux-arm64")}
 
@@ -491,8 +460,7 @@ func TestTheServerIsBuiltForTheTargetTheRunIsBuildingFor(t *testing.T) {
 		t.Errorf("the server for linux-arm64 is written to %q, want %q", s.result, want)
 	}
 
-	// A windows target's program has the suffix its operating system puts on a program it runs, which
-	// is the same rule the ffmpeg phase already follows.
+	// a windows target's output carries the .exe suffix its operating system runs.
 	o = options{target: "windows-amd64", output: defaultOutputPath("windows-amd64")}
 
 	want = filepath.Join("dist", "windows-amd64", "rdio-scanner.exe")
@@ -500,8 +468,7 @@ func TestTheServerIsBuiltForTheTargetTheRunIsBuildingFor(t *testing.T) {
 		t.Errorf("the server for windows-amd64 is written to %q, want %q", serverStep(o, "/repo", theVersion(t)).result, want)
 	}
 
-	// A run that named no target builds for the machine it is running on, which is what it did before
-	// the release matrix existed.
+	// a run that named no target builds for the machine it is running on.
 	o = options{output: defaultOutputPath("")}
 
 	want = filepath.Join("dist", runtime.GOOS+"-"+runtime.GOARCH, "rdio-scanner")
@@ -510,9 +477,7 @@ func TestTheServerIsBuiltForTheTargetTheRunIsBuildingFor(t *testing.T) {
 	}
 }
 
-// The compile is the check: the build runs the binaries it compiled, and a drop is run by the compile
-// that adopts it. There is no command that proves binaries the build did not compile, and no file a
-// later build reads back as somebody else's proof.
+// an ffmpeg check is not a command: the build runs the binaries it compiled.
 func TestTheFfmpegCheckIsNotACommandThisToolAccepts(t *testing.T) {
 	for _, args := range [][]string{
 		{"ffmpeg-check"},
@@ -526,10 +491,7 @@ func TestTheFfmpegCheckIsNotACommandThisToolAccepts(t *testing.T) {
 	}
 }
 
-// The usage line is what an operator reads when they type something the tool does not do. It names the
-// commands the tool has, and a command that no longer exists in it is not in that line. It reaches the
-// operator's standard error beside the word it was refused for: a command line the tool does not accept
-// is a failure, and it builds nothing, so the writer carrying the run's progress has nothing in it.
+// the usage line names the commands the tool has.
 func TestTheUsageLineNamesTheCommandsTheToolHas(t *testing.T) {
 	out := &bytes.Buffer{}
 	errout := &bytes.Buffer{}
@@ -558,9 +520,7 @@ func TestTheUsageLineNamesTheCommandsTheToolHas(t *testing.T) {
 	}
 }
 
-// A person naming the target their machine is types the two words go names that machine by. The release
-// word is what the manifest records and what the archive is named for, so the word typed is resolved to
-// the release word here, where the run reads it, and every phase after this one works with one name.
+// a target named on the command line is resolved to the release word the run builds for.
 func TestTheTargetACommandNamesIsTheReleaseWordTheRunBuildsFor(t *testing.T) {
 	for _, tc := range []struct {
 		args   []string
@@ -585,10 +545,7 @@ func TestTheTargetACommandNamesIsTheReleaseWordTheRunBuildsFor(t *testing.T) {
 	}
 }
 
-// A release run builds the platform it is standing on: the archive a developer builds to try the build is
-// the one their own machine runs, and the eight-target matrix is a release, which is a deliberate act.
-// Asking for the matrix and naming one target at the same time is a command line whose two halves ask for
-// different numbers of archives.
+// a release run builds its own platform unless --all asks for the whole matrix.
 func TestDistBuildsThePlatformItIsRunOnUnlessTheWholeMatrixIsAskedFor(t *testing.T) {
 	o, err := parseArgs([]string{"dist"})
 	if err != nil {
@@ -642,9 +599,7 @@ func TestDistBuildsThePlatformItIsRunOnUnlessTheWholeMatrixIsAskedFor(t *testing
 	}
 }
 
-// The ffmpeg is the one thing this tool builds for a platform the operator names. The platform has to
-// be the word right after it, so that a target left lying at the end of a command line is refused
-// instead of quietly building something else.
+// the ffmpeg target must be the word right after the ffmpeg command.
 func TestTheFFmpegTargetIsTheWordRightAfterIt(t *testing.T) {
 	o, err := parseArgs([]string{"ffmpeg", "linux-arm64"})
 	if err != nil {
@@ -677,11 +632,7 @@ func TestTheFFmpegTargetIsTheWordRightAfterIt(t *testing.T) {
 	}
 }
 
-// The build speaks to the container program the machine has, and prefers podman: podman is the
-// prerequisite the compile guide names and the program the build was developed against, and docker is
-// the program a machine with no podman still has. A machine with neither is refused, and the refusal
-// names both programs it looked for, because a message naming one program tells the operator to install
-// a program they may already have.
+// the build resolves the container program the machine has, preferring podman.
 func TestTheBuildSpeaksToTheContainerProgramTheMachineHas(t *testing.T) {
 	// Both programs on the machine: the one the build prefers.
 	program, err := resolveContainerProgram(aMachineWith(podmanProgram, dockerProgram), noEnvironment)
@@ -693,8 +644,7 @@ func TestTheBuildSpeaksToTheContainerProgramTheMachineHas(t *testing.T) {
 		t.Errorf("the machine has both programs and the build speaks to %q, want %q", program, podmanProgram)
 	}
 
-	// Only docker: the machine can build a container image, and a tool that names podman alone refuses
-	// a machine that can do the work.
+	// a machine with only docker can build container images.
 	program, err = resolveContainerProgram(aMachineWith(dockerProgram), noEnvironment)
 	if err != nil {
 		t.Fatalf("resolveContainerProgram: %v", err)
@@ -730,8 +680,7 @@ func TestTheBuildSpeaksToTheContainerProgramTheMachineHas(t *testing.T) {
 		t.Errorf("the refusal still speaks to %q", program)
 	}
 
-	// The operator names docker, and the machine has it: the name stands, which is how the docker path
-	// is exercised on a machine that prefers podman.
+	// the name the operator gives stands over the machine's preference.
 	program, err = resolveContainerProgram(aMachineWith(podmanProgram, dockerProgram),
 		anEnvironment(map[string]string{containerProgramEnv: dockerProgram}))
 	if err != nil {
@@ -793,9 +742,7 @@ func aMachineWith(programs ...string) func(string) (string, error) {
 	}
 }
 
-// The release image build names the program the run resolved, and the file it builds from: docker looks
-// for Dockerfile and does not find Containerfile, and a build that names its file has one shape for both
-// programs.
+// the container step names the resolved program and the Containerfile it builds from.
 func TestTheReleaseImageBuildNamesTheProgramAndTheFileItBuildsFrom(t *testing.T) {
 	for _, program := range []string{podmanProgram, dockerProgram} {
 		s := containerStep(options{}, "/repo", theVersion(t), theMoment, program)
@@ -815,11 +762,8 @@ func TestTheReleaseImageBuildNamesTheProgramAndTheFileItBuildsFrom(t *testing.T)
 	}
 }
 
-// The files a container writes in the operator's tree belong to the operator who ran the build: the
-// ffmpeg phase compiles into a directory under the tree, and the build has to read, overwrite, and throw
-// away what the container wrote there. podman is told to keep the host's user namespace. docker has no
-// user namespace to keep, and is told the operator's own identity numbers, which is the same guarantee
-// stated in the vocabulary docker has.
+// the container run arguments keep files the container writes in
+// the operator's tree owned by the operator.
 func TestTheContainerRunArgsAreTheOnesTheProgramUnderstands(t *testing.T) {
 	podman := theContainerProgram{name: podmanProgram}
 	docker := theContainerProgram{name: dockerProgram}
@@ -865,11 +809,7 @@ func theFlagValue(args []string, flag string) string {
 	return ""
 }
 
-// The compile guide is what an operator reads before they type, and the tool is what answers them. A
-// guide naming nine of the ten commands the tool accepts is a guide an operator trusts and a tool
-// contradicts, and a guide that never says how to check what it built leaves the checking to guesswork.
-// The guide's command section is pinned to the commands the tool accepts, and its verification section
-// to the suites a build is verified with.
+// the compile guide names every command the tool accepts.
 func TestTheCompileGuideNamesEveryCommandTheToolAccepts(t *testing.T) {
 	section := theGuideSection(t, "## What to type")
 
@@ -880,8 +820,7 @@ func TestTheCompileGuideNamesEveryCommandTheToolAccepts(t *testing.T) {
 	}
 }
 
-// The guide separates what to type from why it is this way, and says how to verify a build: the suites
-// the tool runs, and the suites the tool runs when it is asked to run nothing but them.
+// the compile guide says how to verify a build.
 func TestTheCompileGuideSaysHowToVerifyABuild(t *testing.T) {
 	section := theGuideSection(t, "## How to verify a build")
 
@@ -892,9 +831,8 @@ func TestTheCompileGuideSaysHowToVerifyABuild(t *testing.T) {
 	}
 }
 
-// theGuideSection reads one section of the compile guide: the lines under the heading named, up to the
-// next heading of the same level. A test that read the whole document could pass on a sentence in the
-// rationale, which is not where the operator looks for the command they type.
+// theGuideSection reads one section of the compile guide: the lines
+// under the heading named, up to the next heading of the same level.
 func theGuideSection(t *testing.T, heading string) string {
 	t.Helper()
 

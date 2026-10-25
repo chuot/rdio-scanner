@@ -21,13 +21,13 @@ import (
 	"testing"
 )
 
-// The webapps phase is the two applications and the npm commands that build their bundles. These
-// tests read the plan the tool composes for the bundles — what npm is told to do, in what order,
-// with what in the environment — and the freshness question the tree answers about a bundle. The
-// tree helpers writeTreeFile, setMTime, and date live in build_test.go.
+// These tests read the plan the tool composes for the bundles: what
+// npm is told to do, in what order, with what in the environment,
+// and the freshness question the tree answers about a bundle; the
+// tree helpers live in build_test.go.
 
-// The whole pipeline is the two applications, then the ffmpeg, then the server. The order is the
-// point: the server embeds both bundles and the ffmpeg, so a server built first ships without them.
+// the whole pipeline is the two applications, then the ffmpeg, then
+// the server: the server embeds both bundles and the ffmpeg.
 func TestTheWholePipelineIsTheApplicationsThenTheFFmpegThenTheServer(t *testing.T) {
 	o, err := parseArgs(nil)
 	if err != nil {
@@ -44,8 +44,8 @@ func TestTheWholePipelineIsTheApplicationsThenTheFFmpegThenTheServer(t *testing.
 		t.Errorf("the applications are planned in the order %s, %s, want the scanner then the administration", steps[0].label, steps[1].label)
 	}
 
-	// The ffmpeg and the server are not plan steps: the tool runs the ffmpeg itself and composes the
-	// server last. Both say they belong to a whole-pipeline run, which is what puts them in the run.
+	// the ffmpeg and the server are not plan steps: the tool runs the
+	// ffmpeg itself and composes the server last, both saying they belong.
 	if !o.buildsFFmpeg() || !o.buildsServer() {
 		t.Errorf("a whole-pipeline run reports it builds the ffmpeg %v and the server %v, want both", o.buildsFFmpeg(), o.buildsServer())
 	}
@@ -55,8 +55,8 @@ func TestTheWholePipelineIsTheApplicationsThenTheFFmpegThenTheServer(t *testing.
 	}
 }
 
-// Each subcommand plans only the steps it names. The version subcommand plans nothing, because it
-// answers one question and builds nothing.
+// each subcommand plans only the steps it names, and version plans
+// nothing because it answers one question and builds nothing.
 func TestEachSubcommandPlansOnlyTheStepsItNames(t *testing.T) {
 	for _, c := range []struct {
 		args []string
@@ -93,8 +93,8 @@ func TestEachSubcommandPlansOnlyTheStepsItNames(t *testing.T) {
 	}
 }
 
-// The application builds are given the version in the environment, and each writes into the bundle
-// directory of the Go package that embeds it.
+// the application builds are given the version in the environment,
+// and each writes into the bundle directory of its embedding package.
 func TestTheApplicationBuildsAreGivenTheVersionInTheEnvironment(t *testing.T) {
 	o, err := parseArgs([]string{"client"})
 	if err != nil {
@@ -125,8 +125,8 @@ func TestTheApplicationBuildsAreGivenTheVersionInTheEnvironment(t *testing.T) {
 			t.Errorf("%s is built with env %v, which does not carry the resolved version", app, s.env)
 		}
 
-		// Each application writes into the bundle directory of the Go package that embeds it, and the
-		// step says that destination as the result it leaves behind.
+		// each application writes into the bundle directory of the Go package that
+		// embeds it, and the step records that destination as its result.
 		if s.result != appBundle[app] {
 			t.Errorf("%s leaves behind %q, want the bundle of the package that embeds it", app, s.result)
 		}
@@ -163,8 +163,8 @@ func TestClientDependenciesAreInstalledOnlyWhenTheyAreNotAlreadyThere(t *testing
 	}
 }
 
-// A bundle that is newer than every file it is built from is not rebuilt: a phase with nothing to do
-// does not run. The plan runs the one application whose bundle is not current.
+// the plan skips a bundle that is newer than every file it is built
+// from: a phase with nothing to do does not run.
 func TestAPlanSkipsABundleThatIsAlreadyBuilt(t *testing.T) {
 	o, err := parseArgs([]string{"client"})
 	if err != nil {
@@ -182,8 +182,8 @@ func TestAPlanSkipsABundleThatIsAlreadyBuilt(t *testing.T) {
 	}
 }
 
-// A release run whose bundles are current runs no client step. The bundles are the same for every
-// target, so a second matrix run over the same sources compiles nothing.
+// the plan runs no client step when both bundles are current: the
+// bundles are the same for every target, so a second matrix run compiles nothing.
 func TestAPlanRunsNoClientStepWhenBothBundlesAreCurrent(t *testing.T) {
 	o, err := parseArgs([]string{"dist"})
 	if err != nil {
@@ -195,8 +195,8 @@ func TestAPlanRunsNoClientStepWhenBothBundlesAreCurrent(t *testing.T) {
 	}
 }
 
-// The dependencies are looked for only when a client step is going to run. A run that builds no bundle
-// has no use for npm, and installing esbuild into a tree that will not build is work nobody asked for.
+// the dependencies are looked for only when a client step will run:
+// a run that builds no bundle has no use for npm.
 func TestARunThatBuildsNoBundleNeedsNoNpm(t *testing.T) {
 	o, err := parseArgs([]string{"client"})
 	if err != nil {
@@ -212,8 +212,8 @@ func TestARunThatBuildsNoBundleNeedsNoNpm(t *testing.T) {
 	}
 }
 
-// A built bundle is current when it is newer than every file it is built from. The built bundle is not
-// one of its own sources: a rule that watched its own output would rebuild on every run.
+// a bundle is current when it is newer than every file it is built
+// from, and the built bundle is not one of its own sources.
 func TestABundleIsCurrentWhenItIsNewerThanEverySourceItIsBuiltFrom(t *testing.T) {
 	repo := t.TempDir()
 
@@ -254,10 +254,9 @@ func TestABundleIsCurrentWhenItIsNewerThanEverySourceItIsBuiltFrom(t *testing.T)
 	}
 }
 
-// Each application is judged by its own sources and the sources the two applications share. A rule that
-// watched both applications' sources rebuilt the administration bundle every time a scanner source
-// changed, and a rule that watched the contract the administration bundle carries rebuilt a scanner
-// bundle that carries no contract.
+// each application is judged by its own sources and the sources the
+// two share, and the administration contract belongs to its bundle alone.
+// see the webapps-source-watch maintainer note.
 func TestEachApplicationIsJudgedByItsOwnSourcesAndTheSourcesTheTwoShare(t *testing.T) {
 	repo := t.TempDir()
 
@@ -323,9 +322,9 @@ func TestEachApplicationIsJudgedByItsOwnSourcesAndTheSourcesTheTwoShare(t *testi
 	}
 }
 
-// The built bundle is the output of the client build, not a source. Its nested contents are part of the
-// output: a bundle that watched them would rebuild on every run, because the bundle built last is newer
-// than the bundle built first, and the first is then never current.
+// the built bundle is output, not a source of either bundle: a bundle
+// watching its own nested contents would never be current, because
+// the bundle built last is always newer than the bundle built first.
 func TestTheBuiltBundleIsNotASourceOfEitherBundle(t *testing.T) {
 	repo := t.TempDir()
 
@@ -351,9 +350,9 @@ func TestTheBuiltBundleIsNotASourceOfEitherBundle(t *testing.T) {
 
 	bundle := string(filepath.Separator) + "bundle" + string(filepath.Separator)
 
-	// Each application's sources: its own frontend, the frontend the two applications share, the script
-	// and the manifest that build both bundles, and — for the administration application alone — the
-	// OpenAPI contract its bundle carries.
+	// Each application's sources: its own frontend, the shared frontend,
+	// the script and manifests that build both bundles, and for the
+	// administration application alone the OpenAPI contract it carries.
 	want := map[string][]string{
 		subScanner: {
 			filepath.Join(presentationDir, "build.mjs"),
