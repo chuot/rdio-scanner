@@ -34,14 +34,12 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The administrator's configuration socket is how the administration interface learns that something changed while it was
-// open. It is not a listener connection: it has no commands, no live feed, and no history — it sends its
-// credential and then only ever reads.
-//
-// The socket is authenticated by a frame and not by a header. The upgrade itself asks for nothing, the
-// first frame must be the bare token, and every later frame is checked the same way: the legacy server
-// re-validates whatever arrives, so a connection whose token has been retired is ended the next time it
-// says anything.
+// The administrator's configuration socket is how the administration interface learns
+// that something changed while it was open: it sends its credential and then only ever
+// reads.
+// The first frame must be the bare token and every later frame is checked the same way,
+// as the legacy server re-validated whatever arrived, so a retired token ends the
+// connection the next time it says anything.
 
 const (
 	socketToken    = "capture-administrator-token"
@@ -67,19 +65,19 @@ type fixture struct {
 	configuration domain.Configuration
 }
 
-// recordedLogs is the log a test hands the socket and then reads back: the port the socket writes through,
-// plus the entries it was given, in the order it was given them. It is an interface rather than the fake so
-// that a test can hand the socket a log of its own — one that holds a write open, say — and still read what
-// the socket wrote.
+// recordedLogs is the log a test hands the socket and then reads back: the port the
+// socket writes through, plus the entries it was given, in order. It is an interface so
+// a test can hand the socket a log of its own, one that holds a write open, and still
+// read what was written.
 type recordedLogs interface {
 	ports.LogRepository
 
 	Recorded() []domain.LogEntry
 }
 
-// heldLogs is a server log that holds one departure open until the test lets it finish, and announces the
-// moment that write begins. It is how a test says "this entry is still on its way" without waiting on a wall
-// clock.
+// heldLogs is a server log that holds one departure open until the test lets it finish
+// and announces the moment that write begins: how a test says an entry is still on its
+// way without waiting on a wall clock.
 type heldLogs struct {
 	*fakes.Logs
 
@@ -210,14 +208,10 @@ func (fixture *fixture) present(t *testing.T, conn *websocket.Conn, token string
 	}
 }
 
-// awaitCredential waits for the server to have accepted credentials from n connections.
-//
-// The socket acknowledges nothing, so a test that is about to push to connections it has just authenticated
-// has to let the read loops get there first. The capture does the same with a fixed pause; a test waits for
-// the thing it depends on instead, and says so when it never happens.
-//
-// The count is of connections rather than of a named one because the connection the server holds is not the
-// one the test holds: the test has the peer's end of the socket, and the server has its own.
+// awaitCredential waits for the server to have accepted credentials from n connections:
+// the socket acknowledges nothing, so a test about to push lets the read loops get there
+// first, waiting for the fact it depends on rather than the capture's fixed pause. The
+// count is of connections because the server holds its own end of each socket.
 func (fixture *fixture) awaitCredential(t *testing.T, n int) {
 	t.Helper()
 
@@ -274,12 +268,10 @@ func (fixture *fixture) heldCount() int {
 	return len(fixture.sessions.conns)
 }
 
-// awaitEntry waits for the socket to have written an entry under a part of the server whose message begins
-// with a sentence, and hands the entry back.
-//
-// The socket writes on the goroutine that serves the connection, so a test that has just opened or closed one
-// has to let the server get there. It waits for the entry it depends on rather than for a fixed pause, and
-// says so when it never arrives.
+// awaitEntry waits for the socket to have written an entry under a part of the server
+// whose message begins with a sentence, and hands the entry back. The socket writes on
+// the goroutine serving the connection, so a test waits for the entry it depends on
+// rather than for a fixed pause.
 func (fixture *fixture) awaitEntry(t *testing.T, source domain.LogSource, sentence string) domain.LogEntry {
 	t.Helper()
 
@@ -300,10 +292,9 @@ func (fixture *fixture) awaitEntry(t *testing.T, source domain.LogSource, senten
 	return wrote
 }
 
-// countEntries counts the entries saying exactly that sentence. It is how a test says "once each": a
-// departure filed by the socket and then filed again by the read loop it just ended would read as two
-// administrators leaving, and an operator counting sessions from the log would be told a number that never
-// existed.
+// countEntries counts the entries saying exactly that sentence: a departure filed by the
+// socket and again by the read loop it just ended would read as two administrators
+// leaving and tell an operator a number that never existed.
 func (fixture *fixture) countEntries(sentence string) int {
 	count := 0
 
@@ -343,11 +334,9 @@ func (fixture *fixture) nextFrame(t *testing.T, conn *websocket.Conn) string {
 	return string(b)
 }
 
-// nothingArrivedYet reports whether the connection has been given nothing for a moment, which is how these
-// tests say the server is not pushing to it.
-//
-// A connection whose read timed out is not a connection any more, so a test that uses this cannot go on to
-// read from the same socket.
+// nothingArrivedYet reports whether the connection has been given nothing for a moment,
+// which is how these tests say the server is not pushing to it. A read timeout ends the
+// connection, so a test that uses this cannot read from the same socket again.
 func (fixture *fixture) nothingArrivedYet(t *testing.T, conn *websocket.Conn) bool {
 	t.Helper()
 
@@ -389,9 +378,9 @@ func TestConfigSocketPushesTheCapturedConfigurationAfterAChange(t *testing.T) {
 	}
 }
 
-// A credential the server does not recognize ends the connection with the close the capture recorded. The
-// upgrade itself asked for nothing, so this is the only thing standing between a stranger and the
-// configuration.
+// A credential the server does not recognize ends the connection with the close the
+// capture recorded: the upgrade itself asks for nothing, so this is the only thing
+// standing between a stranger and the configuration.
 func TestConfigSocketClosesAConnectionWhoseTokenItDoesNotRecognize(t *testing.T) {
 	fixture := newFixture(t)
 
@@ -416,12 +405,10 @@ func TestConfigSocketClosesAConnectionWhoseTokenItDoesNotRecognize(t *testing.T)
 		t.Errorf("the close is %d %q, want the captured close %d %q", code, reason, captured.Code, captured.Reason)
 	}
 
-	// The close is what the peer sees. What the operator sees is an entry saying a connection presented a
-	// credential this server does not have — which is the difference between an administration interface holding an expired
-	// session and somebody trying to open the configuration socket from somewhere they should not.
-	//
-	// Waiting for the close is enough to know the entry is written: the refusal happens before the read loop
-	// ends, and the close is the last thing the server writes on the way out.
+	// The peer sees the close; the operator sees an entry saying a connection presented a
+	// credential this server does not have, which separates an expired administration
+	// session from somebody prying at the socket. The close is the last thing the server
+	// writes on the way out, so waiting for it is enough to know the entry is written.
 	entry := fixture.awaitEntry(t, domain.LogSourceAdmin, "an administrator from ")
 
 	if entry.Message != "an administrator from 127.0.0.1 presented a session token that is not one this server issued" {
@@ -446,10 +433,9 @@ func TestConfigSocketClosesAConnectionWhoseTokenItDoesNotRecognize(t *testing.T)
 	}
 }
 
-// TestAnAdministratorConnectionThatJoinedIsRecorded is the first of the three facts the listener socket
-// already reports and this one said nothing about. When the administrator's own view of the server stops
-// working, "did it even connect, and when" is the first question, and a log that records everything else
-// about a deployment could not answer it.
+// An administrator connection that joined is recorded in the server log: when the
+// administration interface stops working, whether it ever connected and when is the
+// first question an operator asks.
 func TestAnAdministratorConnectionThatJoinedIsRecorded(t *testing.T) {
 	fixture := newFixture(t)
 
@@ -472,9 +458,9 @@ func TestAnAdministratorConnectionThatJoinedIsRecorded(t *testing.T) {
 	}
 }
 
-// TestAnAdministratorConnectionThatEndedIsRecorded is the other end of the same fact. An administrator
-// connection that dropped in the middle of the night is the difference between a page that was closed and a
-// server that let go of it, and only the log can say which.
+// An administrator connection that ended is recorded: a connection that dropped in the
+// middle of the night is the difference between a page that was closed and a server that
+// let go of it, and only the log can say which.
 func TestAnAdministratorConnectionThatEndedIsRecorded(t *testing.T) {
 	fixture := newFixture(t)
 
@@ -498,12 +484,10 @@ func TestAnAdministratorConnectionThatEndedIsRecorded(t *testing.T) {
 	}
 }
 
-// TestAnAdministratorConnectionBehindAProxyIsRecordedByTheAddressItCameFrom is why the address is read the
-// way the rest of the server reads it rather than taken off the socket. A deployment behind a reverse proxy
-// hands the socket over from the proxy's own address; the forwarding header is the only thing that says who
-// actually connected. Every other entry in this log names the client — a listener that joined, a login
-// attempt, a request the server could not read — and an administrator's connection named the proxy instead
-// would make a search for one machine answer with half the truth.
+// An administrator connection behind a proxy is recorded by the address in the
+// forwarding header rather than the proxy's own: every other entry in this log names the
+// client, and naming the proxy here would make a search for one machine answer with half
+// the truth.
 func TestAnAdministratorConnectionBehindAProxyIsRecordedByTheAddressItCameFrom(t *testing.T) {
 	fixture := newFixture(t)
 
@@ -517,11 +501,10 @@ func TestAnAdministratorConnectionBehindAProxyIsRecordedByTheAddressItCameFrom(t
 	}
 }
 
-// TestStoppingTheSessionsReportsEveryConnectionItIsHolding is the shutdown half of the two facts this socket
-// reports. Shutting an address down does not wait for a connection the server has taken over, and the end of
-// a stop is where the database the log lives in is closed. A departure noticed after that is an entry the
-// server can no longer write: the log view then holds an administrator connection that began and never
-// ended, which is exactly the shape that makes an operator hunt for a fault that is not there.
+// Stopping the sessions reports every connection the server is still holding: the end of
+// a stop is where the log's database closes, so a departure noticed later could never be
+// written and the log view would hold an administrator connection that began and never
+// ended.
 func TestStoppingTheSessionsReportsEveryConnectionItIsHolding(t *testing.T) {
 	fixture := newFixture(t)
 
@@ -560,11 +543,9 @@ func TestStoppingTheSessionsReportsEveryConnectionItIsHolding(t *testing.T) {
 	}
 }
 
-// TestClosingTheSessionsWaitsForADepartureAlreadyOnItsWay is the half of the shutdown that ending the
-// connections does not cover, on the socket the administration interface holds open. A connection that let go a moment
-// earlier is already being reported by the goroutine that was reading it, which took the connection out of the
-// set before it wrote the entry — so the close finds nothing to report and nothing to wait for, says that the
-// server stopped, and closes the database the log lives in while that entry is still on its way.
+// Closing the sessions waits for a departure already on its way: the read loop took the
+// connection out of the set before writing its entry, so the close finds nothing to wait
+// for and would otherwise close the log's database while that entry is still coming.
 func TestClosingTheSessionsWaitsForADepartureAlreadyOnItsWay(t *testing.T) {
 	logs := &heldLogs{
 		Logs:    &fakes.Logs{},
@@ -621,12 +602,10 @@ func TestClosingTheSessionsWaitsForADepartureAlreadyOnItsWay(t *testing.T) {
 	}
 }
 
-// A connection that has not presented a credential is not pushed anything.
-//
-// The legacy server registers the connection the moment it upgrades and pushes to everything it has
-// registered, so a peer that opens the socket and says nothing receives the whole configuration — every
-// access code, every apikey, and every downstream credential — as soon as anybody saves it. Repaired by the owner's decision: the connection is open, and it is told nothing until it
-// says who it is.
+// A connection that has not presented a credential is pushed nothing: the legacy server
+// registered the connection at the upgrade and pushed to everything registered, so a
+// silent peer received every access code and credential as soon as anybody saved. By the
+// owner's decision a silent peer learns nothing until it says who it is.
 func TestConfigSocketSendsNothingToAConnectionThatHasNotPresentedACredential(t *testing.T) {
 	fixture := newFixture(t)
 
@@ -636,10 +615,9 @@ func TestConfigSocketSendsNothingToAConnectionThatHasNotPresentedACredential(t *
 	// one does not.
 	fixture.changed(t)
 
-	// The connection then says who it is, and a second change is made — to a configuration that is visibly
-	// not the first one. Which of the two arrives first is the answer to the question: a connection that was
-	// handed the configuration while it had said nothing is given the first one, and a connection kept out of
-	// it is given the second.
+	// The connection then says who it is, and a second, visibly different change is made:
+	// which of the two arrives is the answer - a peer kept out of the configuration is
+	// given the second.
 	fixture.present(t, conn, socketToken)
 	fixture.awaitCredential(t, 1)
 
@@ -700,10 +678,9 @@ func TestConfigSocketKeepsAConnectionThatSaysNothing(t *testing.T) {
 	fixture.present(t, conn, socketToken)
 	fixture.awaitCredential(t, 1)
 
-	// A listener connection that stops answering is ended within a minute. This one is not held to any
-	// interval at all, because there is nothing it is being asked to answer: a test cannot wait the minute a
-	// listener is given, so it waits a period that would already have ended a socket being timed out at any
-	// interval a server would plausibly pick for one that has to stay open across a whole editing session.
+	// A listener connection that stops answering is ended within a minute, and this socket
+	// is not held to any interval at all: the test waits a period that would already have
+	// ended a socket being timed out at any interval a server would plausibly pick.
 	time.Sleep(600 * time.Millisecond)
 
 	fixture.changed(t)
@@ -713,9 +690,9 @@ func TestConfigSocketKeepsAConnectionThatSaysNothing(t *testing.T) {
 	}
 }
 
-// The socket is served by the same upgrader the legacy server used, which refuses a connection that comes
-// from another origin. The listener connection does not have this rule, and the difference is the legacy
-// server's own: one upgrader is asked to accept any origin and the other is left at its default.
+// The socket is served by the upgrader the legacy server used, which refuses a
+// connection from another origin; the listener connection has no such rule, because that
+// upgrader was asked to accept any origin.
 func TestConfigSocketRefusesAConnectionFromAnotherOrigin(t *testing.T) {
 	fixture := newFixture(t)
 
@@ -769,13 +746,10 @@ func TestConfigurationChangeReachesEveryCredentialPresentingConnection(t *testin
 	}
 }
 
-// A connection that has gone away is forgotten rather than written to again, and one connection going away
-// does not stop the others from being told.
-//
-// The legacy server writes to every connection it holds and unregisters the ones that fail. Here the read
-// loop notices a closed peer on its own, which is the same thing the legacy server's read loop does; the
-// branch that forgets a connection a push could not reach is defensive, and is recorded rather than
-// contrived.
+// A connection that has gone away is forgotten rather than written to again, and one peer
+// going away does not stop the others being told: the read loop notices a closed peer on
+// its own, and the branch that forgets a connection a push could not reach is defensive,
+// recorded rather than contrived.
 func TestConfigSocketStopsPushingToAConnectionThatWentAway(t *testing.T) {
 	fixture := newFixture(t)
 
@@ -865,10 +839,10 @@ func capturedConfiguration(t *testing.T) domain.Configuration {
 
 	configuration.Options = domain.DefaultOptions().ApplyMap(submitted)
 
-	// The capture records every site as belonging to no system at all, because the legacy server's query
-	// for sites never asks for the system a site is on. This server reports the system it is stored under,
-	// which is the approved divergence recorded as a preserved quirk, and the comparison states it instead of skipping
-	// the capture.
+	// The capture records every site as belonging to no system because the legacy server's
+	// query for sites never asks for that column; this server reports the system the site
+	// is stored under, the approved divergence recorded as a preserved quirk, and the
+	// comparison states it instead of skipping the capture.
 	for i := range configuration.Systems {
 		for j := range configuration.Systems[i].Sites {
 			configuration.Systems[i].Sites[j].SystemID = configuration.Systems[i].ID
@@ -878,18 +852,10 @@ func capturedConfiguration(t *testing.T) domain.Configuration {
 	return configuration
 }
 
-// capturedConfigGolden is the captured socket push with the two approved divergences stated on it.
-//
-// The first is a preserved quirk: the capture records every site as belonging to no system at all, because the legacy
-// server's query for sites never asks for the system a site is on, and this server reports the system a site
-// is stored under.
-//
-// The second is a preserved quirk. The captured push carries a display order for every talkgroup, and those numbers exist
-// only because computing a listener's configuration sorts the talkgroups the server holds and rewrites each
-// one's order to its new position — on the objects the server itself keeps. The listeners were configured
-// before this push was captured, so the administrator was handed numbers the server had invented. This server
-// copies a system's talkgroups before it sorts or numbers them, so its push carries no talkgroup order keys
-// here at all, and the comparison says so instead of skipping the capture.
+// capturedConfigGolden is the captured socket push with the two approved divergences
+// stated on it: sites under no system reported as the system they are stored under, and
+// no talkgroup display-order keys, because this server copies a system's talkgroups
+// before sorting or numbering them.
 func capturedConfigGolden(t *testing.T) string {
 	t.Helper()
 
@@ -909,10 +875,8 @@ func capturedConfigGolden(t *testing.T) string {
 	return golden
 }
 
-// TestConfigSocketEndsAConnectionThatSendsAnOversizedFrame: the
-// configuration socket reads frames up to the same fixed size as the listener socket. A
-// bigger frame is not a frame the server can act on, and it is never read as a credential:
-// the connection ends and the frame never reaches the credential check.
+// The configuration socket reads frames up to the same fixed size as the listener
+// socket: a bigger frame ends the connection and never reaches the credential check.
 func TestConfigSocketEndsAConnectionThatSendsAnOversizedFrame(t *testing.T) {
 	fixture := newFixture(t)
 
@@ -925,7 +889,7 @@ func TestConfigSocketEndsAConnectionThatSendsAnOversizedFrame(t *testing.T) {
 
 	// A write that fails here is the rule answering early: the socket ends the connection
 	// at the limit, and the client's own write can be the frame's first contact with that
-	// end. What the test insists on is the connection being over, whichever half notices.
+	// end; the test insists the connection is over, whichever half notices.
 	if err := conn.WriteMessage(websocket.TextMessage, big); err != nil {
 		t.Logf("the oversized frame's write failed: %v", err)
 	}
@@ -947,11 +911,10 @@ func TestConfigSocketEndsAConnectionThatSendsAnOversizedFrame(t *testing.T) {
 	}
 }
 
-// TestConfigSocketEndsAConnectionThatStopsAnswering: the
-// server asks its administrator connections every so often, and a connection that stops
-// answering is one the server cannot send the configuration to — a half-open peer holds its
-// goroutine and its slot, and a server that is stopping waits on it. The socket ends the
-// connection within its pong window, the way the listener socket ends a silent listener.
+// The server asks its administrator connections every so often, and one that stops
+// answering holds a goroutine and a slot that a stopping server waits on: the socket ends
+// the connection within its pong window, the way the listener socket ends a silent
+// listener.
 func TestConfigSocketEndsAConnectionThatStopsAnswering(t *testing.T) {
 	fixture := newFixture(t)
 
@@ -980,12 +943,10 @@ func TestConfigSocketEndsAConnectionThatStopsAnswering(t *testing.T) {
 // server's own stop gives its shutdown.
 const shutdownWindow = 10 * time.Second
 
-// TestConfigSocketClosesEveryStalledConnectionInsideTheShutdownDeadline:
-// a server that is stopping closes every administrator connection it is holding, and the close
-// is a write. A peer that stopped reading holds that write for its full deadline, and a close
-// made one connection at a time takes a deadline per stalled connection — a wall of stalled
-// sockets then blows past the server's own shutdown window, which is how a stopping server
-// ends up needing the kill signal. The closes are made together, inside the deadline.
+// A stopping server closes every administrator connection it holds, and a close is a
+// write: a peer that stopped reading holds that write for its full deadline, so closes
+// made one connection at a time blow past the shutdown window. The closes are made
+// together, inside the deadline.
 func TestConfigSocketClosesEveryStalledConnectionInsideTheShutdownDeadline(t *testing.T) {
 	fixture := newFixture(t)
 
@@ -1009,9 +970,9 @@ func TestConfigSocketClosesEveryStalledConnectionInsideTheShutdownDeadline(t *te
 
 	fixture.sessions.mutex.Unlock()
 
-	// Stall every writer: frames bigger than any socket buffer, pushed through the server's
-	// own write path, from the server, while the peers read nothing. Each flood stops when
-	// its write blocks and runs out its deadline — the stalled writer the shutdown has to
+	// Stall every writer: frames bigger than any socket buffer, pushed through the
+	// server's own write path, while the peers read nothing. Each flood stops when its
+	// write blocks and runs out its deadline - the stalled writer the shutdown has to
 	// close past.
 	body := bytes.Repeat([]byte("x"), 4*1024*1024)
 
@@ -1048,9 +1009,9 @@ func TestConfigSocketClosesEveryStalledConnectionInsideTheShutdownDeadline(t *te
 	}
 }
 
-// The status view counts the administrator connections the server is holding. It is shown as what it
-// is — the connections the administration interface holds open, the page reading the count among them —
-// and not as a count of other people.
+// The status view counts the administrator connections the server is holding, shown as
+// the connections the administration interface holds open and not as a count of other
+// people.
 func TestSessionsCountReportsTheConnectionsTheServerIsHolding(t *testing.T) {
 	fixture := newFixture(t)
 
