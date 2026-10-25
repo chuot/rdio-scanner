@@ -23,10 +23,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// The administrator's standing questions, packaged so a client starts a session with them. A prompt
-// is not a capability: it asks a question in the operator's words and names the capabilities the
-// assistant should reach for, in the order that answers it. An assistant that has to work out the
-// sequence itself is an assistant that will work out a different one.
+// The standing questions are the administrator's: each names the capabilities to
+// reach for, in the order that answers the question.
 
 func TestTheAdministratorsStandingQuestionsAreInTheCatalog(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
@@ -132,8 +130,8 @@ func TestExplainRecentErrorsAsksForTheWindowThenEachDistinctError(t *testing.T) 
 	}
 }
 
-// The access audit reads the masked inventory. The inventory carries no record of when a code was
-// last used, and the prompt says where that is answered instead of pretending the inventory knows.
+// The access audit reads the masked inventory and says where last use is
+// answered, rather than pretending the inventory knows it.
 func TestAuditAccessCodesAsksForTheInventoryAndNamesWhereUseIsAnswered(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
 
@@ -164,8 +162,8 @@ func TestOnboardListenerProducesTheExactWriteCallWithTheScopeSpelledOut(t *testi
 	}
 }
 
-// A standing question that was not given the argument it cannot do without says which one is
-// missing. The protocol does not check the declared arguments, so the question checks its own.
+// A standing question missing an argument it cannot do without says which
+// one: the protocol never checks declared arguments.
 func TestAStandingQuestionRefusesAnArgumentItCannotDoWithout(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
 
@@ -189,8 +187,8 @@ func TestAStandingQuestionRefusesAnArgumentItCannotDoWithout(t *testing.T) {
 	}
 }
 
-// The standing questions are the administrator's. The read-only tier's catalog names none, and
-// asking for one by name answers the protocol's own answer and nothing about the deployment.
+// The standing questions are the administrator's: the read-only tier's catalog
+// names none, and asking for one by name answers the protocol's own error.
 func TestTheReadOnlyTierSeesNoStandingQuestion(t *testing.T) {
 	s := newCallerSession(t, readScoped())
 
@@ -209,8 +207,8 @@ func TestTheReadOnlyTierSeesNoStandingQuestion(t *testing.T) {
 	}
 }
 
-// promptText is what a standing question answers, as one block of text: the messages it returns,
-// joined, because an assistant reads them as one instruction.
+// promptText is what a standing question answers: its messages joined into
+// one block, the way an assistant reads an instruction.
 func promptText(t *testing.T, s *session, name string, args map[string]string) string {
 	t.Helper()
 
