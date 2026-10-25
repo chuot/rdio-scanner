@@ -1,12 +1,6 @@
-// Blacklisting a talkgroup while the Systems section is asking to be saved. The system's blacklist is
-// one field of the system row, and the Systems section saves every row it holds, so the list the
-// section is holding is the list the server ends up storing. When the Blacklist action stores an entry
-// for a system whose section is mid-edit, the section has to end up holding the list the server holds:
-// a section that keeps the text it was showing writes that text back over the entry the operator just
-// asked for, and the talkgroup row it was blacklisted from is already gone.
-//
-// The rows are laid out the way the conformance fixture lays them out: the first talkgroup of the
-// first system is row 1 and reference 1514000.
+// the blacklist is one field of the system row: the section saves what it holds
+// after a Blacklist stores an entry, the section must adopt it or overwrite it
+// see the blacklist-slice-coupling maintainer note.
 
 import './dom-shim.js';
 
@@ -20,11 +14,8 @@ import '../presentation/admin/rdio-admin-systems.js';
 
 import { findAll, keystroke, reachField } from './dom-shim.js';
 
-// The page reaches the server through fetch. Recording what fetch is asked to send shows the requests
-// the Blacklist action and the Systems section's Save make, through the page's own api adapter, with no
-// server in the test. The answers are the answers the server gives the same requests: the level endpoint
-// answers the rows it stored beside the system's blacklist, and the section endpoint answers the systems
-// as the store holds them, nested levels included.
+// the test records both requests through the page's api adapter; no server
+// see the level-endpoint-echo-fixture maintainer note.
 const requests = [];
 
 globalThis.fetch = async (url, options = {}) => {
@@ -121,8 +112,7 @@ function blacklistButton(el) {
   return findAll(el, (node) => node.tag === 'button' && node.textContent === 'Blacklist talkgroup')[0];
 }
 
-// The system row of the Systems section, as the section holds it: the operator's field, saved by the
-// section's own Save control.
+// the Systems section's system row: the operator's field, saved by its Save
 function systemsRow(store, systemId) {
   return (store.getState()['section:systems']?.working ?? []).find((system) => system.id === systemId) ?? null;
 }
@@ -139,8 +129,7 @@ function snackbarText() {
   return document.querySelector('rdio-snackbar')?.textContent ?? '';
 }
 
-// The control of the section's save bar: Save, Discard. The bar is a component of its own, and it
-// answers the way the page's bar answers once it is connected.
+// the save bar is its own component: Save and Discard, like the page's bar
 function barControl(el, name) {
   const bar = findAll(el, (node) => node.tag === 'rdio-admin-section-bar')[0];
 
@@ -149,8 +138,7 @@ function barControl(el, name) {
   return findAll(bar, (node) => node.tag === 'button' && node.className.split(/\s+/).includes(name))[0];
 }
 
-// The control of one field of one row of the Systems section, the way the operator reaches it: the
-// row's field carrying that name, and the control inside it.
+// one field of one row as the operator reaches it: the field name, inner control
 function fieldControl(el, rowIndex, title) {
   const row = el.querySelectorAll('.rdio-admin-row')[rowIndex];
   const field = [...row.querySelectorAll('rdio-form-field')].find((f) => f.querySelector('label')?.textContent === title);
@@ -158,10 +146,8 @@ function fieldControl(el, rowIndex, title) {
   return field?.querySelector('input, select, textarea') ?? null;
 }
 
-// The operator's sequence: a field of the system row is edited and not saved, a talkgroup of that
-// system is blacklisted, and the Systems section is saved to finish the edit. The edit is one the
-// section marks as its own — the system's label — so it is not the blacklist field. The reading taken
-// after the click and before the section's Save is the state the click leaves the section in.
+// the sequence: edit a system field unsaved, blacklist one of its talkgroups
+// then save the Systems section; the reading before Save is the click's state
 async function editASystemFieldThenBlacklist({ saveSystems = true } = {}) {
   requests.length = 0;
 
@@ -200,9 +186,7 @@ async function editASystemFieldThenBlacklist({ saveSystems = true } = {}) {
   return { store, saved, afterClick, systemsSection };
 }
 
-// The operator's only pending edit in the Systems section is the blacklist field itself. The click
-// stores the list the server accepts, and the section is left holding it: nothing is pending any
-// more, and the section says so by not asking to be saved.
+// if the only pending edit was the blacklist field, storing it clears dirtiness
 test('a Systems section whose only pending edit was the blacklist field stops asking to be saved when the Blacklist action stores its entry', async () => {
   requests.length = 0;
 
@@ -231,10 +215,8 @@ test('a Systems section whose only pending edit was the blacklist field stops as
   assert.equal(systemsRow(store, 1)?.blacklists, '1514000', 'the Blacklist action left the section holding the draft the operator typed, not the list the server stored');
 });
 
-// What the operator reads when they come back to the Systems section after the action: the field
-// holding the list the server stored, the talkgroup they blacklisted named by its reference. The
-// section is asking to be saved for the edit they made in another field, which is the state the
-// report left them in.
+// during another pending edit the field shows the stored list
+// and names the blacklisted talkgroup by its reference
 test('the Systems section shows the blacklisted talkgroup after the Blacklist action, while it is asking to be saved for another edit', async () => {
   requests.length = 0;
 
@@ -256,9 +238,7 @@ test('the Systems section shows the blacklisted talkgroup after the Blacklist ac
   assert.equal(fieldControl(systemsSection, 0, 'Blacklists')?.value, '1514000', 'the Blacklists field the operator reads after the Blacklist action is not the list the server stored');
 });
 
-// The draft the operator was writing in the Systems section's own Blacklists field, never sent. The
-// click stores the list the server accepts, the field ends up holding that list, and the click says
-// what it replaced. The section's Save then stores the list the server already holds.
+// the click replaces an unsaved Blacklists draft and says what it replaced
 test('the Blacklist action replaces an unsaved draft of the Blacklists field with the list it stores, and says so', async () => {
   requests.length = 0;
 
@@ -294,9 +274,8 @@ test('the Blacklist action replaces an unsaved draft of the Blacklists field wit
   assert.equal(store.getState()['blacklists:1'].working, '1514000', 'the list the page holds after the Systems section saved is not the list the server holds');
 });
 
-// The operator decides not to finish the edit they started. Discard in the Systems section takes the
-// edit back out, and the list the Blacklist action stored stays: it is the server's, not part of the
-// edit being thrown away.
+// Discard retracts the section's own edit only
+// the stored blacklist is the server's, not part of the edit
 test('Discard in the Systems section, after the Blacklist action, leaves the field holding the list the server stored', async () => {
   requests.length = 0;
 

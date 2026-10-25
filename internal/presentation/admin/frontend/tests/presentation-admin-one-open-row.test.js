@@ -1,13 +1,5 @@
-// One row open at a time in the systems tree.
-//
-// The operator edits one talkgroup at a time. Opening a row shrinks the rows that were open, so the
-// list stays short and the save bar under it is reached without scrolling past the rows opened on the
-// way. These readings are taken from the rendered rows: the panel that is open, the message under the
-// control, the warning icon on the row's summary line, and the store's working copy under them.
-//
-// The rows are driven through the event a summary activation produces — the toggle event a click and
-// the keyboard's Enter and Space both leave on the row. The real Enter and Space are walked in the
-// browser harness; the shim has no keyboard.
+// one open row at a time in the systems tree; readings come from the rendered rows
+// rows are driven by the toggle event: the shim carries no keyboard
 
 import './dom-shim.js';
 
@@ -98,8 +90,7 @@ function rows(el) {
   return findAll(el, (node) => node.tag === 'details' && node.dataset.key !== undefined);
 }
 
-// The rows the operator sees open. The reading is the page, not the section's map: the map is what the
-// next render reproduces the page from.
+// open rows are read from the rendered page, not the section's map
 function openRows(el) {
   return rows(el).filter((row) => row.open);
 }
@@ -112,10 +103,8 @@ function rowTitle(row) {
   return texts(findAll(row, (node) => node.className?.split(/\s+/).includes('row-title')))[0] ?? '';
 }
 
-// The summary activation: the row's open state flips, and the row answers with the toggle event a
-// click and the keyboard's Enter and Space both produce. The browser leaves that event on the row the
-// operator activated — it does not bubble it up to the list the rows sit on — so whatever answers it
-// has to answer it on the row.
+// activation flips open state and the row answers with a toggle event;
+// the event lands on the row, it does not bubble, so handlers sit on the row
 function activate(row) {
   row.open = !row.open;
   row.dispatchEvent({ type: 'toggle', target: row, bubbles: false });
@@ -143,8 +132,7 @@ function controlOf(row, title) {
   return findAll(field(row, title), (node) => ['input', 'textarea', 'rdio-select'].includes(node.tag))[0];
 }
 
-// The operator clears the field and walks away from it: the field reveals its message, and the row
-// gains its warning icon.
+// clearing a field then leaving it shows the message and warning icon
 function revealEmptyField(row, title) {
   const input = controlOf(row, title);
 
@@ -163,8 +151,7 @@ function summaries(row) {
   return findAll(row, (node) => node.tag === 'summary');
 }
 
-// The server replaces the rows under the operator's feet: the section rebuilds them from the state it
-// keeps, which is the state the operator's clicks left.
+// the server replaces rows; the section rebuilds from the state the operator left
 function pushRows(store, key, rows) {
   const current = store.getState()[key];
 
@@ -180,8 +167,7 @@ function pushRows(store, key, rows) {
   });
 }
 
-// The four systems-tree sections: the three per-level sections and the systems section. Each shows
-// three rows of the system it opens on, and each saves on its own slice.
+// the four systems-tree sections: three rows of the opened system, own save slice
 const SECTIONS = [
   ['talkgroups', 'rdio-admin-talkgroups', 'subsection:talkgroups:2'],
   ['sites', 'rdio-admin-sites', 'subsection:sites:2'],
@@ -189,10 +175,8 @@ const SECTIONS = [
   ['systems', 'rdio-admin-systems', 'section:systems'],
 ];
 
-// The list a browser hands the section is a NodeList: it carries its rows by index, `forEach`, and
-// iteration, and it carries no `filter`, `map`, or `find`. The shim answers with an array, so the
-// shape the operator's browser has is stated here for the reading to reach the rule the way it
-// reaches it on the page.
+// a browser hands over a NodeList: index, forEach, iteration, no array methods;
+// the shim returns an array, so this restates the browser shape
 function asBrowserRowList(found) {
   return {
     length: found.length,
@@ -218,8 +202,7 @@ function listTheBrowserHands(el) {
   return list;
 }
 
-// CA-001, CA-008: opening a row closes the rows that were open, and the row the operator opened is
-// the one row the section shows open.
+// opening a row closes the rows that were open; exactly one row stays open
 for (const [name, tag, key] of SECTIONS) {
   test(`opening a second ${name} row closes the first and leaves one row open`, () => {
     seed();
@@ -251,8 +234,7 @@ for (const [name, tag, key] of SECTIONS) {
     const [first, second, third] = rows(el);
 
     activate(first);
-    // The keyboard's Enter and Space produce the same activation event a click produces: the reading
-    // drives that event, and the harness walks the real keys.
+    // Enter and Space produce the click activation event on real keys
     activate(second);
     activate(third);
 
@@ -280,8 +262,7 @@ for (const [name, tag, key] of SECTIONS) {
     activate(first);
     activate(second);
 
-    // The rows are rebuilt from the state the operator's clicks left: the render must not leave two
-    // rows open, and must not open a row the operator never opened.
+    // rebuild from the state the operator left: never two open, never an unopened row
     pushRows(store, key, store.getState()[key].working.map((row) => ({ ...row, order: row.order })));
 
     assert.equal(openRows(el).length, 1, 'the rebuild reproduces exactly one open row');
@@ -290,8 +271,7 @@ for (const [name, tag, key] of SECTIONS) {
   });
 }
 
-// CA-003: the row the add control creates is the row the operator came to fill in, so it is the
-// section's one open row and the rows the operator left open close.
+// the add control opens the new row; the rows the operator left open close
 for (const [name, tag] of [['talkgroup', 'rdio-admin-talkgroups'], ['site', 'rdio-admin-sites'], ['unit', 'rdio-admin-units'], ['system', 'rdio-admin-systems']]) {
   test(`pressing the new ${name} control opens the row it creates and closes the row that was open`, () => {
     seed();
@@ -314,8 +294,7 @@ for (const [name, tag] of [['talkgroup', 'rdio-admin-talkgroups'], ['site', 'rdi
   });
 }
 
-// CA-004: shrinking is presentation only. Reading a row is not a change to the section's working copy,
-// and the save bar answers the same as it did before the clicks.
+// reading rows changes nothing: the working copy and the save bar are untouched
 for (const [name, tag, key] of [['talkgroups', 'rdio-admin-talkgroups', 'subsection:talkgroups:2'], ['sites', 'rdio-admin-sites', 'subsection:sites:2'], ['units', 'rdio-admin-units', 'subsection:units:2']]) {
   test(`opening and closing ${name} rows writes nothing to the section's working copy`, () => {
     const store = seed();
@@ -340,8 +319,7 @@ for (const [name, tag, key] of [['talkgroups', 'rdio-admin-talkgroups', 'subsect
   });
 }
 
-// CA-004, the other half: the message the operator revealed in a row, and the row's invalid marker,
-// survive being collapsed by opening another row, and are there when the row is opened again.
+// a revealed message and the invalid marker survive collapse, back on reopen
 for (const [name, tag] of [['talkgroup', 'rdio-admin-talkgroups'], ['site', 'rdio-admin-sites'], ['unit', 'rdio-admin-units'], ['system', 'rdio-admin-systems']]) {
   test(`a collapsed ${name} row keeps the message the operator revealed and its invalid marker`, () => {
     seed();
@@ -370,10 +348,8 @@ for (const [name, tag] of [['talkgroup', 'rdio-admin-talkgroups'], ['site', 'rdi
   });
 }
 
-// CA-009: the rule mounts on the systems-tree lists, and reaches nothing else. The Tools panels are
-// five actions the operator reads together — they open *Import talkgroups CSV* while *Export config*
-// stays open. The OpenAPI endpoint rows are a table of contents the operator reads down: collapsing
-// every endpoint when one opens turns a reference into a single-item lookup.
+// the systems-tree rule reaches nothing else: Tools panels open side by side,
+// and OpenAPI endpoint rows stay a table of contents
 const TOOLS_SEED = {
   auth: { authenticated: true, docker: false, passwordNeedChange: false },
   alerts: {},
@@ -456,9 +432,8 @@ test('the OpenAPI endpoint rows keep opening side by side', () => {
   }
 });
 
-// CA-001, CA-008, on the list the operator's browser hands the section. The rule reads the rows the
-// operator left open off the page; the page answers with a NodeList, and a NodeList that is asked for
-// `filter` answers nothing, which leaves every row the operator opened sitting open on the screen.
+// the open-row harvest runs against the browser-shaped NodeList:
+// asking it for filter yields nothing and leaves every opened row open
 for (const [name, tag] of SECTIONS) {
   test(`a ${name} row opened on the list a browser hands the section closes the rows that were open`, () => {
     seed();

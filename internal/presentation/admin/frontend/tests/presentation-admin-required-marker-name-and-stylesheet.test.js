@@ -1,12 +1,6 @@
-// The name keeps its text. The asterisk is a mark the stylesheet draws beside a field's name; it is
-// never a character the webapp puts into the name, so a screen reader, a search, and the label a
-// control is attached to all read the same word the operator reads.
-//
-// The readings take the marked names on every shape the webapp names a field with — the label inside a
-// form field, the caption span a hand-built row names its field with, and the label of a panel's own
-// form — and read the text of each marked element. The stylesheet reading counts the rules that draw
-// the mark. The last two readings are pins: no name on these surfaces carries an asterisk as text, and
-// no source under the presentation directories composes one into a name.
+// the name keeps its text: the asterisk is a mark the stylesheet draws, never a
+// character put into the name; the shapes read and the asterisk pins are in the hub
+// see the required-asterisk-name-pins maintainer note.
 
 import './dom-shim.js';
 
@@ -100,15 +94,14 @@ function panels(el) {
   return findAll(el, (node) => node.className?.split(/\s+/).includes('rdio-admin-row'));
 }
 
-// The caption span a row names its field with: the systems tree writes it as `.body`, the hand-built
-// sections as `.field-title`. A label inside a form field is the other shape, and is read by its tag.
+// spanClass: the row caption span, .body in the systems tree,
+// .field-title in the hand-built sections
 function spanClass(node) {
   return node.className?.split(/\s+/).find((name) => name === 'field-title' || name === 'body');
 }
 
-// The elements that name the fields of a row, panel, or section: the label inside each form field, and
-// the caption spans. A row built by the shared row builders names each field twice, so a name counts
-// once and the element that counts is the first one the page shows.
+// namedElements: the field labels and caption spans that name a row or panel
+// a shared row names each field twice, so a name counts once
 function namedElements(root) {
   const found = [];
 
@@ -244,9 +237,8 @@ test('no field name on these surfaces carries an asterisk as text', () => {
 });
 
 test('no source under the presentation directories composes an asterisk into a name', () => {
-  // The mark Material composed was a space and an asterisk. A name built with one of those inside its
-  // own text would reach the operator as part of the word. The value the systems lists use for every
-  // system at once is a bare asterisk, and is not a name.
+  // the mark Material composed was a space and an asterisk; a name built with one
+  // reads as part of the word; the every-systems value is a bare asterisk, not a name
   for (const dir of presentationDirs) {
     for (const file of sourceFiles(dir)) {
       const source = readFileSync(file, 'utf8');

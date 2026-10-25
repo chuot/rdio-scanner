@@ -1,10 +1,5 @@
-// The seven administration sections the operator named beyond the systems tree — Groups, Tags,
-// Access, API keys, Downstreams, Dirwatch, Options — read the way the talkgroups row is read: what a
-// row the operator just added says, what appears when they change a field, what the field says after
-// they leave a good value, and what is left after the section is discarded.
-//
-// The readings are taken from the text under the control, written by the form field primitive
-// itself. The rows are the rendered rows; the store's working copy is not the screen.
+// field state tests for the seven sections beyond the systems tree
+// field text comes from the form field primitive; rows are the rendered page
 
 import './dom-shim.js';
 
@@ -92,8 +87,7 @@ function addRow(el) {
 }
 
 function rows(el) {
-  // The row locators take the panels the sections build: the collapsible details rows and the
-  // plain rows alike, so a section's row is the same row whichever shape it carries.
+  // row locators match collapsible details rows and plain rows alike
   return findAll(el, (node) => node.tag === 'details'
     || (node.tag === 'div' && node.className?.split(/\s+/).includes('rdio-admin-row')));
 }
@@ -101,8 +95,8 @@ function rows(el) {
 function field(row, title) {
   const fields = findAll(row, (node) => node.tag === 'rdio-form-field');
 
-  // The systems-tree sections and the row sections with a dialog put a <label> inside the field;
-  // Groups, Tags, and Options name the field in the description row beside it.
+  // systems-tree and dialog sections name the field inside a label;
+  // Groups, Tags, and Options name it in the description row beside the field
   return fields.find((node) => texts(findAll(node, (child) => child.tag === 'label'))[0] === title)
     ?? fields.find((node) => findAll(node.parent, (child) => child.className?.split(/\s+/).includes('field-title'))[0]?.textContent === title);
 }
@@ -142,9 +136,7 @@ function marker(row) {
   return findAll(row, (node) => node.className?.split(/\s+/).includes('row-invalid') && node.hidden !== true)[0] ?? null;
 }
 
-// ---------------------------------------------------------------------------
-// The rows the operator adds in the six row sections.
-// ---------------------------------------------------------------------------
+// rows added by the operator, in the six row sections
 
 const ROW_SECTIONS = [
   ['Groups', 'rdio-admin-groups', 'New Group', 'Label', 'Dispatch'],
@@ -188,8 +180,8 @@ for (const [name, tag, addLabel, title, goodValue] of ROW_SECTIONS) {
 
     const el = attach(tag);
 
-    // The operator edits a saved row: the section is dirty and the field they edited carries its
-    // message. Adding a row is the rebuild the state has to survive.
+    // editing a saved row dirties the section and puts a live message on the field
+    // the field state has to survive the row rebuild
     typeIn(rows(el)[0], title, '');
 
     assert.ok(fieldMessage(field(rows(el)[0], title)), 'the edited field carries its message');
@@ -214,9 +206,7 @@ for (const [name, tag, addLabel, title, goodValue] of ROW_SECTIONS) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// The rules a row shares with the rows beside it: an identifier another row has.
-// ---------------------------------------------------------------------------
+// the duplicate identifier rule shared by sibling rows
 
 const DUPLICATES = [
   ['Access', 'rdio-admin-access', 'Code', 'alpha', 'Code is already defined'],
@@ -238,9 +228,7 @@ for (const [name, tag, title, taken, message] of DUPLICATES) {
   });
 }
 
-// The Ident names the key the listener authenticates with: two rows under the same Ident are two keys
-// nobody can tell apart. The rule is the one Access answers for its Code, and it stands until the
-// operator leaves a value that is the row's own.
+// duplicate API key Idents are indistinguishable to the listener
 test('the API keys section keeps a duplicate Ident reported, marked, and unsavable until the value is unique', () => {
   seed(getAdminContext().store);
 
@@ -260,9 +248,7 @@ test('the API keys section keeps a duplicate Ident reported, marked, and unsavab
   assert.equal(barButton(el, 'save').disabled, false, 'Save answers the section again');
 });
 
-// ---------------------------------------------------------------------------
-// The Options section: one form, no rows.
-// ---------------------------------------------------------------------------
+// the Options section: a single form, no rows
 
 function optionsField(el, key) {
   const row = findAll(el, (node) => node.getAttribute?.('data-control') === key)[0];

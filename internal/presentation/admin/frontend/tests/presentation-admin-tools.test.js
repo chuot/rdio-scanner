@@ -1,7 +1,5 @@
-// Tools panel layout and icons: every
-// panel icon is a valid Material Icons ligature, every panel body follows the
-// standard row pattern, and the config panels are split: Export config first,
-// Import config second, then the csv imports and the password panel.
+// Tools panels: valid Material Icons ligatures and the standard row pattern
+// config panels split: Export config first, Import config second, then csv imports
 
 import './dom-shim.js';
 
@@ -100,8 +98,8 @@ test('the import panel carries the styled file picker and the hidden native inpu
 
   assert.equal(top.length, 1, 'the import panel has no row.top');
 
-  // The styled Choose file button and the chosen-file caption sit in the row; the
-  // native picker is hidden and opens from the button.
+  // the row holds the Choose file button and the chosen-file caption
+  // the native picker is hidden and opens from the button
   assert.equal(findAll(top[0], (node) => node.tag === 'button').length, 1, 'the import row.top has no choose-file button');
   assert.equal(findAll(top[0], (node) => node.className === 'file-name').length, 1, 'the import row.top has no chosen-file caption');
   assert.equal(findAll(panel, isFileInput).length, 1, 'the import panel has no file input');

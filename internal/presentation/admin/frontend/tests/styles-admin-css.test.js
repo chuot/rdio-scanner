@@ -4,17 +4,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// The stylesheets the client build feeds to esbuild. A `//` is not a comment in CSS: the browser
-// throws away the text from the `//` to the next semicolon, and the declaration it throws away is
-// the one the line was standing next to. A stylesheet that carries one cannot be allowed to reach a
-// bundle, so the whole set is checked here.
-//
-// The scan walks the text the way the browser reads it: inside `/* */` a `//` is comment text and
-// harmless, inside a quoted URL (a font or an icon path) it is part of the string, and anywhere else
-// it is a declaration the browser discards.
-//
-// The paths are read from the presentation directory, two directories above the tests' own
-// application directory.
+// no stylesheet may carry //: the browser throws away the text to the next semicolon
+// see the css-scan-rules maintainer note.
 const presentationDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const STYLESHEETS = [

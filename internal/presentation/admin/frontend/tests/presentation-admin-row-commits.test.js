@@ -1,11 +1,5 @@
-// The rows a section commits, and the moment it commits them.
-//
-// A field edit is committed with the marker that keeps the rows under the operator's hands, so the
-// render that sees its own commit returns without rebuilding them. The drag handler was installed by
-// the render that built the rows on the page: the move must commit the rows as the store holds them at
-// the moment of the drop, and the section's validity must answer the same rows.
-//
-// The readings are taken from the rendered rows and from the section's working copy.
+// the rows a section commits, and the moment it commits them
+// a drag commits the rows as the store holds them at the drop
 
 import './dom-shim.js';
 
@@ -68,8 +62,7 @@ function addRow(el) {
 }
 
 function rows(el) {
-  // The row locators take the panels the sections build: the collapsible details rows and the
-  // plain rows alike, so a section's row is the same row whichever shape it carries.
+  // a section's row is a details panel or an rdio-admin-row div
   return findAll(el, (node) => node.tag === 'details'
     || (node.tag === 'div' && node.className?.split(/\s+/).includes('rdio-admin-row')));
 }
@@ -81,8 +74,7 @@ function rowTitles(el) {
 function field(row, title) {
   const fields = findAll(row, (node) => node.tag === 'rdio-form-field');
 
-  // The row sections with a dialog put a <label> inside the field; Groups, Tags, and Dirwatch name
-  // the field in the description row beside it.
+  // dialog sections put a <label> in the field; Groups, Tags, Dirwatch name it in the row
   return fields.find((node) => texts(findAll(node, (child) => child.tag === 'label'))[0] === title)
     ?? fields.find((node) => findAll(node.parent, (child) => child.className?.split(/\s+/).includes('field-title'))[0]?.textContent === title);
 }
@@ -106,8 +98,7 @@ function rowButton(row, label) {
 }
 
 function marker(row) {
-  // The dirwatch row keeps its icon on the page and hides it when the row is valid, so the reading
-  // is the icon the row is showing, not the node sitting behind it.
+  // dirwatch keeps its row-invalid icon and hides it: read the icon the row is showing
   return findAll(row, (node) => node.className?.split(/\s+/).includes('row-invalid') && node.hidden !== true)[0] ?? null;
 }
 
@@ -140,24 +131,21 @@ function dragRow(el, from, to) {
   fire(moved[from], 'dragend');
 }
 
-// The row the operator came to fill in, the value they typed in it, and the move they made while it
-// was still unsaved. The move must carry the row as the operator left it.
+// the move must carry the unsaved row with the value typed in it
 const DRAG_SECTIONS = [
   ['Groups', 'rdio-admin-groups', 'Label', 'Depot', 'Dispatch'],
   ['Tags', 'rdio-admin-tags', 'Label', 'Depot', 'Fire'],
   ['Dirwatch', 'rdio-admin-dirwatch', 'Directory', '/var/spool/new', '/var/spool/first'],
 ];
 
-// What a section answers when its rows change: the Save control answers the rows as the section
-// holds them, and the row's warning icon follows the same reading.
+// the Save control and the row's warning icon answer the same rows
 const VALIDITY_SECTIONS = [
   ['Groups', 'rdio-admin-groups', 'Label', 'Dispatch', 'Delete Group'],
   ['Tags', 'rdio-admin-tags', 'Label', 'Fire', 'Delete Tag'],
   ['Dirwatch', 'rdio-admin-dirwatch', 'Directory', '/var/spool/first', 'Delete dirwatch'],
 ];
 
-// The value that turns the row the add control created into the section's only invalid row: an empty
-// label for Groups and Tags, a network folder Dirwatch refuses.
+// one invalid row each: empty label for Groups and Tags, network path for Dirwatch
 const INVALID_VALUES = { groups: '', tags: '', dirwatch: '\\\\network\\share' };
 
 // The value that makes that row valid again, unique among the rows the section holds.
@@ -200,9 +188,7 @@ for (const [name, tag, title, typed, savedTitle] of DRAG_SECTIONS) {
 for (const [name, tag, title, savedTitle, deleteLabel] of VALIDITY_SECTIONS) {
   const key = name.toLowerCase();
 
-  // The section's validity is recomputed by every commit of its rows. Deleting the row that made the
-  // section unsavable is such a commit: the Save control answers the rows the section holds after the
-  // delete, not the rows as they were when the row was added.
+  // deleting the only invalid row commits the rows, and Save answers them again
   test(`the ${key} Save control answers the rows after the section deletes its only invalid row`, () => {
     seed(getAdminContext().store);
 

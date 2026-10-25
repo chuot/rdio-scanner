@@ -1,18 +1,5 @@
-// The names the systems-selection tree gives its rows.
-//
-// One dialog scopes an access code, an API key, and a downstream: the tree of the deployment's groups,
-// tags, systems, and talkgroups. It named nothing. Every row painted a number — the operator who opened
-// it on a deployment carrying a "Dispatch" group, a "Metro" system, and a "Fire dispatch" talkgroup read
-// `1`, `3`, `10`, `100`, `101`, `11`, `110` — because the tree writes `label ?? String(id)` against model
-// rows that carry no label, so the fallback is the only branch that ever runs. The operator asked for the
-// row's own name first, and the reference number they cross-check it against after it.
-//
-// These readings are taken on the text the row presents, in the order the page presents it, because that
-// text is what the operator reads. Which row a row *is* — the identity the tree hands the keyboard back
-// to — is pinned by the focus readings and is not what this file is about.
-//
-// Every reading below fails against the tree that paints identifiers, except the ones that name the
-// fallback kept on purpose: a row with a reference and no label is still named by that number.
+// the names the systems-selection tree gives its rows: the row's own
+// label first, the reference number after
 
 import './dom-shim.js';
 
@@ -30,8 +17,8 @@ import '../presentation/admin/rdio-systems-selection.js';
 
 import { connectFields, findAll, texts } from './dom-shim.js';
 
-// The config the three sections hand the dialog: a system carries its `systemRef`, a talkgroup its
-// `talkgroupRef`, a group and a tag their stored id and no business reference of their own.
+// the config the three sections hand the dialog: systems carry systemRef,
+// talkgroups talkgroupRef; groups and tags carry only their stored id
 const CONFIG = {
   groups: [{ id: 1, order: 1, label: 'Dispatch' }, { id: 2, order: 2, label: 'Interop' }],
   tags: [{ id: 3, order: 1, label: 'Fire' }],
@@ -57,8 +44,8 @@ function tree(config = CONFIG, value = null) {
   return el;
 }
 
-// Every row of the tree, in the order the page presents it: the identity the tree names the row by, and
-// the words the row says.
+// every tree row in the order the page presents it: its identity
+// and the words it says
 function rows(el) {
   return findAll(el, (node) => node.tag === 'input' && node.type === 'checkbox').map((box) => ({
     node: box.dataset?.node,
@@ -114,8 +101,7 @@ describe('presentation/admin/rdio-systems-selection — the rows name themselves
     assert.deepEqual(bare, [], `the tree names rows by number: ${bare.map((row) => `${row.node} = ${row.text}`).join(', ')}`);
   });
 
-  // Two systems carrying the same label are two systems, and the number beside the label is what tells
-  // them apart. Named by label alone, the dialog would offer the operator two rows that read the same.
+  // two systems sharing a label stay distinguishable by the number after it
   it('keeps two systems that share their label distinguishable by the number after it', () => {
     const el = tree({
       groups: [],
@@ -130,10 +116,8 @@ describe('presentation/admin/rdio-systems-selection — the rows name themselves
   });
 });
 
-// A row the operator has not filled in yet, or a row the server carries with a label cleared away: the
-// tree has to say something an operator can act on. A fresh group row carries no identifier at all and a
-// fresh system row carries no reference yet, so today the tree paints `undefined` and `null`, and a row
-// named by a label that is only spaces ends in a pair of empty parentheses.
+// a row with nothing filled in yet still says something an operator
+// can act on, never undefined, null, or empty parentheses
 describe('presentation/admin/rdio-systems-selection — a row with nothing to say says something true', () => {
   it('names a system the add control created, which has no reference yet', () => {
     const el = tree({ groups: [], tags: [], systems: [{ systemRef: null, label: '', talkgroups: [] }] });
@@ -204,18 +188,15 @@ describe('presentation/admin/rdio-systems-selection — a row with nothing to sa
   });
 });
 
-// ---------------------------------------------------------------------------
-// The three sections that open the dialog. One component answers Access, API Keys, and Downstreams, and
-// it is handed the working copies of the Groups, Tags, and Systems sections — so a label the operator
-// typed and has not saved yet is the label the dialog names, and what the dialog hands back stays the
-// identifiers it stores today.
-// ---------------------------------------------------------------------------
+// the three sections that open the dialog: one component answers Access,
+// API Keys, and Downstreams from the sections' working copies, so an unsaved
+// label names the row and the handback stays stored identifiers
 
 const SEEDED_GROUPS = [{ id: 1, order: 1, label: 'Dispatch' }, { id: 2, order: 2, label: 'Interop' }];
 const SEEDED_TAGS = [{ id: 3, order: 1, label: 'Fire' }];
 
-// The Systems section's rows, as the server hands them over and as the section holds them: `systemRef`
-// and `talkgroupRef` are the business references, `id` is the stored row identity.
+// the Systems section's rows as the server hands them over: systemRef and
+// talkgroupRef are business references, id the stored row identity
 const SEEDED_SYSTEMS = [
   {
     id: 1, order: 1, systemRef: 10, label: 'Metro', blacklists: '', sites: [], units: [],
@@ -234,8 +215,8 @@ const SEEDED_ACCESS = [{ id: 7, order: 1, code: 'front-gate', ident: 'Front desk
 const SEEDED_APIKEYS = [{ id: 10, order: 1, disabled: false, key: 'key-one', ident: 'Recorder', systems: [{ id: 11, talkgroups: '*' }] }];
 const SEEDED_DOWNSTREAMS = [{ id: 13, order: 1, disabled: false, url: 'https://one.example/api', apikey: 'key-one', systems: [{ id: 11, talkgroups: '*' }] }];
 
-// The label the operator has typed in the Systems section and not saved yet: it lives in the working
-// copy, and it is the label the dialog has to name the row with.
+// the label typed in the Systems working copy and not saved yet: the
+// dialog names the row with it
 const EDITED_SYSTEM_LABEL = 'Metro Fire Station';
 
 function slice(baseline) {
@@ -329,8 +310,8 @@ describe('the sections that open the dialog — the names are the labels the sec
 
       chooseSystems(row).dispatchEvent({ type: 'click' });
 
-      // The opening runs through the promise the dialog resolves on an action, so the reading is taken
-      // once the section has painted it.
+      // wait for the promise the dialog resolves on an action, so the
+      // reading sees the painted section
       await new Promise((resolve) => setImmediate(resolve));
 
       const tree = openedTree();
@@ -359,8 +340,8 @@ describe('the sections that open the dialog — the names are the labels the sec
 
       await new Promise((resolve) => setImmediate(resolve));
 
-      // The row the reading ticks is the row the dialog names "Fire dispatch (100)": the reference the
-      // stored value carries is the number the row shows.
+      // the ticked row is the one the dialog names "Fire dispatch (100)":
+      // the row shows the stored reference's number
       activate(boxFor(openedTree(), 'talkgroup:100'));
 
       dialogAction('Select').dispatchEvent({ type: 'click' });

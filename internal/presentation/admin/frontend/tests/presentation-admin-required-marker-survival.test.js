@@ -1,12 +1,7 @@
-// The marks survive the page's own work. A section rebuilds its rows for a great many reasons: the
-// operator adds a row, deletes one, drags one above another, opens a row and closes it, picks another
-// system above a per-level section, discards the section, and the server's answer replaces the working
-// copy under the section. Each of those rebuilds hands the fields back to the page, and a mark that is
-// a declaration survives all of them: it is on the name of the field, and the name is the same name the
-// section built before the rebuild.
-//
-// Each reading takes the marked set of a section, does one of those things to the page, and reads the
-// marked set again.
+// The marks survive the page's own work: each reading takes a section's
+// marked set, rebuilds the rows one of the section's own ways, and
+// re-reads it; a declaration on the field's name survives every rebuild.
+// see the required-marker-survival maintainer note.
 
 import './dom-shim.js';
 
@@ -108,8 +103,7 @@ function dragRow(el, from, to) {
   fire(moved[from], 'dragend');
 }
 
-// The system above a per-level section: the operator picks another system and the section renders the
-// rows of the one they picked.
+// Picking another system makes the section render that system's rows.
 function switchSystem(el) {
   const select = findAll(el, (node) => node.tag === 'rdio-select')[0];
 
@@ -117,8 +111,7 @@ function switchSystem(el) {
   connectFields(el);
 }
 
-// The working copy replaced from outside the section: the server's answer, the reload of a level, the
-// save that hands the section a copy of its own rows.
+// The working copy replaced from outside: a server answer, a reload, a save.
 function replaceWorking(el, key, rows) {
   getAdminContext().store.setState({ [key]: slice(rows) });
   connectFields(el);

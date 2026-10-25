@@ -1,11 +1,6 @@
-// The blacklist the operator edits. The field holds a comma separated list of talkgroup references,
-// and it is the only place the operator edits that list: the section writes what the field holds when
-// the system is saved, and nothing else takes a reference out. A reference the system has no talkgroup
-// for is blacklisted the same way as one it has — the server compares the reference.
-//
-// The fixture lays the system out the way the conformance fixture does: the first talkgroup of the
-// first system is reference 1514000, and the blacklist names that reference beside one the system has
-// no talkgroup for.
+// the Blacklists field is the only place the operator edits the list
+// a ref with no talkgroup here is blacklisted the same: the server compares refs
+// see the blacklist-field-list maintainer note.
 
 import './dom-shim.js';
 
@@ -19,9 +14,8 @@ import '../presentation/admin/rdio-admin-talkgroups.js';
 
 import { findAll } from './dom-shim.js';
 
-// The page reaches the server through fetch. Recording what fetch is asked to send shows the body a
-// save of the section writes, and the answer echoes back what it was given. The talkgroups level
-// answers the rows it stored, the way the level endpoint answers them.
+// fetch records the save body; the answer echoes back what it got
+// see the level-endpoint-echo-fixture maintainer note.
 const requests = [];
 
 globalThis.fetch = async (url, options = {}) => {
@@ -84,8 +78,7 @@ function blacklistsControl(el) {
   return findAll(el, (node) => node.tag === 'textarea')[0];
 }
 
-// The rows a per-reference editor would render, and the control it would take a reference out with.
-// Neither belongs on the page: the field is the editor.
+// per-reference editor rows are not on the page: the field is the editor
 function entryRows(el) {
   return findAll(el, (node) => node.className?.split(/\s+/).includes('rdio-admin-blacklist-entry'));
 }
@@ -113,10 +106,8 @@ test('the systems section edits the blacklist through the field alone', () => {
     'the section renders a control that takes a reference out of the list, where the field is the editor');
 });
 
-// The reading the operator's report is made of. The system's blacklist starts empty, the operator
-// blacklists a talkgroup in the Talkgroups section, and then opens the Systems section to look at it.
-// The section is built after the action, which is the operator opening it after the click, with the
-// page never reloaded.
+// the systems section is built after the talkgroups action, no reload in between
+// so the reading is what the operator sees opening the section afterward
 function storedSystem() {
   return [
     {

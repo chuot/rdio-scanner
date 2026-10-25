@@ -1,10 +1,5 @@
-// The mark a screen reader hears. The asterisk the operator reads is drawn by the stylesheet, so the
-// assistive technology reading the page needs the same fact on the control itself: `aria-required`
-// true on a field the webapp insists on, and nothing at all on a field it accepts empty. The mark
-// names the declaration, so the attribute follows the declaration and not the row's state.
-//
-// The control is what carries it: the box the operator types in, and for a pick list the select the
-// primitive builds inside it — the element the label is attached to and the screen reader announces.
+// aria-required puts the required mark on the control a screen reader announces:
+// the input box, or the select the pick-list primitive builds
 
 import './dom-shim.js';
 
@@ -116,10 +111,7 @@ function spanClass(node) {
   return node.className?.split(/\s+/).find((name) => name === 'field-title' || name === 'body');
 }
 
-// The name a field answers for, and the field carrying it. A field built with a label inside it
-// answers for the label in it; a field a hand-built row names with a caption beside it is the field
-// that sits in the same row as that caption, which is the shape the options panel and the hand-built
-// rows use, and the caption is the name the mark rides.
+// namedField pairs a field with its naming element: inner label, or row caption
 function namedField(root, name) {
   const fields = findAll(root, (node) => node.tag === 'rdio-form-field');
 
@@ -141,9 +133,7 @@ function namedField(root, name) {
   return undefined;
 }
 
-// The control the field resolves to: the box the operator types in, or the select the pick-list
-// primitive builds inside the field, which is the element a label is attached to and a screen reader
-// announces.
+// controlFor resolves the field to its input, or the pick-list primitive's select
 function controlFor(root, name) {
   const found = namedField(root, name);
 
@@ -157,9 +147,7 @@ function ariaRequired(root, name) {
   return controlFor(root, name)?.getAttribute('aria-required') ?? null;
 }
 
-// The name the field carries the mark on, marked or not: the reading pairs the mark on the name with
-// the attribute on the control, so a field whose name carries no mark cannot answer with a required
-// control, and a marked name cannot leave its control unannounced.
+// nameCarriesMark reads the mark on the named element, marked or not
 function nameCarriesMark(root, name) {
   return requiredMark(namedField(root, name)?.naming);
 }
@@ -223,7 +211,4 @@ for (const [name, surface, fields] of UNMARKED_CONTROLS) {
   });
 }
 
-// The native attribute is the browser's own validation and is not this declaration: the mark is the
-// section's, and the primitive's attribute is the reading of it. The fields the sections declare are
-// read above; the fields they do not are read below, and the browser's own attribute is left to the
-// forms that already carried it.
+// the browser's native required attribute is its own validation, not the section's

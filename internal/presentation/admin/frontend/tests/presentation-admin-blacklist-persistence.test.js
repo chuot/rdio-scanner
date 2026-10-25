@@ -1,11 +1,6 @@
-// Blacklisting a talkgroup. The action writes two things the operator means as one: the talkgroup row
-// goes away, and the system refuses that talkgroup. Both have to be stored by the save of the section
-// the operator is standing in, and the entry has to name the number the server compares a recording
-// against — the talkgroup's reference, not the identifier the store gave the row.
-//
-// The rows here are laid out the way the conformance fixture lays them out: the first talkgroup of the
-// first system is row 1 and reference 1514000. The two numbers differ, which is what makes a reading
-// that names one of them say which one the action wrote.
+// blacklisting is two stored halves meant as one: row removed, ref refused
+// the entry names the talkgroup reference the server compares, not the store's id
+// see the blacklist-row-ref maintainer note.
 
 import './dom-shim.js';
 
@@ -20,11 +15,8 @@ import { sectionWorking } from '../presentation/admin/section-shell.js';
 
 import { findAll, keystroke, reachField } from './dom-shim.js';
 
-// The page reaches the server through fetch. Recording what fetch is asked to send shows the request
-// a save of the section makes — the request the browser sends, through the page's own api adapter —
-// with no server in the test. The answer is the answer the server gives the same request: the level
-// endpoint answers the rows it stored, whether they arrived as the list of the level's rows or as the
-// object carrying them beside the system's blacklist.
+// the test records the request the page's own api adapter sends; no server
+// see the level-endpoint-echo-fixture maintainer note.
 const requests = [];
 
 globalThis.fetch = async (url, options = {}) => {
@@ -77,8 +69,8 @@ function seed() {
     }
   }
 
-  // The state a loaded configuration leaves the page holding: every level of every system, and the
-  // system's blacklist the talkgroups section edits beside its rows.
+  // a loaded configuration holds every level of every system,
+  // plus the blacklist the talkgroups section edits beside its rows
   for (const system of systems()) {
     state[`blacklists:${system.id}`] = {
       systemId: system.id,
@@ -93,8 +85,7 @@ function seed() {
   store.setState({
     ...state,
     'section:systems': { baseline: structuredClone(systems()), working: systems(), dirty: false, invalid: false, conflict: false },
-    // The talkgroup rows point at a group and a tag: the rows are valid, so the level's save bar
-    // answers the way it answers for a system the operator has filled in.
+    // valid rows leave the save bar in its settled answer
     'section:groups': { baseline: [{ id: 1, label: 'Dispatch' }], working: [{ id: 1, label: 'Dispatch' }], dirty: false, invalid: false, conflict: false },
     'section:tags': { baseline: [{ id: 2, label: 'Law' }], working: [{ id: 2, label: 'Law' }], dirty: false, invalid: false, conflict: false },
     alerts: {},
@@ -115,9 +106,7 @@ function blacklistButton(el) {
   return findAll(el, (node) => node.tag === 'button' && node.textContent === 'Blacklist talkgroup')[0];
 }
 
-// The text the page is holding as this system's blacklist: the systems section's own field today,
-// the per-system slice the talkgroups level saves with from this feature on. The reading asks what
-// the page is holding for this system, not where it keeps it.
+// reads the blacklist the page holds for this system, not where it is kept
 function blacklistText(store, systemId) {
   const slice = store.getState()[`blacklists:${systemId}`];
 
@@ -126,8 +115,8 @@ function blacklistText(store, systemId) {
   return sectionWorking('systems')?.find((system) => system.id === systemId)?.blacklists ?? '';
 }
 
-// The payload a level save sends: the rows, and — from this feature on — the blacklist text saved
-// with them. A bare array is the shape that carries rows alone.
+// a level save payload is the rows plus the blacklist text;
+// a bare array is rows alone
 function rowsOf(body) {
   return (Array.isArray(body) ? body : body.talkgroups) ?? [];
 }
@@ -155,9 +144,8 @@ test('blacklisting a talkgroup writes the reference the server compares, not the
   assert.equal(blacklistText(store, 1), '1514000', 'the blacklist entry the action wrote names the row identifier, not the talkgroup reference');
 });
 
-// The action as the operator counts it: one click on a saved talkgroup's Blacklist action stores the
-// row removal and the blacklist entry. The reading is taken with the section's Save control untouched,
-// so what it finds is what the click alone leaves stored.
+// one Blacklist click on a saved talkgroup stores both halves with Save untouched
+// so the reading is what the click alone leaves stored
 async function blacklistOneTalkgroup({ edit } = {}) {
   requests.length = 0;
 
@@ -176,8 +164,7 @@ async function blacklistOneTalkgroup({ edit } = {}) {
   return { store, level, body };
 }
 
-// The Label control of one talkgroup row: the field an operator edits in a row they are not
-// blacklisting, which is the edit the click is expected to store along with its own two halves.
+// a Label edit in a row that is not blacklisted is what the click must store too
 function labelControl(el, index) {
   const row = el.querySelectorAll('.rdio-admin-row')[index];
   const field = row.querySelectorAll('rdio-form-field').find((f) => f.querySelector('label')?.textContent === 'Label');

@@ -1,9 +1,5 @@
-// The rule the systems-tree sections apply to their rows: one row open at a time, and the scroll the
-// section gives back when the rows above the opened row collapse.
-//
-// Both readings are arithmetic over the section's own state — the keys of the rows that are open, the
-// key of the row the operator opened, and the two measurements of the opened row's position. Neither
-// touches the DOM, the store, or the clock, so the failure of a reading names the rule and nothing else.
+// systems-tree row rule: one row open at a time, plus the scroll back after rows
+// above the opened row collapse; arithmetic over section state, no DOM or clock
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

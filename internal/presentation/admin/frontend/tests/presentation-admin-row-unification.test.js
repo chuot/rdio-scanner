@@ -91,8 +91,7 @@ test('Dirwatch renders its help through the standard caption block', () => {
 
   const el = section('rdio-admin-dirwatch');
 
-  // The standard caption block is a p with span.body and span.caption; the retired
-  // dirwatch builder used span.row-title and span.row-caption.
+  // the standard caption block is a p with span.body and span.caption
   const bodies = findAll(el, (node) => node.tag === 'span' && node.className === 'body');
   const captions = findAll(el, (node) => node.tag === 'span' && node.className === 'caption');
 
@@ -109,8 +108,7 @@ test('the dirwatch Directory caption renders its emphasized tokens as text', () 
 
   const el = section('rdio-admin-dirwatch');
 
-  // The Directory caption is a list of nodes (text plus bold token names); assigning
-  // an array to textContent rendered "[object Text]" literals in the browser.
+  // the Directory caption is a node list; an array in textContent rendered [object Text]
   const captions = findAll(el, (node) => node.tag === 'span' && node.className === 'caption');
 
   const directory = captions.find((node) => node.textContent.includes('Path of the'));

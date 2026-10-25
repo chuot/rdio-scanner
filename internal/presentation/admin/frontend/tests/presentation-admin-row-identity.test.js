@@ -1,10 +1,5 @@
-// The rows the operator added and has not saved. The section remembers each of them as itself: the
-// open panel and the messages the operator revealed belong to the row they worked on, and not to the
-// position a render happens to leave that row in.
-//
-// The readings are taken from the rendered rows — the panel that is open, and the text under the
-// control. The rows are named by the order the section presents them: the row the last add created is
-// the first, the row the first add created follows it, and the saved rows come after.
+// unsaved rows stay themselves: the open panel and the revealed messages belong to the row
+// rows are named by the order the section presents them: last add first, saved rows last
 
 import './dom-shim.js';
 
@@ -101,16 +96,13 @@ function addRow(el) {
   return rows(el)[0];
 }
 
-// The rows on the page, in the order the section presents them. The systems tree builds its rows as
-// panels that open; the sections that build their rows by hand build them as panels of their own.
+// the rows on the page, in the order the section presents them
 function rows(el) {
   return findAll(el, (node) => node.tag === 'details'
     || (node.tag === 'div' && node.className?.split(/\s+/).includes('rdio-admin-row')));
 }
 
-// The name a field answers to: the systems-tree sections and the row sections with a dialog put a
-// <label> inside the field, and the sections that build their rows by hand name the field in the
-// description row beside it.
+// a field answers to its <label>, or to the field-title row beside it
 function fieldTitle(node) {
   return texts(findAll(node, (child) => child.tag === 'label'))[0]
     ?? findAll(node.parent, (child) => child.className?.split(/\s+/).includes('field-title'))[0]?.textContent;
@@ -164,8 +156,7 @@ function dragRow(el, from, to) {
   fire(moved[from], 'dragend');
 }
 
-// The summary activation the operator performs to reach the fields of a row: the row's open state
-// flips, and the row answers with the toggle event a click and the keyboard's Enter and Space leave.
+// activation flips the row's open state and fires the toggle event
 function activate(row) {
   row.open = !row.open;
   row.dispatchEvent({ type: 'toggle', target: row });
@@ -176,10 +167,8 @@ function openRows(el) {
   return rows(el).filter((row) => row.open);
 }
 
-// The systems tree: the systems section and the three per-level sections. Each row the operator adds
-// is filled in the same way, and each section's delete control names its own row. Every section opens
-// the row its add control creates, and that row is the section's one open row: the rows the operator
-// left open close with it.
+// the systems tree: the systems section and the three per-level sections
+// each section opens the row its add creates, and closes the rest
 const TREE = [
   ['talkgroup', 'rdio-admin-talkgroups', 'Delete talkgroup'],
   ['site', 'rdio-admin-sites', 'Delete site'],
@@ -188,8 +177,7 @@ const TREE = [
 ];
 
 for (const [name, tag, deleteLabel] of TREE) {
-  // The reading the operator named: they came to fill in a row, they reached a field of it, and the
-  // add control for a second row moved that row's state onto the row they never touched.
+  // a second add must not move a revealed message onto an untouched row
   test(`a second new ${name} row keeps the message the operator revealed on the first new row`, () => {
     seed(getAdminContext().store);
 
@@ -211,8 +199,7 @@ for (const [name, tag, deleteLabel] of TREE) {
     assert.deepEqual(messages(second), [], 'the row the second add created says nothing about fields nobody reached');
   });
 
-  // The row the operator deleted was open, and its messages were revealed. The row the add control
-  // creates next is a row of its own: it says nothing, and it opens only as its section opens a row.
+  // a row added after a delete inherits nothing from the row it replaces
   test(`a ${name} row added after deleting a new row is a row of its own`, () => {
     seed(getAdminContext().store);
 
@@ -238,8 +225,7 @@ for (const [name, tag, deleteLabel] of TREE) {
     }
   });
 
-  // The row the operator reached is the second row on the page. Dragging it above the row the last
-  // add created moves the row, and the message travels with it.
+  // dragging the second row moves its revealed message with the row
   test(`dragging a new ${name} row moves the message with the row the operator reached`, () => {
     seed(getAdminContext().store);
 
@@ -248,8 +234,7 @@ for (const [name, tag, deleteLabel] of TREE) {
     addRow(el);
     addRow(el);
 
-    // The row the second add created is the section's one open row, so the operator opens the row
-    // they came to fill in before they reach its fields.
+    // only the second add's row is open, so this row is opened by hand first
     activate(rows(el)[1]);
     leave(rows(el)[1], 'Label');
 
@@ -263,8 +248,7 @@ for (const [name, tag, deleteLabel] of TREE) {
   });
 }
 
-// The identity is the row's own, so the values the operator typed stay in the row they typed them in
-// across the second add: the reading the sections' own row-staying behaviour already promises.
+// typed values stay in the row they were typed in across a second add
 test('the second new site row leaves the label the operator typed in the first new row', () => {
   seed(getAdminContext().store);
 
@@ -285,10 +269,7 @@ test('the second new site row leaves the label the operator typed in the first n
   assert.deepEqual(working.map((site) => site.label), ['', 'Depot', 'East'], 'the working copy holds both new rows, each with what the operator left in it');
 });
 
-// ---------------------------------------------------------------------------
-// The six sections that build their rows by hand. Their rows are panels of their own, with no open
-// state to carry: the reading here is the message the operator revealed, and the row it belongs to.
-// ---------------------------------------------------------------------------
+// the six hand-built row sections: no open state, only the revealed message and its row
 
 const HAND_BUILT = [
   ['groups', 'rdio-admin-groups', 'Label', 'Label is required', 'Delete Group'],

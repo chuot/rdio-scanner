@@ -1,9 +1,5 @@
-// Every control a list section's rows let the operator edit must announce a name, and the name
-// must carry the words the row shows beside the control. A pick list that names its control on the
-// host element and never moves the name onto the control announces nothing, and a field whose label
-// is attached to no control leaves a screen reader reading a control it cannot identify. The
-// readings below walk every form field each section renders and name the control the accessibility
-// tree would speak for.
+// every editable control in a section's rows must announce a name matching the
+// words beside it; host-element names and unattached labels announce nothing
 
 import './dom-shim.js';
 
@@ -86,8 +82,7 @@ function attach(tag) {
   return el;
 }
 
-// The words the row shows as this field's name: the label inside the form field where the section
-// uses one, the caption span named beside the control where the row is laid out by hand.
+// the field's displayed name: the inner label, or the caption beside the control
 function fieldTitle(field) {
   const label = findAll(field, (node) => node.tag === 'label')[0];
 
@@ -102,9 +97,8 @@ function fieldTitle(field) {
   return '';
 }
 
-// The name a screen reader is handed for the control itself: the name written on the control, or
-// the text of the label attached to it. A name sitting on any other element — the pick list's host
-// around the control, say — announces nothing and is not read.
+// the announced name is written on the control or on its attached label;
+// a name on any other element, like a pick list host, announces nothing
 function announcedName(field, control) {
   const written = control.getAttribute('aria-label') ?? control.getAttribute('aria-labelledby');
 

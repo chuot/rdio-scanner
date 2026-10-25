@@ -1,26 +1,6 @@
-// The dialog's actions, read at the moment they run.
-//
-// An action is how an operator answers a dialog: *Select* hands what the dialog's content holds to
-// whatever opened it, *Cancel* hands nothing. Taking the dialog out of the page is the moment its
-// content reports that nothing was picked — the systems and talkgroups tree, for instance, answers its
-// own dismissal hook when it leaves the page, and a dismissal is the answer "nothing was picked". An
-// action that runs *after* its own dialog has left the page therefore never gets to answer: the
-// dismissal has already settled the exchange, and the operator's pick is thrown away.
-//
-// That is not a hypothetical. Measured in a real browser on the shipped administration application:
-// unticking one talkgroup of a system the scope covered completely and pressing *Select* left the row
-// reading exactly what it reads after *Cancel*, the section stayed clean, and the server kept the scope
-// it had. The order the primitive's own click handler runs in is the cause — it closes the dialog and
-// then calls the action — and these readings are what pin it, because nothing ever tested the wiring
-// between this primitive and the content it carries.
-//
-// The readings are stated as facts about the page: the dialog and the content it carries are still on
-// the page when the action runs, and both are off it afterwards. The shim cannot reach further: it does
-// not run a disconnected callback, so the dismissal that a browser reports on the way out is a fact only
-// a browser can read, and the outcome it produces is measured in the browser harness instead.
-//
-// What these readings do not touch is the dismissal path: Escape, the backdrop, and an action with no
-// handler still take the dialog off the page.
+// the action runs while its dialog and content are still on the page
+// dismissal answers nothing was picked first, so a late pick is lost
+// see the dialog-action-order maintainer note.
 
 import './dom-shim.js';
 
@@ -31,8 +11,7 @@ import '../../../common/frontend/presentation/ui/primitives.js';
 
 import { openDialog } from '../../../common/frontend/presentation/ui/primitives.js';
 
-// The dialog's own action controls, in the order the dialog presents them: the bar the primitive builds
-// holds them, and the content the operator answers through sits above it.
+// the dialog's action buttons, in the order the dialog bar presents them
 function actionButtons(dialog) {
   const bar = dialog.querySelector('.rdio-dialog-actions');
 
@@ -65,8 +44,7 @@ function content() {
   return box;
 }
 
-// A key pressed on the control the keyboard is standing on: the keydown the browser leaves on the
-// control, bubbling to the dialog that answers it.
+// keydown dispatched on the focused control, bubbling to the dialog
 function pressKey(el, key) {
   el.dispatchEvent({ type: 'keydown', key, target: el, preventDefault: () => {} });
 }
@@ -121,8 +99,7 @@ describe('presentation/ui/primitives — the dialog answers with what its action
   });
 
   it('still closes the dialog for an action that carries no handler', () => {
-    // The webapps answer with a plain confirmation too: the update prompt's *No* button names nothing
-    // but closing the box, and the operator who presses it is refused the reload.
+    // actions with no handler, like the update prompt's No, still close the dialog
     const dialog = openDialog({
       title: 'New version available',
       content: 'A new version of the scanner webapp is available. Would you like to reload the page?',

@@ -1,15 +1,6 @@
-// The structure the operator's keyboard and screen reader travel through, in the administration
-// application: the skip link that comes before every control of the page, the content region the
-// section sits in, the heading that names the section the operator is on, and the list the sections
-// themselves sit in.
-//
-// The skip link is the page's own markup and the stylesheet's own rule, so those two readings are
-// taken from the files the build ships. The rest is taken from the rendered shell: the nav, the
-// content region, and the heading the shell puts at its head, read the way an operator reads them.
-//
-// The fifteen section labels are written out here on purpose, in the order the navigation must show them.
-// They are the words the operator reads in the navigation; a test that takes them from the code under test
-// would pass whatever the code decides to call a section, or to order them by.
+// the page structure keyboard and screen reader travel: skip link, content
+// region, section heading, sections list; the fifteen section labels are written
+// here so the code under test cannot decide them
 
 import './dom-shim.js';
 
@@ -71,10 +62,10 @@ function slice(value) {
   return { baseline: structuredClone(value), working: structuredClone(value), dirty: false, invalid: false, conflict: false };
 }
 
-// The shell, on the section it starts on. Every section the operator can reach is seeded with the
-// empty list the server answers with when nothing is defined, so the reading is taken on a page the
-// operator can actually be on. `docker` puts the shell on a server whose environment names the
-// container, which is the state that takes the directory watches out of the navigation.
+// the shell on a starting section, every reachable section seeded with the
+// server's empty list.
+// docker names the container environment, the state that drops the
+// directory watches item from the navigation
 function shell({ docker = false } = {}) {
   getAdminContext().store.setState({
     auth: { authenticated: true, docker, passwordNeedChange: false },
@@ -115,8 +106,8 @@ function navButtons(nav) {
   return findAll(nav, (node) => node.tag === 'button' && node.dataset.section !== undefined);
 }
 
-// The word the operator reads on a navigation item: the span, not the whole button. The icon beside it is
-// the icon font's own ligature text, which the markup hides from the operator who reads rather than looks.
+// a navigation item's word: the span, not the button, because the icon's
+// ligature text is hidden from read operators
 function navLabel(button) {
   const label = findAll(button, (node) => node.tag === 'span')[0];
 
@@ -130,8 +121,8 @@ function navOrder(el) {
   return navButtons(nav).map((button) => ({ name: button.dataset.section, label: navLabel(button) }));
 }
 
-// The body's own children, in the order the page ships them: the skip link has to be the first of
-// them, because the first thing a keyboard finds on a page is the first thing the page puts there.
+// the body's children in shipped order: the skip link must be first,
+// where the keyboard finds it
 function bodyElements(html) {
   const body = html.slice(html.indexOf('<body') + 5, html.indexOf('</body>'));
 
@@ -157,9 +148,9 @@ describe('admin structure — the route into the page', () => {
     assert.ok(base, 'the stylesheet has no resting rule for the skip link');
     assert.ok(focus, 'the stylesheet has no rule that reveals the skip link on focus');
 
-    // Parked by clipping itself, and revealed by taking the clip off. A link moved outside the
-    // page's scrollable area is dropped from the keyboard's route — the browser will not land on a
-    // control it cannot scroll into view — and this is the control the keyboard has to reach first.
+    // the skip link parks by clip-path inset(50%) and is revealed by removing
+    // the clip: a link moved outside the scrollable area leaves the keyboard's
+    // route, and the keyboard must reach this control first
     assert.match(base[2], /clip-path:\s*inset\(\s*50%\s*\)/,
       'the skip link is not parked out of sight at rest, so it is on the page before the operator asks for it');
     assert.match(focus[1], /clip-path:\s*none/, 'the rule that reveals the skip link does not bring it back on screen');
@@ -219,8 +210,8 @@ describe('admin structure — the section the operator is on', () => {
     assert.ok(heading, 'the systems section page carries no heading naming it');
     assert.equal(heading.textContent.trim(), 'Systems');
 
-    // The heading is the region's name, so a screen reader reading the region says the section the
-    // operator is on, and says it again when the operator moves.
+    // aria-labelledby names the region by its heading, so the screen reader
+    // says the current section again on every move
     assert.equal(region.getAttribute('aria-labelledby'), heading.getAttribute('id'));
 
     el.openSection('tags');
@@ -273,10 +264,9 @@ describe('admin structure — the list of sections', () => {
     }
   });
 
-  // The column is the operator's map of the deployment, and a map is only worth scanning in the order the
-  // work runs in: look at the server, build the system and the levels that belong to it, name what a
-  // listener browses, get audio in, say who may send and who may listen, set how the server behaves, read
-  // what it did, maintain the deployment, and read the published contract last because it is reference.
+  // the section column follows the order the work runs in: server, system and
+  // levels, listener browsing, audio in, send and listen permission, behavior,
+  // history, maintenance, and the published contract last as reference
   it('shows the sections in the order the administrator works through the deployment', () => {
     const items = navOrder(shell());
 
@@ -298,8 +288,8 @@ describe('admin structure — the list of sections', () => {
       `the four items that follow Systems are not its own levels: ${names.join(', ')}`);
   });
 
-  // Sections that answer one question belong side by side, so the operator finds the sibling of what they
-  // are already looking at instead of scanning the whole column again.
+  // sections answering one question stay side by side, so the operator finds
+  // the sibling without rescanning the column
   it('keeps the sections that answer the same question side by side', () => {
     const names = navOrder(shell()).map((item) => item.name);
 
@@ -311,8 +301,8 @@ describe('admin structure — the list of sections', () => {
     assert.equal(names[names.length - 1], 'openapi', `the column ends with ${names[names.length - 1]}, not with the contract`);
   });
 
-  // A container has no directory for the server to watch, so the item is gone from the column. Everything
-  // else keeps the place it was given.
+  // a container drops the directory watches item from the column and
+  // everything else keeps its place
   it('leaves the container without its directory watches and keeps the rest of the column', () => {
     const items = navOrder(shell({ docker: true }));
 

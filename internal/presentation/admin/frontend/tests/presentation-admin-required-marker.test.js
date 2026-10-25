@@ -1,12 +1,6 @@
-// The names the administration webapp marks with an asterisk, in the four sections built by the
-// shared row builders: the systems section and the three per-level sections.
-//
-// The reading is the page, not the section's declaration. A row the operator just added carries the
-// mark on the name of every field the webapp insists on, before the operator reaches any field — the
-// mark names the rule, not the value in the control, and it is there from the first render.
-//
-// The glyph is the stylesheet's. The suites read the mark on the naming element, and the browser
-// harness reads the character the page renders.
+// The names the webapp marks with an asterisk, in the four row-builder sections.
+// The reading is the rendered page: the mark is on the name from the first render.
+// The glyph is the stylesheet's; the suites read the mark, the harness the character.
 
 import './dom-shim.js';
 
@@ -92,9 +86,7 @@ function rows(el) {
   return findAll(el, (node) => node.tag === 'details');
 }
 
-// The names a row carries the asterisk on. A field is named by the label inside its form field; a
-// hand-built list — the talkgroups Groups boxes — is named by the caption span above it, the shape
-// the sections that build their fields by hand use.
+// The names a row carries the asterisk on: a label, or a hand-built list's caption span.
 function markedNames(row) {
   const names = [];
 
@@ -111,9 +103,7 @@ function markedNames(row) {
   return names.sort();
 }
 
-// The names a row shows at all, marked or not: the reading is the pair — which names carry the mark,
-// and which names the row carries. A field built by the shared row builders is named twice on the
-// page, once by the caption block and once by the label inside its form field, so a name counts once.
+// The names a row shows at all, marked or not; the reading is the marked pair.
 function shownNames(row) {
   const names = new Set();
 
@@ -130,15 +120,13 @@ function shownNames(row) {
   return [...names].sort();
 }
 
-// The caption span a row names its field with: the systems tree writes it as `.body`, the hand-built
-// sections as `.field-title`. A label inside a form field is the other shape, and is read by its tag.
+// The caption span a row names its field with: `.body` or `.field-title`.
 function spanClass(node) {
   return node.className?.split(/\s+/).find((name) => name === 'field-title' || name === 'body');
 }
 
 function fieldOf(row, title) {
-  // The label inside the field, and the caption beside the control: both live inside the form field,
-  // so the field is the one whose own text names the title.
+  // The label and the caption both live inside the form field.
   return findAll(row, (node) => node.tag === 'rdio-form-field')
     .find((node) => findAll(node, (child) => child.tag === 'label' || spanClass(child))
       .some((el) => el.textContent === title));

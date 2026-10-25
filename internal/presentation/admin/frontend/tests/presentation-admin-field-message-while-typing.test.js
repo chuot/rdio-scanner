@@ -1,12 +1,5 @@
-// The message under a field, read while the operator is typing in it.
-//
-// The form field reveals a message the moment the value in the control changes, and the section
-// recomputes that message from the value it holds. The readings here stop before the operator leaves
-// the field, which is the state the page is in while the operator is in it: the message must answer
-// the value in the control, not the value the section last committed.
-//
-// The leaving is read with reachField, the way the field-error work reads it, so the two rules are
-// read against the same field.
+// field messages read while typing answer the value in the control,
+// not the last committed value; leaving readings match the field-error tests
 
 import './dom-shim.js';
 
@@ -92,8 +85,7 @@ function messageOf(row, title) {
   return fieldMessage(field(row, title));
 }
 
-// The operator types a value into the field and stays in it. The row is re-read from the page after
-// every keystroke, the way it is on screen.
+// types a value and stays in the field; the row re-reads each keystroke
 function typeIn(row, title, value) {
   keystroke(controlOf(row, title), value);
   connectFields(row);
@@ -131,9 +123,7 @@ function workingRows() {
   return getAdminContext().store.getState()['subsection:talkgroups:1'].working;
 }
 
-// ---------------------------------------------------------------------------
-// The keystroke the operator is typing: the message answers the value in the control.
-// ---------------------------------------------------------------------------
+// keystroke readings: the message answers the control's value
 
 test('typing the first digit of a valid Id raises no message', () => {
   seed(getAdminContext().store);
@@ -171,9 +161,7 @@ test('the keystroke that breaks a rule reports it without waiting for the operat
   assert.equal(typeIn(row, 'Id', '0'), 'Id is invalid', 'the identifier below the minimum reports on the keystroke');
 });
 
-// ---------------------------------------------------------------------------
-// The rule about the whole list: an identifier another talkgroup of the system has.
-// ---------------------------------------------------------------------------
+// the whole-list rule: an identifier another talkgroup of the system has
 
 test('a talkgroup Id typed digit by digit reports the duplicate on the keystroke that completes the collision', () => {
   seed(getAdminContext().store, PAIR);
@@ -200,9 +188,7 @@ test('the duplicate a talkgroup Id carries goes away on the keystroke that makes
   assert.equal(marker(row), null, 'the row loses its warning icon on the same keystroke');
 });
 
-// ---------------------------------------------------------------------------
-// The row under the operator's hands: the same field, the same row, every keystroke.
-// ---------------------------------------------------------------------------
+// the same field and the same row, on every keystroke
 
 test('a run of keystrokes into a talkgroup Label keeps the field on the page and the value the operator typed', () => {
   seed(getAdminContext().store, PAIR);
@@ -233,9 +219,7 @@ test('the message under the field answers the value typed at every keystroke of 
   assert.deepEqual(readings, ['', 'Id is already defined', ''], 'the message follows the value in the control through the run');
 });
 
-// ---------------------------------------------------------------------------
-// The marks beside the field: the row's warning icon and the section's Save control.
-// ---------------------------------------------------------------------------
+// marks beside the field: row warning icons and the Save control
 
 test('the first keystroke into a valid talkgroup Id lights the Save control', () => {
   seed(getAdminContext().store, PAIR);

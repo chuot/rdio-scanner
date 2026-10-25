@@ -1,10 +1,6 @@
-// The dashboard section (presentation/admin/rdio-admin-dashboard.js): the six cards, in the order the
-// operator reads the deployment, each with the one word it answers with and the sentence that says why, the
-// 24 hours drawn as a list an operator can read without seeing the bars, and every figure as text. The
-// section is read-only like the log view: nothing on it saves anything.
-//
-// The readings are taken on the rendered element, the way an operator meets it: the words on the page, the
-// roles the page declares, and what the page leaves out.
+// the six dashboard cards: order, state words, reasons, the chart as a text list
+// every figure text; read-only, nothing on it saves
+// readings are taken on the rendered element as the operator meets it
 
 import './dom-shim.js';
 
@@ -21,9 +17,8 @@ import '../presentation/admin/rdio-admin-dashboard.js';
 import { findAll } from './dom-shim.js';
 import { holdRefreshInterval } from './refresh-clock.js';
 
-// The section starts its own refresh schedule when it opens, and a refresh schedule re-arms itself. Held,
-// it cannot keep this process alive and cannot poll under a test that is reading what the section shows;
-// when the section polls is proven in presentation-admin-dashboard-refresh.test.js.
+// the section's own refresh schedule is held so it cannot poll under the test
+// the dashboard refresh test covers when the section polls
 holdRefreshInterval(STATUS_REFRESH_DELAY);
 
 const STATUS = {
@@ -90,15 +85,12 @@ const CONFIG = {
   ],
 };
 
-// The section, opened the way the shell opens it, on the snapshot and configuration the page already
-// holds. The status read is answered here so that opening the section does not reach for a server this
-// test is not running, and the answer is the same snapshot the page was seeded with, so the read the
-// section makes when it opens does not change what the section is showing.
+// the status read is answered here so opening the section needs no server
+// and answers with the seeded snapshot, so the read cannot change the display
 let refused = false;
 
-// The snapshot the transport answers with is the one the test just seeded, so the read the section makes
-// when it opens writes back exactly what the section is already holding and cannot repaint it under the
-// test's hands.
+// the served snapshot equals the seeded one
+// so the read on open cannot repaint the section under the test's hands
 let served = STATUS;
 
 globalThis.fetch = async () => {
@@ -178,17 +170,15 @@ function readLineText(el) {
   return text(findAll(el, (node) => node.classList?.contains('rdio-dashboard-read'))[0]).trim();
 }
 
-// A snapshot whose read is happening now: whether the page considers the figures it holds current is a
-// comparison against the page's own clock, and a fixture that names an instant from a printed page is
-// current or stale depending on when the test ran.
+// fixture stamp naming the current instant:
+// freshness compares the page's clock, so printed dates hinge on test timing
 function readNow() {
   const now = new Date().toISOString();
 
   return { ...STATUS, server: { ...STATUS.server, now } };
 }
 
-// The whole point of the section is that the state of the deployment is the first thing on the page, and
-// the operator reads the cards in that order.
+// deployment status leads the page, and the cards follow the reading order
 test('the dashboard shows the six cards in the order the operator reads the deployment', () => {
   const el = openDashboard();
 
@@ -198,8 +188,7 @@ test('the dashboard shows the six cards in the order the operator reads the depl
 
   assert.deepEqual(cards(el).map((node) => node.dataset.card), ['server', 'ingestion', 'listeners', 'activity', 'busiest', 'logHealth']);
 
-  // Each card is a region named by its own heading, so a screen reader reading the card says the card's
-  // name and not a wall of figures.
+  // each card is a region named by its heading, so it reads as a name, not figures
   for (const node of cards(el)) {
     const headingId = node.getAttribute('aria-labelledby');
 
@@ -213,8 +202,7 @@ test('the dashboard shows the six cards in the order the operator reads the depl
   el.disconnectedCallback();
 });
 
-// The pill is one word, and the word is the same one the domain module decided on: a card that reads
-// "working" in colour and "needs attention" in words is a card that says two things.
+// the pill's word is the domain module's word; colour carries nothing alone
 test('each card answers with one state word, and the word is not carried by colour alone', () => {
   const el = openDashboard();
 
@@ -233,23 +221,21 @@ test('each card answers with one state word, and the word is not carried by colo
   el.disconnectedCallback();
 });
 
-// The sentence under the pill is what the operator who cannot see the colour is told instead of the
-// colour, and it is the same sentence the sighted operator reads.
+// the reason sentence replaces the colour for operators who cannot see it
+// and is the same text sighted operators read
 test('the card that is not working says why in the words the operator reads', () => {
   const el = openDashboard();
 
   assert.match(reasonOf(el, 'logHealth'), /\b3 errors\b/, `the log health reason says "${reasonOf(el, 'logHealth')}"`);
 
-  // A card that is working has nothing to explain, and a card that explains itself when nothing is wrong
-  // is a card the operator learns to skim past.
+  // a working card explains nothing; explanatory noise gets skimmed past
   assert.equal(reasonOf(el, 'server'), '', 'the server card explains itself on a server that is fine');
 
   el.disconnectedCallback();
 });
 
-// A deployment with a watch configured and enabled that is not watching is the case the whole live block
-// exists for: the configuration says one thing and the server says another, and the card is where the
-// operator finds out.
+// an enabled watch that is not watching is named on the ingestion card
+// the whole live block exists for this configuration-versus-server disagreement
 test('a watch that is enabled and not watching is named on the ingestion card', () => {
   const status = structuredClone(STATUS);
 
@@ -266,8 +252,7 @@ test('a watch that is enabled and not watching is named on the ingestion card', 
   el.disconnectedCallback();
 });
 
-// Every figure is text the operator can read, select, and hear: a dashboard that showed its numbers as
-// gauges or colours would be a dashboard that only describes itself to someone looking at it.
+// every figure is text an operator can read, select, and hear
 test('every figure is text, in the words the domain module chose', () => {
   const el = openDashboard();
 
@@ -275,8 +260,7 @@ test('every figure is text, in the words the domain module chose', () => {
   assert.equal(figure(el, 'server', 'Version'), 'Version 8.0.0');
   assert.equal(figure(el, 'server', 'Database'), 'Database 4.5 GB');
 
-  // A deployment that cannot know the size of its own database says that, and not a zero: a zero reads as
-  // an empty database to an operator who was never given a size.
+  // an unknown database size says so; a zero would read as an empty database
   const unknownSize = structuredClone(STATUS);
 
   unknownSize.server.databaseKnown = false;
@@ -306,14 +290,13 @@ test('every figure is text, in the words the domain module chose', () => {
 
   quietEl.disconnectedCallback();
 
-  // The 24-hour total is the sum of the bars the page is showing, so the figure and the chart cannot
-  // disagree with each other.
+  // the 24-hour total sums the drawn bars, so figure and chart cannot disagree
   assert.equal(figure(el, 'activity', 'Last 24 hours'), 'Last 24 hours 46 calls', 'the 24-hour total does not match the bars the chart shows');
   assert.equal(figure(el, 'activity', 'Last hour'), 'Last hour 37');
   assert.equal(figure(el, 'activity', 'Today'), 'Today 214');
 
-  // The instant is shown as the clock time the operator's own clock says it is, which is the clock a chart
-  // of the last 24 hours is read against. Which hour it falls on is the machine's timezone's business.
+  // the last call is shown in local clock time, what a 24-hour chart reads against
+  // which hour it lands on is the machine's timezone's business
   assert.match(figure(el, 'activity', 'Last call') ?? '', /\d{2}:\d{2}/, `the last call is shown as "${figure(el, 'activity', 'Last call')}"`);
 
   assert.equal(figure(el, 'logHealth', 'Errors'), 'Errors 3');
@@ -322,8 +305,7 @@ test('every figure is text, in the words the domain module chose', () => {
   el.disconnectedCallback();
 });
 
-// The busiest talkgroups are a table: the name, the system it belongs to, and the count are three things
-// an operator reads across, and a screen reader reads them as a row with named columns.
+// the busiest talkgroups are a table with named columns: name, system, count
 test('the busiest talkgroups are a table with named columns', () => {
   const el = openDashboard();
 
@@ -343,8 +325,7 @@ test('the busiest talkgroups are a table with named columns', () => {
   el.disconnectedCallback();
 });
 
-// The chart is a list, and every item says which hour it is and how many calls it holds. The bar is the
-// shape a sighted operator reads at a glance; it carries nothing the item does not already say.
+// the chart is a list stating each hour and count; the bar is decoration
 test('the 24 hours are a list whose items say the hour and the count, with the bars hidden', () => {
   const el = openDashboard();
 
@@ -377,8 +358,7 @@ test('the 24 hours are a list whose items say the hour and the count, with the b
   el.disconnectedCallback();
 });
 
-// A window with nothing in it is a window the chart still draws: the operator has to be able to see that
-// every hour is empty, and not a chart that quietly shrank to nothing.
+// an empty window still draws all 24 hours, not a chart that shrank to nothing
 test('an empty window still draws the whole 24-hour list', () => {
   const status = structuredClone(STATUS);
 
@@ -405,8 +385,7 @@ test('an empty window still draws the whole 24-hour list', () => {
   el.disconnectedCallback();
 });
 
-// The log health card names the parts of the server that wrote the errors, because "3 errors" is a number
-// and "dirwatch wrote 2 of them" is a place to start looking.
+// naming which subsystems wrote the errors beats a bare count
 test('the log health card names the parts of the server that wrote the log', () => {
   const el = openDashboard();
 
@@ -418,8 +397,7 @@ test('the log health card names the parts of the server that wrote the log', () 
   el.disconnectedCallback();
 });
 
-// The dashboard is a read of the server, not a form. Nothing on it saves anything, and a control that
-// looked like a field would be a control an operator might think they have to fill in.
+// the dashboard is a read, not a form: it saves nothing, no field-like controls
 test('the dashboard saves nothing and asks for nothing', () => {
   const el = openDashboard();
 
@@ -433,8 +411,8 @@ test('the dashboard saves nothing and asks for nothing', () => {
   el.disconnectedCallback();
 });
 
-// A read that was refused is said as a refusal. The numbers the page is still holding are not shown beside
-// it, because a figure with no "as of" attached to it is a figure the operator will believe.
+// on a refused read the held numbers are not shown beside it
+// a figure with no "as of" attached is a figure an operator will believe
 test('a refused read is named in text and the numbers the page holds are not presented', async () => {
   const context = getAdminContext();
 
@@ -464,32 +442,29 @@ test('a refused read is named in text and the numbers the page holds are not pre
   el.disconnectedCallback();
 });
 
-// The line that says when the page last read the server is what makes every figure on the page a figure
-// with a moment attached to it.
+// the last-read line attaches a moment to every figure on the page
 test('the page says when it last read the server', () => {
   const el = openDashboard();
 
   const read = findAll(el, (node) => node.classList?.contains('rdio-dashboard-read'))[0];
 
   assert.ok(read, 'the page does not say when it last read the server');
-  // Which clock time the read fell on is the machine's timezone's business; that the line names a clock time
-  // at all is the page's.
+  // which clock time the read fell on is the machine's timezone's business;
+  // that the line names a clock time at all is the page's
   assert.match(text(read), /read at \d{2}:\d{2}/i, `the last-read line says "${text(read).trim()}"`);
 
   el.disconnectedCallback();
 });
 
-// The failure panel says the numbers are not on the page. The line that attaches a moment to every figure
-// has to say the other half: the moment the page is holding is not being kept up to date any more, because
-// the read that would have kept it current is the one the server refused.
+// the failure panel says the held figures are no longer kept current
+// the last-read line carries the other half: the moment is a stale one now
 test('a refused read says the figures the page is holding are no longer being kept current', async () => {
   const context = getAdminContext();
 
   const el = openDashboard(readNow());
 
   try {
-    // The read the section makes when it opens, settled first: the refusal has to be a read the page makes
-    // after the server started refusing, and not the one it had already asked for.
+    // settle the read on open first: the refusal must come after the server refused
     await context.useCases.loadStatus();
 
     assert.doesNotMatch(
@@ -509,10 +484,9 @@ test('a refused read says the figures the page is holding are no longer being ke
       `the read line says "${readLineText(el)}" while the server is refusing reads`,
     );
 
-    // The next refusal is, as far as the store can see, the same failure as the one before it, and a page
-    // that only rewrites its own words when something tells it to would go on claiming its figures are
-    // current. It is the page that knows it has not read the server, and it says so however long the reads
-    // stay refused.
+    // repeated refusals look identical to the store, which may signal nothing new
+    // the page knows it has not read the server and keeps saying so while they fail
+    // see the dashboard-staleness-after-refusals maintainer note.
     await context.useCases.loadStatus();
 
     assert.match(

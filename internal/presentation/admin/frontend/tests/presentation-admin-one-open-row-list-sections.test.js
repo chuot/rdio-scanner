@@ -1,22 +1,6 @@
-// One row open at a time in the six sections that edit a row list: Access, API Keys, Dirwatch,
-// Downstreams, Groups, Tags.
-//
-// These sections built their rows as always-expanded panels: a deployment with dozens of tags or a
-// dozen access codes rendered a tower of expanded rows, and the operator who came to change one row
-// scrolled past every other row to reach it and every other row to reach the save bar under the
-// list. The readings below are the shape the sections take instead — the one the systems tree
-// already carries: every row renders closed showing its identity, opening a row closes the rest,
-// the add control opens the row it creates, shrinking writes nothing to the store, and the
-// section's own behaviour — drag sorting, the Move buttons, the Dirwatch type rebuild, the controls
-// inside a row — keeps working from the closed row and the opened one alike.
-//
-// The rows are driven through the event a summary activation produces — the toggle event a click
-// and the keyboard's Enter and Space both leave on the row. The real Enter and Space, the real
-// drag, and the real viewport are walked in the browser harness; the shim has no keyboard, no
-// pointer gesture, and no layout, so it carries the events those produce.
-//
-// Every reading below fails against a section that builds expanded panels: the rows the readings
-// query are the panels the operator opens, and an expanded section carries none of them.
+// row-list sections open one row at a time; readings come from the rendered rows
+// rows are driven by the toggle event: the shim carries no keyboard or layout
+// see the one-open-row-lists maintainer note.
 
 import './dom-shim.js';
 
@@ -36,9 +20,8 @@ import '../presentation/admin/rdio-admin-tags.js';
 
 import { connectFields, fieldMessage, findAll, texts } from './dom-shim.js';
 
-// The six seeded lists. Each carries a row that breaks its section's own rule — a label, a code,
-// an ident, a URL, or a directory left empty — so the collapsed row's warning marker is read
-// beside a valid one, and a deployment with a dozen codes or dozens of tags is exactly this shape.
+// each seeded list carries one invalid row, so the collapsed row's warning
+// marker is read beside a valid one
 const GROUPS = [
   { id: 1, order: 1, label: 'Dispatch' },
   { id: 2, order: 2, label: '' },
@@ -83,9 +66,8 @@ const SYSTEMS = [
 // The one alert the audition readings pick. The sequence carries the shape the audio schedules.
 const ALERTS = { storm: [{ begin: 0, end: 0.04, frequency: 440, type: 'square' }] };
 
-// The six sections: the slice each one saves, the key its rows carry on the panel, the words the
-// collapsed row shows as its identity, the fallback the row the add control creates shows until the
-// operator fills it in, and the field whose message the readings reveal in it.
+// each section: saved slice, panel key, collapsed identity words,
+// the new row's fallback identity, and the field the readings reveal in
 const SECTIONS = [
   {
     name: 'groups', tag: 'rdio-admin-groups', key: 'section:groups', prefix: 'grp', seedRows: GROUPS,
@@ -123,8 +105,8 @@ function slice(baseline) {
   return { baseline, working: structuredClone(baseline), dirty: false, invalid: false, conflict: false };
 }
 
-// The store in the state the six sections answer to: the seeded list, the systems the access
-// dialog and the dirwatch picks read, and the alerts the group and tag audition lists carry.
+// the store as the six sections expect it: seeded list, the systems the access
+// dialog and dirwatch picks read, and the alerts the audition lists carry
 function seed(section, alerts = {}) {
   const store = getAdminContext().store;
 
@@ -148,15 +130,13 @@ function attach(tag) {
   return el;
 }
 
-// The rows on the page, in the order the section presents them: the panels that open, remembered
-// by the key the section names them by. A section that builds expanded panels carries none, which
-// is what these readings exist to catch.
+// rows on the page, in section order, keyed the way the section names them
+// (an expanded section carries none, which is what these readings catch)
 function rows(el) {
   return findAll(el, (node) => node.tag === 'details' && node.dataset.key !== undefined);
 }
 
-// The rows the operator sees open. The reading is the page, not the section's map: the map is what
-// the next render reproduces the page from.
+// open rows are read from the rendered page, not the section's map
 function openRows(el) {
   return rows(el).filter((row) => row.open);
 }
@@ -179,10 +159,8 @@ function moveButtons(row) {
   return findAll(row, (node) => node.tag === 'button' && node.dataset?.move !== undefined);
 }
 
-// The summary activation: the row's open state flips, and the row answers with the toggle event a
-// click and the keyboard's Enter and Space both produce. The browser leaves that event on the row
-// the operator activated — it does not bubble it up to the list the rows sit on — so whatever
-// answers it has to answer it on the row.
+// activation flips open state and the row answers with a toggle event;
+// the event lands on the row, it does not bubble, so handlers sit on the row
 function activate(row) {
   row.open = !row.open;
   row.dispatchEvent({ type: 'toggle', target: row, bubbles: false });
@@ -192,8 +170,8 @@ function control(el, className) {
   return findAll(el, (node) => node.tag === 'button' && node.className?.split(/\s+/).includes(className))[0];
 }
 
-// The name a field answers to, and the control inside it. The sections with a dialog put a label
-// inside the field; the sections that caption a field beside it name it there instead.
+// a field answers to its name and its inner control: inner labels, or captions
+// beside the control, depending on the section
 function fieldTitle(node) {
   return texts(findAll(node, (child) => child.tag === 'label'))[0]
     ?? findAll(node.parent, (child) => child.className?.split(/\s+/).includes('field-title'))[0]?.textContent;
@@ -207,8 +185,7 @@ function controlOf(row, title) {
   return findAll(field(row, title), (node) => ['input', 'textarea', 'rdio-select'].includes(node.tag))[0];
 }
 
-// The operator clears the field and walks away from it: the field reveals its message, and the row
-// gains its warning icon.
+// clearing a field then leaving it shows the message and warning icon
 function revealEmptyField(row, title) {
   const input = controlOf(row, title);
 
@@ -234,8 +211,7 @@ function markerOn(row) {
   return findAll(row, (node) => node.className?.split(/\s+/).includes('row-invalid')).length;
 }
 
-// The server replaces the rows under the operator's feet: the section rebuilds them from the state
-// it keeps, which is the state the operator's clicks left.
+// the server replaces rows; the section rebuilds from the state the operator left
 function pushRows(store, key, rows) {
   const current = store.getState()[key];
 
@@ -251,9 +227,8 @@ function pushRows(store, key, rows) {
   });
 }
 
-// The list the operator's browser hands the section: it carries its rows by index, forEach, and
-// iteration, and it carries no filter, map, or find. The shim answers with an array, so the section
-// is asked to harvest its open rows off a page that answers in the shape the real browser has.
+// rows carry by index, forEach, and iteration: no filter, map, or find;
+// the shim returns an array, so this emulates the browser shape
 function asBrowserRowList(found) {
   return {
     length: found.length,
@@ -280,17 +255,14 @@ function announcedSentence() {
   return document.querySelector('rdio-live-region')?.textContent.trim() ?? '';
 }
 
-// The pointer's route: the dragstart the handle leaves on the row, and the drop the row it lands on
-// answers. The shim carries no gesture, so it carries the events the gesture produces.
+// a pointer drag: the shim delivers the dragstart and drop events, no real gesture
 function dragTo(from, to) {
   from.dispatchEvent({ type: 'dragstart', target: from, bubbles: true, dataTransfer: {} });
   to.dispatchEvent({ type: 'drop', target: to, bubbles: true, dataTransfer: {}, preventDefault: () => {} });
 }
 
-// The browser facilities the shim does not carry: the clipboard the copy control writes the key to,
-// and the audio context the alert audition schedules its tones on. Both are the browser's, not
-// these sections', so the readings state them as fakes the test owns and count what was asked of
-// them.
+// the shim lacks the clipboard and the audio context: fakes the test owns,
+// counting what was asked of them
 const clipboardWrites = [];
 
 globalThis.navigator.clipboard ??= {
@@ -324,17 +296,14 @@ class FakeAudioContext {
 
 globalThis.AudioContext = FakeAudioContext;
 
-// The dialog the access section opens answers through a promise; the click that settles it hands
-// the chosen value back in a microtask, and the section's commit and rebuild run from there.
+// dialog answers are promises: the value lands in a microtask, then commit rebuilds
 async function settleMicrotasks() {
   for (let step = 0; step < 10; step++) await Promise.resolve();
 }
 
-// CA-001, CA-003: the section's rows are panels the operator opens, they start closed, and the
-// collapsed row already carries the identity the operator reads it by — its title, its move
-// controls, and, when its values break the section's rule, its warning marker. The fields wait in
-// the closed panel; they answer after the summary is activated, which the CA-004 to CA-006 readings
-// drive by activation.
+// rows are panels that start closed; the collapsed row shows identity, move
+// controls, and a warning marker when the row breaks the section's rule
+// fields stay hidden until the summary is activated
 for (const section of SECTIONS) {
   test(`the ${section.name} section shows its rows closed, named, and marked when invalid`, () => {
     seed(section);
@@ -374,8 +343,8 @@ for (const section of SECTIONS) {
   });
 }
 
-// CA-002: one row open at a time, and the section mounts the row-open rule the systems tree mounts,
-// so the readings that prove the rule (domain-row-open-rule.test.js) stand behind these too.
+// one open at a time: the section mounts the shared row-open rule
+// proven in domain-row-open-rule.test.js
 for (const section of SECTIONS) {
   test(`opening a second ${section.name} row closes the first and leaves one row open`, () => {
     seed(section);
@@ -400,8 +369,7 @@ for (const section of SECTIONS) {
   });
 }
 
-// CA-002: the open row survives the rebuild the server causes: the section reproduces the state the
-// operator's clicks left, never two open rows and never a row the operator never opened.
+// the open row survives a rebuild: never two open, never a phantom one
 for (const section of SECTIONS) {
   test(`a ${section.name} rebuild with one row open shows exactly one open row`, () => {
     const store = seed(section);
@@ -424,10 +392,7 @@ for (const section of SECTIONS) {
   });
 }
 
-// CA-003: the harvest reads the open rows off a page that answers in the shape the operator's
-// browser has: a NodeList that carries its rows by index, forEach, and iteration, and carries no
-// filter. A section that plucks filter off that answer reads no open rows at all, and the row the
-// operator left open comes back closed.
+// calling filter reads zero rows and closes the row the operator left
 for (const section of SECTIONS) {
   test(`a ${section.name} row left open on the page a browser hands the section stays open across the rebuild`, () => {
     const store = seed(section);
@@ -452,8 +417,7 @@ for (const section of SECTIONS) {
   });
 }
 
-// CA-004: the row the add control creates is the row the operator came to fill in: it opens, alone,
-// and the row the operator had open closes as it does.
+// the add control opens the new row alone, closing the row the operator had open
 for (const section of SECTIONS) {
   test(`the ${section.name} add control opens the row it creates and closes the row the operator had open`, () => {
     seed(section);
@@ -490,8 +454,8 @@ for (const section of SECTIONS) {
   });
 }
 
-// CA-005, CA-004 of REQ-004: shrinking is presentation only. Opening and closing rows writes
-// nothing to the section's working copy — the same object, byte for byte, as dirty as it was.
+// shrinking is presentation only: opening and closing writes nothing
+// to the section's working copy
 for (const section of SECTIONS) {
   test(`opening and closing ${section.name} rows changes nothing the section would save`, () => {
     const store = seed(section);
@@ -518,8 +482,7 @@ for (const section of SECTIONS) {
   });
 }
 
-// CA-005: the message the operator revealed in a row, and the row's invalid marker, survive being
-// collapsed by opening another row, and are there when the row is opened again.
+// a revealed message and the invalid marker survive collapse, back on reopen
 for (const section of SECTIONS) {
   test(`a collapsed ${section.name} row keeps the message the operator revealed and its invalid marker`, () => {
     seed(section);
@@ -550,8 +513,7 @@ for (const section of SECTIONS) {
   });
 }
 
-// CA-005, REQ-005: the row the operator is typing in stays open, the other rows stay closed, and
-// the field the operator is in stays where it is.
+// typing keeps the row open, the others closed, and the field in place
 for (const section of SECTIONS) {
   test(`a keystroke in the open ${section.name} row closes nothing and leaves the field where it is`, () => {
     seed(section);
@@ -578,9 +540,8 @@ for (const section of SECTIONS) {
   });
 }
 
-// CA-006, REQ-007: the rule follows the control, not the pointer. The activation the keyboard's
-// Enter and Space produce closes the other rows exactly as a click does, and every summary reports
-// whether its row is expanded. Closing a row records its own state and closes nothing.
+// keyboard Enter and Space produce the same activation as a click
+// and every summary reports its row's expanded state
 for (const section of SECTIONS) {
   test(`activating a ${section.name} summary the way the keyboard does closes the others, and every row says whether it is expanded`, () => {
     seed(section);
@@ -623,8 +584,7 @@ function moveButton(row, direction) {
   return button;
 }
 
-// CA-008, CA-011 of REQ-008: the keyboard's Move buttons work on a closed row — the row the
-// operator is not editing still moves — and the move says the same sentence it always said.
+// the Move buttons work on a collapsed row, and the move says the same sentence
 for (const section of SECTIONS) {
   test(`pressing Move on a closed ${section.name} row reorders the list without opening it`, () => {
     const store = seed(section);
@@ -649,8 +609,7 @@ for (const section of SECTIONS) {
   });
 }
 
-// The pointer's route, from a closed row: the drag lands in the same reorder and says the same
-// sentence as the Move button, because both go through one move.
+// a pointer drag reorders and announces like the Move button: one move
 for (const section of SECTIONS) {
   test(`dragging a closed ${section.name} row reorders the list through the same sentence as the Move button`, () => {
     const store = seed(section);
@@ -675,10 +634,8 @@ for (const section of SECTIONS) {
   });
 }
 
-// A Move button's label follows the row the operator renamed: the name on the control is the name
-// on the page, on a collapsed row too. The sections that keep the collapsed row's identity in step
-// with the typed value are Groups, Tags, and Dirwatch; the identity fields of the other three
-// sections live in the saved row today, and this conversion is not the moment that changes.
+// Move labels follow a renamed row, on a collapsed row too
+// (Groups, Tags, and Dirwatch keep the collapsed identity in step)
 for (const section of SECTIONS.filter((candidate) => ['groups', 'tags', 'dirwatch'].includes(candidate.name))) {
   test(`the collapsed ${section.name} row the operator renamed carries its new name on the controls that move it`, () => {
     seed(section);
@@ -708,8 +665,7 @@ for (const section of SECTIONS.filter((candidate) => ['groups', 'tags', 'dirwatc
   });
 }
 
-// CA-008, REQ-008: the section's own behaviour survives the conversion. Dirwatch's type drives
-// which fields the row carries, and the rebuild the pick causes keeps the open row open.
+// the Dirwatch type drives the row's field set: the rebuild keeps the row open
 test('changing an open dirwatch row\'s type rebuilds its fields and keeps the row open', () => {
   const store = seed(SECTIONS.find((section) => section.name === 'dirwatch'));
 
@@ -734,8 +690,7 @@ test('changing an open dirwatch row\'s type rebuilds its fields and keeps the ro
   assert.equal(store.getState()['section:dirwatch'].working[0].type, 'dsdplus', 'the type the operator picked is the row\'s type');
 });
 
-// CA-008: the controls inside a row work in the opened row. The access code stays hidden until the
-// operator asks, in the opened row and nowhere else the pointer can reach.
+// the access code stays hidden until revealed; the stored value is intact
 test('the code reveal works in the opened access row and leaves the stored code untouched', () => {
   const store = seed(SECTIONS.find((section) => section.name === 'access'));
 
@@ -767,8 +722,7 @@ test('the code reveal works in the opened access row and leaves the stored code 
   assert.equal(store.getState()['section:access'].working[0].code, 'front-gate', 'showing the code commits nothing');
 });
 
-// CA-008: Choose systems on the opened access row opens the selection dialog, and the value the
-// operator answers with lands on that row while the row stays open.
+// Choose systems on the opened access row: the dialog value lands there
 test('Choose systems on the opened access row lands on that row and keeps it open', async () => {
   const store = seed(SECTIONS.find((section) => section.name === 'access'));
 
@@ -813,8 +767,7 @@ test('Choose systems on the opened access row lands on that row and keeps it ope
   assert.equal(rowTitle(openRows(el)[0]), 'Front desk');
 });
 
-// CA-008: the copy control in the opened API key row hands the key to the clipboard, and pressing
-// it opens nothing and commits nothing.
+// the copy control writes the opened key; nothing opens or commits
 test('the copy control hands the opened api key row\'s key to the clipboard', async () => {
   const store = seed(SECTIONS.find((section) => section.name === 'api key'));
 
@@ -839,8 +792,7 @@ test('the copy control hands the opened api key row\'s key to the clipboard', as
   assert.equal(store.getState()['section:apikeys'].working[0].key, 'key-one', 'copying a key commits nothing');
 });
 
-// CA-008: the alert pick on the opened group or tag row commits the pick and the audition runs the
-// tone the pick names on the browser's audio.
+// the alert pick commits on the opened row; the audition uses fake audio
 for (const section of SECTIONS.filter((candidate) => candidate.audition)) {
   test(`picking the audio alert on the opened ${section.name} row commits it and plays its tone`, () => {
     const store = seed(section, ALERTS);

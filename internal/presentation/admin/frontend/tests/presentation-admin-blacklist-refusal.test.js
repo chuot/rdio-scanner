@@ -1,9 +1,6 @@
-// Blacklisting a talkgroup in a section the page will not save. The action stores what it means, and a
-// section with a row the page refuses to store cannot be stored by a click: the reading here is the
-// operator clicking Blacklist on a saved talkgroup while another talkgroup row of the same system is
-// incomplete. The click must refuse, leave the section exactly as it was, and say which fields must be
-// fixed. The trap this reading pins is the one the two-step action left: an incomplete row keeps the
-// section's Save disabled, so an entry the click only queued could never be stored.
+// Blacklist in a section that cannot be saved: one incomplete row disables Save
+// so a merely queued entry could never be stored; the click must refuse cleanly
+// see the blacklist-atomic-refusal maintainer note.
 
 import './dom-shim.js';
 
@@ -36,8 +33,7 @@ function systems() {
       sites: [{ id: 4, label: 'Metro East', order: 1, siteRef: 101 }],
       talkgroups: [
         { id: 1, label: 'Ground', name: 'Dispatch 1', talkgroupRef: 1514000, order: 1, groupIds: [1], tagId: 2 },
-        // The row the operator added and has not finished: no tag. The section refuses to save it, and
-        // the section's Save control answers disabled for the whole section.
+        // the unfinished row (no tag) makes the section refuse to save and the bar disable
         { id: 2, label: 'Ground', name: 'Dispatch 2', talkgroupRef: 1514100, order: 2, groupIds: [1] },
       ],
       units: [{ id: 7, label: 'Car 1', order: 1, unitRef: 1001 }],

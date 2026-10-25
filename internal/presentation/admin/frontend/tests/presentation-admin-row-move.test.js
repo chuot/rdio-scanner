@@ -1,15 +1,5 @@
-// The keyboard's route to a row's position in a drag-sorted section.
-//
-// The sections of the systems tree are ordered by the operator: the order is what the listener shows,
-// and the order is what the server keeps. The pointer's route is the drag handle — a gesture a
-// keyboard does not have, and a gesture an operator who cannot keep a pointer steady on a moving row
-// cannot use. The row's position needs a control the keyboard can stop on: two buttons that move the
-// row one place up or down, going through the same reorder the drag goes through and saved by the same
-// save bar the drag is saved by.
-//
-// The readings are taken on the rendered rows and on the store's working copy under them: the page the
-// operator reads, and the state the save bar sends. The buttons are answered through the click event a
-// mouse and the keyboard's Enter and Space both leave on a button.
+// keyboard move buttons replace the drag gesture, same reorder and same save bar
+// see the keyboard-row-move maintainer note.
 
 import './dom-shim.js';
 
@@ -94,10 +84,8 @@ function buttonNamed(row, direction) {
   return moveButtons(row).find((btn) => new RegExp(`^move ${direction} `, 'i').test(btn.getAttribute('aria-label') ?? '')) ?? null;
 }
 
-// The click a button answers: the event a mouse leaves and the keyboard's Enter and Space leave in
-// exactly the same shape. The spy on preventDefault is what the reading reads: a control inside a
-// row's summary line has to take the row's own activation away from the browser, or moving the row
-// opens it.
+// a move button in a row's summary must preventDefault, or the click opens the row
+// see the preventdefault-summary-activation maintainer note.
 function clickButton(button) {
   let prevented = false;
 
@@ -166,8 +154,7 @@ describe('presentation/admin/row-builders — the keyboard moves a drag-sorted r
     assert.deepEqual(workingOrder('systems'), ['Metro', 'County', 'Depot'], 'the store did not take the row where the button moved it');
     assert.deepEqual(pageOrder(el), ['Metro', 'County', 'Depot'], 'the page did not show the row where the button moved it');
 
-    // The same persist path the drag uses: every row carries its place in the list as its order, so
-    // the save bar sends the whole list's order, not the moved row's.
+    // every row carries its place as its order: the save bar sends the whole list's order
     assert.deepEqual(
       sortedByOrder(getAdminContext().store.getState()['section:systems'].working).map((row) => row.order),
       expected.map((row) => row.order),

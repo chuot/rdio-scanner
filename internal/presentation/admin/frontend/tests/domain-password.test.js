@@ -1,6 +1,4 @@
-// Admin password change validation (domain/password.js).
-// Red first: these tests define the validator contract mirrored from the
-// legacy Angular password validators (required, minLength 8, match).
+// admin password validation: required, at least 8 characters, confirmation matches
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

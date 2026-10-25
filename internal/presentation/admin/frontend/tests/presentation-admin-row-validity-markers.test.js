@@ -1,8 +1,5 @@
-// The two things the field-message fix must leave alone: the warning icon a row carries, and the
-// Save control of the section holding it. Both answer the row's validity, not the operator's contact
-// with it — Angular Material showed the panel icon for an invalid row nobody had touched, and the
-// save bar is disabled while the section is invalid. These are the proofs that pin them, taken in
-// every section that marks its rows.
+// the row's warning icon and its section's save answer validity, not the contact detail
+// see the validity-markers-pinned maintainer note.
 
 import './dom-shim.js';
 
@@ -92,8 +89,7 @@ function control(el, className) {
   return findAll(el, (node) => node.tag === 'button' && node.className?.split(/\s+/).includes(className))[0];
 }
 
-// The rows on the page: the systems tree sections open a row as a <details>, the row sections build
-// a panel. Both are the row the operator sees.
+// a row is a <details> in the systems tree, a panel in the row sections
 function rows(el) {
   return findAll(el, (node) => node.tag === 'details' || node.className?.split(/\s+/).includes('rdio-admin-row'));
 }
@@ -108,8 +104,7 @@ function addRow(el) {
 function field(row, title) {
   const fields = findAll(row, (node) => node.tag === 'rdio-form-field');
 
-  // The systems-tree sections and the row sections with a dialog put a <label> inside the field;
-  // Groups and Tags name the field in the description row beside it.
+  // dialog sections label inside the field; Groups and Tags name it in the row beside
   return fields.find((node) => texts(findAll(node, (child) => child.tag === 'label'))[0] === title)
     ?? fields.find((node) => findAll(node.parent, (child) => child.className?.split(/\s+/).includes('field-title'))[0]?.textContent === title);
 }
@@ -145,8 +140,7 @@ function checkBox(row) {
 }
 
 function marker(row) {
-  // The dirwatch row keeps its icon on the page and hides it when the row is valid, so the reading
-  // is the icon the row is showing, not the node sitting behind it.
+  // dirwatch keeps its row-invalid icon and hides it: read the icon the row is showing
   return findAll(row, (node) => node.className?.split(/\s+/).includes('row-invalid') && node.hidden !== true)[0] ?? null;
 }
 
@@ -162,9 +156,7 @@ function rowButton(row, label) {
   return findAll(row, (node) => node.tag === 'button' && node.textContent === label)[0];
 }
 
-// The rows the operator adds, and what each one needs to become valid. Filling a row is typing in
-// it, which reaches every field of it: the marker and the Save control are read on rows the
-// operator has both touched and left.
+// new rows and what makes each valid; marker and Save are read after typing and leaving
 const PINNED = [
   ['Systems', 'rdio-admin-systems', (row) => { typeIn(row, 'Label', 'County West'); typeIn(row, 'Id', '3'); }],
   ['Sites', 'rdio-admin-sites', (row) => { typeIn(row, 'Label', 'Central'); typeIn(row, 'Id', '41'); }],
@@ -219,9 +211,7 @@ for (const [name, tag, fillRow] of PINNED) {
   });
 }
 
-// The delete is a commit of the section's rows, and carries the section's validity with it: the Save
-// control and the row icons answer the rows the section holds after the delete. The operator fills in
-// one new row and leaves another untouched, then deletes the row they filled in.
+// the delete commits the rows: Save and the icons answer the rows left behind
 const DELETES = [
   ['Groups', 'rdio-admin-groups', (row) => typeIn(row, 'Label', 'Tac'), 'Delete Group'],
   ['Tags', 'rdio-admin-tags', (row) => typeIn(row, 'Label', 'Law'), 'Delete Tag'],
@@ -248,11 +238,8 @@ for (const [name, tag, fillRow, deleteLabel] of DELETES) {
   });
 }
 
-// The row the add control creates carries the mask its section needs. The section's rule rejects the
-// empty string the server answers for a row saved without a mask, so a row created without one means
-// one thing as a new row (no mask at all: the rule passes it) and another as a saved row (the empty
-// string: the rule rejects it). The default is the token pair the fixture's rows carry, with the
-// separator the mask matching style uses.
+// a new dirwatch row lacks a mask where a saved one has an empty string: add seeds a default
+// see the dirwatch-mask-default maintainer note.
 test('the dirwatch row the add control creates carries the mask the section needs, and Directory is its only complaint', () => {
   seed(getAdminContext().store);
 

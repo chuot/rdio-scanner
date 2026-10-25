@@ -4,22 +4,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// The focus indicator, proven in the stylesheets that draw it.
-//
-// A keyboard operator sees where they are standing by seeing what the page draws around the control
-// they are on. Two things can take that away: a rule that suppresses the outline on a control the
-// keyboard can reach, and a family of controls no rule covers. Both are read here out of the
-// cascade the browser is given, because both are the cascade's doing; the harness walks the real
-// route and measures the drawn ring against what sits beside it.
-//
-// The light material fields are the one place the ring is not drawn on the control the keyboard is
-// standing on: the field's visible surface is its box, the control sits inset inside it, and the
-// cascade frames the box and takes the browser's native ring off the control. That pairing —
-// suppression on the control beside a drawn ring on the field's own box — is what the readings
-// below allow, and only together.
-//
-// The paths are read from the presentation directory, three directories above this tests' own
-// application directory — the same shape `styles-admin-css.test.js` reads.
+// the focus indicator, proven in the stylesheets that draw it
+// a field-box ring may replace a control ring, but only paired with it
+// see the focus-visible-readings maintainer note.
 const presentationDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const STYLESHEETS = {
@@ -28,9 +15,7 @@ const STYLESHEETS = {
     scanner: join(presentationDir, 'scanner', 'frontend', 'styles', 'rdio.css'),
 };
 
-// The controls a keyboard can stop on, by the names the applications give them. A suppression that
-// lands on one of these is the operator losing their place; a suppression that lands on a caption
-// or a card is nothing of the kind.
+// tags the keyboard can stop on: suppressions here lose the operator's place
 const FOCUSABLE_TAGS = ['a', 'button', 'input', 'select', 'textarea', 'summary'];
 const FOCUSABLE_NAMES = [
     'rdio-admin-nav',
@@ -55,9 +40,8 @@ const FOCUSABLE_NAMES = [
     'todo-step',
 ];
 
-// The states a suppression is allowed to live in. A press is not a focus: the beveled listener
-// buttons flatten under the pointer, and the rule that does it takes the native ring off the press,
-// not off the keyboard. A disabled control takes no focus at all.
+// a press is not a focus: outline rules in these states do not touch the keyboard
+// a disabled control takes no focus at all
 const PRESS_STATES = [':active', ':disabled', ':enabled', ':hover'];
 
 function rules(css) {
@@ -88,8 +72,7 @@ function selectors(selector) {
     return selector.split(',').map((part) => part.trim()).filter(Boolean);
 }
 
-// The compound the rule paints: the last part of the selector is the element the declarations land
-// on, which is the element the keyboard is standing on.
+// the last selector part is the element the declarations land on
 function subject(part) {
     const compounds = part.split(/\s+/);
 
@@ -111,11 +94,8 @@ function outlineSuppression(body) {
     return declarations.filter((d) => /^outline(-style)?\s*:\s*(none|0)\b/.test(d));
 }
 
-// A field control's suppression is the field's own arrangement when the field's box draws the
-// ring in its place: the cascade takes the browser's native ring off the control and frames the
-// whole field — fill, corner radii, underline — on the box that holds the control. A suppression
-// with no box-level ring in the same stylesheet is still the operator losing their place, and it
-// is reported.
+// a field control's ring moves to its box: fill, radii, underline frame the box
+// without that box ring the control's suppression is still reported
 function fieldControlSuppression(part) {
     const last = subject(part);
 
@@ -138,8 +118,7 @@ function suppressions(name) {
         if (!suppressed.length) continue;
 
         for (const part of selectors(rule.selector)) {
-            // A rule scoped to a press, a hover, or a disabled control is not the rule the operator
-            // sees while they hold the keyboard on a control.
+            // rules scoped to a press, hover, or disabled state are not keyboard focus rules
             if (PRESS_STATES.some((state) => subject(part).includes(state))) continue;
             if (!focusableSubject(part)) continue;
             if (fieldControlSuppression(part) && replacedBy) continue;
@@ -156,8 +135,7 @@ function focusVisibleRules(name) {
         .filter((rule) => selectors(rule.selector).some((part) => part.includes(':focus-visible')));
 }
 
-// The families the requirement names, each with the stylesheet that must draw its indicator and the
-// shape of the selector that proves the family is the one being painted.
+// an entry: the control family, its stylesheet, and the proving selector shape
 const FAMILIES = [
     { family: 'navigation buttons', sheet: 'admin', part: (p) => p.includes('rdio-admin-nav') && p.includes('button') },
     { family: 'section bar buttons', sheet: 'admin', part: (p) => p.includes('rdio-admin-section-bar') },
@@ -193,17 +171,8 @@ describe('focus indicators — the cascade the keyboard gets', () => {
     });
 
     it('draws the indicator as the accent outline the pages already use, at the offset that clears the control', () => {
-        // One ring everywhere, so a keyboard operator reads the same shape on every control. The
-        // listener's light material fields are the one place the ring is not the accent: on the
-        // light fill those fields sit on, the accent green measures 2.6:1 against the fill, under
-        // the 3:1 floor an indicator has to clear, and those fields' own ink — the grey their text
-        // and their pressed line already use — measures 9.4:1. The shape and the distance are the
-        // same there; only the ink differs.
-        //
-        // Under a forced palette the ring is drawn in the colour the system uses to say "here",
-        // `Highlight`, at the same shape and the same distance: the accent is a colour the operator
-        // asked the system to replace. A rule inside the mode's own block is allowed the system's
-        // colour, and only there.
+        // every ring is the accent; light fields use grey ink, forced mode uses Highlight
+        // see the focus-ring-ink maintainer note.
         const wrong = [];
 
         for (const sheet of ['theme', 'admin', 'scanner']) {
@@ -214,8 +183,7 @@ describe('focus indicators — the cascade the keyboard gets', () => {
 
                 if (!outline) continue;
 
-                // A suppression is not a drawn ring; the suppression reading owns it and only
-                // allows it where a box-level ring replaces it.
+                // an outline suppression is not a ring: the suppression check owns it
                 if (/^\s*(none|0)\b/.test(outline)) continue;
 
                 const allowed = inForcedMode.has(`${rule.selector}|${rule.body}`) ? /Highlight/ : /--rdio-accent|#424242/;
@@ -232,18 +200,9 @@ describe('focus indicators — the cascade the keyboard gets', () => {
     });
 });
 
-// --- forced colours ---------------------------------------------------------------
-//
-// Under a forced palette the system owns the colours: the page's greys, its accents, and its fills
-// are replaced by the colours the operator asked the system for. What the page has to keep is the
-// shape of its controls — the border that says a card is a card, the line that says a field is a
-// field, the ring that says where the keyboard is standing — drawn in the system's own colours. A
-// stylesheet with no block for the mode is a stylesheet whose shapes are painted in the colours the
-// system was asked to replace, and a stylesheet that sets `forced-color-adjust: none` is the same
-// stylesheet opting out of the mode entirely.
-//
-// The blocks are read the way the browser reads them: comments blanked, a media block's own rules
-// read from inside it.
+// under a forced palette the system owns the colours; the shapes stay
+// every sheet needs a forced-colors block, and no forced-color-adjust: none
+// see the forced-colours maintainer note.
 
 function blocksAtOneLevel(css) {
     const stripped = css.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));

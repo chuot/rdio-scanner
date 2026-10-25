@@ -188,9 +188,8 @@ describe('domain/dirwatch — helpers', () => {
     });
 });
 
-// The server clamps every stored delay to one day: 1440. The section's rule rejects a delay below
-// 2000. No delay value passes both sides, so the row must be loaded the way the legacy form loaded
-// it — Math.max(2000, delay) at form creation — and the loader is that clamp.
+// the server clamps stored delays to 1440; the section rule rejects below 2000
+// no delay passes both, so loading clamps with Math.max(2000, delay)
 describe('normalizeDirwatchRow (the legacy form-creation delay clamp)', () => {
     it('loads the delay the server clamps to one day as the floor the rule accepts', () => {
         const row = normalizeDirwatchRow({ ...validRow(), delay: 1440 });

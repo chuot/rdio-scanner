@@ -1,6 +1,5 @@
-// Systems section validation (domain). Mirrors the legacy admin.service.ts
-// validators: systemRef/siteRef/talkgroupRef required + min + duplicate, unit
-// ref/range rules, groupIds/tagId cross-references, blacklists format.
+// systems validation: required refs, minimums, duplicates, unit rules,
+// group and tag cross-references, blacklist format
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -80,7 +79,7 @@ test('talkgroup: required fields and talkgroupRef duplicate within the system', 
     { id: 2, talkgroupRef: 101, label: '', name: '', groupIds: [], tagId: null },
   ];
 
-  // duplicate refs mark every row carrying them, like the legacy validator
+  // duplicate refs mark every row carrying them
   assert.deepEqual(talkgroupErrors(talkgroups[0], talkgroups, { groupIds: [1], tagIds: [2] }), {
     talkgroupRef: 'Id is already defined',
   });
@@ -109,7 +108,7 @@ test('talkgroup: groupIds and tagId must reference existing groups/tags', () => 
     tagId: 'Tag is required',
   });
 
-  // legacy quirk: a single number (not an array) is membership-checked too
+  // quirk kept: a single number (not an array) is membership-checked too
   assert.deepEqual(talkgroupErrors({ ...tg, tagId: 3, groupIds: 99 }, [tg], { groupIds: [1], tagIds: [3] }), {
     groupIds: 'Group is required',
   });

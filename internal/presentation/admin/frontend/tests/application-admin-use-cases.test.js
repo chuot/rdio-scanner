@@ -1,5 +1,4 @@
-// Admin login/logout orchestration (application/admin-use-cases.js).
-// Red first: these tests define the boot/login/logout/session-expiry contract.
+// tests for admin login/logout orchestration: the boot/login/logout/session-expiry contract
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -74,8 +73,7 @@ function fakeApi({ loginResult = { token: 'jwt-1', passwordNeedChange: true }, c
 
       if (saveError) throw new Error('Admin API PUT /config/groups: 417');
 
-      // The real server clamps every stored dirwatch delay to one day: 1440. The fake answers the
-      // way the server does, so the reading sees the shape the round-trip really carries.
+      // the fake clamps stored dirwatch delays to 1440, the way the real server does
       if (dirwatchDelayClamp && section === 'dirwatch') {
         return value.map((row) => ({ ...row, delay: Math.min(row.delay, 1440) }));
       }
@@ -379,10 +377,8 @@ test('saveSection sends the working copy, then re-baselines from the saved secti
   assert.deepEqual(slice.working, [{ id: 1, label: 'Renamed' }]);
 });
 
-// The systems section saves the fields of the system row. The sites, talkgroups, and units under it
-// are saved by the section that shows them, for the system it shows: the rows this section loaded
-// are older than a level the operator saved there, so sending them would store back rows that
-// section deleted, and refuse talkgroups the system's blacklist has just taken.
+// saveSection sends the system row and not the levels: the loaded rows are stale
+// see the systems-level-staleness maintainer note.
 test('saveSection sends the system row and leaves its levels to the sections that save them', async () => {
   const { api, useCases } = setup({ token: 'jwt-0' });
 
@@ -524,11 +520,9 @@ test('the section that answered the request leaves nothing standing for the next
   assert.equal(store.getState().focus, null);
 });
 
-// The server clamps every stored dirwatch delay to one day: 1440, below the section's floor of 2000.
-// The legacy form loaded the stored delay as Math.max(2000, delay) — the row read valid and the form
-// was not dirty, because an initial control value is not a change. The application loads the server's
-// rows through the same clamp, on the baseline and the working copy together, so the saved row means
-// the same thing on both sides of its save.
+// the server clamps dirwatch delays to 1440, below the section's floor of 2000
+// the application clamps server rows on baseline and working copy alike
+// see the dirwatch-delay-clamp maintainer note.
 test('a dirwatch row the server answers with its clamped delay loads as the floor the rule accepts, and is not a change', async () => {
   const { store, useCases } = setup({
     token: 'jwt-0',
@@ -570,9 +564,8 @@ test('saving a dirwatch row the server answers with its clamped delay leaves the
   assert.equal(slice.dirty, false, 'the section is quiet after its save');
 });
 
-// The live status snapshot the dashboard is built from (application/admin-use-cases.js's loadStatus). The
-// page asks the server one question and holds the answer, and the two things the page has to get right are
-// which answer it is holding and whether that answer is still current.
+// the status snapshot the dashboard is built from: the page holds one answer, and the
+// tests pin which answer it holds and whether that answer is still current
 function statusSnapshot(overrides = {}) {
   return {
     server: {
@@ -603,8 +596,7 @@ test('a successful status read writes the snapshot and the instant the server re
   assert.equal(status.snapshot.server.uptimeSeconds, 8048);
   assert.equal(status.snapshot.live.listeners, 3);
 
-  // The instant the server says it read is the instant the answer is about, which is the only instant a
-  // page can honestly attach to the figures it is showing.
+  // fetchedAt is the instant the server says it read: the only honest stamp for the figures
   assert.equal(status.fetchedAt, '2026-10-17T08:45:11Z');
 
   assert.deepEqual(api.calls.map((c) => c[0]), ['getStatus']);
@@ -619,8 +611,7 @@ test('a status read the server refused sets the failed state and keeps the numbe
 
   assert.equal(held.failed, false);
 
-  // The server goes away between two reads. Its answer to a status read it could not complete is 417 with
-  // nothing in the body, which the adapter turns into a rejection.
+  // a status read the server cannot complete is 417 with an empty body: the adapter rejects it
   api.getStatus = async () => {
     api.calls.push(['getStatus']);
 
@@ -633,9 +624,7 @@ test('a status read the server refused sets the failed state and keeps the numbe
 
   assert.equal(status.failed, true, 'a read the server refused is not held as a read that answered');
 
-  // The numbers are kept, and the failure is kept beside them: a page that drops the figures has thrown
-  // away the only thing the operator can still act on, and a page that keeps them without the failure is
-  // a page presenting them as current.
+  // the snapshot is kept beside the failure: numbers without it must not read as current
   assert.deepEqual(status.snapshot, held.snapshot, 'the page dropped the numbers it was holding');
   assert.equal(status.fetchedAt, held.fetchedAt, 'the page kept the numbers and lost the moment they were read');
 

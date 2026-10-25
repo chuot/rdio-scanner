@@ -1,7 +1,5 @@
-// The OpenAPI document docs/openapi.json is the contract the front ends and the command-line
-// tooling are written against. It must parse with Node's built-in JSON support and cover every
-// entry point the server answers: the admin REST surface, the two ingestion endpoints, the two
-// WebSocket surfaces, and the two static applications.
+// docs/openapi.json is the contract for the front ends and the command-line tooling
+// the document must parse with Node's JSON and cover every entry point the server answers
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -55,9 +53,7 @@ test('all 8 per-section GET/PUT pairs are documented', () => {
   }
 });
 
-// The Systems section saves the system row: its own fields, its blacklist included. The sites,
-// talkgroups, and units under a system are saved by the level that shows them, so the section's
-// body names the row and its answer carries the levels as the store holds them.
+// the systems section's body is the system row with its blacklist, its answer the levels
 test('the systems section body is the system row, and its answer is the system with its levels', () => {
   const item = doc.paths?.['/api/admin/config/{section}'];
 
@@ -81,9 +77,8 @@ test('the systems section body is the system row, and its answer is the system w
   }
 });
 
-// The systems tree saves each level of one system on its own, so the document must
-// carry the three per-level pairs with the system path parameter and the entity schema
-// the level is made of.
+// each level of one system saves on its own, so the three per-level endpoint pairs and
+// their entity schema must be in the document
 const SUB_LEVELS = { sites: 'Site', talkgroups: 'Talkgroup', units: 'Unit' };
 
 test('the six per-level system GET/PUT pairs are documented', () => {
@@ -109,9 +104,8 @@ test('the six per-level system GET/PUT pairs are documented', () => {
 
     const body = item.put.requestBody.content['application/json'].schema;
 
-    // The body is the list of the level's rows. The talkgroups level takes one shape more: the
-    // object that names the rows beside the system's whole blacklist, so the save that drops a
-    // talkgroup stores the entry that refuses it in the same request.
+    // the body is the list of the level's rows; talkgroups take one shape more, naming the
+    // rows beside the system's whole blacklist so a drop and its refusal share one request
     const branches = body.oneOf ?? [body];
     const list = branches.find((branch) => branch.items?.$ref === `#/components/schemas/${schema}`);
 
@@ -143,9 +137,8 @@ test('the six per-level system GET/PUT pairs are documented', () => {
   }
 });
 
-// The API entrypoint submenu names the user management and the capture
-// endpoints, so the document must carry them. The capture endpoints authenticate
-// with the apikey form field, not the admin token.
+// the document carries the user management and capture endpoints named by the API
+// entrypoint submenu; capture authenticates with the apikey form field
 const EXTRA_PATHS = {
   '/api/admin/user-add': ['post'],
   '/api/admin/user-remove': ['post'],
@@ -161,9 +154,8 @@ test('the user management and capture endpoints are documented', () => {
   }
 });
 
-// The status read is the only boundary in the server that answers what the server is doing right now,
-// and the administrator's landing page is built out of it alone. It answers GET and nothing else: it
-// reads, and a page that could write through it would be a page that could stop the server.
+// /api/admin/status answers the whole snapshot, GET only: a writable status read
+// would be a read that can stop the server
 test('the status read is documented as the one read that answers the whole snapshot', () => {
   const item = doc.paths?.['/api/admin/status'];
 
@@ -188,8 +180,7 @@ test('the status read is documented as the one read that answers the whole snaps
     assert.ok(status.properties?.[block], `the status snapshot carries no ${block} block`);
   }
 
-  // The lists are lists even when the server has recorded nothing, because a page that has to check
-  // each of them for being absent is a page that will eventually stop checking.
+  // hours, busiest, and recent stay arrays when nothing is recorded: no absent-list checks
   for (const list of ['hours', 'busiest', 'recent']) {
     assert.equal(status.properties?.activity?.properties?.[list]?.type, 'array',
       `activity.${list} is not a list`);
@@ -197,8 +188,7 @@ test('the status read is documented as the one read that answers the whole snaps
 
   assert.equal(status.properties?.logs?.properties?.sources?.type, 'array', 'logs.sources is not a list');
 
-  // The page already holds the whole configuration, so the counts that come out of it are derived
-  // there; the status read carries no configuration of any kind.
+  // the status snapshot carries no configuration: the page derives those counts itself
   for (const absent of ['config', 'options', 'systems', 'dirwatch', 'downstreams', 'alerts']) {
     assert.ok(!status.properties?.[absent], `the status snapshot carries ${absent}, which is configuration and not status`);
   }
@@ -218,9 +208,8 @@ test('raw-JWT bearer-less security scheme is declared and applied', () => {
   assert.equal(scheme?.in, 'header');
   assert.equal(scheme?.name, 'Authorization');
 
-  // login works without a token; the capture endpoints take the apikey form field; the
-  // static applications are public; the call history takes a listener access code beside the
-  // admin JWT. Everything else carries the admin JWT.
+  // no admin JWT: login, the capture endpoints with their apikey form field, the static
+  // applications; call history also takes a listener access code
   const NO_TOKEN = ['/api/admin/login', '/api/call-upload', '/api/trunk-recorder-call-upload'];
   const PUBLIC = ['/', '/admin', '/admin/'];
 
@@ -234,8 +223,7 @@ test('raw-JWT bearer-less security scheme is declared and applied', () => {
       }
 
       if (CALL_PATHS[path]) {
-        // A listener-facing endpoint answers to two principals with two sets of rights, and the
-        // document says so rather than pretending one credential covers both.
+        // the document names both principals, adminJwt and accessCode, not one credential
         assert.deepEqual(operation.security, [{ adminJwt: [] }, { accessCode: [] }],
           `${method.toUpperCase()} ${path} must accept the access code beside the admin JWT`);
         continue;
@@ -267,10 +255,9 @@ test('section responses reference the config entity schemas', () => {
   }
 });
 
-// The ingestion endpoints are form uploads keyed by an apikey, not by the admin JWT. The
-// field catalogue is the parser's own: every field name internal/infrastructure/dirwatch/
-// parsers/multipart.go reads must appear in the documented form, and the trunk-recorder
-// endpoint adds its JSON sidecar field.
+// the ingestion endpoints are apikey form uploads, and UPLOAD_FIELDS mirrors
+// multipart.go's catalogue plus the trunk-recorder JSON sidecar field
+// see the upload-field-catalogue maintainer note.
 const UPLOAD_FIELDS = [
   'audio', 'audioFilename', 'audioName', 'audioMime', 'audioType', 'channelType',
   'dateTime', 'frequency', 'frequencies', 'key', 'patches', 'patched_talkgroups',
@@ -300,9 +287,8 @@ test('both ingestion endpoints are documented with the parser field catalogue', 
   assert.ok(sidecar, 'the trunk-recorder endpoint must document the meta sidecar field');
 });
 
-// The listener protocol and the administrator configuration socket are documented as
-// x-websocket components: the command set
-// mirrors internal/presentation/scanner/backend/message.go.
+// the listener protocol and the admin configuration socket are x-websocket components;
+// the LISTENER_COMMANDS set mirrors the scanner backend's message.go
 const LISTENER_COMMANDS = ['CAL', 'CFG', 'IOS', 'LCL', 'LFM', 'LSC', 'MAX', 'PID', 'PIN', 'SRV', 'VER', 'XPR'];
 
 test('the listener WebSocket protocol is documented with its full command set', () => {
@@ -333,10 +319,8 @@ test('the two static applications and the admin redirect are documented', () => 
   assert.ok(redirect, 'GET /admin must document the 307 redirect to /admin/');
 });
 
-// The call history over HTTP. The recorded calls live today on the listener socket, and these three
-// endpoints are the same history on the HTTP side of the server, under the same licence. They are
-// listener-facing, so they answer to a listener access code, and an administrator session opens the whole
-// history through the credential the admin page already presents.
+// CALL_PATHS put the recorded call history on HTTP, answering a listener access code
+// with the admin JWT opening the whole history beside it
 const CALL_PATHS = {
   '/api/calls/search': ['post'],
   '/api/calls/{callId}': ['get'],
@@ -427,9 +411,8 @@ test('one call is documented as metadata, with the recording named and not carri
 
   assert.ok(properties, 'CallResponse declares no properties');
 
-  // The recording is its own entry point, so a metadata answer names the recording's bytes and
-  // carries none of them: a metadata question is asked far more often than a recording is listened
-  // to, and a metadata answer carrying the recording makes every metadata answer a download.
+  // CallResponse names the recording's bytes and carries none of them: the audio is its
+  // own entry point, and metadata answers are asked far more often than recordings played
   assert.ok(!('audio' in properties), 'CallResponse must not carry the recording bytes');
 
   for (const field of ['audioName', 'audioType', 'audioLength', 'audioUrl']) {

@@ -1,8 +1,5 @@
-// The dashboard's own derivations (domain/dashboard-status.js): the counts the page reads out of the
-// configuration it already holds, the one word each card answers with and the sentence that says why, the
-// 24 hours the chart is drawn over, and the words the figures are shown in. Nothing here touches the DOM,
-// the network, or the clock: the element hands in the snapshot, the configuration, and the instant it is
-// rendering at.
+// dashboard status derivations: counts, card words, the 24-hour chart, figures
+// pure: the element hands in the snapshot, config, and render instant
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -111,8 +108,7 @@ function configFixture(overrides = {}) {
   return { ...base, ...overrides };
 }
 
-// The card list is the order the operator reads the page in, and the words are the words the navigation
-// and the headings carry. Written out here because they are what an operator is shown.
+// the card order and wording are pinned as the operator is shown them
 test('the dashboard shows six cards, in the order the operator reads them', () => {
   assert.deepEqual(
     DASHBOARD_CARDS.map((card) => card.key),
@@ -129,9 +125,7 @@ test('the refresh interval is the one the dashboard documents', () => {
   assert.equal(STATUS_REFRESH_DELAY, 5000);
 });
 
-// The inventory is derived from the configuration the page already holds: the status read carries no
-// inventory, and a second source for a count the page can compute itself is a count that can disagree
-// with the page.
+// counts derive from the held configuration; a second source can disagree
 test('the inventory counts are derived from the configuration the page holds', () => {
   const inventory = deriveInventory(configFixture());
 
@@ -140,8 +134,7 @@ test('the inventory counts are derived from the configuration the page holds', (
   assert.equal(inventory.accessCodes, 2);
   assert.equal(inventory.apikeys, 1);
 
-  // The talkgroup, site, and unit totals are the sums across every system, which is the number the
-  // operator is asking for when they ask how many talkgroups this deployment has.
+  // the totals are sums across every system
   assert.equal(inventory.talkgroups, 3);
   assert.equal(inventory.sites, 2);
   assert.equal(inventory.units, 1);
@@ -163,8 +156,7 @@ test('the inventory counts the watches and downstreams that are configured and t
   assert.deepEqual(inventory.downstreams, { configured: 2, enabled: 1, disabled: 1 });
 });
 
-// A configuration that has nothing in it is what a fresh deployment looks like, and every count is a zero
-// rather than something the page has to guard against.
+// an empty configuration answers zeros, not absent values
 test('a configuration with nothing in it answers zeros and not nothing', () => {
   const inventory = deriveInventory({});
 
@@ -177,8 +169,7 @@ test('a configuration with nothing in it answers zeros and not nothing', () => {
   assert.deepEqual(inventory.downstreams, { configured: 0, enabled: 0, disabled: 0 });
 });
 
-// Every card answers one word, and a card that is not working says why in a sentence the operator reads.
-// Colour is never the only signal.
+// each card answers one state word; colour is never the only signal
 test('a server that is answering and a deployment that is ingesting both read as working', () => {
   const states = deriveCardStates(statusFixture(), deriveInventory(configFixture()));
 
@@ -199,8 +190,7 @@ test('the log health card names the errors it is reporting', () => {
   assert.match(card.reason, /\b3 errors\b/, `the log health reason says "${card.reason}"`);
 });
 
-// A window with warnings and no errors is not a server in trouble: the operator would learn to ignore a
-// card that cried at every warning.
+// warnings without errors keep log health working
 test('warnings alone do not make the log health card ask for attention', () => {
   const status = statusFixture({ logs: { windowStart: '2026-10-16T08:45:11Z', errors: 0, warnings: 11, sources: [{ source: 'dirwatch', errors: 0, warnings: 11 }] } });
 
@@ -209,8 +199,7 @@ test('warnings alone do not make the log health card ask for attention', () => {
   assert.equal(card.state, 'ok');
 });
 
-// A deployment with nothing configured to ingest and nothing watching is the case the operator has to be
-// told about: the server is running and nothing is arriving, and neither fact says so on its own.
+// nothing ingesting and nothing watching is an ingestion problem
 test('nothing configured to ingest and nothing watching is an ingestion problem', () => {
   const status = statusFixture({ live: { ...statusFixture().live, dirwatchersRunning: 0 } });
 
@@ -220,8 +209,7 @@ test('nothing configured to ingest and nothing watching is an ingestion problem'
   assert.match(card.reason, /nothing/i, `the ingestion reason says "${card.reason}"`);
 });
 
-// The point of reporting the running watchers beside the enabled ones: a watch that is configured and
-// enabled and is not watching is a broken watch, and the two numbers are what show it.
+// fewer watchers running than enabled: an ingestion problem named by both numbers
 test('fewer watches running than enabled is an ingestion problem, and the two numbers are the reason', () => {
   const status = statusFixture({ live: { ...statusFixture().live, dirwatchersRunning: 1 } });
 
@@ -231,8 +219,7 @@ test('fewer watches running than enabled is an ingestion problem, and the two nu
   assert.match(card.reason, /\b2\b.*\b1\b/, `the ingestion reason says "${card.reason}", wanting the 2 enabled and the 1 running`);
 });
 
-// No audio converter means every recording is stored as it arrived, which is a decision the operator has
-// to know about rather than discover when a player cannot play it.
+// a deployment that cannot convert audio says so on the ingestion card
 test('a deployment that cannot convert audio says so on the ingestion card', () => {
   const status = statusFixture({ live: { ...statusFixture().live, audioConversion: false } });
 
@@ -242,8 +229,7 @@ test('a deployment that cannot convert audio says so on the ingestion card', () 
   assert.match(card.reason, /convert/i, `the ingestion reason says "${card.reason}"`);
 });
 
-// Nobody listening is what a quiet deployment looks like. A card that called it a problem would teach the
-// operator to ignore the card.
+// zero listeners is a normal quiet state, not a problem
 test('no listeners is a normal state and not a problem', () => {
   const status = statusFixture({ live: { ...statusFixture().live, listeners: 0 } });
 
@@ -252,9 +238,8 @@ test('no listeners is a normal state and not a problem', () => {
   assert.equal(card.state, 'ok');
 });
 
-// The "the history stopped growing" case: the deployment has calls in it, ingestion is configured, and
-// nothing has arrived for a day. Every number on the card is a zero and the server is healthy, so only
-// this comparison names it.
+// history stopped growing: calls exist, ingestion is set, nothing arrived in a day
+// every other figure is zero and the server is healthy; only this names it
 test('a history that stopped growing in the last 24 hours asks for attention', () => {
   const status = statusFixture({
     activity: {
@@ -292,8 +277,7 @@ test('a deployment with no history and nothing configured to ingest is not asked
   assert.equal(card.state, 'ok');
 });
 
-// A snapshot that did not answer a block is not a snapshot that answered zero. The card says it does not
-// know, which is the only honest thing it can say.
+// a snapshot block that did not answer reads as unknown, not zero
 test('a snapshot missing a block answers unknown for the cards that read it', () => {
   const status = statusFixture();
 
@@ -313,8 +297,7 @@ test('a snapshot missing a block answers unknown for the cards that read it', ()
   assert.equal(states.find((entry) => entry.key === 'server').state, 'ok');
 });
 
-// The default password is the server card's one problem, and it is the same fact the todo list already
-// states: one derivation, read by both.
+// the default password: one derivation read by the server card and the todo list
 test("the default password is the server card's problem, and it says what to do", () => {
   const states = deriveCardStates(statusFixture(), deriveInventory(configFixture()), { passwordNeedChange: true });
 
@@ -332,8 +315,7 @@ test('the busiest talkgroups card never asks for attention', () => {
   assert.equal(card.state, 'ok');
 });
 
-// The chart is drawn over the whole window whatever the history holds, so a quiet server's chart has the
-// same shape as a busy one's.
+// the chart spans the whole window whatever the history holds
 test('the hour series is the whole window, oldest first, with a ratio for the bar', () => {
   const series = buildHourSeries(statusFixture());
 
@@ -342,8 +324,7 @@ test('the hour series is the whole window, oldest first, with a ratio for the ba
   assert.equal(series[0].count, 0);
   assert.equal(series[23].count, 37);
 
-  // The ratio is the bar's height against the busiest hour, which is what lets a quiet hour still be
-  // drawn as something and not as nothing.
+  // ratio is the bar height against the busiest hour, so quiet hours still draw
   assert.equal(series[23].ratio, 1);
   assert.equal(series[21].ratio, 9 / 37);
 
@@ -360,8 +341,7 @@ test('an empty window gives every hour a zero bar and no division by nothing', (
   }
 });
 
-// The hour labels are the words the chart's text alternative carries: the operator who cannot see the bars
-// is told which hour is which.
+// the hour labels are the words of the chart's text alternative
 test("each hour carries the label the chart's text alternative reads", () => {
   const series = buildHourSeries(statusFixture());
 
@@ -406,13 +386,11 @@ test('the database size is said as a size, and a deployment that cannot know it 
   assert.equal(formatBytes(512, true), '512 B');
   assert.equal(formatBytes(0, true), '0 B');
 
-  // The not-known answer is words and not a zero: a zero reads as an empty database to an operator who
-  // was never given a size at all.
+  // an unknown size is words, never a zero an operator could misread
   assert.equal(formatBytes(0, false), 'not known');
 });
 
-// A snapshot the page is holding is only current for as long as the page's own refresh interval can keep
-// it current. Past that, the numbers are the numbers of a moment the page stopped reading.
+// a snapshot older than three refresh intervals is not current
 test('a snapshot older than three refresh intervals is not current', () => {
   const fetchedAt = '2026-10-17T08:45:11Z';
 
@@ -422,7 +400,7 @@ test('a snapshot older than three refresh intervals is not current', () => {
   assert.equal(isStale(fetchedAt, new Date(Date.parse(fetchedAt) + STATUS_STALE_AFTER_MS).toISOString()), true);
   assert.equal(isStale(fetchedAt, '2026-10-17T09:30:00Z'), true);
 
-  // A page that has never read anything is not holding a stale snapshot: it is holding nothing.
+  // a page holding no snapshot is not holding a stale one
   assert.equal(isStale(null, '2026-10-17T09:30:00Z'), false);
 });
 

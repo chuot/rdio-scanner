@@ -4,20 +4,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Reduced motion, proven in the stylesheets that run it.
-//
-// The operator who asks the platform for less motion gets it through the cascade: a rule inside
-// `@media (prefers-reduced-motion: reduce)` is what stops an animation and what collapses a
-// transition to the state it ends in. Two things are proven here. Every animation the applications
-// run is named by such a rule, on the same selector that runs it — a guard that names a different
-// selector stops a different element, and the one that moves keeps moving. And every transition is
-// collapsed on the same terms, because a transition that survives the preference is the page moving
-// under the operator anyway.
-//
-// The scan walks the text the way the browser reads it: block comments are blanked, a rule's
-// declarations are the text outside any nested block, and a media block's own rules are read from
-// inside it. The paths are read from the presentation directory, two directories above the tests'
-// own application directory — the same shape `styles-admin-css.test.js` reads.
+// reduced motion, proven in the stylesheets that run it
+// every animation and transition is guarded on its own selector
+// see the reduced-motion-scan maintainer note.
 const presentationDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const STYLESHEETS = {
@@ -60,9 +49,7 @@ function lineAt(text, index) {
     return 1 + text.slice(0, index).split('\n').length - 1;
 }
 
-// The blocks at one level of a stylesheet: each with the selector (or at-rule) that opens it, the
-// text inside it, and the line it opens on. Nested blocks stay inside their parent's text, so a
-// media block's rules are read by calling this again on that text.
+// top-level blocks: selector, inner text, opening line; nesting recursed
 function blocks(css) {
     const stripped = blankComments(css);
     const found = [];
@@ -96,8 +83,7 @@ function blocks(css) {
     return found;
 }
 
-// A rule's own declarations: the text with any nested block taken out, split on the semicolons the
-// browser splits them on.
+// a rule's own declarations: nested blocks removed, split on semicolons
 function declarations(body) {
     let text = '';
     let depth = 0;
@@ -158,8 +144,7 @@ function cascade(name) {
         const media = block.selector.startsWith('@media');
 
         if (media) {
-            // The preference's own block, and only its rules: a media block for a screen width is
-            // part of the page the operator sees in every motion state.
+            // only the reduce block counts: width media blocks apply in every motion state
             if (!/prefers-reduced-motion/.test(block.selector) || !/reduce/.test(block.selector)) {
                 for (const inner of blocks(block.body)) running.push({ ...inner, file: name });
             }

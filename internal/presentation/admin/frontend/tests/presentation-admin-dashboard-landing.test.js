@@ -1,8 +1,6 @@
-// The section a signed-in operator lands on (presentation/admin/rdio-admin.js). The landing is what the
-// operator sees before they choose anything, so it is proven through the two ways a session really starts:
-// a token the browser already holds, and a password the operator just typed. Both go through the shell's
-// own context, its own adapter, and a transport the test answers, so the reading is taken on the page the
-// operator is actually on and not on a stub that agrees with the code under test.
+// the landing is proven through the two real session starts
+// through the shell's own context, adapter, and an answered transport
+// see the landing-session-fixtures maintainer note.
 
 import './dom-shim.js';
 
@@ -18,8 +16,8 @@ import '../presentation/admin/rdio-admin.js';
 
 import { findAll } from './dom-shim.js';
 
-// The transport the shell's context is built on is answered here, because the context is built the first
-// time a component asks for it and the adapter keeps whatever fetch the page had at that moment.
+// the shell's context is built once, on first ask, and its adapter keeps that one
+// so the transport must be answered before any component asks
 const requests = [];
 
 const CONFIG = {
@@ -106,8 +104,7 @@ function openShell() {
   return el;
 }
 
-// The session the page holds, taken away: the store is the page's own, and a page that has signed out is a
-// page whose store says so.
+// sign-out goes through the page's own store: the store is what says signed out
 function signOut() {
   window.sessionStorage.clear();
 
@@ -137,18 +134,15 @@ function navButtons(el) {
   return findAll(nav, (node) => node.tag === 'button' && node.dataset.section !== undefined);
 }
 
-// The word the operator reads on a navigation item. The icon beside it is the icon font's own ligature
-// text, which the markup hides from the operator who is reading rather than looking, so the label is the
-// span and not the whole button.
+// the nav icon is icon-font ligature text, hidden from readers
+// so the label is the span, not the whole button
 function navLabel(button) {
   const label = findAll(button, (node) => node.tag === 'span')[0];
 
   return (label?.textContent ?? button.textContent ?? '').trim();
 }
 
-// The landing is the section the operator is shown before they choose anything. Everything the operator
-// needs first — what the server is doing, whether it is still ingesting — is on the dashboard, and the
-// operator should not have to know that in order to go looking for it.
+// the dashboard leads: it holds what an operator needs before choosing anything
 test('an operator whose browser already holds a session lands on the dashboard', async () => {
   window.sessionStorage.setItem(ADMIN_TOKEN_KEY, 'a-token-the-browser-is-holding');
 
@@ -162,8 +156,7 @@ test('an operator whose browser already holds a session lands on the dashboard',
   assert.equal(headingOf(el)?.textContent.trim(), 'Dashboard', 'the heading does not name the section the operator landed on');
 });
 
-// The other way a session starts: the operator types a password and the server answers. The landing is the
-// same, because it is the same shell answering the same question.
+// the password sign-in start lands the same: one shell answers both ways
 test('an operator who has just signed in lands on the dashboard', async () => {
   signOut();
 
@@ -179,8 +172,7 @@ test('an operator who has just signed in lands on the dashboard', async () => {
   assert.equal(headingOf(el)?.textContent.trim(), 'Dashboard');
 });
 
-// An operator who is not signed in is shown the sign-in page and nothing else: the dashboard reads the
-// status of a server, and a server that has not let this browser in has no reason to describe itself.
+// signed out, only the sign-in page shows: the status read is for members only
 test('an operator who is not signed in is not shown the dashboard', () => {
   signOut();
 
@@ -192,15 +184,14 @@ test('an operator who is not signed in is not shown the dashboard', () => {
 
   assert.ok(findAll(el, (node) => node.tag === 'rdio-admin-login').length, 'the page does not carry the sign-in panel');
 
-  // A page that has not been let in asks for nothing: the status read is several statements over the
-  // history, and an anonymous page could ask for it as easily as anyone else.
+  // the status read is several history statements, open to any caller
+  // a page not let in asks the server for nothing
   assert.equal(requests.length, asked, `the sign-in page asked the server for ${requests.length - asked} thing(s) it has not earned`);
 });
 
-// The navigation is the operator's map of the sections, and the landing heads it: the operator who lands on
-// the dashboard has to be able to see that is where they are standing, and has to find it at the head of the
-// column when they come back from anywhere in it. Both ways a session starts are read, because the landing is
-// the same section reached either way.
+// the dashboard heads the nav after either session start:
+// operators see where they stand and find the landing at the column's head
+// see the nav-current-item maintainer note.
 test('the dashboard heads the navigation, whichever way the session started', async () => {
   const opensWithTheLanding = (items, how) => {
     const sections = items.map((button) => button.dataset.section);
@@ -227,8 +218,8 @@ test('the dashboard heads the navigation, whichever way the session started', as
   opensWithTheLanding(navButtons(signedIn), 'the sign-in the operator just finished');
 });
 
-// Only the section the operator is standing on is current. The landing is the section they are standing on
-// until they choose another, and the navigation has to say so, whichever way they got there.
+// the landing is the nav's current item until another section is chosen
+// one current item at a time
 test('the landing is the item the navigation marks as current', async () => {
   const marksOnlyTheLanding = (el, how) => {
     const currents = navButtons(el).filter((button) => button.getAttribute('aria-current') !== null);
@@ -255,8 +246,7 @@ test('the landing is the item the navigation marks as current', async () => {
   marksOnlyTheLanding(signedIn, 'the sign-in the operator just finished');
 });
 
-// The landing is a section like every other section: the operator can leave it and come back to it, and
-// coming back to it puts the same page on the screen again.
+// the landing behaves like any section: leave it, return, the same page again
 test('the operator can leave the dashboard and come back to it', async () => {
   window.sessionStorage.setItem(ADMIN_TOKEN_KEY, 'a-token-the-browser-is-holding');
 

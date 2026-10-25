@@ -1,6 +1,5 @@
-// The todos banner: todos are shown in a persistent banner at
-// the top of the screen, not as a section. The banner renders nothing when there is
-// nothing to say, and the navigation no longer carries a todos item.
+// the todos banner: a persistent top banner, not a section
+// it renders nothing with nothing to say, and navigation has no todos item
 
 import './dom-shim.js';
 
@@ -53,8 +52,7 @@ test('the banner shows the open todos in the content column, above the section c
 
   assert.equal(contents.length, 1, 'the shell has one content column');
 
-  // The column opens with the heading naming the section, and the banner sits under it, above the
-  // section card: the operator reads what is wrong before reading the section it belongs to.
+  // the banner sits under the column heading and above the section card
   const siblings = contents[0].children;
 
   assert.ok(siblings.includes(banners[0]), 'the banner must sit in the content column');
@@ -78,10 +76,8 @@ test('the topbar carries the brand and the logout control, and no role text', ()
   assert.ok(texts(findAll(headers[0], (node) => node.tag === 'h1')).includes('Rdio Scanner'), 'the header must carry the brand');
 });
 
-// The order the column shows its sections in is proven once, in the structure test, where the fifteen labels
-// are written out as the operator reads them. What belongs here is that the shell paints exactly one
-// navigation column, and that it carries the sections this product has and not the ones the legacy
-// application had.
+// the shell paints exactly one navigation column, with this product's sections
+// it carries the OpenAPI section and not the legacy Ingestion one
 test('the shell has one navigation column, carrying the sections this product has', () => {
   const { el } = shell();
 

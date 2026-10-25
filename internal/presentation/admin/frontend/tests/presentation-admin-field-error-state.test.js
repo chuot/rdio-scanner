@@ -1,10 +1,5 @@
-// The field messages of the Systems, Sites, Talkgroups, and Units sections, read the way the
-// operator reads them: the messages a row the operator just added carries, the messages that appear
-// when the operator reaches a field, and the message a field keeps after the operator leaves a good
-// value in it.
-//
-// The readings are taken from the text under the control, written by the form field primitive
-// itself, and the rows are the rendered rows — the store's working copy is not the screen.
+// field state tests for Systems, Sites, Talkgroups, and Units
+// field text comes from the form field primitive; rows are the rendered page
 
 import './dom-shim.js';
 
@@ -127,8 +122,7 @@ function pickIn(row, title, value) {
   connectFields(row);
 }
 
-// The operator ticks one box of the Groups list: the box is checked, and the change fires the way
-// leaving the box fires it.
+// ticking a Groups box checks it and fires change the way leaving the box does
 function checkBox(row) {
   const box = findAll(row, (node) => node.tag === 'input' && node.type === 'checkbox')[0];
 
@@ -159,9 +153,7 @@ function leave(row, title) {
   reachField(controlOf(row, title));
 }
 
-// ---------------------------------------------------------------------------
-// The talkgroup row the operator came to fill in.
-// ---------------------------------------------------------------------------
+// the talkgroup row being filled in
 
 test('a new talkgroup row says nothing about fields the operator has not reached', () => {
   seed(getAdminContext().store);
@@ -196,8 +188,7 @@ test('walking across a field of a new talkgroup row reveals nothing', () => {
 
   const row = addRow(attach('rdio-admin-talkgroups'));
 
-  // The operator tabbed through the row: the field took the focus and gave it up, and its value
-  // never changed. Material's matcher read that as touched, not dirty, and showed no message.
+  // focusing and blurring a field without changing it shows no message
   const control = controlOf(row, 'Label');
 
   control.focus();
@@ -330,9 +321,7 @@ test('the field the operator edited is the same field node, holding what they ty
   assert.equal(fieldMessage(labelField), '');
 });
 
-// ---------------------------------------------------------------------------
-// The same three readings in the other three sections the operator walks.
-// ---------------------------------------------------------------------------
+// the same readings in the other three sections
 
 const SECTIONS = [
   ['Sites', 'rdio-admin-sites', 'Label', 'Central', 'Id', '41'],
@@ -377,12 +366,10 @@ for (const [name, tag, firstTitle, goodValue, idTitle, idValue] of SECTIONS) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// The state of having reached a field, across the rebuilds the section does.
-// ---------------------------------------------------------------------------
+// touched state across the section's rebuilds
 
-// The saved sites of both systems. Metro's site carries no identifier: it is a row the operator
-// has not reached, and its message is the reading the section must keep to itself.
+// Metro's site carries no identifier: it was never visited,
+// so its messages must stay hidden
 const SAVED_SITES = {
   1: [{ id: 6, label: 'North', siteRef: null, order: 1 }],
   2: [{ id: 4, label: 'East', siteRef: 40, order: 1 }, { id: 5, label: 'West', siteRef: 41, order: 2 }],
@@ -418,8 +405,8 @@ function dragRow(el, from, to) {
 function sitesOnSavedRows() {
   const store = setSlice(setSlice(seed(getAdminContext().store), 'subsection:sites:1', SAVED_SITES[1]), 'subsection:sites:2', SAVED_SITES[2]);
 
-  // The section picks the system it shows, the way it does in the application: County is the
-  // system the dropdown lists first, and it is the one carrying the two saved sites.
+  // the section picks its system the way the app does:
+  // County is listed first in the dropdown and holds the two saved sites
   const el = attach('rdio-admin-sites');
 
   return { store, el };
@@ -428,8 +415,8 @@ function sitesOnSavedRows() {
 test('the message a field carries survives every rebuild the section does', () => {
   const { el } = sitesOnSavedRows();
 
-  // The operator edits East's identifier away from the value the server holds: the row is invalid,
-  // the section is dirty, and the field they edited carries its message.
+  // clearing a saved Id makes the row invalid and the section dirty;
+  // the edited field carries the message
   typeIn(rows(el)[0], 'Id', '');
 
   assert.equal(fieldMessage(field(rows(el)[0], 'Id')), 'Id is required');
@@ -484,9 +471,7 @@ test('a configuration push leaves every field unreached', () => {
   assert.deepEqual(messages(rows(el)[0]), [], 'the pushed section says nothing about a field the operator has not reached again');
 });
 
-// ---------------------------------------------------------------------------
-// The Groups list of a talkgroup row: a field the operator reaches by picking in it.
-// ---------------------------------------------------------------------------
+// the Groups list of a talkgroup row: touched by picking, not by typing
 
 function groupsMarker(row) {
   return findAll(row, (node) => node.dataset?.invalid === 'true')[0] ?? null;

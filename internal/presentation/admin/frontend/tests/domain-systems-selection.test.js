@@ -1,7 +1,5 @@
-// Tri-state systems/talkgroups selection propagation (domain).
-// Mirrors legacy config/systems-selection semantics: everything → groups/tags/
-// systems → talkgroups, cascading in all four directions; emitted ids are the
-// business refs (systemRef / talkgroupRef / group.id / tag.id).
+// tri-state selection: everything cascades to groups, tags, systems, talkgroups
+// and back in all four directions; emitted ids are business refs
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -55,9 +53,7 @@ test('model is built from business refs, not database ids', () => {
   assert.equal(model.all, false);
 });
 
-// The tree names its rows, and it can only name them with what the model carries. The configuration
-// hands the model a label on every row of every level; a model that keeps identifiers alone leaves the
-// tree nothing to say but the number.
+// the model keeps configuration labels, so the tree can name its rows
 test('the model rows carry the labels the configuration carries', () => {
   const model = createSelectionModel(fixture());
 
@@ -68,9 +64,8 @@ test('the model rows carry the labels the configuration carries', () => {
   assert.deepEqual(model.systems[1].talkgroups.map((talkgroup) => talkgroup.label), ['TG3', 'TG4']);
 });
 
-// A row the add control of a section has just created carries an empty label and no identifier of its
-// own. The model carries the row as it was handed it: it invents neither a name nor a number, because
-// the words that stand in for a row the operator has not filled in belong to the section that made it.
+// a newly added row is carried with its empty label and no identifier
+// placeholder words belong to the section that made the row
 test('a row the add control created is carried with its empty label and no identifier', () => {
   const model = createSelectionModel({
     groups: [{ alert: '', label: '', led: '', order: 0 }],

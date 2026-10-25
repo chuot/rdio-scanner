@@ -1,6 +1,5 @@
-// The password panel in Tools: the form lives inside the Tools
-// section as a details panel, carries no username field, and the standalone
-// password section is gone from the navigation.
+// the password panel lives inside the Tools section as a details panel
+// the form carries no username field, and navigation has no password section
 
 import './dom-shim.js';
 

@@ -1,11 +1,5 @@
-// The payload a section Save sends. The rows the operator added and has not saved carry a mark of
-// their own, which the section uses to remember the row's open panel and the fields whose messages are
-// revealed. That mark is the client's bookkeeping: the payload carries the keys the configuration
-// defines, and nothing the client added to keep its screens in step.
-//
-// The fake records the body the way the transport writes it — a JSON stringify of the payload — so the
-// reading is the body the server receives, and the fake answers the way the server does: a row that
-// arrived with `id: 0` comes back with an identifier of its own.
+// the save payload carries the configuration's keys, not the client's row mark
+// the fake stores the stringified body and answers like the server: id 0 gets an id
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -140,10 +134,7 @@ test('a per-level save sends the rows with the keys the configuration defines', 
   ], 'the level of the system the operator saved carries its configuration keys and nothing else');
 });
 
-// The Systems section edits the system row's own fields. The sites, talkgroups, and units under a
-// system are saved by the section for that level, which shows one system at a time: the Systems
-// payload carries no copy of them, so a save there cannot answer for a level the operator changed
-// somewhere else — and cannot put back rows that level deleted.
+// the systems save carries no copy of the sites, talkgroups, and units
 test('the systems save sends the fields of the system row, and no copy of the levels', async () => {
   const { api, useCases } = await setup();
 
@@ -195,8 +186,7 @@ test('the systems save sends the fields of the system row, and no copy of the le
   ], 'the systems save sends the fields of the system row, and no copy of the sites, talkgroups, and units the level sections save');
 });
 
-// The row the server holds has a site under it. The Systems section does not show sites, and its
-// save does not carry them: what the server stores for the level is the level section's to write.
+// stored sites, talkgroups, and units stay the level sections' to write
 test('the systems save leaves the stored sites, talkgroups, and units to the sections that save them', async () => {
   const { api, useCases } = await setup();
 
@@ -213,8 +203,7 @@ test('the systems save leaves the stored sites, talkgroups, and units to the sec
   }
 });
 
-// The store compares the working copy with the server's copy structurally. The client's mark is not a
-// value the operator changed: a row that carries the mark and nothing else is the row the server holds.
+// the working copy differing from the server copy by the mark alone is not dirty
 test('the mark alone does not make a section dirty', async () => {
   const { store, useCases } = await setup();
 
@@ -227,8 +216,7 @@ test('the mark alone does not make a section dirty', async () => {
   assert.equal(slice.dirty, false, 'a working copy that differs from the server copy by the mark alone is not a change');
 });
 
-// The row the server saved is remembered by the identifier the server gave it: the client's mark is
-// gone from the section's rows with the save, and the row keeps its place in the section's readings.
+// a saved row loses its client mark and is keyed by the server's identifier
 test('a saved row is remembered by the identifier the server gave it', async () => {
   const { store, useCases } = await setup();
 
@@ -243,9 +231,7 @@ test('a saved row is remembered by the identifier the server gave it', async () 
   assert.equal(rowKey(slice.working[0], 0), 'id7', 'the row is remembered by the identifier the server gave it');
 });
 
-// The mask the add control creates is the row's own configuration key: it rides into the body the
-// server reads, and the row the save answers carries the mask the section's rule accepts — the row
-// means the same thing on both sides of its save.
+// the dirwatch mask the add control creates rides into the saved body, rule-clean
 test('the dirwatch row the add control creates is saved carrying its mask', async () => {
   const { api, useCases } = await setup();
 

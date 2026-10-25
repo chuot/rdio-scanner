@@ -1,12 +1,6 @@
-// The administration page says what changed while the operator was not looking at it.
-//
-// The operator works on a section, and the page answers: the save bar reports what the server did
-// with the rows, and a row that moved is a row whose place in the list the listener plays in. The
-// page carries one polite region, empty of anything static, and writes into it in the page's own
-// words: the save's answer, and the row that moved with the place it landed on.
-//
-// The readings are taken on the rendered shell and on the region's own text, after the control the
-// operator pressed.
+// the page announces what changed while the operator was not looking:
+// the save's answer and the moved row go into one polite live region
+// see the admin-polite-live-region maintainer note.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -58,8 +52,8 @@ function shell() {
 
   el.openSection('systems');
 
-  // The shell places the section card and its save bar the way a browser places them; the shim
-  // leaves their own connection to the test, as every section proof does.
+  // the shell places the section card and save bar; the test connects them
+  // the way every section proof does
   const section = findAll(el, (node) => node.tag === 'rdio-admin-systems')[0];
 
   assert.ok(section, 'the shell did not place the systems section on the page');
@@ -163,10 +157,9 @@ describe('administration announcements — the page says what changed', () => {
 
     const live = region(el);
 
-    // A configuration push repaints the shell: the todos change, and the page rebuilds the
-    // header, the nav, and the contents. The sentence written for the operator who is not
-    // looking must survive that paint — a region rebuilt empty mid-read throws the page's own
-    // answer away before it is heard.
+    // a configuration push repaints the header, nav, and contents
+    // the announcement written for an operator not looking must survive that paint
+    // see the admin-polite-live-region maintainer note.
     getAdminContext().store.setState({ todos: ['Systems has changes'] });
 
     assert.equal(region(el), live,

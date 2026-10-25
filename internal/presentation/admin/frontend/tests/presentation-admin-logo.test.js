@@ -1,6 +1,4 @@
-// The Rdio Scanner logo in the top bar: the bundled PWA icon plus the
-// wordmark, on the surface the administrator sees after login. The login card
-// carries the wordmark title only: no logo.
+// the top bar carries the PWA icon plus wordmark; the login card, wordmark only
 
 import './dom-shim.js';
 

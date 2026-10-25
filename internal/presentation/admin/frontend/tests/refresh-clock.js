@@ -1,14 +1,6 @@
-// A section's own poll interval, taken off the clock.
-//
-// A refresh schedule re-arms itself: the next poll is scheduled before the current one runs, so a schedule
-// that is left running is a chain of timers that never ends, and a test process waits for every timer it
-// was given before it exits. Holding the interval is also what lets a test say "the interval arrived"
-// instead of waiting for it, which is the difference between a test that is fast and repeatable and a test
-// that depends on the wall clock.
-//
-// Only the interval named is held. Every other timer the page or the test runner sets — a socket reconnect,
-// a snackbar, the runner's own — keeps running on the real clock, so holding one does not reach into the
-// others.
+// a named interval is taken off the clock; its re-arming chain cannot keep the test alive
+// holding it lets a test fire the poll instead of waiting on the wall clock
+// see the held-refresh-interval maintainer note.
 export function holdRefreshInterval(delay) {
   const realSetTimeout = globalThis.setTimeout;
   const realClearTimeout = globalThis.clearTimeout;
@@ -37,8 +29,7 @@ export function holdRefreshInterval(delay) {
     // How many polls the page is waiting for. A schedule that started twice would show two.
     waitingCount: () => waiting.size,
 
-    // The interval arriving: everything waiting is run, once, in the order it was scheduled. The count is
-    // what the page polled, so a test can say a paused page polled nothing.
+    // runs every waiting tick once, in order; the count is the number of polls
     fire: () => {
       const due = [...waiting.values()];
 
@@ -49,8 +40,7 @@ export function holdRefreshInterval(delay) {
       return due.length;
     },
 
-    // Putting the clock back. Every held interval is dropped, because a test that hands the clock back
-    // while its own schedule is still waiting would leave that schedule running on the real clock.
+    // gives the clock back, dropping held intervals so no schedule restarts live
     release: () => {
       globalThis.setTimeout = realSetTimeout;
       globalThis.clearTimeout = realClearTimeout;

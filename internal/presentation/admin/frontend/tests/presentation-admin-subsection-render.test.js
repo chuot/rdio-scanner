@@ -1,10 +1,5 @@
-// What the operator sees in the per-level sections. The store's working copy is not the screen:
-// these tests read the rendered rows, so a section that updates its data and leaves the page
-// untouched fails here.
-//
-// Every case is one of the four ways the rows change: the operator presses the add control, the
-// operator presses delete, the operator picks another system, and the server replaces the level
-// under the operator's feet.
+// these tests read the rendered rows, not the store's working copy
+// cases are the four row changes: add, delete, system switch, server replacement
 
 import './dom-shim.js';
 
@@ -106,8 +101,7 @@ function dropdown(el) {
   return findAll(el, (node) => node.tag === 'rdio-select')[0];
 }
 
-// The save bar is its own element that renders when it is attached to the page; the shim
-// attaches it here so a test can read the Save control the operator sees.
+// the save bar renders only when attached: the shim attaches it for saveButton
 function saveButton(el) {
   const bar = findAll(el, (node) => node.tag === 'rdio-admin-section-bar')[0];
 
@@ -135,16 +129,14 @@ function fieldInput(row, title) {
   return findAll(field, (node) => node.tag === 'input')[0];
 }
 
-// The operator types in the field and moves on: the value lands in the input, the
-// input has the focus, and the change event fires the way leaving the field fires it.
+// sets the value, focuses the input, and fires change as leaving the field does
 function typeIn(input, value) {
   input.value = value;
   input.focus();
   input.dispatchEvent({ type: 'change' });
 }
 
-// The drag handle's own events: the row being moved starts the drag, the row it lands
-// on takes it. The list carries the drag listeners the rows are sorted by.
+// the list carries the drag listeners: events target the moved and landing rows
 function dragRow(el, from, to) {
   const list = findAll(el, (node) => node.className === 'rdio-admin-rows')[0];
   const moved = list.querySelectorAll(':scope > [data-drag]');
@@ -412,9 +404,8 @@ test('the unit section falls back to another system when the one it shows is del
     'after falling back, the add control renders its row on the system now showing');
 });
 
-// CA-003: a field edit is the operator's own typing, not a reason to rebuild the
-// rows they are working on. The Systems section already behaves this way; these
-// three cases hold the per-level sections to it.
+// editing a field keeps the row and field on the page: typing rebuilds nothing
+// the Systems section does this; these cases hold the per-level sections to it
 test('editing a site label keeps the row and the field the operator is in on the page', () => {
   const store = seed();
   const el = attach('rdio-admin-sites');
@@ -463,9 +454,9 @@ test('editing a unit label keeps the row and the field the operator is in on the
   assert.equal(saveButton(el).disabled, false, 'Save is enabled for the change the operator made');
 });
 
-// The drag handler is installed by the render that built the rows on the page, and a field
-// edit deliberately does not rebuild them. The move must therefore commit the rows as the
-// operator left them in the fields, not the rows the render captured.
+// a field edit does not rebuild the rows the render built
+// so a drag commits the rows as the operator left them in the fields
+// see the drag-commits-edited-rows maintainer note.
 test('dragging a site after editing it keeps what the operator typed', () => {
   const store = seed();
   const el = attach('rdio-admin-sites');
@@ -504,8 +495,7 @@ test('dragging a talkgroup after editing it keeps what the operator typed', () =
     'the move commits the rows as the operator left them');
 });
 
-// The row the operator is typing in is the section's one open row, and their own keystroke never
-// closes it: nothing about typing closes a row, and the field they are in stays on the page.
+// typing never closes the one open row: the field stays on the page
 test('typing in a field of the open row leaves the section with that one row open', () => {
   const store = seed();
   const el = attach('rdio-admin-sites');

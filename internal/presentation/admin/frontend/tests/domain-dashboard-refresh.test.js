@@ -1,6 +1,5 @@
-// The dashboard's auto-refresh (domain/dashboard-status.js's interval, driven by the same schedule the log
-// view uses). Nothing here waits: the schedule is given a timer the test controls, so every poll is
-// something the test chose to run, and the interval is read back off the timer instead of slept through.
+// tests for the dashboard auto-refresh interval in domain/dashboard-status.js:
+// a test-controlled timer runs every poll, and the interval is read off the timer
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,8 +23,7 @@ function fakeTimers() {
       scheduled.delete(id);
     },
     scheduledCount: () => scheduled.size,
-    // scheduledDelay is the interval the schedule is waiting out, which is how these tests read the
-    // dashboard's own interval off the schedule without waiting for it.
+    // scheduledDelay reads the interval the schedule is waiting out, no waiting needed
     scheduledDelay: () => [...scheduled.values()][0]?.ms,
     run: () => {
       const due = [...scheduled.values()];
@@ -39,8 +37,7 @@ function fakeTimers() {
   };
 }
 
-// The dashboard is polled, and a page that is open in three tabs of an operator's browser is three pages
-// asking the same question. The interval is the one the dashboard documents, and not the log view's.
+// the dashboard polls on its own documented interval, not the log view's
 test('the dashboard polls on its own interval', () => {
   const timers = fakeTimers();
 
@@ -58,9 +55,7 @@ test('the dashboard polls on its own interval', () => {
   assert.equal(timers.scheduledDelay(), 5000, 'the dashboard changed its interval after the first poll');
 });
 
-// The pause control is clicked, the section is reopened, the page becomes visible again: every one of
-// those can plausibly start the schedule again, and two schedules polling the same page is two requests
-// for every interval.
+// starting the schedule again (pause, reopen, visibility) must not double the polling
 test('starting a schedule that is already running does not double the polling', () => {
   const timers = fakeTimers();
 
@@ -79,9 +74,8 @@ test('starting a schedule that is already running does not double the polling', 
   assert.equal(polls, 1);
 });
 
-// The status read is several statements over a database that can hold years of recorded calls. A refresh
-// that fires while a read is still in flight stacks them, and the page ends up showing an older answer
-// over a newer one.
+// a refresh while a status read is in flight would stack reads and show an older answer
+// over a newer one
 test('a poll is not stacked on one already in flight, and the schedule carries on', () => {
   const timers = fakeTimers();
 
@@ -106,8 +100,7 @@ test('a poll is not stacked on one already in flight, and the schedule carries o
   assert.equal(polls, 1);
 });
 
-// A read that fails — a server that went away, a session that expired — must not quietly end an auto-
-// refresh the operator asked for. The schedule is scheduled before the poll runs, so it is still there.
+// the schedule is armed before the poll runs, so a failed read cannot end the refresh
 test('a poll that fails does not end the refresh', () => {
   const timers = fakeTimers();
 
@@ -136,8 +129,7 @@ test('a poll that fails does not end the refresh', () => {
   assert.equal(polls, 2);
 });
 
-// The pause control is the operator's own decision: while it is off, nothing is asked, and turning it back
-// on starts exactly one chain and not the one that was already running before the pause.
+// pause asks for nothing; resume starts exactly one chain, not the paused one
 test('pausing ends the polling and resuming starts exactly one', () => {
   const timers = fakeTimers();
 

@@ -1,7 +1,5 @@
-// The OpenAPI section's view of the contract: every path and
-// method of docs/openapi.json lands in exactly one group, the Config box splits
-// by resource, and a contract edit that adds an endpoint fails this test until
-// the view names it — the section can only ever show what the server answers.
+// the OpenAPI contract view: every path and method lands in exactly one group,
+// the Config box splits by resource, and a new endpoint fails here until named
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -41,8 +39,7 @@ test('the groups carry the admin-facing names of the surface', () => {
   ]);
 });
 
-// The one read the dashboard is built from. It is a read of the server rather than of a saved resource, so
-// it is named by its own group and not folded into the configuration or the log view.
+// the live status read is its own group: a server read, not a saved resource
 test('the Status group names the one live status read', () => {
   const groups = buildOpenApiGroups(contract);
 
@@ -53,9 +50,7 @@ test('the Status group names the one live status read', () => {
   assert.deepEqual(status.endpoints.map((endpoint) => `${endpoint.method} ${endpoint.path}`), ['GET /api/admin/status']);
 });
 
-// The call history over HTTP. The section shows what the server answers, so the three
-// endpoints the contract names appear as their own group, read between the log view and the
-// password change.
+// the three call history endpoints form their own group
 test('the Calls group names the three call history endpoints', () => {
   const groups = buildOpenApiGroups(contract);
 
@@ -127,8 +122,7 @@ test('an operation whose contract entry states no description falls back to its 
 test('the path parameter the contract declares for a path reaches the endpoints under it', () => {
   const endpoint = endpointOf(buildOpenApiGroups(contract), '/api/admin/config/{section}', 'GET');
 
-  // The allowed values travel with the parameter: the administrator reading the
-  // expanded endpoint sees which sections the path answers, not only its type.
+  // allowed values travel with the parameter, shown on the expanded endpoint
   assert.deepEqual(endpoint.params, [{
     name: 'section',
     in: 'path',

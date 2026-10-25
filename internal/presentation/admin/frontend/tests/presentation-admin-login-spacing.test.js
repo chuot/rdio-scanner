@@ -1,10 +1,5 @@
-// The login card's own spacing. The card styles its title, its password field, and its Login
-// button, and the failure message the form shows is the one card child that had no spacing of its
-// own: the message sat flush against the button. The card gives it the same step it uses between
-// its fields.
-//
-// The gap is the card's rule, not a rule on every form message. The shared message shape carries no
-// margin, and the listener application lays its own forms out on that shape.
+// the login card gives its failure message the same spacing step as its fields
+// the gap is the card's rule: the shared message shape carries no margin
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

@@ -1,12 +1,4 @@
-// The OpenAPI submenu: the
-// section renders the endpoint groups derived from docs/openapi.json through the
-// shared box. Each endpoint is a detail row: its summary line names the method,
-// the path, and the summary, and it opens on the description, the parameters, the
-// request body fields, and the response codes the contract states. The rows are
-// closed by default, so the page reads as a table of contents. The auth sentence
-// is stated once in the card intro. A contract that cannot be fetched renders one
-// honest caption. No other section card carries an OpenAPI box. The boxes are
-// informational: the test reads what they render, never what they request.
+// rows read as a table of contents; a bad contract shows one caption
 
 import './dom-shim.js';
 
@@ -89,13 +81,11 @@ const rows = (root) => places(root).flatMap((node) => findAll(node, (n) => n.tag
 
 const boxTitle = (box) => texts(findAll(box, (node) => node.className === 'box-title').flatMap((p) => findAll(p, (node) => node.tag === 'span')))[0];
 
-// The box puts a zero-width break opportunity after every path separator so a long
-// path wraps on a narrow viewport. The path the administrator reads is the path of
-// the contract, separators included.
+// zero-width break opportunities follow path separators so long paths wrap;
+// the path still reads as the contract's, separators included
 const paths = (root) => texts(findAll(root, (node) => node.className === 'endpoint-path')).map((text) => text.replace(/\u200B/g, ''));
 
-// allText reads everything a node states, containers included: the detail checks
-// ask what the administrator reads when the row opens, not which element carries it.
+// allText reads every text under a node, containers included, for the detail checks
 const allText = (root) => texts(findAll(root, () => true)).join('\n');
 
 const rowFor = (root, path, method) =>
@@ -132,8 +122,7 @@ test('the OpenAPI card renders one box per group, each endpoint naming method, p
   assert.deepEqual(texts(findAll(login, (node) => node.className === 'summary')), ['Log in and obtain a JWT']);
 });
 
-// The call history over HTTP. The card shows what the server answers, so the three call
-// endpoints appear in their own box, read between the log view and the password change.
+// the three history endpoints share a box between logs and password
 test('the Calls box renders the three call history endpoints', async () => {
   const { boxes } = await openApiCard();
 

@@ -1,14 +1,5 @@
-// The systems-selection tree, and the keyboard that stays on the checkbox it just activated.
-//
-// The tree answers every checkbox by rebuilding itself: the cascade through the model changes the
-// state of the rows above and below, so the page is painted from the model again. A rebuild throws
-// away the control the keyboard was standing on, and a browser puts the focus on the page's body —
-// so the operator who checks a talkgroup with the keyboard finds themselves at the top of the page,
-// and the next Tab starts the walk down the tree again from the beginning. The tree has to put the
-// keyboard back on the control it just answered, the same row it is looking at.
-//
-// The readings are taken on the control the operator activated, through the change event a click and
-// the keyboard's Space both leave on a checkbox.
+// the systems-selection tree and keyboard focus: after a checkbox rebuilds the tree,
+// the keyboard stays on the checkbox it just activated
 
 import './dom-shim.js';
 
@@ -21,8 +12,8 @@ import '../presentation/admin/rdio-systems-selection.js';
 
 import { findAll } from './dom-shim.js';
 
-// The config the sections hand the tree: the systems carry their `systemRef`, the talkgroups their
-// `talkgroupRef`, and those are the identifiers the tree's rows are built from.
+// the config the sections hand the tree: systemRef and talkgroupRef are
+// the identifiers its rows are built from
 const CONFIG = {
   groups: [{ id: 1, label: 'Dispatch' }, { id: 2, label: 'Interop' }],
   tags: [{ id: 3, label: 'Fire' }],
@@ -53,16 +44,14 @@ function boxes(el) {
   return findAll(el, (node) => node.tag === 'input' && node.type === 'checkbox');
 }
 
-// The checkbox naming a row of the tree: the row is what the operator is looking at, and the control
-// the tree hands the keyboard back to has to be the same row, not the position the render happened
-// to leave it in.
+// the checkbox naming a tree row: focus returns to the same row,
+// not to a render position
 function boxFor(el, name) {
   return boxes(el).find((box) => box.dataset.node === name) ?? null;
 }
 
-// The operator activates a checkbox: the box flips, and the box answers with the change event a
-// click and the keyboard's Space both leave on it. The tree rebuilds, and the keyboard is where the
-// tree left it.
+// flips a checkbox and fires the change event a click or keyboard Space
+// leaves on it, then the tree rebuilds
 function activate(box) {
   box.checked = !box.checked;
   box.dispatchEvent({ type: 'change', target: box });
@@ -121,8 +110,8 @@ describe('presentation/admin/rdio-systems-selection — the keyboard stays on th
 
     assert.equal(document.activeElement, after, 'the keyboard left the system row its subtree just changed');
 
-    // The cascade the model ran through the tree is the same one the pointer gets: the talkgroups
-    // under the system follow the row the operator activated.
+    // the model cascade matches the pointer's: talkgroups under the
+    // system follow the activated row
     const talkgroups = [boxFor(el, 'talkgroup:100'), boxFor(el, 'talkgroup:101')];
 
     assert.deepEqual(talkgroups.map((box) => box.checked), [true, true], 'the cascade did not follow the row the keyboard is standing on');

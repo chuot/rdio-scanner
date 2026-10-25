@@ -1,12 +1,7 @@
-// The surfaces the mark is not for. The login box asks the operator for the server's password and the
-// legacy form hid the marker there on purpose; the OpenAPI box marks the fields its own contract says
-// are required, and that asterisk is the contract speaking, not the webapp declaring a requirement of
-// its own; the Tools file forms take a file, the Logs filters narrow a list, and the systems-selection
-// dialog picks which systems a row allows — none of them is a field the webapp insists on.
-//
-// These readings pass today and stay passing. They are the pins: the mark the config sections declare
-// must not reach these surfaces, and the asterisk the OpenAPI box already draws must stay exactly the
-// one its contract states.
+// The surfaces the mark is not for: the login box, the OpenAPI box,
+// the Tools file forms, the Logs filters, and the systems-selection
+// dialog. The OpenAPI asterisk is the contract speaking, not the webapp.
+// see the required-marker-pinned-surfaces maintainer note.
 
 import './dom-shim.js';
 
@@ -63,8 +58,7 @@ function spanClass(node) {
   return node.className?.split(/\s+/).find((name) => name === 'field-title' || name === 'body');
 }
 
-// The elements that name a field: the label inside a form field, and the caption span a hand-built
-// block names its control with.
+// The elements that name a field: the label inside a form field or a caption span.
 function namedElements(root) {
   const found = [];
 

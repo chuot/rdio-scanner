@@ -1,8 +1,5 @@
-// The per-level store slices: each level of each
-// system — sites, talkgroups, units — lives in a `subsection:<level>:<systemId>`
-// slice with the same baseline/working/dirty/invalid/conflict semantics as the
-// section slices, saves through the per-level endpoints, and keeps the talkgroup
-// order-key normalization the systems section does.
+// per-level subsection slices, subsection:<level>:<systemId>, same semantics as
+// the section slices: baseline/working/dirty/invalid/conflict, per-level endpoints
 
 import test from 'node:test';
 import assert from 'node:assert/strict';

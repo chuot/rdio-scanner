@@ -1,15 +1,6 @@
-// The dialog's focus trap, exercised through the events a keyboard produces.
-//
-// A dialog that lets the Tab key walk out of itself leaves the keyboard on the page behind a box
-// that says it is modal: the operator keeps typing into controls they cannot see. The trap is the
-// page's own keydown handler, and it has to answer the Tab key on the controls the dialog carries
-// *at the moment the key is pressed* — a dialog whose content changes (a tree that re-renders, a
-// control that appears, a control that is disabled) has to know its ends then, and it has to skip
-// the controls a browser will not let the keyboard stop on: a hidden one and a disabled one.
-//
-// The readings are taken through the events the keyboard leaves: the keydown the Tab key produces,
-// the focus the browser moves. The real key presses are walked in the browser harness; the shim has
-// no keyboard of its own, so it carries the focus the browser moves.
+// the dialog's tab focus trap, read through the keyboard events it answers
+// it reads its ends at keypress time and skips hidden and disabled controls
+// see the dialog-focus-trap maintainer note.
 
 import './dom-shim.js';
 
@@ -27,9 +18,7 @@ function focusables(root) {
   return findAll(root, (node) => ['button', 'input', 'select', 'textarea'].includes(node.tag));
 }
 
-// The two ends of the dialog's own route: the control the keyboard reaches first, and the one it
-// reaches last. The trap is read against these, because these are the ends a Tab key pressed inside
-// the dialog meets.
+// the first and last focusable controls inside the dialog
 function ends(dialog) {
   const all = focusables(dialog);
 
@@ -51,10 +40,8 @@ function open(content, actions = [{ label: 'Cancel' }, { label: 'Select' }]) {
   return dialog;
 }
 
-// The Tab key, pressed on the control the keyboard is standing on: the keydown the browser leaves on
-// the control, bubbling to the dialog that traps it. The reading records whether the page took the
-// key away from the browser — the preventDefault that stops the walk out of the dialog — and where
-// the focus ended up.
+// Tab posted on the focused control, bubbling to the dialog
+// records whether preventDefault stopped the walk, and where focus landed
 function pressTab(el, { shift = false } = {}) {
   let prevented = false;
 
@@ -104,9 +91,7 @@ describe('presentation/ui/primitives — the dialog trap, at the moment the key 
     dialog.close();
   });
 
-  // The trap is a snapshot of the controls taken when the dialog opened. A dialog whose content
-  // rebuilds — the selection tree re-renders on every checkbox the operator activates — has new
-  // controls, and a snapshot taken at open time names ends that are no longer the ends.
+  // the trap's ends are the dialog's live controls, not an open-time snapshot
   it('takes its ends from the controls the dialog carries when the key is pressed, not when it opened', () => {
     const body = document.createElement('div');
 
@@ -114,8 +99,7 @@ describe('presentation/ui/primitives — the dialog trap, at the moment the key 
 
     const dialog = open(body, []);
 
-    // The content rebuilds: the tree the dialog carries is replaced by one that carries more
-    // controls than the dialog was opened with.
+    // the content rebuilds, carrying one more control than at open
     const added = control('Third');
 
     body.append(added);
@@ -135,8 +119,7 @@ describe('presentation/ui/primitives — the dialog trap, at the moment the key 
   it('skips the controls a browser will not let the keyboard stop on', () => {
     const body = document.createElement('div');
 
-    // A control the page has taken off the screen, and a control the page has disabled, sit at the
-    // two ends of the dialog: the browser's own Tab route leaves both out, so the trap has to.
+    // hidden and disabled controls at both ends: the browser tab route skips them
     const hidden = control('Hidden first');
 
     hidden.hidden = true;

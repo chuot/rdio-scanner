@@ -1,7 +1,5 @@
-// The per-level sections: each section shows the
-// saved systems in display order in its dropdown, edits the rows of the selected
-// system in its own slice, and the talkgroups section carries the Blacklist
-// action that adds the talkgroup's reference to the system's blacklist and saves it with the rows.
+// the per-level sections test dropdowns, per-system slices, and Blacklist
+// Blacklist adds the reference to the system's blacklist, saved with the rows
 
 import './dom-shim.js';
 
@@ -56,8 +54,8 @@ function seed() {
     }
   }
 
-  // The state a loaded configuration leaves the page holding, blacklist slice included: the list the
-  // talkgroups section edits beside its rows and saves with them.
+  // the state a loaded configuration leaves, blacklist slice included
+  // that list is the one the talkgroups section edits and saves with its rows
   for (const system of systems()) {
     state[`blacklists:${system.id}`] = {
       systemId: system.id,
@@ -148,9 +146,9 @@ test('blacklisting a talkgroup adds its reference to the system blacklist and re
 
   blacklist.click();
 
-  // The entry names the reference the server compares a recording against, and it joins the list the
-  // talkgroups section saves with its rows — not the Systems section's copy, which the action leaves
-  // alone so that section is never left holding a change nobody was told about.
+  // the Blacklist entry names the reference the server compares a recording against
+  // it joins the talkgroups' blacklists:2 list, not the Systems section's copy
+  // see the blacklist-slice-coupling maintainer note.
   assert.equal(store.getState()['blacklists:2'].working, '7,1514', 'the entry the Blacklist action wrote is not the reference the server compares');
   assert.equal(store.getState()['section:systems'].working.find((s) => s.id === 2).blacklists, '7', 'the Blacklist action wrote the Systems section, which does not save the talkgroups it is edited beside');
   assert.equal(store.getState()['section:systems'].dirty, false, 'the Blacklist action left the Systems section asking to be saved');

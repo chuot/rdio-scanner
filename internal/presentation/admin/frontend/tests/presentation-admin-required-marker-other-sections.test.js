@@ -1,9 +1,5 @@
-// The seven administration sections outside the systems tree, and the Tools → Change password panel,
-// read for the asterisk on the name of every field the webapp insists on.
-//
-// These sections build their rows by hand, and they name a field in two shapes: a <label> inside the
-// form field (Access, API keys, Downstreams, Dirwatch, the password panel), or a caption span beside
-// it (Groups, Tags, Options). The mark rides whichever node names the field.
+// The seven sections outside the systems tree, plus the password panel.
+// A hand-built section names its field by a label inside the field or a caption span.
 
 import './dom-shim.js';
 
@@ -85,8 +81,7 @@ function control(el, className) {
 }
 
 function rows(el) {
-  // The row locators take the panels the sections build: the collapsible details rows and the
-  // plain rows alike, so a section's row is the same row whichever shape it carries.
+  // The row locators find collapsible details rows and plain rows alike.
   return findAll(el, (node) => node.tag === 'details'
     || (node.tag === 'div' && node.className?.split(/\s+/).includes('rdio-admin-row')));
 }
@@ -103,9 +98,7 @@ function addRow(el) {
   return rows(el)[0];
 }
 
-// The names a row carries the asterisk on: the label inside a form field, and the caption span a
-// hand-built row names its field with. A systems-tree style row names its field in both shapes at
-// once, so a name counts once.
+// The names a row carries the asterisk on; a name counts once.
 function markedNames(row) {
   const names = new Set();
 
@@ -127,8 +120,7 @@ function spanClass(node) {
 }
 
 function fieldOf(row, title) {
-  // The label inside the field, and the caption beside the control: both live inside the form field,
-  // so the field is the one whose own text names the title.
+  // The label and the caption both live inside the form field.
   return findAll(row, (node) => node.tag === 'rdio-form-field')
     .find((node) => findAll(node, (child) => child.tag === 'label' || spanClass(child))
       .some((el) => el.textContent === title));
@@ -214,13 +206,8 @@ test('the change password panel names the fields the webapp insists on', () => {
   );
 });
 
-// ---------------------------------------------------------------------------
-// The conditional requirements: System and Talkgroup stay plain, and their rules report.
-//
-// A row the operator added carries no system and no talkgroup at all, and the rule lets an absent id
-// pass: the row that can put the two selects in front of the operator is a saved row whose mask names
-// neither id. That is the row these readings are taken on.
-// ---------------------------------------------------------------------------
+// The conditional requirements: System and Talkgroup stay plain, their rules report.
+// Only a saved row whose mask names neither id can put the two selects in view.
 
 test('the dirwatch row leaves System and Talkgroup plain while their rules report them', () => {
   seed(getAdminContext().store, {
@@ -229,8 +216,7 @@ test('the dirwatch row leaves System and Talkgroup plain while their rules repor
 
   const row = rows(attach('rdio-admin-dirwatch'))[0];
 
-  // The operator reaches the two selects the row leaves empty: both rules report, and neither name
-  // carries a mark, because the row does not insist on them the way it insists on the directory.
+  // The operator reaches both empty selects: both rules report, no mark.
   reachField(controlOf(row, 'System'));
   reachField(controlOf(row, 'Talkgroup'));
   connectFields(row);

@@ -9,16 +9,14 @@ import test from 'node:test';
 
 import { getAdminContext } from '../application/admin-context.js';
 
-// The form field primitive is part of every bundle the administration application builds; a
-// test that reads a field's message needs it defined before the form markup is parsed.
+// the field primitive is in every bundle; it must be defined before markup parses
 import '../../../common/frontend/presentation/ui/primitives.js';
 
 import '../presentation/admin/rdio-admin-login.js';
 
 import { connectFields, fieldMessage, findAll } from './dom-shim.js';
 
-// The form markup arrives through innerHTML, the way a browser inserts it: the fields under the
-// root are connected here, which is the moment the browser runs the primitive's own setup.
+// markup arrives through innerHTML: connect runs the primitive's setup
 function loginForm(result) {
   const context = getAdminContext();
 
@@ -32,8 +30,7 @@ function loginForm(result) {
   const form = el.querySelector('form');
   const input = el.querySelector('input[name="password"]');
 
-  // The operator types: the value lands in the control and the input event bubbles out of it,
-  // which is what makes the field one the operator has reached.
+  // typing sets the control value and bubbles input, which marks the field reached
   input.value = 'secret';
   input.dispatchEvent({ type: 'input' });
 
@@ -49,8 +46,7 @@ function errorText(el) {
   return fieldMessage(el.querySelector('rdio-form-field'));
 }
 
-// The browser filled the password in: the value is in the control and no event ever left it, so
-// the field is one the operator has not reached by typing. Pressing Enter submits it.
+// a pasted password: the value is set, no event fired, so the field is not reached
 function pastedForm(result, password) {
   const context = getAdminContext();
 

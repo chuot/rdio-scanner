@@ -1,15 +1,6 @@
-// The guard against drift. A section declares which of its fields the webapp insists on, and the mark
-// is drawn on the name of each one. The declaration is worth nothing if it is not the rule: a field the
-// rule requires and the section does not declare leaves the operator to discover the requirement by
-// saving, and a field the section declares with no rule behind it tells the operator the webapp insists
-// on something it accepts empty.
-//
-// Each reading takes the section's own rule function over the row an empty one is, keeps the messages
-// that say a field is required, and compares the fields they name with the names the rendered row
-// carries the mark on. The named exemptions are taken away first: the identifier a unit row asks for
-// only when the operator leaves it empty, the dirwatch system and talkgroup the row asks for only when
-// its mask names neither id, and the systems picker the row sections carry as a list of systems and not
-// as a field on the row.
+// the guard against drift: a section's marks must match the fields its rule
+// requires, the named exemptions aside; readings and exemptions are in the hub
+// see the required-marker-declaration-drift maintainer note.
 
 import './dom-shim.js';
 
@@ -122,23 +113,18 @@ function passwordPanel() {
     .find((panel) => findAll(panel, (child) => child.className?.split(/\s+/).includes('row-title'))[0]?.textContent === 'Change password');
 }
 
-// The rule's own words: the messages that say a field is required, and only those. A rule that reports
-// a value the field rule rejects for its shape — an id below one, a mask without a token, a delay
-// below the floor — says nothing about the field being required, and marks nothing.
+// requiredFields keeps only messages ending ' is required'; shape rejections mark nothing
 function requiredFields(errors, names) {
   const keys = Object.entries(errors).filter(([, message]) => / is required$/.test(message)).map(([key]) => key);
 
-  // A rule that requires a field the section's table does not name is drift the reading must report,
-  // not drift it must swallow.
+  // a rule requiring a field the section's table does not name is drift to report, not swallow
   const unnamed = keys.filter((key) => !names[key]);
 
   return { fields: keys.map((key) => names[key]).filter(Boolean), unnamed };
 }
 
-// The drift between a rule and a declaration: the fields the rule requires that the page does not mark,
-// and the names the page marks that the rule does not require. The exemptions are the fields the rule
-// asks for only in a state the row is not in — a conditional requirement — and the systems picker,
-// which the row sections carry as a list of systems and not as a field on the row.
+// drift: undeclared names the rule requires but the page leaves unmarked, unbacked names the
+// page marks with no requirement behind it; exemptions cover conditional requirements
 function drift(requirements, declarations, exemptions = []) {
   const required = [...new Set(requirements)].filter((name) => !exemptions.includes(name)).sort();
   const declared = [...new Set(declarations)].sort();
@@ -265,20 +251,17 @@ for (const { section, page, rule, names, exemptions = [] } of SECTIONS) {
 // ---------------------------------------------------------------------------
 
 test('a rule that requires a field no section declares is reported', () => {
-  // The access row's code: the rule requires it, and a section that declared only the identifier
-  // would leave the operator to find the requirement by saving.
+  // the access row's code: a declaration naming only the identifier hides the requirement
   assert.deepEqual(drift(['Code', 'Ident'], ['Ident']), { undeclared: ['Code'], unbacked: [] }, 'the requirement the page does not mark is named');
 });
 
 test('a declaration with no rule behind it is reported', () => {
-  // A section that marked the groups list of a row whose rule accepts no group: the mark tells the
-  // operator the webapp insists on a field it accepts empty.
+  // the groups mark on a row whose rule takes no groups claims a field it accepts empty
   assert.deepEqual(drift(['Ident'], ['Groups', 'Ident']), { undeclared: [], unbacked: ['Groups'] }, 'the mark with no requirement behind it is named');
 });
 
 test('a conditional requirement is exempt and the rest of the row is guarded', () => {
-  // The unit row: the rule asks for the identifier only when the operator leaves it empty, so the
-  // declaration marks the label and the guard accepts the identifier as exempt.
+  // the unit row: the rule asks for the identifier only when it is left empty, so it is exempt
   assert.deepEqual(drift(['Id', 'Label'], ['Label'], ['Id']), { undeclared: [], unbacked: [] }, 'the conditional identifier is exempt and the label is guarded');
 
   // The exemption does not blind the guard to the rest of the row.

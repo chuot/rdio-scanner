@@ -1,11 +1,5 @@
-// The dashboard keeping itself current (presentation/admin/rdio-admin-dashboard.js): the interval the page
-// polls on, the operator's own pause control, the page going away and coming back, the configuration push
-// that asks for an answer at once, and what the page says out loud when the operator asked for a read and
-// what it says nothing about when its own schedule did.
-//
-// The page's own timer is held here: the dashboard's interval is taken off the clock and fired by the test,
-// so no test in this file waits for anything. Every other timer on the page — a socket reconnect, the test
-// runner's own — is left on the real clock.
+// dashboard refresh: interval, pause, visibility, config push, spoken output
+// the interval timer is faked here and test-fired; other timers stay real
 
 import './dom-shim.js';
 
@@ -60,20 +54,16 @@ const CONFIG = {
   tags: [],
 };
 
-// The status reads the page asked for, and the ones the test is holding open so that "in flight" is a
-// state a test can actually stand in.
+// counts status reads; some are held open so in-flight is a testable state
 let statusReads = 0;
 let held = false;
 const pending = [];
 
-// The server refusing the read the page's own schedule asked for: the transport's own answer to a status
-// read it could not complete, 417 and nothing in the body.
+// a refused read: the transport answers 417 with an empty body
 let refused = false;
 
-// The moment a status read names. Whether the page thinks the figures it is holding have gone stale is a
-// comparison against the page's own clock, so the fixture names the moment the read is happening rather
-// than an instant copied from a printed page: a fixed one would be current or stale depending on when the
-// test ran.
+// the timestamp comes from the page clock, not a fixed instant:
+// a fixed one reads fresh or stale depending on when the test ran
 let statusNow = new Date().toISOString();
 
 function servedStatus() {
@@ -143,13 +133,10 @@ globalThis.WebSocket = class FakeAdminSocket {
   }
 };
 
-// The dashboard's interval, taken off the clock, so that "the interval arrived" is something the test says
-// rather than something the test waits for.
+// the interval timer is fake: the test fires it rather than waiting
 const holdTheRefreshInterval = () => holdRefreshInterval(STATUS_REFRESH_DELAY);
 
-// The page's own clock, moved forward. An operator who left this section behind another tab and came back
-// an hour later is a thing no test waits for, and the clock the page measures its figures against is the
-// one thing that moved while they were gone.
+// advances the page clock: an hour in a background tab is not worth waiting for
 function withPageClockAdvancedBy(offsetMs, moveThePage) {
   const RealDate = globalThis.Date;
 
@@ -178,8 +165,7 @@ function readLineText(el) {
   return line ? words(line).trim() : '';
 }
 
-// The page, opened the way the shell opens it: a session the browser holds, the configuration the session
-// starts with, and the section the operator is standing on.
+// opens the page the way the shell does: session, config, active section
 async function openDashboard() {
   window.sessionStorage.setItem(ADMIN_TOKEN_KEY, 'a-token-the-browser-is-holding');
 
@@ -194,9 +180,7 @@ async function openDashboard() {
 
   el.connectedCallback();
 
-  // The read the section makes when it opens, awaited: the use case holds the read it has in flight, so this
-  // is the very same read and not a second one, and the section is left with its answer settled before a
-  // test starts driving its schedule.
+  // awaits the open read: the use case holds it in flight, no second read starts
   await getAdminContext().useCases.loadStatus();
 
   return { el, socket };
@@ -220,8 +204,7 @@ function clearLiveRegion() {
   globalThis.document.body.children = [];
 }
 
-// The operator who opens the dashboard expects it to keep up by itself: the page is showing what the
-// server is doing now, and a page that stopped reading an hour ago is not showing that.
+// the dashboard starts on auto-refresh when opened, and the control shows it on
 test('auto-refresh is on when the operator opens the dashboard, and the control says it is on', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -243,9 +226,7 @@ test('auto-refresh is on when the operator opens the dashboard, and the control 
   }
 });
 
-// The control is the operator's own decision, and it is one control: pressing it stops the page asking,
-// pressing it again starts exactly one chain of asking and not the two or three the page may have started
-// along the way.
+// pause stops the page asking; resume starts exactly one chain, not several
 test('the pause control stops the page asking and resuming starts exactly one chain', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -280,9 +261,7 @@ test('the pause control stops the page asking and resuming starts exactly one ch
   }
 });
 
-// The status read is several statements over a history that can hold years of calls. A poll that fires
-// while a read is still running stacks a second one on top of it, and the page ends up answering itself
-// with an older number over a newer one.
+// a poll never stacks: an older answer cannot replace a newer one
 test('a poll is not stacked on a read that is still running', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -313,10 +292,7 @@ test('a poll is not stacked on a read that is still running', async () => {
   }
 });
 
-// A configuration save changes what the server is doing — a watch is turned on, a downstream is removed —
-// and the dashboard is the page that shows what the server is doing. Waiting for the next interval to
-// find out what a save the operator just made did is a page that shows the operator a stale answer on
-// purpose.
+// a configuration save requests one read at once, not at the next interval
 test('a configuration push asks the server once, at once', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -336,9 +312,7 @@ test('a configuration push asks the server once, at once', async () => {
   }
 });
 
-// The two ways the page asks can arrive in the same moment: the interval fires and the operator's save
-// lands. Two reads of the same instant are one request too many on a read that costs several statements
-// over the history.
+// a push and a poll landing together cost one request
 test('a configuration push and a poll in the same moment cost one request', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -367,9 +341,7 @@ test('a configuration push and a poll in the same moment cost one request', asyn
   }
 });
 
-// A dashboard in a tab behind another one, or on a laptop with the lid shut, is a page asking the server
-// several statements every five seconds for nobody. The browser says when the page stopped being the page
-// the operator is looking at, and the page stops.
+// polling stops while the page is hidden: no reads for nobody on a hidden tab
 test('the page stops asking while it is not the page the operator is looking at', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -401,9 +373,8 @@ test('the page stops asking while it is not the page the operator is looking at'
   }
 });
 
-// A page that stopped asking has also stopped keeping its figures current, and the figures stay on the
-// screen while it does. The line that attaches a moment to every one of them is re-read at the moment the
-// operator looks at the page again, rather than waiting for the next poll to notice.
+// returning to the page reads staleness at once:
+// waiting for the next poll to notice would be too late
 test('the page says the figures it is holding have gone stale when the operator comes back to them', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -434,9 +405,7 @@ test('the page says the figures it is holding have gone stale when the operator 
   }
 });
 
-// A refresh the page does by itself is the page doing what it was told to do: saying so every five seconds
-// into a screen reader's voice is a page that never stops talking. A refresh the operator asked for is an
-// answer to the operator, and it is answered out loud.
+// automatic refreshes stay silent; operator-initiated refreshes are announced
 test('a refresh the page does by itself says nothing out loud, and one the operator asked for does', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -451,8 +420,7 @@ test('a refresh the page does by itself says nothing out loud, and one the opera
 
     readAgainControl(el).dispatchEvent({ type: 'click' });
 
-    // The read the operator asked for, awaited: the use case holds the read in flight, so this is the same
-    // read, and the page's own answer-out-loud continuation is attached before this one.
+    // awaits the operator's read: same in-flight read, with the answer attached first
     await getAdminContext().useCases.loadStatus();
 
     assert.match(liveRegionText(), /read/i, `the operator's own refresh said "${liveRegionText()}"`);
@@ -465,9 +433,7 @@ test('a refresh the page does by itself says nothing out loud, and one the opera
   }
 });
 
-// The page losing its server is a change of state the operator would find critical, and a change a screen
-// reader is never told about is a change that happens in silence. The sentence is the one the page already
-// says when the operator asked and the server refused; what was missing is that nobody had to ask.
+// the page announces a refused scheduled read: the operator never asked to be told
 test('a read the page makes on its own and the server refuses is said out loud', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -500,9 +466,7 @@ test('a read the page makes on its own and the server refuses is said out loud',
   }
 });
 
-// A status message the operator has already been given is not given again every interval, and it is not
-// given again because something else on the page moved. The page keeps polling a server that is still
-// refusing, and the refusal it already said stays said.
+// a refusal is announced once; a repaint that is not a new refusal stays silent
 test('the page says a refusal once, and a repaint that is not a new refusal says it again to nobody', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -546,8 +510,7 @@ test('the page says a refusal once, and a repaint that is not a new refusal says
   }
 });
 
-// An operator who asks after the page has already lost its server is asking to be told again, and the page
-// answers the question they asked rather than pointing at what it said earlier.
+// re-asking while the server still refuses is answered again, not referred back
 test('an operator asking again while the server is still refusing is answered again', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -585,8 +548,7 @@ test('an operator asking again while the server is still refusing is answered ag
   }
 });
 
-// The operator can ask for an answer right now whatever the schedule is doing, and a page whose schedule
-// is paused is still a page that can answer a question.
+// the refresh control works whether or not the page is polling on its own
 test('the operator can ask for a read whether or not the page is polling on its own', async () => {
   const clock = holdTheRefreshInterval();
 
@@ -610,8 +572,7 @@ test('the operator can ask for a read whether or not the page is polling on its 
   }
 });
 
-// A section the shell has replaced is a section that is no longer on the page: its timer is the page
-// asking questions on a schedule nobody can see or stop.
+// a section the shell replaced clears its interval
 test('a dashboard the operator leaves stops asking', async () => {
   const clock = holdTheRefreshInterval();
 

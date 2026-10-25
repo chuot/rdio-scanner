@@ -1,5 +1,5 @@
-// The log view's auto-refresh: what the toggle decides. Nothing here waits — the schedule
-// is given a timer the test controls, so every poll is something the test chose to run.
+// the log view's auto-refresh: what the toggle decides
+// the schedule takes a test-controlled timer; no test ever waits
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,8 +22,7 @@ function fakeTimers() {
     },
     // scheduledCount is what is waiting right now, which is how these tests see a stopped schedule.
     scheduledCount: () => scheduled.size,
-    // run fires everything that is waiting, and reports how many things it fired, so a test can walk the
-    // schedule forward one interval at a time.
+    // run fires everything waiting and reports the count, so tests step by interval
     run: () => {
       const due = [...scheduled.values()];
 
@@ -86,8 +85,7 @@ test('turning auto-refresh off stops the polling', () => {
   assert.equal(schedule.isRunning(), false);
 });
 
-// The toggle is clicked, the section is reopened, a filter changes: every one of those can plausibly start
-// the schedule again, and two schedules polling the same log view is two requests for every page.
+// starting a running schedule twice would double the polling
 test('starting a schedule that is already running does not double the polling', () => {
   const timers = fakeTimers();
 
@@ -106,9 +104,8 @@ test('starting a schedule that is already running does not double the polling', 
   assert.equal(polls, 1);
 });
 
-// An operator who is watching a log that is being written faster than the server can answer is the case
-// this protects: a refresh that fires while a request is still in flight stacks requests, and the view
-// ends up rendering an older answer over a newer one.
+// a refresh during an in-flight request is skipped, and the schedule carries on
+// stacked requests could render an older answer over a newer one
 test('a refresh while a request is in flight is skipped, and the schedule carries on', () => {
   const timers = fakeTimers();
 
@@ -133,10 +130,8 @@ test('a refresh while a request is in flight is skipped, and the schedule carrie
   assert.equal(polls, 1);
 });
 
-// The schedule is scheduled before the poll runs, so a poll that fails — a log view that could not be
-// read, a server that went away — does not quietly end an auto-refresh the operator turned on. The failure
-// itself is not swallowed: in the browser it surfaces the way any failed callback does, and what this
-// pins is that the schedule is still there afterwards.
+// scheduling before the poll runs keeps auto-refresh alive through a failed poll
+// the failure surfaces like any failed callback; this pins the schedule survives
 test('a poll that fails does not end the refresh', () => {
   const timers = fakeTimers();
 

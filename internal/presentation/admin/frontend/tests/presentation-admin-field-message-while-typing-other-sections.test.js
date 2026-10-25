@@ -1,15 +1,5 @@
-// The message under a field in the sections outside the systems tree, read while the operator is
-// typing in it. The rule is the one the talkgroups row is read by: the form field reveals a message
-// the moment the value in the control changes, so the section recomputes it on the keystroke and not
-// only when the operator leaves.
-//
-// The last readings close the whole-application inventory: the Tools → Change password panel, which
-// answers the keystroke today, and the forms that carry no field message at all — the Tools file
-// forms, the Logs filters, and the systems-selection dialog.
-//
-// The keystroke helper fires `input` alone, so a reading taken here is the state of the page while
-// the operator is in the field. The leaving is fired with reachField, the way the field-error work
-// reads it, and is used only to show what the operator sees once they leave.
+// field messages outside the systems tree answer keystrokes;
+// the Tools password panel and the dialog forms have none
 
 import './dom-shim.js';
 
@@ -42,8 +32,8 @@ const ACCESS = [{ id: 1, order: 1, code: 'alpha', ident: 'AAA', systems: '*' }];
 const APIKEYS = [{ id: 1, order: 1, key: 'first-key', ident: 'K1', systems: '*', disabled: false }];
 const DOWNSTREAMS = [{ id: 1, order: 1, url: 'https://first.example', apikey: 'dk-1', systems: '*', disabled: false }];
 
-// A dirwatch row the operator has to name the system and the talkgroup for: no mask token, and the
-// two selects left empty. The row is the one the mask rule is read against.
+// a dirwatch row with no mask tokens and its System and Talkgroup selects empty:
+// the row the mask rule is read against
 const DIRWATCH = [{ id: 1, order: 1, directory: '/var/spool/first', extension: 'mp3', mask: '', type: 'default', systemId: null, siteId: null, talkgroupId: null, frequency: 1, delay: 2000, disabled: false }];
 
 const OPTIONS = {
@@ -97,8 +87,7 @@ function addRow(el) {
 }
 
 function rows(el) {
-  // The row locators take the panels the sections build: the collapsible details rows and the
-  // plain rows alike, so a section's row is the same row whichever shape it carries.
+  // row locators match collapsible details rows and plain rows alike
   return findAll(el, (node) => node.tag === 'details'
     || (node.tag === 'div' && node.className?.split(/\s+/).includes('rdio-admin-row')));
 }
@@ -106,8 +95,8 @@ function rows(el) {
 function field(row, title) {
   const fields = findAll(row, (node) => node.tag === 'rdio-form-field');
 
-  // The row sections name the field in a <label> inside it; Groups, Tags, and Options name it in
-  // the description row beside it.
+  // some sections name the field in a label inside it;
+  // Groups, Tags, and Options name it in the description row beside it
   return fields.find((node) => texts(findAll(node, (child) => child.tag === 'label'))[0] === title)
     ?? fields.find((node) => findAll(node.parent, (child) => child.className?.split(/\s+/).includes('field-title'))[0]?.textContent === title);
 }
@@ -120,8 +109,7 @@ function messageOf(row, title) {
   return fieldMessage(field(row, title));
 }
 
-// The operator types in the field and stays in it. The row is re-read from the page after every
-// keystroke, the way it is on screen.
+// types a value and stays in the field; the row re-reads each keystroke
 function typeIn(row, title, value) {
   keystroke(controlOf(row, title), value);
   connectFields(row);
@@ -143,9 +131,7 @@ function messagesWithText(root) {
     .map((node) => node.textContent);
 }
 
-// ---------------------------------------------------------------------------
-// Groups and Tags: the Label is the field the row is named by.
-// ---------------------------------------------------------------------------
+// Groups and Tags: the Label is the row's name field
 
 for (const [name, tag] of [['Group', 'rdio-admin-groups'], ['Tag', 'rdio-admin-tags']]) {
   test(`typing the first letters of a valid ${name.toLowerCase()} Label raises no message`, () => {
@@ -167,9 +153,7 @@ for (const [name, tag] of [['Group', 'rdio-admin-groups'], ['Tag', 'rdio-admin-t
   });
 }
 
-// ---------------------------------------------------------------------------
-// Access, API keys, and Downstreams: the identifiers, and the rule about the whole list.
-// ---------------------------------------------------------------------------
+// identifiers, and the whole-list rule, in Access, API keys, and Downstreams
 
 test('typing the first letters of a valid access code raises no message', () => {
   seed(getAdminContext().store);
@@ -246,9 +230,7 @@ test('an emptied downstream API key reports on the keystroke that empties it', (
   assert.equal(typeIn(row, 'API key', ''), 'API key is required', 'the keystroke that empties the key reports it');
 });
 
-// ---------------------------------------------------------------------------
-// Dirwatch: the directory, the mask tokens, and the row's own minimums.
-// ---------------------------------------------------------------------------
+// Dirwatch: the directory, the mask tokens, and the row's minimums
 
 test('the dirwatch directory typed character by character reports the collision on the completing keystroke', () => {
   seed(getAdminContext().store);
@@ -268,9 +250,8 @@ test('the dirwatch extension reports the rule it breaks on the keystroke and cle
   assert.equal(typeIn(row, 'Extension', 'wav'), '', 'the extension the operator is typing says nothing');
 });
 
-// The mask is the field that names where the ids come from: a mask carrying the system token answers
-// the System field, and a mask carrying the talkgroup token answers the Talkgroup field. The operator
-// reaches the two empty selects, then types the tokens in the mask.
+// a mask with the system token answers the System field; the talkgroup token
+// answers the Talkgroup field, on the keystroke that types each token
 test('the dirwatch mask tokens move the System and Talkgroup messages on the keystrokes that type them', () => {
   seed(getAdminContext().store);
 
@@ -306,9 +287,7 @@ test('the dirwatch frequency and delay report their minimums on the keystroke th
   assert.equal(typeIn(row, 'Delay', '2000'), '', 'the delay the operator typed reports nothing once it reaches the floor');
 });
 
-// ---------------------------------------------------------------------------
-// Options: one form, no rows.
-// ---------------------------------------------------------------------------
+// Options: one form, no rows
 
 function optionsField(el, key) {
   const row = findAll(el, (node) => node.getAttribute?.('data-control') === key)[0];
@@ -342,10 +321,8 @@ test('Prune Days answers the number being typed, and zero is a value the rule ac
   assert.equal(typeInOption(el, 'pruneDays', ''), 'Prune days is required', 'the keystroke that empties the field reports it');
 });
 
-// ---------------------------------------------------------------------------
-// The whole-application inventory: the panel that already answers the keystroke, and the forms
-// that carry no field message.
-// ---------------------------------------------------------------------------
+// the whole-application sweep: the Tools password panel answers keystrokes,
+// while the file forms, Logs filters, and systems dialog carry no field messages
 
 function toolsPanel() {
   seed(getAdminContext().store);
@@ -385,9 +362,8 @@ test('the Tools file forms carry no field message while the operator reaches the
   assert.deepEqual(messagesWithText(el), [], 'no field in the Tools file forms says anything while the operator is in it');
 });
 
-// The Logs panel asks the server for its entries the moment it opens. The reading is about the
-// filters, so the request is answered with an empty page: the panel is on the page, and no
-// transport is involved.
+// the Logs panel requests entries on open; the test stubs an empty page
+// so the reading involves no transport
 function logsPanel() {
   const context = getAdminContext();
 
@@ -438,10 +414,7 @@ test('the systems-selection dialog carries no field message while the operator t
   assert.deepEqual(messagesWithText(tree), [], 'the dialog says nothing while the operator is ticking it');
 });
 
-// ---------------------------------------------------------------------------
-// The leaving still says what the field-error work pinned: the keystroke reading does not replace
-// it, and the two are read against the same field.
-// ---------------------------------------------------------------------------
+// the leaving readings still match the field-error tests: same fields, one rule
 
 test('the message a keystroke raises is the message the field carries when the operator leaves it', () => {
   seed(getAdminContext().store);

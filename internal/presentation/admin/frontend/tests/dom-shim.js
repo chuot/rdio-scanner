@@ -1,40 +1,23 @@
-// The smallest DOM the admin presentation components need to be exercised outside a
-// browser: createElement, customElements, append/replaceChildren, textContent, dataset,
-// attributes, and click listeners. innerHTML is stored as the string it is, never
-// parsed, so a component that wants its test to see inside it builds real child nodes.
-//
-// The form field primitive is the custom element the shim builds and connects for real at every
-// route a component uses to create it: createElement, append, replaceChildren, and the innerHTML
-// parser. Its rule — show a message only once the operator has reached the field — is what the
-// section proofs read, and a stub that records a string cannot carry it. Markup laid out through
-// innerHTML carries every registered primitive the browser would upgrade, connected in document
-// order, so a panel built that way is exercised as it is on screen. The other primitives stay as
-// the plain nodes the tests connect by hand today.
+// the smallest DOM the admin presentation components need outside a browser
+// the form field primitive is built and connected for real on every creation route
+// see the form-field-real-primitive maintainer note.
 
 const FORM_FIELD = 'rdio-form-field';
 const LIVE_REGION = 'rdio-live-region';
 
-// The controls a browser hands the operator text in: their value is the empty string before
-// anything is typed, and the components read them as text from the first render.
+// text controls: their value is the empty string before anything is typed
 const CONTROL_TAGS = new Set(['input', 'textarea', 'select']);
 
-// connectFormField runs the primitive's own connectedCallback the moment a component appends
-// the field to a row, which is the moment a browser runs it: the field already carries its
-// label and its control, and it is connected before the render writes messages into it.
-//
-// The live region is the page-level primitive the shell appends the same way: the shell places
-// it empty and the components write into it without connecting it by hand, so the shim connects
-// it at insertion, as a browser does.
+// connectFormField runs connectedCallback on append, as a browser does
+// the shell places the live region empty; the shim connects it at insertion
 function connectFormField(node) {
   if (node && (node.tag === FORM_FIELD || node.tag === LIVE_REGION) && typeof node.connectedCallback === 'function' && !node.dataset.bound) {
     node.connectedCallback();
   }
 }
 
-// connectCustom runs the connectedCallback of every custom element under a root, in the order a
-// browser runs them: the element first, then what it builds into its children. Markup a component
-// lays out through innerHTML is inserted as one tree, so every primitive in it is connected at that
-// moment — the section's own setup then reads the controls its primitives build.
+// connectCustom runs the connectedCallback of every custom element under a root,
+// the element first, then its children, the order a browser runs them in
 function connectCustom(node) {
   if (node.tag === '#text') return;
 
@@ -54,11 +37,8 @@ class ShimNode {
     this._text = '';
   }
 
-  // dataset and the data-* attributes are one thing in a browser: the builders write a row's key, a
-  // field's key, and the mark that says a row is sortable through dataset, the markup the components
-  // lay out carries the same facts as attributes, and the handlers read them back through dataset.
-  // The shim keeps them as one thing, so a control marked through dataset and a control marked in
-  // markup answer the same reading.
+  // dataset and the data-* attributes are one thing here: a control marked
+  // through dataset and a control marked in markup answer the same reading
   get dataset() {
     const node = this;
 
@@ -80,9 +60,7 @@ class ShimNode {
     });
   }
 
-  // hidden is one fact in a browser: the attribute the markup carries and the property the page
-  // sets are the same state. A panel hidden in markup and opened by property, and a control the page
-  // takes off the screen, have to answer the same reading.
+  // hidden attribute and hidden property are the same state, as in a browser
   get hidden() {
     return this.attributes.hidden !== undefined;
   }
@@ -127,14 +105,11 @@ class ShimNode {
     this._html = html;
     this.children = parseHTML(html);
 
-    // A browser links the nodes it inserts to the element they are inserted into: a section that
-    // names a field with a caption in markup walks up from that caption to the row holding it, and
-    // the links have to be there for the page to answer.
+    // inserted nodes keep a parent link: a caption in markup walks up to its row
     for (const node of this.children) node.parent = this;
 
-    // Inserting markup in a browser upgrades every custom element in it and runs their
-    // connectedCallback in document order; a section that lays its panel out through innerHTML
-    // then reads the controls its own primitives built.
+    // inserted markup upgrades every custom element in it and runs their
+    // connectedCallback in document order, as a browser does
     for (const node of this.children) connectCustom(node);
   }
 
@@ -149,8 +124,7 @@ class ShimNode {
   querySelectorAll(selector) {
     const parts = selector.split(',').map((s) => s.trim());
 
-    // `:scope >` is the child combinator the row lists use to name their own rows:
-    // only the direct children of the element asked are candidates.
+    // `:scope >` is the child combinator the row lists use to name their own rows
     const scoped = parts.map((part) => part.match(/^:scope\s*>\s*(.+)$/));
 
     const found = [];
@@ -192,9 +166,7 @@ class ShimNode {
     this.attributes[name] = String(value);
   }
 
-  // A control's value is the text in it, and a browser answers a control nobody has typed in
-  // with the empty string, never with nothing. The controls the components read before the
-  // operator reaches them — the log filters, the number fields — are read through this.
+  // a control nobody has typed in answers with the empty string, never with nothing
   get value() {
     if (this._value !== undefined) return this._value;
 
@@ -205,9 +177,7 @@ class ShimNode {
     this._value = String(value);
   }
 
-  // An element's id is the attribute the page writes it as: `el.id = 'content'` is how a browser
-  // gives an element the name a skip link points at and a region is labelled by, and the tests read
-  // that name back through getAttribute, the way the accessibility tree does.
+  // el.id is the id attribute: skip links read it back through getAttribute
   get id() {
     return this.attributes.id ?? '';
   }
@@ -225,8 +195,7 @@ class ShimNode {
     return this.attributes[name] !== undefined;
   }
 
-  // The form field marks its control invalid with these two; the sections that clear a row's
-  // warning icon take the icon off the page with remove().
+  // these two mark a control invalid and clear a row's warning icon
   removeAttribute(name) {
     delete this.attributes[name];
   }
@@ -246,15 +215,10 @@ class ShimNode {
     this.parent = null;
   }
 
-  // isConnected is the fact a page asks when it wants to know whether an element is still on the page:
-  // a browser reports a node as connected while the parents holding it reach the document, and reports
-  // every node of a removed subtree as not connected with it. A node that was never placed on the page
-  // is not connected either.
-  //
-  // The shim tracks parents but has never answered this, and it does not run a disconnected callback
-  // when a node leaves: a component that answers its own disconnect — the selection tree reporting a
-  // dismissal, the logs component refusing a response that arrived after it went away — is only seen
-  // doing that in a browser.
+  // isConnected: a node is connected while its parents reach the document;
+  // a removed subtree reports not connected, as does a never-placed node
+  // the shim tracks parents but runs no disconnected callback on removal
+  // see the disconnected-callback-gap maintainer note.
   get isConnected() {
     let node = this;
 
@@ -263,8 +227,7 @@ class ShimNode {
     return node === globalThis.document?.body;
   }
 
-  // classList is the class view the drag handlers use to mark the row being moved.
-  // It reads and writes the same className the components set.
+  // classList reads and writes the same className the drag handlers set
   get classList() {
     const node = this;
 
@@ -274,8 +237,7 @@ class ShimNode {
       add: (...added) => (node.className = [...new Set([...names(), ...added])].join(' ')),
       remove: (...removed) => (node.className = names().filter((name) => !removed.includes(name)).join(' ')),
       contains: (name) => names().includes(name),
-      // toggle(name, force) is the slide toggle's switch: the class is put on or taken off by
-      // the value the caller passes, and the resulting state is what the caller reads back.
+      // toggle(name, force) puts the class on or off by the value passed
       toggle: (name, force) => {
         const on = force === undefined ? !names().includes(name) : !!force;
 
@@ -300,24 +262,20 @@ class ShimNode {
     (this.listeners[type] ??= []).push(fn);
   }
 
-  // The dialog takes its own key handler off when it closes; a shim without this leaves the handler
-  // on the element and the page.
+  // the dialog removes its key handler on close; without this the handler stays
   removeEventListener(type, fn) {
     this.listeners[type] = (this.listeners[type] ?? []).filter((f) => f !== fn);
   }
 
-  // The form field primitive defines its own setError when it is connected, and that is the one
-  // the section proofs read. This is the fallback for a field that was never connected: the shim
-  // records the message so a test can still see the field was flagged.
+  // fallback setError for a never-connected field: the shim records the message
+  // tests still see the flagged field; the primitive defines its own when connected
   setError(error) {
     this.error = error;
   }
 
-  // A click is answered with the event the browser hands the handler: the control the pointer was on
-  // is the event's target, and the handler that answers a control inside a bigger control — a move
-  // button inside a row's summary line — names the row through that target and takes the activation
-  // the browser would otherwise give the surrounding control. The browser's click event carries
-  // preventDefault and stopPropagation; a handler that takes the activation away needs them.
+  // the click event carries target, the control the pointer was on:
+  // a handler on a control inside a bigger one names the row through the target
+  // preventDefault and stopPropagation take the activation from the outer control
   click() {
     this.dispatchEvent({
       type: 'click',
@@ -328,25 +286,16 @@ class ShimNode {
     });
   }
 
-  // Forms refocus their input after a failed submit; the shim records the focus
-  // so a test can see it happened.
-  //
-  // The focus lands where a browser puts it: on the element the keyboard is standing on, which the
-  // page reads back through document.activeElement — the trap's ends, the tree that keeps focus
-  // through a rebuild, and the panel that takes the keyboard in are all read through it.
+  // focus sets the element the keyboard stands on, read as document.activeElement
+  // a form refocuses its input after a failed submit, and the shim records that
   focus() {
     this.focused = true;
     document.activeElement = this;
   }
 
-  // Forms are driven by dispatching their submit event, the way a browser does:
-  // the listener receives the event object the test hands in. The event bubbles the way a
-  // browser bubbles it: a section's handler sits on the control, the form field's own handler
-  // sits on the field that owns the control, and a change typed into a control reaches both.
-  //
-  // An event the browser does not bubble stays on the element it was left on: the `toggle` event a
-  // details element leaves when its summary is activated is one of them, so a handler on the list
-  // under the rows never hears it.
+  // events bubble up to the owning field, as in a browser
+  // an event the browser does not bubble stays put, like details' toggle
+  // see the event-bubbling-shim maintainer note.
   dispatchEvent(event) {
     const bubbles = event.bubbles !== false;
 
@@ -385,8 +334,7 @@ globalThis.document = {
 
     const node = ctor ? new ctor() : new ShimNode(tag);
 
-    // A custom element instance is built through the class, whose super() has
-    // no tag; the element name is the tag the component asked for.
+    // the class's super() has no tag: createElement stamps the custom element's tag
     node.tag = tag;
 
     return node;
@@ -399,12 +347,10 @@ globalThis.document = {
     return node;
   },
 
-  // document.body and document.querySelector are the two views the snackbar primitive uses to
-  // place itself: a root node the components append to, and the lookup of what is in it.
+  // document.body and querySelector are the snackbar primitive's placement views
   body: new ShimNode('body'),
 
-  // The control the keyboard is standing on. A browser always has one: the page reads it back to
-  // decide where its own focus rules have to put the keyboard next.
+  // activeElement is the control the keyboard stands on; a browser always has one
   activeElement: null,
 
   querySelector(selector) {
@@ -414,10 +360,8 @@ globalThis.document = {
 
 globalThis.document.activeElement = globalThis.document.body;
 
-// A browser tells a page when it stopped being the page the operator is looking at, and a page that keeps
-// asking the server questions while it is in a tab behind another one is a page that costs the server
-// work for nobody. The shim carries the same two things a page reads: the state, and the event that says
-// it changed.
+// the shim carries the two page-visibility reads: visibilityState
+// and the visibilitychange event that says it changed
 globalThis.document.visibilityState = 'visible';
 
 globalThis.document.listeners = new Map();
@@ -492,9 +436,8 @@ export function walk(root, visit) {
   for (const child of root.children ?? []) walk(child, visit);
 }
 
-// parseHTML is the smallest parser the innerHTML templates in the components need:
-// tags, quoted attributes, text, and nesting. No entities, no comments, no
-// self-closing rules beyond `/>`.
+// parseHTML covers what the innerHTML templates need: tags, quoted attributes,
+// text, nesting; no entities, no comments, no self-closing rules beyond `/>`
 function parseHTML(html) {
   const roots = [];
   const stack = [];
@@ -521,9 +464,8 @@ function parseHTML(html) {
       continue;
     }
 
-    // Every custom element in the markup is built through its own class, the way createElement
-    // builds it, so a component that lays out a form through innerHTML gets the primitive's own
-    // rule and not a node that only records what it was told.
+    // custom elements in markup use their own class, as createElement builds them
+    // so innerHTML forms get the primitive's rule, not a node that records markup
     const tag = token.match(/^<([a-zA-Z][\w-]*)/)[1];
     const ctor = globalThis.customElements.registry.get(tag);
 
@@ -560,8 +502,8 @@ function matches(node, selector) {
 
   if (attr && node.attributes[attr[1]] !== attr[2]) return false;
 
-  // A bare [attr] is the presence test the row lists use to name their rows. The
-  // builders mark them through dataset, the browser's data-* view, so both spellings count.
+  // a bare [attr] is a presence test: the builders mark rows through dataset,
+  // the browser's data-* view, so both spellings count
   const has = selector.match(/\[([a-zA-Z-]+)\]/);
 
   if (has) {
@@ -587,54 +529,48 @@ export function texts(nodes) {
   return nodes.map((node) => node.textContent);
 }
 
-// connectFields runs the form field primitive's connectedCallback on every field under a root,
-// for the tests that drive a component whose markup arrived through innerHTML: a browser connects
-// those fields when the tree is inserted, and the shim inserts them by parsing, not by appending.
+// connectFields connects the form field primitives built through innerHTML:
+// a browser connects them at insertion, the shim inserts them by parsing
 export function connectFields(root) {
   const fields = findAll(root, (node) => node.tag === FORM_FIELD);
 
   for (const field of fields) {
     connectFormField(field);
 
-    // The primitives a field carries connect after the field itself, the way a browser runs them:
-    // the pick list builds the select the field answers with, and that select is the control a
-    // label is attached to and a screen reader announces.
+    // a field's own primitives connect after the field, as a browser runs them:
+    // the pick list builds the select a label attaches to and is announced with
     for (const child of field.children ?? []) connectCustom(child);
   }
 
   return fields;
 }
 
-// fieldMessage is the text the operator sees under the control — the successor of mat-error.
-// A field whose primitive is not connected has no message element, which is itself a reading:
-// the message the section handed over was never written on the page.
+// fieldMessage is the text under the control; a disconnected field has no message
+// element, so '' says the section's message was never written on the page
 export function fieldMessage(field) {
   const node = findAll(field, (child) => child.className?.split(/\s+/).includes('rdio-form-error'))[0];
 
   return node?.textContent ?? '';
 }
 
-// requiredMark is the asterisk a field's name carries: the mark the section declares on the element
-// that names the field — the label of a form field, or the caption span a hand-built row names its
-// field with. The glyph is the stylesheet's, so the reading is the mark and not the character: a name
-// keeps its text. Both spellings count, the way the row lists read their own marks.
+// requiredMark is the asterisk on the element naming the field: a form field's
+// label, or the caption span a hand-built row names its field with
+// the glyph is the stylesheet's, so the name keeps its text; both spellings count
 export function requiredMark(namingEl) {
   if (!namingEl) return false;
 
   return namingEl.dataset?.required === 'true' || namingEl.attributes?.['data-required'] === 'true';
 }
 
-// reachField is the operator editing a field and walking away from it: the change the browser fires
-// when the value leaves the control, bubbling to the field that owns it. Walking across a field
-// without editing it is not a reading — the rule Material's error matcher used.
+// reachField fires the browser's change when the edited value leaves the control
+// walking across a field without editing it is not a reading
 export function reachField(control) {
   control.dispatchEvent({ type: 'change' });
 }
 
-// keystroke is the operator typing in the control and staying in it: the input event the browser
-// fires as the value changes. The change reachField fires comes only when the operator leaves, so
-// a reading taken here is the state of the page while the operator is in the field, with the value
-// in the control and the section holding whatever was there before this keystroke.
+// keystroke fires the input event the browser sends as the value changes
+// reachField's change comes only on leaving: a reading here is the page mid-edit,
+// value in the control, the section holding what was there before the keystroke
 export function keystroke(control, value) {
   control.value = value;
   control.dispatchEvent({ type: 'input' });

@@ -1,7 +1,5 @@
-// The save the Blacklist action makes, refused by the server. The action stores the talkgroup row
-// removal and the blacklist entry in one request; when the server will not apply it, the operator's
-// work has to survive the refusal: the row stays removed, the entry stays pending, the section's Save
-// stays usable to try again, and the operator is told the save failed.
+// a refused Blacklist save keeps both halves pending and Save usable
+// and says the save failed
 
 import './dom-shim.js';
 
@@ -139,9 +137,7 @@ test('a save the server refuses keeps the blacklisting the operator asked for an
     `the refused save did not tell the operator which system it failed on, by the number the section shows them: "${message}"`);
 });
 
-// The save the section's own bar sends, refused by the server. The operator is shown the system by
-// the number the section shows them and the number they type into the fields, not by the identity
-// the store gave the row.
+// the refusal names the system by reference: the number the operator sees
 test('the save the bar sends, refused, names the system by its reference number', async () => {
   requests.length = 0;
 
@@ -161,9 +157,8 @@ test('the save the bar sends, refused, names the system by its reference number'
     `the refused save did not name the system by its reference number: "${snackbarText()}"`);
 });
 
-// The number the section names follows the systems the server pushes. The scaffold that resolves the
-// shown system rebuilds the bar when the systems move, so the message carries the number the
-// operator reads now, not the one the bar was first built with.
+// the bar rebuilds when pushed systems move,
+// so the message carries the currently shown system number
 test('the number the section names follows the systems the server pushes', async () => {
   requests.length = 0;
 
