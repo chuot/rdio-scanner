@@ -629,9 +629,9 @@ func TestClosingAListenerEndsTheSession(t *testing.T) {
 	}
 }
 
-// TestAnUnreadableFrameDoesNotEndTheSession: a frame the server cannot
-// read costs one log line and the next frame is still read, because
-// the client that sent one broken frame is still a client.
+// TestAFrameTheServerCannotReadDoesNotEndTheConnection: a frame the server
+// cannot read costs one log line and the next frame is still read, because a
+// client that sends one broken frame is still a client.
 func TestAFrameTheServerCannotReadDoesNotEndTheConnection(t *testing.T) {
 	f := newFixture(t, openSettings)
 

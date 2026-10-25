@@ -411,11 +411,11 @@ func commandOf(frame string) string {
 	return frame[len(open):end]
 }
 
-// TestFramingReproducesTheCapturedFrames is the golden half: a frame taken out of a
-// capture is put back together and has to come out as the bytes the legacy server
-// sent. The frame is decoded with UseNumber so its numbers go back out as they came
-// in, and the call search is covered by TestCapturedCallListRowsCarryTheirFieldsIn-
-// WrittenOrder.
+// TestFramingReproducesTheCapturedFrames is the golden half: a frame taken out
+// of a capture is put back together and has to come out as the bytes the legacy
+// server sent. The frame is decoded with UseNumber so its numbers go back out
+// as they came in, and the call search is covered by
+// TestCapturedCallListRowsCarryTheirFieldsInWrittenOrder.
 func TestFramingReproducesTheCapturedFrames(t *testing.T) {
 	for _, captured := range []struct {
 		file  string
