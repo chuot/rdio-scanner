@@ -23,36 +23,25 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// CallPayload is one recorded call, as the listener protocol carries it — in a live push, in the
-// answer to a fetch, and in nothing else: a call search sends a row of its own, which is
-// CallSearchRow.
+// CallPayload is one recorded call as the listener protocol
+// carries it, in a live push and a fetch answer. A call
+// search sends CallSearchRow instead.
 type CallPayload struct {
 	Call domain.Call
 }
 
-// MarshalJSON writes the call.
-//
-// The keys come out sorted because the legacy server builds this object from a map and every client
-// that reads it today reads the bytes that produced. A struct would put them in the order the fields
-// are declared, which is a different byte stream for the same call.
-//
-// Seven keys are always there — id, audio, audioName, audioType, dateTime, delayed, patches — and the
-// rest only when the call has the thing they describe. `patches` is the exception worth knowing: a
-// call read out of the database has no list at all and comes out as `null`, and a call being made has
-// an empty one and comes out as `[]`.
+// MarshalJSON writes the call. The keys come out sorted, as
+// the legacy map produced them, and clients read those bytes.
+// Seven keys are always present; the rest appear only with
+// their value. see the call-payload-field-order maintainer note.
 func (payload CallPayload) MarshalJSON() ([]byte, error) {
 	return json.Marshal(callPayloadMap(payload.Call))
 }
 
-// CallMetadataPayload is one recorded call as the HTTP call-history surface answers it: the same
-// keys the listener's call payload carries, with the recording's own bytes left out and the link to
-// them named instead.
-//
-// The recording is a separate entry point, and that is the reason this shape exists. A metadata
-// question is asked far more often than a recording is listened to, and a metadata answer that
-// carries the recording carries a download in every answer. The name, the type, and the length of
-// the recording stay: they are metadata, and they are what a caller needs before it asks for the
-// bytes.
+// CallMetadataPayload is one recorded call as the HTTP
+// call-history surface answers it: the call payload's keys
+// without the recording's bytes, naming the link instead.
+// see the call-payload-field-order maintainer note.
 type CallMetadataPayload struct {
 	Call domain.Call
 }
@@ -68,15 +57,10 @@ func (payload CallMetadataPayload) MarshalJSON() ([]byte, error) {
 	return json.Marshal(body)
 }
 
-// callPayloadMap is the call as the wire carries it, built as a map because the legacy server builds
-// it from a map and every client that reads it today reads the bytes that produced. A struct would
-// put the keys in the order its fields are declared, which is a different byte stream for the same
-// call.
-//
-// Seven keys are always there — id, audio, audioName, audioType, dateTime, delayed, patches — and
-// the rest only when the call has the thing they describe. `patches` is the exception worth knowing:
-// a call read out of the database has no list at all and comes out as `null`, and a call being made
-// has an empty one and comes out as `[]`.
+// callPayloadMap builds the call as the wire carries it, as a
+// map, because the legacy server built it from a map and
+// clients read those bytes. Seven keys are always present,
+// the rest only with their value. see the call-payload-field-order maintainer note.
 func callPayloadMap(call domain.Call) map[string]any {
 	body := map[string]any{
 		"id":        call.ID,
@@ -99,9 +83,9 @@ func callPayloadMap(call domain.Call) map[string]any {
 				"spikeCount": frequency.Spikes,
 			}
 
-			// A preserved quirk: a signal level of zero is stored and a negative one is not stored at all,
-			// and this is where the stored zero is dropped again. A level the server kept is a level
-			// nobody ever sees.
+			// frequency signal levels are emitted only above zero: a
+			// level the server stored can stay unseen.
+			// see the call-payload-field-order maintainer note.
 			if frequency.Dbm > 0 {
 				entry["dbm"] = frequency.Dbm
 			}
@@ -113,9 +97,9 @@ func callPayloadMap(call domain.Call) map[string]any {
 	}
 
 	if call.AudioLength > 0 {
-		// The length of the recording, in seconds to the millisecond, and only when some
-		// source named it: a call whose length was never measured says nothing about its
-		// length, rather than claiming a zero-second recording.
+		// audioLength is the recording's length in seconds to the
+		// millisecond, and only when some source named it: a call
+		// whose length was never measured says nothing about it.
 		body["audioLength"] = audioLengthSeconds(call.AudioLength)
 	}
 
@@ -159,9 +143,9 @@ func callPayloadMap(call domain.Call) map[string]any {
 	return body
 }
 
-// audioBuffer writes the recording as the number of each byte under a wrapper that says it is a
-// buffer, which is the shape the clients already read. A call with no audio has an empty list of
-// bytes rather than no audio.
+// audioBuffer writes the recording as the number of each
+// byte under a wrapper naming it a buffer, the shape the
+// clients already read. No audio means an empty byte list.
 func audioBuffer(audio []byte) map[string]any {
 	numbers := make([]byte, 0, 2+4*len(audio))
 
@@ -183,11 +167,10 @@ func audioBuffer(audio []byte) map[string]any {
 	}
 }
 
-// audioLengthSeconds writes the length of a recording as the JSON number of seconds it is,
-// written to the millisecond — 3.500 for three and a half seconds — which is the count the
-// uploaders name in their `audioLength` field and the precision the server measures to. The
-// number is written as text so it keeps its three decimals on the wire, where a Go float
-// would drop them.
+// audioLengthSeconds writes a recording's length as the JSON
+// number of seconds to the millisecond, 3.500 for three and
+// a half. The number is written as text so its three
+// decimals survive the wire; a Go float would drop them.
 func audioLengthSeconds(length time.Duration) json.RawMessage {
 	return json.RawMessage(strconv.FormatFloat(float64(length)/float64(time.Second), 'f', 3, 64))
 }
