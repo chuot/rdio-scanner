@@ -27,33 +27,15 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The surface's lines, in the log view the operator already reads.
-//
-// The surface speaks `log/slog` — that is what the protocol's software development kit logs with —
-// and this server's log view is a repository of entries filed under a subsystem, a severity, and an
-// instant. The adapter is the seam between the two, and it is the surface's own: the subsystem the
-// lines are filed under is the surface's name, the severities are mapped onto the three the log view
-// has, and the attributes a line carries travel into the entry's text, because the log view has one
-// text and a line that loses its attributes loses the part of the story the operator needed.
-//
-// What the surface files is what an operator asks about on Monday: a caller it would not let in, a
-// caller a capability refused, and a capability that changed the deployment. Reading a recorded call
-// is not filed, the way the administrator's own page does not file a page read: the log view is where
-// the deployment's decisions are recorded, and an assistant reading the history it was entitled to is
-// not a decision.
-//
-// And nothing here carries a credential. The surface is built on credentials at every layer — the
-// session token it recognises, the access code it resolves, the upload keys and the credential hash it
-// reads out of the configuration, the credential an operator replaces — and a log view is read out
-// loud, pasted into a ticket, and handed to a client. The surface names a caller by the identity its
-// code is filed under, and by the address a request came from, and never by what the caller presented.
+// This adapter files the surface's slog lines in the server log view the
+// operator already reads: subsystem, severity, and attributes folded into
+// the entry's text; see the surface-lines-land-in-the-operator-log-view
+// maintainer note.
 
-// NewLogViewHandler is the surface's log view: the lines the surface logs become entries in the
-// server's log view, filed under the subsystem the surface is.
-//
-// The composition root hands this to the surface as its logger, and hands the same repository to
-// every other writer, so the assistant's work lands in the view the operator filters by subsystem and
-// echoes out loud the way every other line of this server does.
+// NewLogViewHandler files the surface's lines under the surface's
+// subsystem, so the assistant's work lands in the same view every other
+// writer files into; see the surface-lines-land-in-the-operator-log-view
+// maintainer note.
 func NewLogViewHandler(logs ports.LogRepository, clock ports.Clock) slog.Handler {
 	return &logViewHandler{logs: logs, clock: clock}
 }
@@ -63,28 +45,22 @@ type logViewHandler struct {
 	logs  ports.LogRepository
 	clock ports.Clock
 
-	// attrs and group are what `WithAttrs` and `WithGroup` add to a handler: the attributes of a
-	// derived handler travel with every line it logs, and a group names them the way the log view
-	// spells a qualified attribute.
+	// attrs and group are what WithAttrs and WithGroup add to a handler: a
+	// derived handler's attributes travel with every line it logs.
 	attrs []slog.Attr
 	group string
 }
 
-// Enabled reports the lines the log view keeps. The surface's own detail is debug, and the log view
-// is an operator's view of the deployment: it keeps the severities an operator filters for.
+// Enabled reports the lines the log view keeps. The surface's own detail is
+// debug, which an operator filtering the deployment does not keep.
 func (handler *logViewHandler) Enabled(_ context.Context, level slog.Level) bool {
 	return level >= slog.LevelInfo
 }
 
-// Handle files one line as one entry.
-//
-// The entry is filed under the surface's subsystem, at the severity the line carries, at the instant
-// the server's clock reports. The attributes are appended to the text: the log view has one text, and
-// a line that dropped its attributes would say a caller was refused without saying by what.
-//
-// The write is not the request's business. A refusal is filed after the caller was answered, and the
-// request's own context is over by then: a line tied to a canceled request is a line that never
-// reaches the operator who needs it.
+// Handle files one line as one entry: filed under the surface's
+// subsystem, at the record's severity, at the server clock's instant, and
+// with the attributes appended to the text; see the surface-lines-land-
+// in-the-operator-log-view maintainer note.
 func (handler *logViewHandler) Handle(_ context.Context, record slog.Record) error {
 	if handler.logs == nil {
 		return nil
@@ -130,8 +106,8 @@ func (handler *logViewHandler) WithGroup(name string) slog.Handler {
 	return &derived
 }
 
-// named is an attribute as the log view spells it: a grouped attribute carries its group, the way
-// the log view spells every qualified name this server writes.
+// named is an attribute as the log view spells it: a grouped attribute
+// carries its group.
 func (handler *logViewHandler) named(attr slog.Attr) string {
 	if handler.group == "" {
 		return attr.Key
@@ -140,9 +116,9 @@ func (handler *logViewHandler) named(attr slog.Attr) string {
 	return handler.group + attr.Key
 }
 
-// logViewLevelOf is the log view's severity for a `log/slog` level. The log view has three severities
-// and an operator filtering for errors is looking for the deployment's failures, so a surface that
-// filed its failures as info would hide them from that filter.
+// logViewLevelOf is the log view's severity for a log/slog level. The log
+// view has three, and an operator filtering for errors is looking for the
+// deployment's failures.
 func logViewLevelOf(level slog.Level) string {
 	switch {
 	case level >= slog.LevelError:
@@ -156,13 +132,10 @@ func logViewLevelOf(level slog.Level) string {
 	}
 }
 
-// withActivityLog files what the operator asks about after the fact: a caller a capability refused,
-// and a capability that changed the deployment.
-//
-// It is one place, on both capability sets, and it files from what the capability answered — the
-// refusal the caller read, and the outcome the answer carries. A capability that changed nothing
-// files nothing: a no-op is not an event in the deployment, and a log view full of nothing is how an
-// operator stops reading it.
+// withActivityLog files what the operator asks about after the fact: a
+// refused caller and a capability that changed the deployment. A
+// capability that changed nothing files nothing; see the surface-lines-
+// land-in-the-operator-log-view maintainer note.
 func withActivityLog(log *slog.Logger, changes map[string]bool) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
@@ -196,9 +169,9 @@ func withActivityLog(log *slog.Logger, changes map[string]bool) mcp.Middleware {
 	}
 }
 
-// callerDescription is who a filed line names its caller as. The identity a listener's code is filed
-// under is the answer, and the administrator's session token is not: it is a credential, and a
-// credential is not what a log view is for.
+// callerDescription is who a filed line names its caller as: the identity a
+// listener's code is filed under, never the administrator's session token,
+// which is a credential.
 func callerDescription(ctx context.Context) string {
 	who, ok := CallerOf(ctx)
 	if !ok {
@@ -217,10 +190,10 @@ func callerDescription(ctx context.Context) string {
 	}
 }
 
-// refusalOf is the sentence a capability refused its caller with, and whether it refused at all. The
-// surface's refusals are the protocol's own tool-level failures, so they are readable here in the same
-// shape the caller reads them in. A caller that asked for a capability this surface does not have is
-// refused at the protocol's level, and that refusal is the caller's doing and the surface's news too.
+// refusalOf is the sentence a capability refused its caller with, and
+// whether it refused at all. Refusals are the protocol's own tool-level
+// failures, readable here in the shape the caller reads them; a capability
+// this surface does not have is refused at the protocol's level.
 func refusalOf(answered mcp.Result, err error) (string, bool) {
 	if err != nil {
 		return err.Error(), true
@@ -242,9 +215,8 @@ func refusalOf(answered mcp.Result, err error) (string, bool) {
 	return strings.Join(text, " "), true
 }
 
-// changedTheDeployment reports whether a capability's answer says it changed the deployment. Every
-// write capability answers an outcome, and the outcomes that mean a write happened are the ones the
-// operator is told about.
+// changedTheDeployment reports whether a capability's answer says it
+// changed the deployment: the write outcomes the operator is told about.
 func changedTheDeployment(answered mcp.Result) bool {
 	result, ok := answered.(*mcp.CallToolResult)
 	if !ok || result == nil || result.StructuredContent == nil {
@@ -267,8 +239,8 @@ func changedTheDeployment(answered mcp.Result) bool {
 	return outcome.Outcome == outcomeSaved || outcome.Outcome == outcomeChanged
 }
 
-// The outcomes that mean the deployment is not what it was. The write capabilities answer these, and
-// the administrator's own page reports the same facts about a save.
+// The outcomes that mean the deployment is not what it was, the same
+// facts the administrator's own page reports about a save.
 const (
 	outcomeSaved   = "saved"
 	outcomeChanged = "changed"
