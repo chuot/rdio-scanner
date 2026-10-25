@@ -29,16 +29,14 @@ import (
 	"rdio-scanner/internal/presentation/common/httpaddr"
 )
 
-// The administrator endpoints are tested against the captures taken from the legacy server, so that a
-// status code or a body is compared with what the legacy server answered and not with what this server's
-// author remembers it answering.
+// The administrator endpoints are tested against captures the legacy server answered, so
+// a status code or a body is compared with what that server put on the wire.
 
 var captureTime = time.Date(2026, 5, 11, 9, 0, 0, 0, time.UTC)
 
-// trustedLocalhostProxy names the peers these tests connect from — the httptest server's localhost and
-// the documentation address httptest.NewRequest carries — as proxies the operator named, so the
-// forwarding header the captured requests carry is honored: the address the endpoints name is the
-// address the captures name. The list is a fixed literal; a parse failure is a bug in this file.
+// trustedLocalhostProxy names the localhost peers these tests connect from as proxies the
+// operator named, so the forwarding header the captures carry is honored and the address
+// the endpoints name is the address the captures name.
 func trustedLocalhostProxy() *httpaddr.Trusted {
 	trusted, err := httpaddr.ParseTrusted("127.0.0.0/8, 192.0.2.0/24")
 	if err != nil {
@@ -93,9 +91,9 @@ type adminFixture struct {
 	// configuration answer reports that is not configuration.
 	Docker bool
 
-	// configSocket is what the configuration path hands a request that asks to become a websocket
-	// connection to. Nothing in this suite is a socket, so it is left unset except by the tests that ask
-	// about the handover.
+	// configSocket is what the configuration path hands a request that asks to become a
+	// websocket connection to; it stays unset except in the tests that ask about the
+	// handover.
 	configSocket http.Handler
 
 	socketRequests []*http.Request
@@ -196,9 +194,9 @@ func (fixture *adminFixture) configurationPorts() application.ConfigurationPorts
 	}
 }
 
-// adminRequest is one request to one administrator endpoint. The token is left out of the struct when the
-// test is about a request that does not carry one, because several of these endpoints answer differently
-// depending on whether they looked at the credential before or after something else.
+// adminRequest is one request to one administrator endpoint. The token is left out when
+// the test is about a request that does not carry one, because several endpoints answer
+// differently depending on whether they looked at the credential first.
 type adminRequest struct {
 	body   string
 	method string
@@ -348,11 +346,9 @@ func (fixture *adminFixture) countLogged(fragment string) int {
 	return count
 }
 
-// seedCaptures installs the configuration the capture left in the legacy server, read back through the
-// same parsers an administrator's save goes through.
-//
-// Seeding this way makes the byte-for-byte comparisons below a round trip: what the legacy server stored,
-// read by this server and written by this server, is the same sequence of bytes.
+// seedCaptures installs the configuration the capture left in the legacy server, read
+// back through the same parsers an administrator's save goes through, so the
+// byte-for-byte comparisons below are a round trip through this server.
 func seedCaptures(t *testing.T, fixture *adminFixture) {
 	t.Helper()
 
@@ -375,10 +371,9 @@ func seedCaptures(t *testing.T, fixture *adminFixture) {
 
 	systems := domain.ParseSystems(decodeCaptured(t, "rest-section-systems.json"))
 
-	// The capture records every site as belonging to no system at all, because the legacy server's query
-	// for sites never asks for the system a site is on. This server reports the system it is stored under,
-	// which is the approved divergence, and it is what
-	// a read of the stored database produces. The comparison below states the divergence instead of
+	// The capture records every site as belonging to no system because the legacy server's
+	// query for sites never asks for that column. This server reports the system the site
+	// is stored under, the approved divergence, and the comparison states it instead of
 	// skipping the capture.
 	for i := range systems {
 		for j := range systems[i].Sites {
@@ -401,9 +396,9 @@ func decodeCaptured(t *testing.T, name string) any {
 	return value
 }
 
-// replaceExactly rewrites a captured payload to state a divergence, and insists that the divergence is
-// still the one the capture recorded: a capture that no longer says what this server disagrees with is a
-// capture that has changed, and the test would rather stop than quietly agree with something new.
+// replaceExactly rewrites a captured payload to state a divergence, and insists the
+// capture still says what this server disagrees with: a capture that has changed stops
+// the test rather than quietly agreeing with something new.
 func replaceExactly(t *testing.T, body, from, to string, times int) string {
 	t.Helper()
 
@@ -417,9 +412,9 @@ func replaceExactly(t *testing.T, body, from, to string, times int) string {
 
 // login
 
-// A login is answered with the credential that stands for the new session and the flag the administrator's
-// page acts on. The captured credential is a placeholder, because a session credential is different on
-// every run of the capture.
+// A login is answered with the credential that stands for the new session and the flag
+// the administrator's page acts on; the captured credential is a placeholder, because a
+// session credential differs on every run of the capture.
 func TestLoginEndpointAnswersTheCapturedLogin(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -470,10 +465,10 @@ func TestLoginEndpointRefusesTheWrongCredentialWithTheCapturedStatus(t *testing.
 	}
 }
 
-// An address gets three login attempts and the fourth is refused before its credential is looked at, so
-// that a locked-out machine is not told whether its credential would have worked. The address is the one
-// in the forwarding header, because a server behind a proxy would otherwise lock out the proxy for
-// everybody behind it.
+// An address gets three login attempts and the fourth is refused before its credential is
+// looked at, so a locked-out machine is not told whether its credential would have
+// worked. The address is the one in the forwarding header, so a proxied server does not
+// lock out the proxy for everybody behind it.
 func TestLoginEndpointRefusesTheFourthAttemptFromOneAddressWhateverItCarries(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -526,9 +521,9 @@ func TestLoginEndpointClearsTheAttemptsAfterASuccessfulLogin(t *testing.T) {
 		t.Fatalf("login status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 
-	// The address has a full budget again, so three more refused attempts are still answered on their
-	// merits. A refused attempt is written in the log view as a refused credential; an address that has
-	// spent its budget is refused before its credential is looked at and writes no such line.
+	// The address has a full budget again, so three more refused attempts are still
+	// answered on their merits; an address that has spent its budget is refused before its
+	// credential is looked at and writes no refused-credential line.
 	for attempt := 1; attempt <= 3; attempt++ {
 		fixture.serve(adminRequest{body: `{"password":"wrong credential"}`, method: http.MethodPost, path: "/api/admin/login"})
 	}
@@ -574,12 +569,9 @@ func TestLogoutEndpointEndsTheSessionItsCredentialStandsFor(t *testing.T) {
 
 // configuration
 
-// The whole configuration an administrator is shown, byte for byte.
-//
-// The capture says something this server does not: every site is recorded as belonging to no system,
-// because the legacy server's query for sites never asks for that column. This server reports the system
-// the site is stored under, which is the approved divergence recorded as a preserved quirk, and the test states it by
-// rewriting the capture rather than by loosening the comparison.
+// The whole configuration an administrator is shown, byte for byte, with the capture's
+// site-system divergence stated by rewriting the capture rather than by loosening the
+// comparison.
 func TestConfigEndpointAnswersTheCapturedConfiguration(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -617,12 +609,10 @@ func TestConfigEndpointRefusesARequestWithoutACredentialWithTheCapturedStatus(t 
 	}
 }
 
-// The configuration path is both an endpoint and a socket, and the upgrade header is what decides which.
-//
-// The socket is handed the request before any credential is asked for, which is the legacy server's order:
-// its one handler looks at the upgrade header first, and only the endpoint half of it looks at a token. A
-// configuration socket authenticates by the frames it sends, and the credential a request could carry in a
-// header is not what the socket is checked against.
+// The upgrade header decides whether the configuration path answers as endpoint or as
+// socket, and the socket is handed the request before any credential is asked for: that
+// is the legacy server's order, and a configuration socket authenticates by the frames it
+// sends.
 func TestConfigEndpointHandsAnUpgradeRequestToTheSocketWithoutAskingForACredential(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -748,9 +738,9 @@ func TestConfigEndpointReplacesOnlyTheSectionsTheSubmittedConfigurationNames(t *
 	}
 }
 
-// The settings are merged into the settings in effect and not replaced, because the legacy server applies
-// the submitted settings onto the ones it is running with, and an administrator's page submits only the
-// settings that page shows.
+// Submitted settings are merged into the settings in effect rather than replaced,
+// because the legacy server applies the submitted settings onto the ones it runs with and
+// an administrator's page submits only what that page shows.
 func TestConfigEndpointMergesTheSettingsTheSubmittedConfigurationNames(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -772,9 +762,9 @@ func TestConfigEndpointMergesTheSettingsTheSubmittedConfigurationNames(t *testin
 	}
 }
 
-// A whole-configuration save with a body the endpoint cannot read is answered with 400, and the watched
-// directories are left alone: the legacy server reads the body before it stops anything, which is the
-// opposite of what its per-section save does.
+// A whole-configuration save with a body the endpoint cannot read gets 400, and the
+// watched directories are left alone: the legacy server reads the body before it stops
+// anything, the opposite of what its per-section save does.
 func TestConfigEndpointRejectsAWholeConfigurationItCannotReadWithoutTouchingTheWatchers(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -799,14 +789,10 @@ func TestConfigEndpointRejectsAWholeConfigurationItCannotReadWithoutTouchingTheW
 	}
 }
 
-// TestEveryAdministratorSaveFilesARequestItCouldNotRead is the half of the log view an operator was missing:
-// a save that came back 400 told them the server refused what they sent, and the log held nothing about it,
-// so they could not tell a server that rejected their change from a request that never made sense on its way
-// in — through a proxy that replaced the body, or a client that sent an object where a list belongs.
-//
-// Every endpoint here has already accepted the credential before it reads the body, which is what makes these
-// requests requests *from the administrator*. That is also what keeps the log safe to write: an entry per
-// unreadable body is only safe when only somebody holding a live session credential can cause one.
+// Every administrator save files a request it could not read, which is what an operator
+// was missing to tell a refused change from a request that made no sense on its way in.
+// Each endpoint has accepted the credential before reading the body, and that is what
+// keeps one entry per unreadable body safe to write.
 func TestEveryAdministratorSaveFilesARequestItCouldNotRead(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -882,10 +868,9 @@ func TestEveryAdministratorSaveFilesARequestItCouldNotRead(t *testing.T) {
 	}
 }
 
-// The login endpoint is the one administrator path that has not accepted a credential by the time it reads
-// the body, so a body it could not read is not a request from the administrator — it is what anybody sent.
-// An entry for it would let a stranger fill the log an operator reads, and the login's own failures are
-// already filed by the use case that looks at the credential, which counts attempts per address.
+// The login endpoint is the one administrator path that has not accepted a credential by
+// the time it reads the body, so an unreadable body there is not filed: an entry for it
+// would let a stranger fill the log an operator reads.
 func TestTheLoginEndpointFilesNothingAboutARequestItCouldNotRead(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -954,9 +939,9 @@ func TestAlertsEndpointAnswersTheCapturedAlerts(t *testing.T) {
 	}
 }
 
-// The alerts endpoint asks for a session inside the method it answers, so a method it does not answer is
-// refused without ever looking at the credential: the order is the legacy server's and it is what a client
-// sees when it asks the wrong question of a server it is not logged in to.
+// The alerts endpoint asks for a session inside the method it answers, so a method it
+// does not answer is refused without looking at the credential; that order is the legacy
+// server's.
 func TestAlertsEndpointRefusesAMethodItDoesNotAnswerBeforeAskingForASession(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -975,12 +960,9 @@ func TestAlertsEndpointRefusesAMethodItDoesNotAnswerBeforeAskingForASession(t *t
 
 // log view
 
-// The log view, byte for byte. The capture's timestamps are placeholders, and the test fills them back in
-// with the instants its own log holds, which is what the capture's clock reported.
-//
-// The capture is the shape this server's log search contract declares, over the scenario the capture script
-// ran: a deployment whose log holds the startup line the legacy server wrote — which is why it reads back
-// as `legacy` — and the two configuration changes made afterwards.
+// The log view, byte for byte, over the shape this server's log search contract declares:
+// the startup line that reads back as legacy and the two configuration changes after it,
+// with the capture's timestamp placeholders filled from this test's own log.
 func TestLogsEndpointAnswersTheCapturedLogView(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -1005,9 +987,9 @@ func TestLogsEndpointAnswersTheCapturedLogView(t *testing.T) {
 	}
 }
 
-// The log view asks for a session before it looks at the method, which is the opposite of the alerts
-// endpoint. A page that asks for the log view with a GET and an expired session is told the session is
-// gone, and not that the method is wrong.
+// The log view asks for a session before it looks at the method, the opposite of the
+// alerts endpoint: a page with an expired session is told the session is gone, not that
+// the method is wrong.
 func TestLogsEndpointAsksForASessionBeforeItLooksAtTheMethod(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -1056,9 +1038,9 @@ func TestLogsEndpointEchoesTheCriteriaTheSearchWasAskedWith(t *testing.T) {
 	}
 }
 
-// A log view that cannot be read is answered with the failure status the frozen contract fixes, and the
-// failure itself is written into the log view so that an administrator can tell a broken log apart from an
-// empty one.
+// A log view that cannot be read is answered with the failure status the frozen contract
+// fixes, and the failure itself is written into the log view, so an administrator can
+// tell a broken log apart from an empty one.
 func TestLogsEndpointReportsAFailureToReadTheLogView(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -1075,10 +1057,9 @@ func TestLogsEndpointReportsAFailureToReadTheLogView(t *testing.T) {
 	}
 }
 
-// A subsystem this server does not have is answered as a bad request, and not as a log view that happens
-// to be empty. An operator who types `dirwatches` and gets an empty page has been told that nothing
-// happened, which is a different and much worse thing than being told they asked for something the server
-// does not have.
+// A subsystem this server does not have is answered as a bad request, not as an empty log
+// view: an operator who gets an empty page has been told nothing happened, which is worse
+// than being told they asked for something the server does not have.
 func TestLogsEndpointRefusesASubsystemThisServerDoesNotHave(t *testing.T) {
 	fixture := newAdminFixture()
 
@@ -1099,9 +1080,9 @@ func TestLogsEndpointRefusesASubsystemThisServerDoesNotHave(t *testing.T) {
 			"server cannot answer, and a body would be an answer to some other question", body)
 	}
 
-	// And the search did not run with a criterion it could not honour, which is what an empty page would
-	// have meant: the one entry the log holds is a dirwatch entry, and a search that ignored the submitted
-	// name would have returned it.
+	// And the search did not run with a criterion it could not honor: the one entry the log
+	// holds is a dirwatch entry, and a search that ignored the submitted name would have
+	// returned it.
 	rec = fixture.authorized(http.MethodPost, "/api/admin/logs", `{"source":"dirwatch"}`)
 
 	if rec.Code != http.StatusOK {
@@ -1294,9 +1275,9 @@ func TestUserAddEndpointAddsTheAccessCodeTheAdministratorDescribed(t *testing.T)
 	}
 }
 
-// Removing an access code that is not there is answered the way the legacy server has always answered it:
-// with success and nothing else. The administrator's page reloads the list either way, and a server that
-// answered this with a failure would show an error for a list that is already correct.
+// Removing an access code that is not there is answered with success and nothing else,
+// as the legacy server always answered it: the page reloads the list either way, and a
+// failure would show an error over a list that is already correct.
 func TestUserRemoveEndpointAnswersSuccessWhenNothingMatched(t *testing.T) {
 	fixture := newAdminFixture()
 
