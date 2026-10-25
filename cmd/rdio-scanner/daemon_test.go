@@ -26,14 +26,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The -service mode is the server under the operating system's service manager. What these tests can prove
-// on a machine with no service manager to talk to is the two decisions the mode is made of: which actions
-// are something to ask the manager for, and whose copy of the server's log entries an operator reads when
-// there is no terminal in front of the server.
+// with no service manager to talk to, these tests pin the two decisions of
 
-// TestAnActionTheServiceManagerDoesNotKnowEndsWithAFailureAndSaysNothing is the mode's answer to an action it
-// was not given to perform: the exit code is the only thing the operator is told, which is what the legacy
-// server gives and what a script checking that exit code is relying on.
+// an unknown action ends with a failure and says nothing but the exit code
+// see the daemon-unknown-action-exit-code maintainer note.
 func TestAnActionTheServiceManagerDoesNotKnowEndsWithAFailureAndSaysNothing(t *testing.T) {
 	var out bytes.Buffer
 
@@ -48,9 +44,7 @@ func TestAnActionTheServiceManagerDoesNotKnowEndsWithAFailureAndSaysNothing(t *t
 	}
 }
 
-// TestTheActionTheServiceManagerRunsWithIsNotAnActionToAskFor is the half of the mode that is not a request:
-// the installed service runs the program with `run`, and that is the server starting under the manager rather
-// than this process asking the manager for something and ending.
+// the run action the manager starts the installed service with is not a request
 func TestTheActionTheServiceManagerRunsWithIsNotAnActionToAskFor(t *testing.T) {
 	if asksTheServiceManager(serviceActionRun) {
 		t.Errorf("the action the service manager runs the service with was treated as an action to ask for, want the server to start under the manager")
@@ -67,11 +61,7 @@ func TestTheActionTheServiceManagerRunsWithIsNotAnActionToAskFor(t *testing.T) {
 	}
 }
 
-// recordedServiceLogger is a service manager's log that remembers what it was told, and at which level.
-//
-// The manager's log has three levels and a formatted form of each, and every one of them reports whether the
-// line got through. Nothing here cares: the server's log entries are the unformatted kind, and a line that
-// did not get through is not something the server can do anything about.
+// recordedServiceLogger is a service manager's log that remembers what it was
 type recordedServiceLogger struct {
 	mutex   sync.Mutex
 	levels  []string

@@ -14,15 +14,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The administrator's log view offers a select of the parts of the server, and the choices it offers are a
-// copy of the vocabulary: the server does not publish the list, and a select built from whatever subsystems
-// happen to be in today's answer would hide the one the operator is troubleshooting on a day it wrote
-// nothing.
-//
-// A copy that is not checked is how the two drift apart. This is the check: the client's list is the
-// vocabulary — the same names, in the order the server lists them, each with a label an operator can read.
-// A server that gains a subsystem and does not also give the administrator's log view the way to ask for it
-// fails here, and not in front of an operator who could not find the filter.
+// the log view's subsystem select is a copy of the server's vocabulary, so
+// this pins the client's list to it: the same names in the server's order,
+// each with a readable label, and a subsystem the server gains but the view
+// cannot ask for fails here rather than in front of an operator.
 func TestTheLogViewOffersEverySubsystemTheServerHas(t *testing.T) {
 	const path = "../../internal/presentation/admin/frontend/domain/log-search.js"
 
@@ -54,10 +49,8 @@ func TestTheLogViewOffersEverySubsystemTheServerHas(t *testing.T) {
 	}
 }
 
-// TestTheLogDocumentationNamesEverySubsystemTheServerHas is the same pin on the other copy of the
-// vocabulary: the operator's page, now the administrator's guide the release archive carries. The guide
-// is where an operator learns that `dirwatch` is the thing to ask for when recordings stop arriving, so
-// a subsystem the server writes and the guide does not name is a subsystem nobody can look for.
+// the operator's guide names every subsystem too, and a subsystem the server
+// writes and the guide does not name is a subsystem nobody can look for.
 func TestTheLogDocumentationNamesEverySubsystemTheServerHas(t *testing.T) {
 	const path = "../../docs/admin-guide.html"
 
@@ -76,18 +69,9 @@ func TestTheLogDocumentationNamesEverySubsystemTheServerHas(t *testing.T) {
 	}
 }
 
-// TestEveryWrittenSubsystemHasAWriter holds the vocabulary to the server's own source.
-//
-// The vocabulary records which names a writer writes and which names exist only so that rows written before
-// the source column existed can still be found. The first half of that is a claim about the rest of the
-// server, and a claim nothing checks is a comment: a name recorded as written that no writer files under is a
-// filter the log view offers and nothing can ever answer, and a name some writer files under that the
-// vocabulary does not record is a subsystem an operator has no way to ask for.
-//
-// Three places name a source without writing an entry, and they are the only places this walk ignores: the
-// vocabulary's own declarations, the persistence layer — which stores entries, and files the ones written
-// before the column existed by their prefix, but never decides which part of the server a new one came from —
-// and the stand-ins the tests wire in.
+// the walk ties the written names to the server's own source, and three
+// places name a source without writing an entry are the only ones it ignores
+// see the log-vocabulary-walk-ignores maintainer note.
 func TestEveryWrittenSubsystemHasAWriter(t *testing.T) {
 	const vocabulary = "../../internal/domain/log.go"
 
@@ -126,8 +110,7 @@ func TestEveryWrittenSubsystemHasAWriter(t *testing.T) {
 	}
 }
 
-// logSourcesTheServerWrites walks the server's own source and collects, for each name the vocabulary
-// declares, the files that name it.
+// logSourcesTheServerWrites walks the server's source and collects, for each
 func logSourcesTheServerWrites(t *testing.T, constant map[string]domain.LogSource) map[domain.LogSource][]string {
 	t.Helper()
 
@@ -171,8 +154,7 @@ func logSourcesTheServerWrites(t *testing.T, constant map[string]domain.LogSourc
 	return wrote
 }
 
-// logSourceConstants reads the names out of the vocabulary's own declarations, so that the walk looks for the
-// constants the server actually has rather than for a list written down a second time.
+// logSourceConstants reads the names out of the vocabulary's own declarations
 func logSourceConstants(t *testing.T, path string) map[string]domain.LogSource {
 	t.Helper()
 
@@ -219,8 +201,7 @@ func logSourceConstants(t *testing.T, path string) map[string]domain.LogSource {
 	return constant
 }
 
-// logSourcesNamedIn reports which source names one file writes entries under. Comments are not code: the
-// file is parsed, so a sentence about a subsystem does not count as a writer for it.
+// logSourcesNamedIn reports which source names one file writes entries under:
 func logSourcesNamedIn(t *testing.T, fset *token.FileSet, path string, constant map[string]domain.LogSource) []domain.LogSource {
 	t.Helper()
 
@@ -275,9 +256,9 @@ type logSourceChoice struct {
 	label string
 }
 
-// logSourceChoices reads the select's choices out of the client's source. The list is a literal, and the
-// point of reading it here is not to parse JavaScript — it is to notice that the two lists are no longer
-// the same list.
+// the select's choices in the client's source are pinned to the vocabulary by
+// reading the literal, not by parsing JavaScript
+// see the log-vocabulary-client-list maintainer note.
 func logSourceChoices(t *testing.T, source string) []logSourceChoice {
 	t.Helper()
 

@@ -27,8 +27,8 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// aProgramTheServerCarries is a bundled ffmpeg the test controls: it answers the version probe and
-// converts by saying who it is, so a test can tell which ffmpeg actually converted the recording.
+// aProgramTheServerCarries is a controlled bundled ffmpeg: it answers
+// the version probe and converts by naming itself.
 func aProgramTheServerCarries(t *testing.T) string {
 	t.Helper()
 
@@ -55,9 +55,8 @@ func aRecording() ports.AudioFile {
 	return ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: []byte("audio")}
 }
 
-// aProbeProgramTheServerCarries is a bundled ffprobe the test controls: it answers the version
-// probe, and answers a probe of a file with a fixed duration, so a test can tell which ffprobe
-// actually measured the recording.
+// aProbeProgramTheServerCarries is a controlled bundled ffprobe: it
+// answers the version probe and probes files at a fixed duration.
 func aProbeProgramTheServerCarries(t *testing.T) string {
 	t.Helper()
 
@@ -79,8 +78,7 @@ func aProbeProgramTheServerCarries(t *testing.T) string {
 	return path
 }
 
-// The whole point of carrying an ffmpeg is that the server converts with the one it carries, and not
-// with whatever the host happens to have installed.
+// the server converts with the ffmpeg it carries, not the host's.
 func TestTheServerConvertsWithTheFfmpegItCarriesInsideItsOwnBinary(t *testing.T) {
 	bundled := aProgramTheServerCarries(t)
 	bundledProbe := aProbeProgramTheServerCarries(t)
@@ -108,8 +106,8 @@ func TestTheServerConvertsWithTheFfmpegItCarriesInsideItsOwnBinary(t *testing.T)
 		t.Errorf("the recording was converted by %q, not by the ffmpeg the server carries", string(converted.Data))
 	}
 
-	// The pair travels together: the ffprobe the server carries is the one that measures, and it
-	// answers with the length the carried program reported.
+	// the pair travels together: the carried ffprobe measures, reporting
+	// the length the carried program gave.
 	length, err := choice.prober(t.TempDir()).Probe(context.Background(), aRecording())
 	if err != nil {
 		t.Fatalf("the server refused to probe a recording: %v", err)
@@ -120,9 +118,8 @@ func TestTheServerConvertsWithTheFfmpegItCarriesInsideItsOwnBinary(t *testing.T)
 	}
 }
 
-// A server whose bundle produced nothing — a plain go build a developer runs, and a target whose pair
-// was never built for it — converts with the ffmpeg its host installs, which is what those deployments
-// have always done.
+// a server whose bundle produced nothing converts with the ffmpeg its
+// host installs.
 func TestAServerWhoseTargetCarriesNoFfmpegConvertsWithTheOneItsHostInstalls(t *testing.T) {
 	choice := theConverter("", "", "")
 
@@ -139,9 +136,8 @@ func TestAServerWhoseTargetCarriesNoFfmpegConvertsWithTheOneItsHostInstalls(t *t
 	}
 }
 
-// A server that carries an ffmpeg and cannot write it out is a broken deployment, and the operator
-// has to be told why: it says the reason once and converts with the host's ffmpeg rather than
-// refusing to record.
+// a server that carries an ffmpeg but cannot write it out says the
+// reason once and converts with the host's rather than refusing.
 func TestAServerThatCannotWriteOutItsFfmpegSaysWhyAndConvertsWithTheHosts(t *testing.T) {
 	failure := "the server cannot prepare /data/ffmpeg for its ffmpeg"
 
@@ -160,8 +156,8 @@ func TestAServerThatCannotWriteOutItsFfmpegSaysWhyAndConvertsWithTheHosts(t *tes
 	}
 }
 
-// The data directory is where the server puts the ffmpeg it carries, in the same way it puts the
-// autocert cache and the database.
+// the server writes the ffmpeg it carries into its data directory, like
+// the autocert cache and the database.
 func TestTheServerWritesTheFfmpegItCarriesIntoItsOwnFolder(t *testing.T) {
 	config := &Config{Config: app.Config{BaseDir: t.TempDir()}}
 

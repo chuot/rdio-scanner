@@ -29,13 +29,12 @@ import (
 	"rdio-scanner/internal/app"
 )
 
-// The -cmd mode is a client of a server that is already running. Every test here runs the program the way an
-// operator runs it — flags in, exit code and console out — against a server that is answering on a real
-// address, because the mode has no other way to reach a server and the point of it is the operator's script.
+// Every command mode test runs the program, flags in and exit code
+// out, against a server answering on a real address.
+// see the command-mode-client-of-running-server maintainer note.
 
-// TestTheCommandModeLogsInAndKeepsTheSessionForTheCommandsThatFollow is the arrangement a script depends on:
-// log in once, and the commands that follow need no credential of their own because the session is in the
-// token file.
+// logging in once leaves a session that the commands which follow use
+// from the token file
 func TestTheCommandModeLogsInAndKeepsTheSessionForTheCommandsThatFollow(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -52,10 +51,9 @@ func TestTheCommandModeLogsInAndKeepsTheSessionForTheCommandsThatFollow(t *testi
 		t.Errorf("the login said %q, want the operator to be told it worked", out)
 	}
 
-	// The session is kept inside the deployment's base directory, named after the executable. The legacy
-	// server concatenated the base directory and the executable name with no separator between them, so
-	// with the base directory an installed server actually has — one with no trailing slash — the file
-	// landed beside the data directory rather than inside it. Repaired rather than preserved.
+	// The session token file sits inside the base directory, named
+	// after the executable, and the test pins that placement.
+	// see the command-session-token-file maintainer note.
 	if filepath.Dir(tokenFile) != baseDir {
 		t.Errorf("the session is kept at %s, want it inside the base directory %s", tokenFile, baseDir)
 	}
@@ -92,9 +90,8 @@ func TestTheCommandModeLogsInAndKeepsTheSessionForTheCommandsThatFollow(t *testi
 	}
 }
 
-// TestTheCommandModeWritesTheServersConfigurationToAFileTheOperatorNames is config-get: the configuration
-// arrives unwrapped, in the file the operator named, with the extension the mode adds when the operator did
-// not name one.
+// config-get writes the server's configuration to the file the
+// operator names, adding the extension when none is named
 func TestTheCommandModeWritesTheServersConfigurationToAFileTheOperatorNames(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -123,8 +120,7 @@ func TestTheCommandModeWritesTheServersConfigurationToAFileTheOperatorNames(t *t
 
 	config := readConfigurationFile(t, named+".json")
 
-	// What is written is the configuration itself, not the answer the endpoint gave: the wrapper the
-	// administrator endpoint puts around it is taken off.
+	// the file holds the configuration itself, the endpoint wrapper taken off
 	for _, section := range []string{"access", "apikeys", "dirwatch", "downstreams", "groups", "options", "systems", "tags"} {
 		if _, found := config[section]; !found {
 			t.Errorf("the configuration file holds no %s section, want the whole configuration", section)
@@ -136,8 +132,8 @@ func TestTheCommandModeWritesTheServersConfigurationToAFileTheOperatorNames(t *t
 	}
 }
 
-// TestTheCommandModeAppliesAConfigurationTheOperatorHoldsInAFile is config-set, and it is the reason
-// config-get exists: a configuration read out of one server is applied to another.
+// config-set makes the server run with the configuration held in the
+// file the operator names
 func TestTheCommandModeAppliesAConfigurationTheOperatorHoldsInAFile(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -181,9 +177,8 @@ func TestTheCommandModeAppliesAConfigurationTheOperatorHoldsInAFile(t *testing.T
 	}
 }
 
-// TestTheCommandModeChangesTheAdministratorCredential is admin-password on a running server: the credential
-// the server answers with afterwards is the one the operator named, and the one it used to answer with is
-// refused.
+// admin-password replaces the credential a running server answers
+// with, and the old one stops working
 func TestTheCommandModeChangesTheAdministratorCredential(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -217,8 +212,8 @@ func TestTheCommandModeChangesTheAdministratorCredential(t *testing.T) {
 	}
 }
 
-// TestTheCommandModeAddsAListenerAccessWithTheOptionsTheOperatorNames is user-add: the access the operator
-// described is the access the server runs with, including the parts that only the optional arguments name.
+// user-add creates exactly the access the operator described,
+// including what only the optional arguments name
 func TestTheCommandModeAddsAListenerAccessWithTheOptionsTheOperatorNames(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -318,8 +313,8 @@ func TestTheCommandModeRemovesAListenerAccess(t *testing.T) {
 	}
 }
 
-// TestTheCommandModeEndsTheSessionAndThrowsTheTokenAway is logout: the server stops honoring the credential
-// and the operator's script stops having one.
+// logout leaves the server refusing the credential and the
+// operator's script with no session
 func TestTheCommandModeEndsTheSessionAndThrowsTheTokenAway(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -349,8 +344,8 @@ func TestTheCommandModeEndsTheSessionAndThrowsTheTokenAway(t *testing.T) {
 	}
 }
 
-// TestACommandThatNeedsASessionSaysItIsNotLoggedIn is what an operator sees when they ran the command and not
-// the login: a refusal that names the reason, before anything is sent to the server.
+// a command that needs a session refuses, naming the reason, before
+// it sends anything to the server
 func TestACommandThatNeedsASessionSaysItIsNotLoggedIn(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -365,11 +360,9 @@ func TestACommandThatNeedsASessionSaysItIsNotLoggedIn(t *testing.T) {
 	}
 }
 
-// TestEveryCommandAgainstAServerThatIsNotAnsweringIsReported is the repaired half of a preserved quirk. The legacy server
-// reported a request it could not make for two of the seven commands and said nothing at all for the other
-// five — no message, and the exit code of a command that worked — so a script that ran a command while the
-// server was down was told the command had happened. Every action now names the failure and ends as a
-// failure.
+// Every command run against a server that is not answering names the
+// failure and ends as a failure.
+// see the command-failure-reporting maintainer note.
 func TestEveryCommandAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -416,8 +409,8 @@ func TestEveryCommandAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
 	}
 }
 
-// TestALoginAgainstAServerThatIsNotAnsweringIsReported is the half of the login-reporting quirk the legacy server already got
-// right: login and logout report a request they could not make, and a script that cannot log in is told so.
+// a login against a server that is not answering reports the failure
+// instead of claiming success
 func TestALoginAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
 	dead := anAddressNothingAnswersOn(t)
 
@@ -449,9 +442,8 @@ func TestALoginAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
 	}
 }
 
-// TestAnActionTheCommandModeDoesNotKnowPrintsTheUsageAndChangesNothing is -cmd help, and -cmd anything else:
-// the operator is shown what the mode can do, and the mode does not treat an action it does not know as a
-// failure.
+// an action the mode does not know prints the usage and changes
+// nothing, and is not treated as a failure
 func TestAnActionTheCommandModeDoesNotKnowPrintsTheUsageAndChangesNothing(t *testing.T) {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -473,9 +465,9 @@ func TestAnActionTheCommandModeDoesNotKnowPrintsTheUsageAndChangesNothing(t *tes
 		"admin-password – Change administrator password.",
 		"$ RDIO_ADMIN_PASSWORD=<password> ./" + app + " -cmd login",
 
-		// The session file the usage text promises is the one the mode keeps: inside the base directory,
-		// named after the executable. The legacy text promised `.<executable>.token`, a path in the
-		// directory the operator happened to be standing in.
+		// The session file the usage text promises is the one the mode
+		// keeps: inside the base directory, named after the executable.
+		// see the command-session-token-file maintainer note.
 		"Session token keystore. Default is `" + tokenFileOf(baseDir) + "`.",
 
 		"Server remote address. Default is `http://localhost:3000/`.",
@@ -486,9 +478,8 @@ func TestAnActionTheCommandModeDoesNotKnowPrintsTheUsageAndChangesNothing(t *tes
 	}
 }
 
-// TestTheCommandModeTakesTheCredentialFromTheEnvironmentWhenTheOperatorNamesNone is the login the usage text
-// shows: the credential in the environment, so that it is not in the process list of every other account on
-// the machine.
+// the mode reads the credential from the environment when the operator
+// names none, keeping it out of the process list
 func TestTheCommandModeTakesTheCredentialFromTheEnvironmentWhenTheOperatorNamesNone(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -520,9 +511,9 @@ func TestACommandGivenAnAddressThatIsNotAServerAddressIsRefused(t *testing.T) {
 	}
 }
 
-// TestAnAddressThatIsNotOneIsRefusedBeforeAnythingElseIsNamed is what the mode says when the operator named
-// the address before the file: the address is what is wrong, and that is what the operator is told, even
-// though the file the command needs was named after it. The legacy server stops at the address.
+// An invalid address is refused before anything else the operator
+// named is read, the file included.
+// see the command-option-ordering maintainer note.
 func TestAnAddressThatIsNotOneIsRefusedBeforeAnythingElseIsNamed(t *testing.T) {
 	code, out := runTheCommandMode(t, t.TempDir(), "config-get", commandArgURL, "ftp://elsewhere/", commandArgOut, filepath.Join(t.TempDir(), "none"))
 
@@ -535,8 +526,8 @@ func TestAnAddressThatIsNotOneIsRefusedBeforeAnythingElseIsNamed(t *testing.T) {
 	}
 }
 
-// TestASessionFileThatCannotBeReadIsReported is a token file that is there and is not something the mode can
-// read: the mode says so, rather than carrying on as if the operator had never logged in.
+// a session file that cannot be read is reported, not carried on as
+// no session at all
 func TestASessionFileThatCannotBeReadIsReported(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -559,8 +550,8 @@ func TestASessionFileThatCannotBeReadIsReported(t *testing.T) {
 	}
 }
 
-// TestACommandGivenAFileThatIsNotAConfigurationIsRefused is config-set's own check: what the operator named
-// has to be a configuration, and a file that holds something else is not applied.
+// config-set refuses to apply a file that does not hold a
+// configuration
 func TestACommandGivenAFileThatIsNotAConfigurationIsRefused(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -587,8 +578,8 @@ func TestACommandGivenAFileThatIsNotAConfigurationIsRefused(t *testing.T) {
 	}
 }
 
-// anAddressNothingAnswersOn is the address of a server that has stopped answering: the port is there and
-// nothing is behind it, which is what an operator's script finds when the server it talks to is down.
+// anAddressNothingAnswersOn is a port with nothing behind it, the
+// way a down server looks to a script
 func anAddressNothingAnswersOn(t *testing.T) string {
 	t.Helper()
 
@@ -601,8 +592,8 @@ func anAddressNothingAnswersOn(t *testing.T) string {
 	return url
 }
 
-// commandTestServer is a server that is answering on a real address, which is what this mode needs: it is a
-// client of a server, over the network, and has no way in that does not go through one.
+// commandTestServer is a server answering on a real address: the
+// mode reaches servers only over the network
 func commandTestServer(t *testing.T) string {
 	t.Helper()
 
@@ -624,9 +615,9 @@ func commandTestServer(t *testing.T) string {
 	return httpServer.URL
 }
 
-// runTheCommandMode runs the program the way an operator runs it and reports the exit code and what the
-// operator saw. The base directory is the one the test prepared, because it is what decides where the session
-// token lands.
+// station search with a limit larger than the total returns everything,
+// no station is repeated across pages, and the results match the seeded
+// titles.
 func runTheCommandMode(t *testing.T, baseDir string, args ...string) (int, string) {
 	t.Helper()
 
@@ -705,9 +696,7 @@ func accessNamed(t *testing.T, config map[string]any, ident string) map[string]a
 	return nil
 }
 
-// The usage text is the operator's only documentation for this mode, and it names the executable the operator
-// is holding. This is the line the mode prints for a login, spelled out for the binary these tests are
-// running as, so that a change to the text has to be a change somebody noticed.
+// the usage text names the login line the mode prints, spelled for the test binary
 func TestTheUsageTextNamesTheLoginTheOperatorRuns(t *testing.T) {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -729,11 +718,9 @@ func TestTheUsageTextNamesTheLoginTheOperatorRuns(t *testing.T) {
 	}
 }
 
-// TestTheCommandModeCreatesTheConfigurationFileForItsOwnerOnly:
-// config-get writes the server's whole configuration — the signing secret, the
-// database password, the administrator hash — to a file the operator names. The
-// file is created readable and writable by its owner alone, so the secrets do not
-// sit world-readable in whatever directory the operator pointed at.
+// config-get writes the server's whole configuration, secrets
+// included, to the file the operator names, and that file
+// is created readable and writable by its owner alone.
 func TestTheCommandModeCreatesTheConfigurationFileForItsOwnerOnly(t *testing.T) {
 	url := commandTestServer(t)
 

@@ -23,8 +23,8 @@ import (
 	"testing"
 )
 
-// newTestConfig parses args with a controlled executable path and base dir, so the
-// tests never depend on where the test binary happens to live.
+// newTestConfig parses args with a controlled executable path and base
+// dir, so tests do not depend on where the test binary lives.
 func newTestConfig(t *testing.T, args ...string) (*Config, *bytes.Buffer) {
 	t.Helper()
 
@@ -157,9 +157,8 @@ func TestConfigSaveWritesHostSectionForServerDatabases(t *testing.T) {
 	}
 }
 
-// The MCP surface is off unless the operator asks for it, at every entry point: the flag, the ini file,
-// and the file -config_save writes. A deployment that never heard of it must keep behaving exactly as it
-// does today, so an ini file without the key leaves the switch off rather than turning it on.
+// the MCP surface stays off at the flag, the ini file, and the saved
+// file unless the operator asks for it.
 func TestMcpServerIsOffUnlessTheOperatorAsksForIt(t *testing.T) {
 	t.Run("the flag default is off", func(t *testing.T) {
 		cfg, _ := newTestConfig(t)
@@ -206,9 +205,8 @@ func TestMcpServerIsOffUnlessTheOperatorAsksForIt(t *testing.T) {
 	})
 }
 
-// -config_save writes mcp_server only when the operator asked for the surface, the way it writes
-// bcrypt_cost only when it differs from its default: a saved file stays comparable with the files the
-// deployments that never asked for MCP carry.
+// -config_save writes the mcp_server key only when the switch is on.
+// see the ini-file-compatibility maintainer note.
 func TestConfigSaveWritesTheMcpSwitchOnlyWhenItIsOn(t *testing.T) {
 	off, _ := newTestConfig(t, "-config_save")
 
@@ -233,8 +231,8 @@ func TestConfigSaveWritesTheMcpSwitchOnlyWhenItIsOn(t *testing.T) {
 	}
 }
 
-// The saved file is the thing a later start reads, so the switch has to survive the round trip: a
-// deployment that asked for the surface keeps it after a restart, and one that did not keeps its absence.
+// the saved file round-trips the MCP switch: an on deployment keeps the
+// surface after a restart, an off one keeps its absence.
 func TestTheMcpSwitchSurvivesTheSavedFileRoundTrip(t *testing.T) {
 	baseDir := t.TempDir()
 
@@ -294,10 +292,8 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-// TestConfigSaveCreatesTheIniFileForItsOwnerOnly: the ini file
-// holds the database password, and on a shared host a world-readable ini hands it
-// to every account on the machine. The save creates it readable and writable by
-// its owner alone.
+// the saved ini file, which holds the database password, is created
+// readable and writable by its owner alone.
 func TestConfigSaveCreatesTheIniFileForItsOwnerOnly(t *testing.T) {
 	cfg, _ := newTestConfig(t, "-config_save")
 
@@ -311,9 +307,7 @@ func TestConfigSaveCreatesTheIniFileForItsOwnerOnly(t *testing.T) {
 	}
 }
 
-// TestBcryptCostComesFromTheIniFileAndDefaultsToTen: the cost
-// is an ini option; the default is the legacy server's cost, so a deployment that
-// says nothing hashes exactly as it does today.
+// the bcrypt cost comes from the ini file and defaults to 10.
 func TestBcryptCostComesFromTheIniFileAndDefaultsToTen(t *testing.T) {
 	cfg, _ := newTestConfig(t)
 
@@ -346,11 +340,9 @@ func TestBcryptCostComesFromTheIniFileAndDefaultsToTen(t *testing.T) {
 	}
 }
 
-// TestABcryptCostOutsideTheRangeIsRejected: the range is the
-// operator's contract — 10 is today's cost, 14 is the ceiling this server will
-// hash at — and a cost outside it is a typo. A server that started with the
-// typo's cost would hash the administrator credential at a cost the operator
-// never asked for, so the typo is refused at startup.
+// a bcrypt cost outside the 10 to 14 contract is refused at startup:
+// a typo there would hash the administrator credential at a cost the
+// operator never asked for.
 func TestABcryptCostOutsideTheRangeIsRejected(t *testing.T) {
 	for _, cost := range []string{"9", "15"} {
 		baseDir := t.TempDir()
@@ -363,10 +355,8 @@ func TestABcryptCostOutsideTheRangeIsRejected(t *testing.T) {
 	}
 }
 
-// TestDatabaseTransportOptionsComeFromTheIniFile: the
-// transport options are ini options the operator opts in to; the defaults say
-// nothing, and a deployment that says nothing connects exactly as it connects
-// today — plaintext, driver's own timing.
+// database transport options are opt-in ini options, and a deployment
+// that says nothing connects with plaintext and the driver's timing.
 func TestDatabaseTransportOptionsComeFromTheIniFile(t *testing.T) {
 	cfg, _ := newTestConfig(t)
 
@@ -398,9 +388,8 @@ func TestDatabaseTransportOptionsComeFromTheIniFile(t *testing.T) {
 	}
 }
 
-// TestAnUnparseableConnectTimeoutIsRejected: the connect
-// timeout is a duration, and "5" is not one — a server that started with a typo's
-// timeout would connect on a timing the operator never named.
+// an unparseable connect timeout is rejected: a server must not connect
+// on a timing the operator never named.
 func TestAnUnparseableConnectTimeoutIsRejected(t *testing.T) {
 	for _, timeout := range []string{"5", "bogus"} {
 		baseDir := t.TempDir()

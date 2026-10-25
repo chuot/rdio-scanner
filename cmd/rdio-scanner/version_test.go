@@ -25,13 +25,7 @@ import (
 	"rdio-scanner/cmd/build/buildinfo"
 )
 
-// captureVersion is the version the server that produced the recorded captures reported.
-//
-// The parity tests in this package compare bytes against the captures recorded in the package that
-// proves them, and the version a build injects is a fact about the build, not a fact about a capture.
-// So the tests name the release they compare against instead of inheriting it from whatever the binary
-// being compiled happens to carry: a development build reporting `dev` still compares its bytes against
-// a capture taken from 8.0.0, which is what it is doing.
+// captureVersion is the version the server that produced the recorded
 const captureVersion = "8.0.0"
 
 func TestMain(m *testing.M) {
@@ -55,23 +49,10 @@ func TestVersionModePrintsVersionAndExitsWithoutError(t *testing.T) {
 }
 
 func TestVersionMatchesThePinnedWireContract(t *testing.T) {
-	// This comparison used to read the version out of the legacy server's own version.go. That file
-	// is not in this repository, so the test skipped — every day, since the legacy trees were
-	// deleted — and a test that always skips asserts nothing.
-	//
-	// What the legacy server reported is not lost. capturedVersionAnswer is the payload the legacy
-	// server put on the wire for a version request, captured in the configuration every capture was
-	// taken in and pinned to the tree the captures are pinned to. Five of the recorded captures carry
-	// that version, because what a server reports is part of what a client is told. Comparing against
-	// the contract is what comparing against the legacy source was for.
-	//
-	// What is compared is the core the build system resolves from VERSION.txt, not the value compiled
-	// into the binary being tested: a binary built without the tool reports the development fallback,
-	// and a fallback is not a release a contract can pin. The core is the only part of a version a
-	// pinned capture can pin, and it is the part VERSION.txt declares.
-	//
-	// A release moves this test deliberately. Moving VERSION.txt without moving the captures that
-	// carry the version is the drift this test exists to catch.
+	// the pinned wire contract compares the core the build system resolves from
+	// VERSION.txt against the version inside the captured payload: a fallback is
+	// not a release a contract can pin, and moving VERSION.txt without moving the
+	// see the version-pinned-wire-contract maintainer note.
 	resolved, err := buildinfo.ReadCore(filepath.Join("..", "..", "VERSION.txt"))
 	if err != nil {
 		t.Fatalf("VERSION.txt at the repository root: %v", err)
@@ -82,8 +63,7 @@ func TestVersionMatchesThePinnedWireContract(t *testing.T) {
 	}
 }
 
-// TestThePinnedWireContractComparesCoresAndNotWholeVersions is that contract in both directions, so
-// that the comparison is not merely observed passing but seen refusing.
+// the pinned wire contract test proves the comparison in both directions, so
 func TestThePinnedWireContractComparesCoresAndNotWholeVersions(t *testing.T) {
 	pinned := pinnedWireCore(t)
 
@@ -117,9 +97,9 @@ func TestThePinnedWireContractComparesCoresAndNotWholeVersions(t *testing.T) {
 	}
 }
 
-// capturedVersionAnswer is the answer a legacy server gave to a version request, recorded byte for
-// byte. It lives in the test that compares against it, which is what the requirement asks for: no fixture
-// directory, no manifest, and nothing outside the test that proves it.
+// capturedVersionAnswer is the answer a legacy server put on the wire for a
+// version request, recorded byte for byte inside the test that compares it
+// see the legacy-captured-version-answer maintainer note.
 const capturedVersionAnswer = `{"branding":"Capture Dispatch","email":"dispatch@example.com","version":"8.0.0"}`
 
 // pinnedWireCore reads the core of the version out of the recorded answer.

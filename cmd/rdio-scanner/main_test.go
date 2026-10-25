@@ -33,15 +33,9 @@ import (
 	"rdio-scanner/internal/infrastructure/persistence"
 )
 
-// These are the tests of the command line itself: the modes the program reaches before it starts a server,
-// and the exit codes it ends with. Everything below drives `run`, the whole program, from the arguments an
-// operator types. The last argument of `run` is the stand-in answer to which embedded web bundles have no
-// application shell; the real answer is what the two application packages say about their own embeds.
+// the command-line tests drive run itself from the arguments an operator
 
-// A server whose embedded bundle has no application shell says so at startup, names the command that
-// builds the bundles, and keeps serving: the API and the websocket work without the bundles, and the
-// operator is told what the missing pages are. The server is asked to listen on a word it cannot listen
-// on, so the run ends at the server starting and the warning is what the output holds.
+// an embedded bundle with no application shell warns at startup, names the
 func TestTheServerWarnsAboutAnUnbuiltBundleAndNamesTheCommand(t *testing.T) {
 	base := t.TempDir()
 
@@ -84,16 +78,10 @@ func TestTheBundleWarningNamesEveryUnbuiltApplication(t *testing.T) {
 	}
 }
 
-// TestTheOperatorsSwitchesReachTheServerTheyWereTypedFor: the command line parses a configuration, and
-// the server is built from a second one — the composition root's own shape. The two are joined by one
-// function, and a switch the command layer parses and that function does not carry across is a switch
-// the operator typed and the server never heard: the flag is accepted, the ini line is honoured by the
-// file's own reader, `-config_save` writes the line, and the deployment runs without the endpoint, with
-// nothing said about the switch it was given.
-//
-// The switches named here are the ones with a server behaviour behind them that no file path and no
-// address can stand in for: the Model Context Protocol endpoint, and the proxy addresses whose
-// X-Forwarded-For the server honors.
+// a switch the command layer parses and the composition shape does not carry
+// across is a switch the server never hears, so these pin the two opt-in
+// switches no address or file path can stand in for
+// see the operator-switches-reach-server maintainer note.
 func TestTheOperatorsSwitchesReachTheServerTheyWereTypedFor(t *testing.T) {
 	cfg, _ := newTestConfig(t, "-mcp_server", "-trusted_proxies", "10.0.0.0/8, 127.0.0.1")
 
@@ -112,8 +100,7 @@ func TestTheOperatorsSwitchesReachTheServerTheyWereTypedFor(t *testing.T) {
 			served.TrustedProxies, cfg.TrustedProxies)
 	}
 
-	// The switches are opt-in, and the way they are opt-in has to survive the handoff: a copy that
-	// turns the default into something else would serve an endpoint no operator asked for.
+	// the switches are opt-in, and a copy turning the default into something else
 	plain, _ := newTestConfig(t)
 
 	quiet := serverConfig(plain, io.Discard, nil)
@@ -130,8 +117,7 @@ func TestTheOperatorsSwitchesReachTheServerTheyWereTypedFor(t *testing.T) {
 	}
 }
 
-// The -admin_password mode is a one-shot: it stores the credential, says so in the log view, and stops
-// without starting a server.
+// the -admin_password mode stores the credential, says so in the log view, and
 func TestAdminPasswordModeStoresTheCredentialAndStops(t *testing.T) {
 	base := t.TempDir()
 
@@ -202,9 +188,7 @@ func TestAdminPasswordModeIsTheCredentialTheServerAccepts(t *testing.T) {
 	}
 }
 
-// testConfigIn is the configuration a test builds a server from on a folder the test owns: the same
-// settings the command line produces for a plain deployment, with the version the recorded runs were
-// captured against and the ffmpeg the host installs.
+// testConfigIn is the configuration a test builds a server from on a folder
 func testConfigIn(base string) app.Config {
 	return app.Config{
 		BaseDir: base,
@@ -214,18 +198,14 @@ func testConfigIn(base string) app.Config {
 		Version: theCommandVersion,
 		Out:     io.Discard,
 
-		// The converter is the ffmpeg the host installs: the one the command-line tests' server
-		// converts with, so that what a test proves is the program and not what one build carries.
+		// the converter is the host's ffmpeg, so a test proves the program and not
 		Converter: func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string) {
 			return ffmpeg.New(), ffmpeg.NewProber(dir), ""
 		},
 	}
 }
 
-// commandTestConfig is the configuration a test builds a command-mode server from: the settings the
-// command line produces for a plain deployment, with the ffmpeg the host installs, because the converter
-// the command line chooses is a fact about the binary being built and a command-mode test is about the
-// program talking to a server.
+// commandTestConfig is the configuration for a command-mode test: the plain
 func commandTestConfig(t *testing.T) app.Config {
 	config := testConfigIn(t.TempDir())
 
@@ -236,19 +216,15 @@ func commandTestConfig(t *testing.T) app.Config {
 	return config
 }
 
-// Every capture in this repository was taken with the server's time zone set to UTC, and the recorded
-// answers are compared against what a server in UTC wrote. A server started in a machine's own time zone
-// reads the timestamps its fixtures name as different moments, so the tests in this package run in UTC.
+// the recorded answers were captured with the server in UTC, so these tests
 func init() {
 	os.Setenv("TZ", "UTC")
 }
 
-// theCommandVersion is the version a test's server reports. The version a build injects is a fact about the
-// build, not a fact about a server, so these tests name the version they configure the server with.
+// theCommandVersion is the version these tests configure their server with:
 const theCommandVersion = "8.0.0"
 
-// noBundlesUnbuilt is the stand-in answer for the tests that reach a mode which never starts a
-// server: the bundle question is not asked in those modes, so the answer does not matter.
+// noBundlesUnbuilt is the stand-in bundle answer for tests reaching modes that
 func noBundlesUnbuilt() []string {
 	return nil
 }
@@ -318,8 +294,7 @@ func logSourceOfMessage(t *testing.T, db *sql.DB, message string) string {
 	return source
 }
 
-// loginAnswered starts a server against a base directory the test has already prepared and reports how a
-// login was answered.
+// loginAnswered starts a server against a prepared base directory and reports
 func loginAnswered(t *testing.T, base, credential string) int {
 	t.Helper()
 

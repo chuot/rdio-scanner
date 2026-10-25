@@ -15,13 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// This file is the integration tier: it runs the ffmpeg this binary actually carries, the programs the
-// server writes out of it, and the converter that runs them. Nothing below it can reach that seam, and
-// it is compiled only when asked for:
-//
-//	go test -tags integration./cmd/rdio-scanner/
-//
-// It fails when the bundle is absent instead of skipping, which is why it is a tier and not a test.
+// Integration tier for the converter: runs the ffmpeg this binary
+// carries, the programs written out of it, and the converter over them.
+// see the ffmpeg-bundle-provenance maintainer note.
 
 package main
 
@@ -49,9 +45,8 @@ const theToneLength = 1.0
 // thePaddedToneLength is what apad=whole_dur=3s pads a recording to.
 const thePaddedToneLength = 3.0
 
-// TestTheFfmpegThisServerCarriesReadsAndConvertsTheAudioItIsGiven is the acceptance proof for the
-// bundle: the programs written out of the server's own binary read a WAV and an MP3, and convert a WAV
-// into the fragmented m4a the server stores, with the length its filters ask for.
+// the bundle is proven end to end: the programs written out of this
+// binary read a WAV and an MP3 and convert a WAV into a padded m4a.
 func TestTheFfmpegThisServerCarriesReadsAndConvertsTheAudioItIsGiven(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -67,9 +62,8 @@ func TestTheFfmpegThisServerCarriesReadsAndConvertsTheAudioItIsGiven(t *testing.
 		t.Fatalf("the server could not write out the ffmpeg it carries: %v", err)
 	}
 
-	// The two programs run from the folder the server wrote them into, and each is named for the
-	// release it is, which is what lets a server upgrade without replacing a binary another running
-	// server is using.
+	// the programs run from the folder the server wrote them into, each
+	// named for its release, so upgrades never replace a running binary.
 	for _, program := range []struct {
 		what string
 		path string
@@ -101,8 +95,8 @@ func TestTheFfmpegThisServerCarriesReadsAndConvertsTheAudioItIsGiven(t *testing.
 		t.Errorf("the bundled ffprobe reads the MP3 as %s s, not the second it is", strconv.FormatFloat(got, 'f', 6, 64))
 	}
 
-	// And the conversion is the one the server runs, through the converter the server builds, at the
-	// level a talkgroup with a loudness target uses.
+	// the conversion runs through the server's own converter at the level a
+	// talkgroup with a loudness target uses.
 	converter := converterChoice{Program: ffmpegPath}.converter()
 
 	converted, err := converter.Convert(
@@ -133,10 +127,8 @@ func TestTheFfmpegThisServerCarriesReadsAndConvertsTheAudioItIsGiven(t *testing.
 	}
 }
 
-// TestTheConversionReportsTheLengthTheConvertedRecordingIs: the running time ffmpeg states
-// while it writes is the length of the file it wrote. The converter's own report and the
-// bundled ffprobe's measurement of that same recording agree, at every conversion level —
-// the length the server stores is the length of the audio the server stores.
+// the converter's reported length and the bundled ffprobe's measurement
+// of the same recording agree, at every conversion level.
 func TestTheConversionReportsTheLengthTheConvertedRecordingIs(t *testing.T) {
 	bundled, ok := bundle.Lookup()
 	if !ok {
@@ -179,10 +171,9 @@ func TestTheConversionReportsTheLengthTheConvertedRecordingIs(t *testing.T) {
 		want := aProbedDuration(t, ffprobePath, m4a)
 		got := converted.Duration.Seconds()
 
-		// The running time ffmpeg states is the recording it has written; the container
-		// is that plus the AAC encoder's own priming — a 1.000-second tone comes out as a
-		// 1.128-second file. The report is never longer than the file it describes, and
-		// the file is never more than the encoder's padding longer than the report.
+		// the file ffmpeg writes is the stated running time plus the AAC
+		// encoder's priming: the report is never longer than the file, and the
+		// file is never more than the encoder's padding longer than the report.
 		if got > want {
 			t.Errorf("level %d: the conversion stated %s s, longer than the %s s recording it wrote",
 				level, strconv.FormatFloat(got, 'f', 6, 64), strconv.FormatFloat(want, 'f', 6, 64))
@@ -197,8 +188,8 @@ func TestTheConversionReportsTheLengthTheConvertedRecordingIs(t *testing.T) {
 	}
 }
 
-// aRecordingFrom copies one of the tier's fixtures into the directory the tier works in, so that
-// ffprobe is given a file and not a pipe — the form the duration feature will have to use.
+// aRecordingFrom copies a tier fixture into the working directory, so
+// ffprobe receives a file rather than a pipe.
 func aRecordingFrom(t *testing.T, dir string, name string) string {
 	t.Helper()
 
