@@ -23,13 +23,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// TestAdminConfigPayloadMatchesTheCapturedConfig is the byte-for-byte half of the criterion for the whole
-// configuration an administrator is shown.
-//
-// The captured configuration says something this server does not: it reports every site as belonging
-// to no system, because the legacy server never reads that column back. This server reports the system
-// the site is on. That is the approved divergence, and the
-// test states it by rewriting the capture rather than by skipping the comparison.
+// TestAdminConfigPayloadMatchesTheCapturedConfig compares the whole
+// admin configuration byte for byte against the capture, rewriting
+// only the site-system divergence.
 func TestAdminConfigPayloadMatchesTheCapturedConfig(t *testing.T) {
 	got := marshal(t, AdminConfigReply{Config: captureConfiguration(), PasswordNeedChange: true})
 	want := capturedAnswer(t, "rest-config.json")
@@ -41,8 +37,8 @@ func TestAdminConfigPayloadMatchesTheCapturedConfig(t *testing.T) {
 	}
 }
 
-// Each section of the configuration is also answered on its own, and answered as the list itself with
-// no envelope around it.
+// TestAdminSectionPayloadsMatchTheCapturedSections proves each config
+// section is also answered bare, as the list itself with no envelope.
 func TestAdminSectionPayloadsMatchTheCapturedSections(t *testing.T) {
 	configuration := captureConfiguration()
 
@@ -73,9 +69,9 @@ func TestAdminSectionPayloadsMatchTheCapturedSections(t *testing.T) {
 	}
 }
 
-// The access codes are answered with their expiry as a moment and not as the number of seconds the
-// server stores it as, and an access that never expires is answered with no expiry at all rather than
-// with the epoch.
+// TestAdminAccessSectionMatchesTheCapturedAccesses proves expiry is
+// answered as an instant, not seconds, and a never-expiring access
+// omits expiry rather than answering the epoch.
 func TestAdminAccessSectionMatchesTheCapturedAccesses(t *testing.T) {
 	open, _ := domain.ParseAccessScope("*")
 	scoped, _ := domain.ParseAccessScope([]any{map[string]any{"id": float64(10001), "talkgroups": "*"}})
@@ -89,10 +85,8 @@ func TestAdminAccessSectionMatchesTheCapturedAccesses(t *testing.T) {
 
 	got := marshal(t, payload)
 
-	// An expiry is rendered in whatever time zone the server runs in, because the legacy server reaches
-	// it through time.Unix. The capture was taken on a machine set to UTC and says the moment in Z; a
-	// server in another zone says the same moment in its own offset, and an administrator sees the same
-	// thing they see today.
+	// An expiry renders in the server's time zone, as the legacy server
+	// reached it through time.Unix; the capture states the moment in UTC.
 	want := replaceExactly(t, capturedAnswer(t, "rest-section-access-restricted.json"),
 		`"1970-01-01T00:00:01Z"`, `"`+time.Unix(1, 0).Format(time.RFC3339)+`"`, 1)
 
@@ -101,10 +95,9 @@ func TestAdminAccessSectionMatchesTheCapturedAccesses(t *testing.T) {
 	}
 }
 
-// A talkgroup's display order is written under the key `talkgroup` and not under the key `order`,
-// which is what the legacy server writes and what the administration interface has to correct for itself
-// before it can show a talkgroup list in order. It is preserved because clients that do not correct for
-// it are reading the number from the key it is really written under.
+// TestAdminTalkgroupWritesItsOrderUnderTheTalkgroupKey proves the
+// display order arrives under key 'talkgroup', the legacy key clients
+// keep reading.
 func TestAdminTalkgroupWritesItsOrderUnderTheTalkgroupKey(t *testing.T) {
 	got := marshal(t, SystemListPayload(domain.Systems{
 		{
@@ -122,9 +115,9 @@ func TestAdminTalkgroupWritesItsOrderUnderTheTalkgroupKey(t *testing.T) {
 	}
 }
 
-// A site is reported as belonging to the system it is stored under. The legacy server reports every
-// site as belonging to no system at all, because the query that reads sites never asks for that column.
-// This is the divergence the capture comparison above states out loud.
+// TestAdminSiteReportsTheSystemItIsOn proves a site is reported as
+// belonging to the system it is stored on, where the legacy server
+// reported none.
 func TestAdminSiteReportsTheSystemItIsOn(t *testing.T) {
 	got := marshal(t, SystemListPayload(domain.Systems{
 		{
@@ -138,8 +131,8 @@ func TestAdminSiteReportsTheSystemItIsOn(t *testing.T) {
 	}
 }
 
-// The configuration an administrator is shown carries the options that decide what the server does, and
-// never the password it stores or the secret it signs its session tokens with.
+// TestAdminOptionsCarryNoPasswordAndNoSecret proves options carry no
+// secret and no password. see the two-configuration-payload-shapes maintainer note.
 func TestAdminOptionsCarryNoPasswordAndNoSecret(t *testing.T) {
 	options := captureConfiguration().Snapshot.Options
 
@@ -164,8 +157,8 @@ func TestAdminOptionsCarryNoPasswordAndNoSecret(t *testing.T) {
 	}
 }
 
-// The server says it runs in a container when it was started with DOCKER in its environment, and says
-// nothing at all about containers otherwise.
+// TestAdminConfigReplyMentionsTheContainerOnlyWhenToldTo proves the
+// container flag appears only when DOCKER was in the environment.
 func TestAdminConfigReplyMentionsTheContainerOnlyWhenToldTo(t *testing.T) {
 	configuration := captureConfiguration()
 
