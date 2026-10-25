@@ -33,19 +33,18 @@ class RdioSnackbar extends HTMLElement {
     }
 
     // The scanner asks for the shape the baseline has: a surface carrying the
-    // colour, the shape, and the elevation, with the message in a label inside
-    // it, and the 150ms enter and 75ms exit animations the baseline plays. The
-    // administration application asks for nothing of the kind and renders as it
-    // always did.
+    // colour, shape, and elevation, the message in a label inside, and the
+    // 150ms enter and 75ms exit animations. The administration application
+    // asks for nothing of the kind and renders as it always did.
     const content = typeof message === 'string' ? document.createTextNode(message) : message;
 
     if (!message) {
       if (this.hidden || this.classList.contains('rdio-snackbar-exit')) return;
 
-      // The exit is a promise about an animation running: the box leaves when that animation ends.
-      // An operator who asked the platform for less motion gets the animation taken away, and the
-      // notification still has to leave, so in that state the box goes straight to the state the
-      // animation ends in — the same terminal state the plain branch reaches.
+      // The exit is a promise about an animation running: the box leaves when
+      // that animation ends. With reduced motion requested the box goes
+      // straight to the state the animation ends in, the same terminal state
+      // the plain branch reaches.
       if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
         this.hidden = true;
         this.replaceChildren();
@@ -101,10 +100,9 @@ export function dismissSnackbar() {
   }
 }
 
-// The page's polite live region: the one place the page writes what changed while the operator was
-// not looking at it. The shell carries it empty — a region that carries static content tells the
-// screen reader the page is answering every time it paints — and the components write one sentence
-// in the page's own words when a state they own changes.
+// The page's polite live region: the one place the page writes what
+// changed while the operator was not looking. The shell carries it empty,
+// and the components write a sentence when a state they own changes.
 class RdioLiveRegion extends HTMLElement {
   connectedCallback() {
     this.setAttribute('role', 'status');
@@ -120,9 +118,9 @@ class RdioLiveRegion extends HTMLElement {
 
 customElements.define('rdio-live-region', RdioLiveRegion);
 
-// The page tells the operator through the region its shell carries. A page that carries none gets
-// one on the first announcement: the region belongs to the page, and the components that write into
-// it are not the ones that placed it.
+// The page tells the operator through the region its shell carries, and a
+// page that carries none gets one on the first announcement: the region
+// belongs to the page, not to the components writing into it.
 export function announce(text) {
   let region = document.querySelector('rdio-live-region');
 
@@ -131,8 +129,8 @@ export function announce(text) {
 
     document.body.append(region);
 
-    // A browser connects the element as it inserts it; a DOM that does not lay the page out needs
-    // the element to say what it is before the first write lands in it.
+    // A browser connects the element as it inserts it; a DOM that does not lay
+    // the page out needs the element to say what it is.
     if (!region.hasAttribute('role')) region.connectedCallback?.();
   }
 
@@ -196,11 +194,9 @@ class RdioDialog extends HTMLElement {
       button.className = 'rdio-button-mini';
       button.textContent = action.label;
       button.addEventListener('click', () => {
-        // The action is the answer, so it runs while the dialog and the content it carries are still on
-        // the page. Closing first reports a dismissal instead: content that answers its own removal — the
-        // selection tree hands back "nothing was picked" when it leaves the page — would answer before
-        // the action has handed anything, and the answer would be thrown away. An action that closes the
-        // dialog itself is closed twice, which answers the same way: the element is already off the page.
+        // The action runs while the dialog and its content are still on the page,
+        // so content that answers its own removal reaches the action:
+        // see the dialog-action-before-close maintainer note.
         action.onClick?.();
         this.close();
       });
@@ -212,12 +208,9 @@ class RdioDialog extends HTMLElement {
 
     this.previousFocus = document.activeElement;
 
-    // The controls the browser's Tab route stops on, read at the moment the key is pressed. A dialog
-    // whose content rebuilds — the selection tree paints itself again on every checkbox the operator
-    // activates — carries controls the dialog was not opened with, and a control the page has hidden
-    // or disabled is a control the browser refuses to stop on. The ends have to be the ends of the
-    // route as it is now: a snapshot taken at open time wraps the keyboard at places the keyboard
-    // never reaches, and leaves the Tab key to the browser at the ends that moved.
+    // The Tab stops are read fresh at the moment the key is pressed, so the
+    // trap ends where the keyboard actually stands:
+    // see the trap-focus-at-keypress maintainer note.
     const focusables = () => [...this.querySelectorAll('button, input, select, textarea, [tabindex]')]
       .filter((el) => !el.disabled && !isOutOfSight(el));
 
@@ -272,23 +265,20 @@ class RdioFormField extends HTMLElement {
     error.setAttribute('role', 'alert');
     this.append(error);
 
-    // The message a section last computed for this field, and whether the operator has reached it.
-    // A field is reached when the operator changes its value, picks in it, or the form holding it is
-    // submitted — the reading Angular Material's error matcher used. Walking across a field says
-    // nothing: an invalid value nobody has edited is not reported.
+    // The message a section last computed for this field, and whether the
+    // operator has reached it: changed, picked, or submitted. Walking across
+    // a field says nothing.
     let message = '';
     let reached = false;
 
-    // The control is looked up when the field paints, not when it is connected: a select field's
-    // inner select is built by its own connectedCallback, which runs after this one, so the control
-    // is not under the field yet at connect time.
+    // The control is looked up when the field paints, not when it is
+    // connected: a select field's inner select is built by its own
+    // connectedCallback, which runs after this one.
     const control = () => this.querySelector('input, select, textarea');
 
-    // A section declares, when it builds the field, that the webapp insists on a value there. The
-    // declaration is a fact about the field and not about its current state, and it is the fact the
-    // operator reads as an asterisk on the field's name: the assistive technology reading the page
-    // needs the same fact on the control it announces, so the control answers required while the
-    // field declares it, and answers nothing at all when the field does not.
+    // A section declares, when it builds the field, that a value is insisted
+    // on. It is a fact about the field, read as an asterisk on the field's
+    // name, and the control answers required while the field declares it.
     const declares = () => this.dataset.required === 'true' || this.getAttribute('data-required') === 'true';
 
     const paint = () => {
@@ -297,17 +287,15 @@ class RdioFormField extends HTMLElement {
 
       error.textContent = shown ? message : '';
 
-      // `aria-invalid` answers true or false: an empty value is not a name the screen reader and the
-      // stylesheet can read, so the mark is written as the word, and taken away when the field has
-      // nothing to say.
+      // `aria-invalid` answers true or false, so the mark is written as the
+      // word, and taken away when the field has nothing to say.
       if (!input) return;
 
       if (shown) input.setAttribute('aria-invalid', 'true');
       else input.removeAttribute('aria-invalid');
 
-      // The announcement is written the same way, and follows the declaration: a field the section
-      // accepts empty leaves the control unannounced, and a field that insists on a value announces
-      // it whatever the row's state happens to be.
+      // The announcement is written the same way, and follows the declaration:
+      // whatever the row's state happens to be.
       if (declares()) input.setAttribute('aria-required', 'true');
       else input.removeAttribute('aria-required');
     };
@@ -324,10 +312,9 @@ class RdioFormField extends HTMLElement {
 
     this.isReached = () => reached;
 
-    // A label attached to no control names nothing, and the select a pick list builds is not
-    // under the field when this first runs: the attachment therefore runs every time a control
-    // appears under the field, the one laid down at connect time and the one a pick list builds
-    // and announces after.
+    // A label attached to no control names nothing, and the select a pick
+    // list builds is not under the field yet: the attachment runs every time
+    // a control appears under the field.
     const nameControl = () => {
       const field = control();
 
@@ -337,18 +324,17 @@ class RdioFormField extends HTMLElement {
       }
     };
 
-    // Typing and picking bubble out of the control to the field that owns it: the value changing is
-    // the reaching. Walking across a field changes nothing, and reveals nothing — Material's matcher
-    // read a touched control as silent. A form submit reaches no control at all: the form that is
-    // submitted tells its fields themselves, through markReached.
+    // Typing and picking bubble out of the control to the field that owns
+    // it: the value changing is the reaching. Walking across a field says
+    // nothing, and a submitted form reaches its fields through markReached.
     for (const type of ['input', 'change']) {
       this.addEventListener(type, () => this.markReached());
     }
 
-    // A pick list builds the select it answers with after this field is connected, so the field
-    // names and paints once at connect, for the control that is already under it, and again when
-    // the control a pick list builds appears: that select is the element the label is attached to
-    // and the screen reader announces, and it is the one carrying the field's declarations.
+    // A pick list builds the select it answers with after this field is
+    // connected, so the field names and paints once at connect, for the
+    // control already under it, and again when the pick list's select
+    // appears.
     this.addEventListener('rdio-control', () => {
       nameControl();
       paint();
@@ -382,11 +368,9 @@ class RdioSelect extends HTMLElement {
       this.dispatchEvent(new CustomEvent('change', { detail: select.value, bubbles: true }));
     });
 
-    // The name the page puts on the host belongs to the control the operator reaches and a
-    // screen reader announces: the name rides on the select, and the host gives it up so the
-    // tree carries one name, not two. A name left on this host announces nothing — the owning
-    // field's lookup, a label's attachment, and the accessibility tree all reach past the host
-    // to the control inside it.
+    // The name the page puts on the host belongs to the control the operator
+    // reaches and a screen reader announces: the name rides on the select,
+    // and the host gives it up so the tree carries one name, not two.
     for (const attr of ['aria-label', 'aria-labelledby']) {
       const value = this.getAttribute(attr);
 
@@ -399,10 +383,9 @@ class RdioSelect extends HTMLElement {
     this.append(select);
     this.select = select;
 
-    // The select built here is the control the field owning this pick list resolves to, and the
-    // element a label is attached to and a screen reader announces. It appears after the field is
-    // connected, so the field is told the control it answers with is there, and paints what the
-    // field declares onto it.
+    // The select built here is the control the field owning this pick list
+    // resolves to, and it appears after the field is connected: the field is
+    // told the control is there, and paints what the field declares onto it.
     this.dispatchEvent(new CustomEvent('rdio-control', { bubbles: true }));
   }
 
@@ -533,9 +516,9 @@ class RdioPaginator extends HTMLElement {
   connectedCallback() {
     if (this.dom) return;
 
-    // The listener's paginator is the four-control one that labels the range it
-    // is showing ("1 of 10"). The administration paginator keeps the two
-    // controls and the page counter it has always had.
+    // The listener's paginator is the four-control one that labels the range
+    // it is showing. The administration paginator keeps the controls it has
+    // always had.
     this.material = this.hasAttribute('material');
 
     const label = document.createElement('span');

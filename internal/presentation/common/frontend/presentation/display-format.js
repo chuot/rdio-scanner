@@ -18,10 +18,9 @@ export function isAfsSystem(call) {
   return call.systemData?.type === 'provoice' || call.talkgroupData?.type === 'provoice';
 }
 
-// The clock format is the browser locale's hour cycle: a
-// 12-hour locale gets the AM/PM suffix, a 24-hour locale gets 24-hour time. No
-// administrator option controls it any more. The locale argument exists for
-// tests with fixed locales; the browser default is used when it is absent.
+// The clock format is the browser locale's hour cycle: a 12-hour locale
+// gets the AM/PM suffix, a 24-hour locale gets 24-hour time. The locale
+// argument exists for tests with fixed locales.
 export function formatTime(date, locale) {
   if (!(date instanceof Date)) return '';
 
@@ -46,8 +45,8 @@ export function formatMonthDay(date) {
   return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
 }
 
-// The search table's duration column: mm:ss from the seconds a search row names.
-// Zero is the never-measured zero the column carries, and it renders blank.
+// The search table's duration column: mm:ss, and the never-measured zero
+// renders blank.
 export function formatDuration(seconds) {
   if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return '';
 
@@ -112,16 +111,8 @@ export function resolveUnit(call, elapsed) {  if (Array.isArray(call.sources) &&
   return call.systemData?.units?.find((u) => u.id === call.source)?.label ?? `${call.source ?? ''}`;
 }
 
-// The bound a date field is given, written the way the field reads it.
-//
-// A datetime-local field reads its min and max as a wall-clock minute — `YYYY-MM-DDTHH:MM`, in the
-// time of the machine the page runs on, because the value the operator types into the field is read
-// as that same wall-clock time. An instant in any other shape is a bound the field ignores, so a
-// bound written from a Date's own string form is a bound that looks set and constrains nothing.
-//
-// A search that answered with no calls names the zero time for the two ends of its match. That is
-// not a date a person can be shown, and a field bounded to it offers no date at all, so no bound is
-// invented for it.
+// The bound a date field is given, written the way the field reads it:
+// see the date-field-wall-clock-bounds maintainer note.
 export function toLocalInputValue(value) {
   if (!value) return '';
 
