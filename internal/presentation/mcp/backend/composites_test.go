@@ -22,10 +22,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The composites: questions an operator asks that no single entry point can answer. Each one
-// composes several reads into one answer, and says in its own description which entry points it
-// composed, so an assistant reading the catalog knows what a call is going to cost and an operator
-// reading the answer knows where each part came from.
+// The composites: questions no single entry point answers, each composing several
+// reads into one answer and naming in its own description which entry points it
+// composed, so the cost of a call and the origin of each part are both readable.
 
 func TestAnalyzeHealthAssemblesWhatNeedsADecision(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
@@ -46,8 +45,8 @@ func TestAnalyzeHealthAssemblesWhatNeedsADecision(t *testing.T) {
 		t.Fatalf("the report reviewed %q, want the day it was asked for, %q", report.Date, day)
 	}
 
-	// The severities counted per subsystem: the log view's own per-subsystem counts, one search per
-	// severity, assembled side by side.
+	// The severities counted per subsystem: the log view's own per-subsystem
+	// counts, one search per severity, assembled side by side.
 	if count := sourceCountOf(report.Errors, "ffmpeg"); count != 1 {
 		t.Fatalf("the report counts %d error lines from the conversion subsystem, want the one it wrote: %+v",
 			count, report.Errors)
@@ -57,8 +56,8 @@ func TestAnalyzeHealthAssemblesWhatNeedsADecision(t *testing.T) {
 			count, report.Warnings)
 	}
 
-	// The restart markers: the server's own startup line, counted and shown, because a server that
-	// came up twice in a day has a reason an operator has to find.
+	// The restart markers: the server's own startup line, counted and shown, a
+	// server up twice in a day having a reason an operator has to find.
 	if len(report.Restarts) != 1 {
 		t.Fatalf("the report names %d restart markers, want the one the fixture's log carries: %+v",
 			len(report.Restarts), report.Restarts)
@@ -78,8 +77,8 @@ func TestAnalyzeHealthAssemblesWhatNeedsADecision(t *testing.T) {
 			report.PruneDays, report.MaxClients)
 	}
 
-	// The findings are the assembled answer: each part of the deployment that needs a decision,
-	// named once, with the severity the operator reads it under.
+	// The findings are the assembled answer: each part of the deployment needing a
+	// decision, named once, under the severity the operator reads it under.
 	subjects := map[string]string{}
 	for _, finding := range report.Findings {
 		subjects[finding.Subject] = finding.Severity
@@ -159,10 +158,9 @@ func TestDiagnoseFeedProblemAssemblesTheAnswersAboutATalkgroup(t *testing.T) {
 	}
 }
 
-// The read-only tier's form of the same question: the history it may see, and the parts of the
-// deployment it cannot see named as unavailable rather than silently dropped. A listener's access
-// code does not read the server's log view or a system's settings, and an answer that left those
-// out without saying so would read like a healthy talkgroup.
+// The read-only tier's form of the diagnosis: the history it may see, and the
+// parts it cannot see named as unavailable, because dropping them silently
+// would read like a healthy talkgroup.
 func TestDiagnoseFeedProblemForAnAccessCodeCallerNamesWhatItCannotSee(t *testing.T) {
 	s := newCallerSession(t, readScoped())
 
@@ -194,9 +192,9 @@ func TestDiagnoseFeedProblemForAnAccessCodeCallerNamesWhatItCannotSee(t *testing
 	}
 }
 
-// A talkgroup the caller's scope does not grant is answered as a talkgroup with no recorded
-// activity, the same answer a quiet talkgroup gets. Naming the scope refused would say what the
-// caller is missing.
+// A talkgroup the caller's scope does not grant answers as a talkgroup with no
+// recorded activity, the same answer a quiet talkgroup gets: naming a scope
+// refusal would say what the caller is missing.
 func TestDiagnoseFeedProblemForAnAccessCodeCallerAnswersATalkgroupItCannotSeeAsQuiet(t *testing.T) {
 	s := newCallerSession(t, readScoped())
 
@@ -289,10 +287,9 @@ func sourceCountOf(counts []sourceCountShape, source string) uint64 {
 	return 0
 }
 
-// TestDiagnoseFeedProblemCountsTheBlacklistedTalkgroups: the number the diagnosis gives for a
-// system's blacklisted talkgroups is the number of references the list names. An administrator
-// asking why a talkgroup is refused needs to know how many the system refuses; the length of the
-// text the field holds says nothing an operator can use.
+// TestDiagnoseFeedProblemCountsTheBlacklistedTalkgroups: the count is the number
+// of references the list names, not the length of the field's text, because an
+// operator needs to know how many the system refuses.
 func TestDiagnoseFeedProblemCountsTheBlacklistedTalkgroups(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -333,8 +330,8 @@ func TestDiagnoseFeedProblemCountsTheBlacklistedTalkgroups(t *testing.T) {
 	}
 }
 
-// systemsPayloadWithBlacklists is the systems section payload as the section's save takes it, with
-// one system's blacklist set to the text given.
+// systemsPayloadWithBlacklists is the systems section payload as the section's
+// save takes it, with one system's blacklist set to the text given.
 func systemsPayloadWithBlacklists(systems domain.Systems, systemRef uint, blacklists string) []any {
 	rows := []any{}
 
