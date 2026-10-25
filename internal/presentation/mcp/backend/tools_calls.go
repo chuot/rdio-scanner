@@ -200,9 +200,8 @@ type callPage struct {
 	Results   []callRow   `json:"results"`
 }
 
-// callOptions echoes what this server was asked for, which is not always
-// what it used: a page asking for more rows than the history will ever
-// return gets the ceiling.
+// callOptions echoes what this server was asked for, which is not always what it used: a page
+// asking for more rows than the history will ever return gets the ceiling.
 type callOptions struct {
 	Limit  uint `json:"limit"`
 	Offset uint `json:"offset"`
@@ -405,10 +404,9 @@ func refused(reason string) *mcp.CallToolResult {
 	return result
 }
 
-// newRefusal is a capability's refusal as the protocol reports it. A tool
-// has a failure answer a client shows as an answer; a resource read has
-// none, so a resource that refuses answers the protocol's error with the
-// same sentence.
+// newRefusal is a capability's refusal as the protocol reports it. A tool has a failure
+// answer a client shows as an answer; a resource read has none, so a resource that
+// refuses answers the protocol's error carrying the same sentence.
 func newRefusal(reason string) error {
 	return fmt.Errorf("%s", reason)
 }
