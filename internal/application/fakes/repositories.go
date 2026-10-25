@@ -316,7 +316,7 @@ func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) er
 
 	if systems.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// the legacy server's save order; see the ports and hub maintainer note.
+		// the legacy server's save order; see the save-order maintainer note.
 		systems.Stored = next
 
 		return systems.SaveErr
@@ -685,7 +685,7 @@ func (groups *Groups) SaveGroups(ctx context.Context, next domain.Groups) error 
 
 	if groups.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// the legacy server's save order; see the ports and hub maintainer note.
+		// the legacy server's save order; see the save-order maintainer note.
 		groups.Stored = next
 
 		return groups.SaveErr
@@ -745,7 +745,7 @@ func (tags *Tags) SaveTags(ctx context.Context, next domain.Tags) error {
 
 	if tags.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// the legacy server's save order; see the ports and hub maintainer note.
+		// the legacy server's save order; see the save-order maintainer note.
 		tags.Stored = next
 
 		return tags.SaveErr
@@ -799,7 +799,7 @@ func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses
 
 	if accesses.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// the legacy server's save order; see the ports and hub maintainer note.
+		// the legacy server's save order; see the save-order maintainer note.
 		accesses.Stored = next
 
 		return accesses.SaveErr
@@ -836,7 +836,7 @@ func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) er
 
 	if apikeys.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// the legacy server's save order; see the ports and hub maintainer note.
+		// the legacy server's save order; see the save-order maintainer note.
 		apikeys.Stored = next
 
 		return apikeys.SaveErr
@@ -853,9 +853,10 @@ type Options struct {
 	Err     error
 	SaveErr error
 
-	// Reloaded is what re-deriving the options from the store produces, when a test wants
-	// that to differ from what was last written; why a stored re-derivation can change
-	// what was written lives in the ports and hub maintainer note.
+	// Reloaded is what re-deriving the options from the store produces, for a test
+	// that wants it to differ from the last write; why a stored re-derivation can
+	// change what was written lives in the options-are-the-configuration-in-effect
+	// maintainer note.
 	Reloaded *domain.Options
 
 	// Secrets records what StoreSecret put on record, in order, so a test can assert
@@ -888,7 +889,7 @@ func (options *Options) WriteOptions(ctx context.Context, next domain.Options) e
 
 	if options.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// the legacy server's save order; see the ports and hub maintainer note.
+		// the legacy server's save order; see the save-order maintainer note.
 		options.Stored = next
 
 		return options.SaveErr
@@ -1164,7 +1165,7 @@ func (dirwatches *Dirwatches) SaveDirwatches(ctx context.Context, next domain.Di
 
 	if dirwatches.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// the legacy server's save order; see the ports and hub maintainer note.
+		// the legacy server's save order; see the save-order maintainer note.
 		dirwatches.Stored = next
 
 		return dirwatches.SaveErr
@@ -1201,7 +1202,7 @@ func (downstreams *Downstreams) SaveDownstreams(ctx context.Context, next domain
 
 	if downstreams.SaveErr != nil {
 		// A save that cannot be persisted still leaves the submitted value in effect,
-		// the legacy server's save order; see the ports and hub maintainer note.
+		// the legacy server's save order; see the save-order maintainer note.
 		downstreams.Stored = next
 
 		return downstreams.SaveErr

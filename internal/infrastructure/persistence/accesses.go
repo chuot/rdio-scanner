@@ -28,9 +28,9 @@ import (
 
 // Accesses is the server's listener access list: the configuration in effect, not a
 // database view — loaded once from the `accesses` table, and a save replaces what the
-// server enforces before it stores it. Why that posture, including a save that fails
-// after it has taken effect, is the parity behavior lives in the access-and-apikey
-// configuration-in-effect maintainer note.
+// server enforces before it stores it. That a save takes effect before the store
+// is the parity behavior; the reason lives in the
+// access-and-apikey-configuration-in-effect maintainer note.
 type Accesses struct {
 	store store
 
@@ -71,8 +71,8 @@ func NewAccesses(db *sql.DB, dialect Dialect) *Accesses {
 func (accesses *Accesses) AllAccesses(ctx context.Context) (domain.Accesses, error) {
 	// The cache answers under the mutex; the database statements of a read or a save
 	// run outside it, so the listener checks keep answering through the whole save.
-	// Why the mutex must not cover the statements lives in the access-and-apikey
-	// configuration-in-effect maintainer note.
+	// Why the mutex does not cover the statements lives in the
+	// access-and-apikey-configuration-in-effect maintainer note.
 	accesses.mutex.Lock()
 
 	if accesses.loaded {
@@ -107,7 +107,7 @@ func (accesses *Accesses) AllAccesses(ctx context.Context) (domain.Accesses, err
 // a save that cannot reach the store still changes what the server enforces — and after
 // a write that succeeded the stored rows are read back and cached. That order of
 // operations is pinned by tests; why it is the parity behavior lives in the
-// access-and-apikey configuration-in-effect maintainer note.
+// access-and-apikey-configuration-in-effect maintainer note.
 func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses) error {
 	// A copy, for the same reason as the read path: the submitted slice stays the
 	// caller's to do with as the caller likes. The assignment takes
@@ -137,9 +137,9 @@ func (accesses *Accesses) SaveAccesses(ctx context.Context, next domain.Accesses
 }
 
 // read is the legacy `Accesses.Read`: every row, sorted by display order. Unlike the
-// legacy server, a read that fails leaves the list already in effect alone; why the
-// legacy clear-before-query is not mirrored lives in the access-and-apikey
-// configuration-in-effect maintainer note.
+// legacy server, a read that fails leaves the list in effect alone; the reason
+// the legacy clear-before-query is not mirrored lives in the
+// access-and-apikey-configuration-in-effect maintainer note.
 func (accesses *Accesses) read(ctx context.Context) (domain.Accesses, []string, error) {
 	rows, err := accesses.store.query(ctx, accessSelectQuery)
 	if err != nil {

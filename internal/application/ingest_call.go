@@ -87,7 +87,7 @@ type IngestCallHandler struct {
 	// writes holds one call being ingested at a time. Duplicate detection and auto-
 	// populate's create-once both depend on that serialization, and with watchers on
 	// their own goroutines and uploads answered on their own connections the rule has
-	// to be held on purpose — see the ingest serialization maintainer note.
+	// to be held on purpose — see the ingest-serialization maintainer note.
 	writes sync.Mutex
 }
 
@@ -188,10 +188,10 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 		return IngestCallResult{Outcome: IngestCallFailed}, err
 	}
 
-	// What this recording changed in the administrator's configuration, in the order the
-	// changes were made: auto-populate creates a system, a talkgroup or a unit because
-	// the recording named it, and an operator has to be able to find the recording that
-	// named it — see the auto-populate configuration log maintainer note.
+	// What this recording changed in the administrator's configuration, in the order
+	// the changes were made: auto-populate creates what the recording named it, and
+	// an operator has to be able to find the recording that named it — see the
+	// auto-populate-configuration-log maintainer note.
 	created := []string{}
 
 	logCreated := func(what string) {
@@ -483,9 +483,9 @@ var forwardSlots = make(chan struct{}, 8)
 
 // forwardCall re-posts a stored call to every downstream server whose scope covers it.
 // It runs on its own goroutine, bounded only by the forwarder's own timeout, so a slow
-// or unreachable downstream cannot hold up later calls — see the downstream forwarding
-// maintainer note. A forwarding failure is therefore a server-log line, not this use
-// case's failure: the call was already stored and delivered here.
+// or unreachable downstream cannot hold up later calls; the call was already stored
+// and delivered here, so a forwarding failure is a server-log line, not this use
+// case's failure — see the downstream-forwarding-from-ingest maintainer note.
 func (handler *IngestCallHandler) forwardCall(ctx context.Context, call domain.Call) {
 	go func() {
 		ctx = context.WithoutCancel(ctx)

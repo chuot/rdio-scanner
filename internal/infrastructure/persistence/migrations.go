@@ -1872,8 +1872,8 @@ const v6DirwatchesTable = "rdioScannerDirWatches"
 
 // migrateDirwatches mirrors `migrateDirwatches` in `server/migrations.go`: the lookup maps that
 // resolve a dirwatch's system and talkgroup are the legacy cross product scanned with the legacy's
-// leftover variables, and the three statements naming the v6 table now name it once, in the
-// spelling v6 created it with; see the dirwatch-lookups and dirwatch-table-name maintainer notes.
+// leftover variables, and the three statements naming the v6 table now name it once,
+// in the spelling v6 created it with; see the dirwatch-table-name maintainer note.
 func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateDirwatches", "dirwatches"
 

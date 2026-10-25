@@ -28,7 +28,7 @@ import (
 
 // Apikeys is the server's upload credential list, held the same way the access list is
 // held: loaded once, replaced by a save before it is stored, and read back after a save
-// that worked; see the access-and-apikey configuration-in-effect maintainer note.
+// that worked; see the access-and-apikey-configuration-in-effect maintainer note.
 type Apikeys struct {
 	store store
 

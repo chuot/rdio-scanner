@@ -300,7 +300,7 @@ func (saver configurationSaver) announce(ctx context.Context, section ConfigSect
 
 // reportFailure records a section the server could not store, followed by the failure's own
 // text: the error names the statement that failed, which is the part an operator needs —
-// see the configuration-save failure maintainer note.
+// see the configuration-save-failure maintainer note.
 func (saver configurationSaver) reportFailure(ctx context.Context, err error) {
 	saver.writeLog(ctx, domain.LogLevelError, domain.LogSourceConfig, fmt.Sprintf("the configuration could not be saved: %s", err))
 }
@@ -436,8 +436,8 @@ func (handler *UpdateConfigurationSectionHandler) Handle(ctx context.Context, cm
 		// The section the page submitted is in the store, and reading back the configuration
 		// that resulted is what failed. The page still gets the same 417 a refused section
 		// gets, so the distinction lives in the use case's answer and the server's log line:
-		// the section named as stored is one the server is now running with — see the
-		// configuration-save failure maintainer note.
+		// the section named as stored is one the server is now running with — see
+		// the configuration-save-failure maintainer note.
 		result.Outcome = ConfigurationSaveFailed
 
 		handler.saver.reportFailure(ctx, err)
