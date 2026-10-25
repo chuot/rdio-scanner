@@ -33,35 +33,27 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// uploadPath is the endpoint every Rdio Scanner server accepts a call upload on. The
-// downstream's configured address is a server address, not an endpoint address: the
-// legacy server appends this path to whatever the administrator typed.
+// uploadPath is the endpoint every Rdio Scanner server accepts a call
+// upload on; see the downstream-forwarding maintainer note.
 const uploadPath = "/api/call-upload"
 
-// requestTimeout is how long the legacy server waits for a downstream to take a call, and
-// it is the reason a deployment with an unreachable downstream stalls its forwarding for
-// that long rather than giving up on it.
+// requestTimeout is how long the legacy server waits for a downstream to
+// take a call; see the downstream-forwarding maintainer note.
 const requestTimeout = 30 * time.Second
 
-// Forwarder re-posts a recorded call to another Rdio Scanner server, over the same
-// call-upload endpoint an external application uploads to.
-//
-// The group and tag repositories are read for the two fields the wire carries as labels
-// rather than as identifiers — the talkgroup's group names and its tag name — which is how
-// the legacy resolves them too, from the configuration in effect rather than from anything
-// the call itself carries.
+// Forwarder re-posts a recorded call to another Rdio Scanner server,
+// over the same call-upload endpoint an external application uploads
+// to. The group and tag repositories are read for the two fields the
+// wire carries as labels rather than as identifiers; see the
+// downstream-forwarding maintainer note.
 type Forwarder struct {
 	groups ports.GroupRepository
 	tags   ports.TagRepository
 	client *http.Client
 }
 
-// NewForwarder builds the forwarder for a server that re-posts its calls to other servers.
-//
-// The client does not follow redirects: a downstream that answers 3xx
-// points the upload at an address the administrator did not name, and following it
-// would re-post the recording and the apikey there. The redirect is reported as the
-// failure it is.
+// NewForwarder builds the forwarder for a server that re-posts its calls
+// to other servers; see the downstream-forwarding maintainer note.
 func NewForwarder(groups ports.GroupRepository, tags ports.TagRepository) *Forwarder {
 	return &Forwarder{
 		groups: groups,
@@ -75,37 +67,33 @@ func NewForwarder(groups ports.GroupRepository, tags ports.TagRepository) *Forwa
 	}
 }
 
-// Forward posts one call to one downstream server and reports what that server said.
-//
-// Only a 200 is a success. Anything else is reported to the caller, which is what the
-// legacy does with it: a line in the server log naming the system, talkgroup, file, and
-// the downstream that refused it.
+// Forward posts one call to one downstream server and reports what that
+// server said; see the downstream-forwarding maintainer note.
 func (forwarder *Forwarder) Forward(ctx context.Context, target ports.DownstreamTarget, call domain.Call) error {
 	body, contentType, err := forwarder.uploadBody(ctx, target, call)
 	if err != nil {
 		return operationError(err)
 	}
 
-	// The legacy parses the configured address and appends the upload path to whatever
-	// path it already had, so an administrator who typed the full endpoint address gets
-	// the path twice. That is reproduced rather than tidied.
+	// The legacy's address parsing is reproduced rather than tidied: the
+	// upload path is appended to whatever path the address already has;
+	// see the downstream-forwarding maintainer note.
 	endpoint, err := url.Parse(target.URL)
 	if err != nil {
 		return operationError(err)
 	}
 
-	// The scheme is re-checked here: an address stored by an
-	// older server — before the apply-time rule — is read by this forwarder, and it is
-	// posted to only over http or https.
+	// The scheme is re-checked here, and an address is posted to only over
+	// http or https; see the downstream-forwarding maintainer note.
 	if endpoint.Scheme != "http" && endpoint.Scheme != "https" {
 		return operationError(fmt.Errorf("the downstream address %s must be an http or https address", target.URL))
 	}
 
 	endpoint.Path = path.Join(endpoint.Path, uploadPath)
 
-	// The legacy builds a fresh client per send and hands it no context, so a shutdown
-	// cannot interrupt a send in flight. The context is honored here instead; the timeout
-	// the legacy hard-codes is kept.
+	// The legacy's fresh per-send client with no context is not reproduced:
+	// the context is honored here, and the legacy's hard-coded timeout is
+	// kept; see the downstream-forwarding maintainer note.
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), body)
 	if err != nil {
 		return operationError(err)
@@ -121,9 +109,8 @@ func (forwarder *Forwarder) Forward(ctx context.Context, target ports.Downstream
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		// The answer is read out before the connection is handed back: a
-		// body left unread makes the connection unusable, and every later call to the
-		// same downstream pays for a fresh one.
+		// The answer is read out before the connection is handed back; see the
+		// downstream-forwarding maintainer note.
 		io.Copy(io.Discard, response.Body)
 
 		return operationError(fmt.Errorf("bad status: %s", response.Status))
@@ -132,11 +119,9 @@ func (forwarder *Forwarder) Forward(ctx context.Context, target ports.Downstream
 	return nil
 }
 
-// uploadBody builds the multipart upload the receiving server parses, in the order the
-// legacy writes the parts.
-//
-// The order is not what the receiver reads by — it reads parts by name — but it is what a
-// byte-for-byte comparison against the legacy server sees, so it is kept.
+// uploadBody builds the multipart upload the receiving server parses,
+// in the order the legacy writes the parts; see the downstream-forwarding
+// maintainer note.
 func (forwarder *Forwarder) uploadBody(ctx context.Context, target ports.DownstreamTarget, call domain.Call) (io.Reader, string, error) {
 	buf := bytes.Buffer{}
 
@@ -150,9 +135,9 @@ func (forwarder *Forwarder) uploadBody(ctx context.Context, target ports.Downstr
 		return nil, "", err
 	}
 
-	// The length of the recording, in seconds to the millisecond, and only when some
-	// source named it: a call whose length was never measured forwards no field at all,
-	// and the receiving server measures its own way.
+	// The length of the recording, in seconds to the millisecond, and only
+	// when some source named it; see the downstream-forwarding maintainer
+	// note.
 	if call.AudioLength > 0 {
 		if err := writeField(writer, "audioLength", audioLengthText(call.AudioLength)); err != nil {
 			return nil, "", err
@@ -229,19 +214,11 @@ func (forwarder *Forwarder) uploadBody(ctx context.Context, target ports.Downstr
 	return &buf, writer.FormDataContentType(), nil
 }
 
-// writeAudio writes the recording itself, under the part name the upload endpoint reads it
-// from and under the filename the call carries.
-//
-// The filename is written through the standard library's `CreateFormFile`, and what the
-// receiver sees is the standard library's escaping of it, not the call's own string: the
-// library strips any path from the name and escapes the characters a quoted
-// `Content-Disposition` cannot carry (Go's `escapeFilename` and `escapeQuotes` in
-// `mime/multipart/writer.go`). A filename with a `"` in it arrives at the downstream
-// quoted, not ending the header. This is pinned here, not hidden, because it is a
-// property of the wire format the server does not own and must not pretend to control:
-// the legacy server forwarded through this same library, so the escaping
-// the two servers put on the wire is byte-identical, and a receiver that parses the
-// header sees the same name from either.
+// writeAudio writes the recording itself, under the part name the upload
+// endpoint reads it from and under the filename the call carries. The
+// filename goes over through the standard library's form writer, so the
+// receiver sees the library's escaping of it rather than the call's own
+// string; see the downstream-forwarding maintainer note.
 func (forwarder *Forwarder) writeAudio(writer *multipart.Writer, call domain.Call) error {
 	part, err := writer.CreateFormFile("audio", call.AudioFilename)
 	if err != nil {
@@ -255,9 +232,9 @@ func (forwarder *Forwarder) writeAudio(writer *multipart.Writer, call domain.Cal
 	return nil
 }
 
-// writeTagLabel writes the talkgroup's tag label. The part is created whether or not the
-// tag is configured, which is what the legacy does: a talkgroup whose tag has been deleted
-// is forwarded with an empty tag name rather than without the field.
+// writeTagLabel writes the talkgroup's tag label. The part is created
+// whether or not the tag is configured; see the downstream-forwarding
+// maintainer note.
 func (forwarder *Forwarder) writeTagLabel(ctx context.Context, writer *multipart.Writer, call domain.Call) error {
 	part, err := writer.CreateFormField("talkgroupTag")
 	if err != nil {
@@ -279,9 +256,9 @@ func (forwarder *Forwarder) writeTagLabel(ctx context.Context, writer *multipart
 	return err
 }
 
-// groupLabels are the talkgroup's group names, in the order the talkgroup lists them,
-// joined the way the upload endpoint splits them. A group the configuration no longer has
-// is left out, as the legacy leaves it out.
+// groupLabels are the talkgroup's group names, in the order the
+// talkgroup lists them, joined the way the upload endpoint splits them;
+// see the downstream-forwarding maintainer note.
 func (forwarder *Forwarder) groupLabels(ctx context.Context, call domain.Call) (string, error) {
 	groups, err := forwarder.groups.AllGroups(ctx)
 	if err != nil {
@@ -302,14 +279,10 @@ func (forwarder *Forwarder) groupLabels(ctx context.Context, call domain.Call) (
 	return strings.Join(labels, ","), nil
 }
 
-// frequenciesOf is the frequency list as the legacy marshals it: the Go field names of its
-// own struct, not the wire names the upload endpoint reads.
-//
-// That is a defect, and it is reproduced rather than repaired. A call forwarded to
-// another Rdio Scanner server arrives with its frequencies and units named in a vocabulary
-// the receiving parser does not look for, so the quality measurements and the units heard
-// during the call are dropped on arrival. Repairing it changes what a receiving server
-// stores, which is the owner's call rather than this port's.
+// frequenciesOf is the frequency list as the legacy marshals it: the Go
+// field names of its own struct, not the wire names the upload endpoint
+// reads. That is a defect, reproduced rather than repaired; see the
+// downstream-forwarding maintainer note.
 func frequenciesOf(call domain.Call) any {
 	out := []map[string]any{}
 
@@ -357,9 +330,10 @@ func writeField(writer *multipart.Writer, name, value string) error {
 	return err
 }
 
-// audioLengthText writes a recording's length as the count of seconds it is, to the
-// millisecond — 3.500 for three and a half seconds — the same spelling the upload field
-// `audioLength` names on the way in and the call payload names on the way out.
+// audioLengthText writes a recording's length as the count of seconds it
+// is, to the millisecond, 3.500 for three and a half seconds, the same
+// spelling the `audioLength` upload field names on the way in; see the
+// downstream-forwarding maintainer note.
 func audioLengthText(length time.Duration) string {
 	return strconv.FormatFloat(float64(length)/float64(time.Second), 'f', 3, 64)
 }

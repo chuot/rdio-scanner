@@ -143,9 +143,9 @@ func configuredGroupsAndTags() (*fakes.Groups, *fakes.Tags) {
 		}}
 }
 
-// TestForwardPostsTheCallToTheDownstreamsUploadEndpoint is the whole shape of a forwarded
-// call: a multipart upload to the receiving server's call-upload endpoint, with the apikey
-// among the form fields.
+// TestForwardPostsTheCallToTheDownstreamsUploadEndpoint is the whole
+// shape of a forwarded call: a multipart upload to the receiving
+// server's call-upload endpoint, with the apikey among the form fields.
 func TestForwardPostsTheCallToTheDownstreamsUploadEndpoint(t *testing.T) {
 	received := &receivedUpload{}
 	server := newUploadServer(t, received)
@@ -235,9 +235,9 @@ func TestForwardWritesEveryPartInTheOrderTheLegacyWritesThem(t *testing.T) {
 	}
 }
 
-// The length travels with the recording it describes, and only when some source named it:
-// a call whose length was never measured forwards no `audioLength` field at all, and the
-// receiving server measures its own way — the forwarder invents no zero-second recording.
+// A call whose length was never measured forwards no `audioLength`
+// field at all, and the receiving server measures its own way: the
+// forwarder invents no zero-second recording.
 func TestForwardLeavesOutTheAudioLengthWhenTheCallHasNone(t *testing.T) {
 	received := &receivedUpload{}
 	server := newUploadServer(t, received)
@@ -291,9 +291,9 @@ func TestForwardAppendsTheUploadPathToTheConfiguredAddress(t *testing.T) {
 	}
 }
 
-// TestForwardAppendsTheUploadPathEvenWhenTheAddressAlreadyNamesIt pins a legacy quirk an
-// administrator can actually hit: a downstream configured with the full endpoint address
-// gets the path appended a second time, and the receiving server answers 404.
+// TestForwardAppendsTheUploadPathEvenWhenTheAddressAlreadyNamesIt pins
+// a legacy quirk an administrator can actually hit: the full endpoint
+// address gets the path appended a second time, and the server 404s.
 func TestForwardAppendsTheUploadPathEvenWhenTheAddressAlreadyNamesIt(t *testing.T) {
 	received := &receivedUpload{}
 	server := newUploadServer(t, received)
@@ -347,9 +347,8 @@ func TestForwardReportsANonSuccessStatusAsAFailure(t *testing.T) {
 	}
 }
 
-// TestForwardReportsAnUnreachableDownstreamAsAFailure is the log line a deployment with a
-// downstream that is down produces on every call. The address is one that was a server a
-// moment ago and is not one now, so the failure is the connection the deployment gets.
+// TestForwardReportsAnUnreachableDownstreamAsAFailure is the log line a
+// deployment with a downstream that is down produces on every call.
 func TestForwardReportsAnUnreachableDownstreamAsAFailure(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	address := server.URL
@@ -392,10 +391,10 @@ func TestForwardReportsAConfiguredAddressThatIsNotAnAddressAsAFailure(t *testing
 	}
 }
 
-// TestForwardNamesTheTalkgroupsGroupsByLabelAndSkipsAGroupThatIsGone is the half of the
-// wire that carries labels rather than identifiers: the receiving server has no idea what
-// group 2 is, so the sender resolves it, and a group the configuration no longer has is
-// left out rather than sent as a number.
+// TestForwardNamesTheTalkgroupsGroupsByLabelAndSkipsAGroupThatIsGone:
+// the receiving server has no idea what group 2 is, so the sender
+// resolves it, and a group the configuration no longer has is left out
+// rather than sent as a number.
 func TestForwardNamesTheTalkgroupsGroupsByLabelAndSkipsAGroupThatIsGone(t *testing.T) {
 	received := &receivedUpload{}
 	server := newUploadServer(t, received)
@@ -428,10 +427,10 @@ func TestForwardNamesTheTalkgroupsGroupsByLabelAndSkipsAGroupThatIsGone(t *testi
 	}
 }
 
-// TestForwardLeavesTheTagFieldPresentWhenTheTalkgroupHasNoTagConfigured is the other half
-// of the same legacy shape: the field is written whether or not there is a tag to name, so
-// the receiving server sees a call with no tag rather than a call that says nothing about
-// tags.
+// TestForwardLeavesTheTagFieldPresentWhenTheTalkgroupHasNoTagConfigured
+// pins the legacy shape: the field is written whether or not there is a
+// tag to name, so the receiving server sees a call with no tag rather
+// than a call that says nothing about tags.
 func TestForwardLeavesTheTagFieldPresentWhenTheTalkgroupHasNoTagConfigured(t *testing.T) {
 	received := &receivedUpload{}
 	server := newUploadServer(t, received)
@@ -460,9 +459,10 @@ func TestForwardLeavesTheTagFieldPresentWhenTheTalkgroupHasNoTagConfigured(t *te
 	}
 }
 
-// TestForwardReportsTheCallInstantTheWayTheUploadEndpointReadsIt pins the two fields that
-// carry the same instant in the two vocabularies the endpoint accepts: the pre-v7 name as
-// an RFC 3339 string, and the current name as milliseconds.
+// TestForwardReportsTheCallInstantTheWayTheUploadEndpointReadsIt pins
+// the two fields that carry the same instant in the two vocabularies
+// the endpoint accepts: the pre-v7 name as an RFC 3339 string, and the
+// current name as milliseconds.
 func TestForwardReportsTheCallInstantTheWayTheUploadEndpointReadsIt(t *testing.T) {
 	received := &receivedUpload{}
 	server := newUploadServer(t, received)
@@ -491,13 +491,12 @@ func TestForwardReportsTheCallInstantTheWayTheUploadEndpointReadsIt(t *testing.T
 	}
 }
 
-// TestForwardMarshalsFrequenciesAndUnitsWithTheLegacyFieldNames pins the legacy field names: the sender writes
-// the Go field names of its own structs, and the receiving upload endpoint reads `dbm`,
-// `errorCount`, `freq`, `pos`, `spikeCount`, `id`, `label`, and `offset`. A forwarded call
-// therefore arrives with its quality measurements and its units dropped.
-//
-// This is reproduced rather than repaired. Repairing it changes what a receiving server
-// stores for every forwarded call, which is the owner's call.
+// TestForwardMarshalsFrequenciesAndUnitsWithTheLegacyFieldNames pins
+// the collision: the sender writes the Go field names of its own
+// structs, and the upload endpoint reads `dbm`, `errorCount`, `freq`,
+// `pos`, `spikeCount`, `id`, `label`, and `offset`, so a forwarded call
+// arrives with its quality measurements and its units dropped. This is
+// reproduced rather than repaired.
 func TestForwardMarshalsFrequenciesAndUnitsWithTheLegacyFieldNames(t *testing.T) {
 	received := &receivedUpload{}
 	server := newUploadServer(t, received)
@@ -559,9 +558,10 @@ func TestForwardSendsEmptyCollectionsAsEmptyArrays(t *testing.T) {
 	}
 }
 
-// TestForwardHonoursTheCallersContext is the deliberate departure from the legacy send,
-// which builds its own client and cannot be interrupted: a server shutting down does not
-// wait out the full request timeout for every downstream it forwards to.
+// TestForwardHonoursTheCallersContext is the deliberate departure from
+// the legacy send, which builds its own client and cannot be
+// interrupted: a shutting-down server does not wait out the full
+// request timeout for every downstream it forwards to.
 func TestForwardHonoursTheCallersContext(t *testing.T) {
 	release := make(chan struct{})
 	defer close(release)
@@ -626,10 +626,10 @@ func containsName(names []string, name string) bool {
 	return false
 }
 
-// TestForwardRefusesAnAddressThatIsNotAnHttpAddress:
-// the forwarder re-checks the scheme at forward time, because an address stored by an
-// older server is read by this one. The refusal names the address and the schemes it
-// must be, and costs the addressed server nothing.
+// TestForwardRefusesAnAddressThatIsNotAnHttpAddress: the forwarder
+// re-checks the scheme at forward time, because an address stored by an
+// older server is read by this one. The refusal names the address and
+// the schemes it must be, and costs the addressed server nothing.
 func TestForwardRefusesAnAddressThatIsNotAnHttpAddress(t *testing.T) {
 	requests := 0
 
@@ -664,10 +664,10 @@ func TestForwardRefusesAnAddressThatIsNotAnHttpAddress(t *testing.T) {
 	}
 }
 
-// TestForwardReportsARedirectAsAFailureWithoutReplayingTheBody: a downstream that answers 301 points the upload somewhere else, and
-// today the client follows it — the recording and the apikey are re-posted to whatever
-// address the redirect names. The redirect is a failure the log names, and the body is
-// handed to nobody else.
+// TestForwardReportsARedirectAsAFailureWithoutReplayingTheBody: a
+// downstream that answers 301 points the upload somewhere else, and
+// today the client follows it. The redirect is a failure the log names,
+// and the body is handed to nobody else.
 func TestForwardReportsARedirectAsAFailureWithoutReplayingTheBody(t *testing.T) {
 	replayed := 0
 
@@ -712,11 +712,10 @@ func TestForwardReportsARedirectAsAFailureWithoutReplayingTheBody(t *testing.T) 
 	}
 }
 
-// TestForwardDrainsTheBodyOfARefusedUpload: a refused upload's
-// body is read out before the connection is handed back. A body left unread makes the
-// connection unusable, and every later call to the same downstream pays for a fresh
-// connection — a deployment with a refusing downstream turns its call log into a
-// connection storm.
+// TestForwardDrainsTheBodyOfARefusedUpload: a refused upload's body is
+// read out before the connection is handed back, or every later call to
+// the same downstream pays for a fresh connection - a deployment with a
+// refusing downstream turns its call log into a connection storm.
 func TestForwardDrainsTheBodyOfARefusedUpload(t *testing.T) {
 	connections := 0
 
