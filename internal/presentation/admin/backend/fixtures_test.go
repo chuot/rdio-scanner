@@ -17,12 +17,10 @@ package backend
 
 import "testing"
 
-// capturedAnswers are the answers the legacy server put on the wire, recorded byte for byte and keyed
-// by the name the test asks for them under. They live in the package that consumes them, which is what
-// the requirement asks for: no fixture directory, no manifest, and nothing outside the test that proves it.
-//
-// The captures were taken from a legacy server answering the scenarios this package drives; the
-// divergences this package states against them are approved divergences.
+// capturedAnswers are the answers the legacy server put on the wire, recorded byte for
+// byte and keyed by the name a test asks for them under, held in the package that
+// consumes them: no fixture directory and no manifest. The divergences this package
+// states against them are approved divergences.
 var capturedAnswers = map[string]string{
 	"rest-login.json": `{"passwordNeedChange":true,"token":"<token>"}`,
 	"rest-logout-status.txt": `401
@@ -49,9 +47,9 @@ var capturedAnswers = map[string]string{
 	"adminws-config.json": `{"access":[],"apikeys":[{"disabled":false,"id":1,"ident":"Capture open","key":"capture-apikey-open","systems":"*"},{"disabled":false,"id":2,"ident":"Capture scoped","key":"capture-apikey-scoped","systems":[{"id":10001,"talkgroups":"*"}]}],"dirwatch":[],"downstreams":[{"apikey":"capture-apikey-open","disabled":true,"id":1,"order":1,"systems":[{"id":10001,"talkgroups":[1514000]}],"url":"http://127.0.0.1:39999/api/call-upload"}],"groups":[{"id":1,"label":"Air"},{"id":2,"label":"EMS"},{"id":3,"label":"Fire"},{"id":4,"label":"Interop"},{"id":5,"label":"Law"},{"id":6,"label":"Unknown"},{"id":7,"label":"Ground"},{"id":8,"label":"Ground"}],"options":{"audioConversion":0,"autoPopulate":false,"branding":"Capture Dispatch","disableDuplicateDetection":true,"email":"dispatch@example.com","keypadBeeps":"uniden","maxClients":200,"pruneDays":7,"showListenersCount":false,"sortTalkgroups":true},"systems":[{"autoPopulate":false,"id":1,"label":"Grand Metro","order":1,"sites":[{"id":1,"label":"Metro East","siteRef":101,"systemId":0},{"id":2,"label":"Metro West","siteRef":102,"systemId":0}],"systemRef":10001,"talkgroups":[{"groupIds":[1],"id":3,"label":"Air","name":"Air 1","tagId":1,"talkgroup":1,"talkgroupRef":1514200},{"frequency":151400000,"groupIds":[7],"id":1,"label":"Ground","name":"Dispatch 1","tagId":3,"talkgroup":2,"talkgroupRef":1514000,"type":"Aggregate"},{"groupIds":[3,7],"id":2,"label":"Ground","name":"Dispatch 2","tagId":4,"talkgroup":3,"talkgroupRef":1514100}],"units":[{"id":1001,"label":"Car 1","unitRef":1001},{"id":1002,"label":"Car 2","unitRef":1002}]},{"autoPopulate":false,"id":2,"label":"Harbour","order":2,"sites":[],"systemRef":10002,"talkgroups":[{"groupIds":[6],"id":4,"label":"Marine","name":"Marine 16","tagId":9,"talkgroup":1,"talkgroupRef":1515000}],"units":[]}],"tags":[{"id":1,"label":"Air Traffic Control"},{"id":2,"label":"Emergency "},{"id":3,"label":"Fire Dispatch"},{"id":4,"label":"Fire Tac"},{"id":5,"label":"Fire Talk"},{"id":6,"label":"Interop"},{"id":7,"label":"Security"},{"id":8,"label":"Service"},{"id":9,"label":"Untagged"},{"id":10,"label":"Capture Tag"},{"id":11,"label":"Capture Tag"}],"version":"8.0.0"}`,
 }
 
-// capturedAnswer hands back the recorded answer under the name a test asks for it under, and stops
-// when that name was never recorded: a test that asks for a capture this package does not hold has
-// changed, and it would rather stop than quietly compare against nothing.
+// capturedAnswer hands back the recorded answer under the name a test asks for it under,
+// and stops when that name was never recorded: a test asking for a capture this package
+// does not hold would rather stop than quietly compare against nothing.
 func capturedAnswer(t *testing.T, name string) string {
 	t.Helper()
 
