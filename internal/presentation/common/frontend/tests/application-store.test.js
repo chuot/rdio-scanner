@@ -109,11 +109,9 @@ describe('application/store — event bus parity with legacy RdioScannerEvent', 
 });
 
 describe('application/store — notification snapshot', () => {
-    // A component that listens to the rows of the system it is showing moves that
-    // binding while it is being notified: the notification that made it re-render is
-    // the one that resolves the new system. It must not be entered again by the
-    // subscription it took inside that notification, and a subscription it released
-    // there must not be entered by it either.
+    // The notification walks the subscriptions as they were at the start: a
+    // component moving its own binding mid-notify must not be entered by the
+    // subscription it took there, nor by one it released.
     it('does not enter a subscription taken while the notification is running', () => {
         const store = createStore({ map: null, panel: null });
         const entered = [];

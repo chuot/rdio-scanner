@@ -155,10 +155,9 @@ describe('domain/config — admin round-trip', () => {
         assert.deepEqual(merged.groups, baseline.groups);
     });
 
-    // The administration sections mark a row the operator added and has not saved, so the row keeps
-    // its open panel and its revealed field messages across a rebuild. The mark is the client's own
-    // bookkeeping, and the configuration the administrator saves is the product's data: a mark that
-    // rode out on a save would be stored, and read back forever.
+    // The unsaved-row mark is the client's own bookkeeping, keeping a row's
+    // open panel and revealed messages across a rebuild. It must not ride out
+    // on a save: the saved configuration is the product's data.
     it('drops the mark a client row carries through the whole-config round-trip', () => {
         const clientMark = Symbol('the key a client puts on a row it added');
         const working = createAdminWorkingCopy(baseline);
