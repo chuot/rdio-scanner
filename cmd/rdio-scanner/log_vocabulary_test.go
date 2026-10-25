@@ -256,8 +256,8 @@ type logSourceChoice struct {
 	label string
 }
 
-// the select's choices in the client's source are pinned to the vocabulary by
-// reading the literal, not by parsing JavaScript
+// logSourceChoices reads the select's choices from the client's source as a
+// literal, not by parsing it
 // see the log-vocabulary-client-list maintainer note.
 func logSourceChoices(t *testing.T, source string) []logSourceChoice {
 	t.Helper()
