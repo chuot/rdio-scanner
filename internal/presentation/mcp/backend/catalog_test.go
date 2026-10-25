@@ -24,12 +24,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// The inventory is checked against what the surface actually registers, in both directions, and
-// against the rule that this surface reaches the deployment over its documented entry points and
-// never over a socket.
+// The inventory is checked against what the surface registers, both directions,
+// and against the rule that the surface reaches the deployment over documented
+// entry points, never over a socket.
 
-// registered is every capability the surface registered, named the way the protocol names it, with
-// the shape the client reads it as.
+// registered is every capability the surface registered, named as the protocol
+// names it and shaped as the client reads it.
 type registered struct {
 	tools     []string
 	resources []string
@@ -97,10 +97,9 @@ func TestEveryRegisteredCapabilityIsInventoried(t *testing.T) {
 	assertSame(t, "resource templates", want.templates, got.templates)
 }
 
-// TestEachTierIsHandedOnlyTheCapabilitiesItsReachOpens is the tier rule as an assistant meets it:
-// the read-only caller's catalog holds the read-only capabilities and nothing else, so it never has
-// to discover its own reach by being refused. The administrator's catalog is the whole inventory,
-// which the test above compares against it.
+// TestEachTierIsHandedOnlyTheCapabilitiesItsReachOpens: a read-only caller's
+// catalog holds only read-only capabilities, so it never discovers its reach by
+// being refused; the administrator's catalog is the whole inventory.
 func TestEachTierIsHandedOnlyTheCapabilitiesItsReachOpens(t *testing.T) {
 	s := newCallerSession(t, readScoped())
 
@@ -151,9 +150,9 @@ func TestEveryInventoriedCapabilityDeclaresWhoAndWhatItDoes(t *testing.T) {
 				t.Fatalf("%s names %q, which is not a method and a path", capability.Name, endpoint)
 			}
 
-			// A socket is not an entry point this surface reaches. The listener and administrator
-			// sockets are reserved, and a capability built on one would reach the deployment past
-			// the documented boundary.
+			// A socket is not an entry point this surface reaches: the listener and
+			// administrator sockets are reserved, and a capability on one would reach
+			// the deployment past the documented boundary.
 			for _, reserved := range []string{"ws://", "wss://", "websocket", "socket"} {
 				if strings.Contains(strings.ToLower(endpoint), reserved) {
 					t.Fatalf("%s names %q, which is a socket and not a documented entry point",
@@ -164,19 +163,18 @@ func TestEveryInventoriedCapabilityDeclaresWhoAndWhatItDoes(t *testing.T) {
 	}
 }
 
-// TestNoCapabilityPathReachesTheListenerSocket is the structural proof: the surface's own import
-// closure — the code a capability can actually call — names no listener or administrator
-// presentation package. Nothing this surface can call is a socket handler, and nothing it can call
-// is another presentation surface at all. The dependency rule is the guarantee; this test keeps it
-// from being quietly broken by the next capability added.
+// TestNoCapabilityPathReachesTheListenerSocket: the surface's import closure
+// names no listener or administrator presentation package, so no capability
+// can call a socket handler or another surface. The dependency rule is the
+// guarantee; this test pins it for the next capability added.
 func TestNoCapabilityPathReachesTheListenerSocket(t *testing.T) {
 	for _, line := range importClosure(t, ".") {
 		if !strings.HasPrefix(line, "rdio-scanner/internal/presentation/") {
 			continue
 		}
 
-		// The listener and administrator surfaces are the sockets. A capability reaching them
-		// would reach the deployment past its documented boundary.
+		// The listener and administrator surfaces are the sockets, reached past the
+		// documented boundary.
 		for _, reserved := range []string{
 			"rdio-scanner/internal/presentation/scanner",
 			"rdio-scanner/internal/presentation/admin",
@@ -186,8 +184,8 @@ func TestNoCapabilityPathReachesTheListenerSocket(t *testing.T) {
 			}
 		}
 
-		// And it reaches no surface sideways: this surface is built from the use cases, over the
-		// stores, and the only presentation code it uses is its own and the shared address reading.
+		// Nothing is reached sideways either: the surface is built from the use cases over
+		// the stores, using no presentation code but its own and the address reading.
 		if line != "rdio-scanner/internal/presentation/mcp/backend" &&
 			!strings.HasPrefix(line, "rdio-scanner/internal/presentation/common/") {
 			t.Fatalf("the surface depends on %s", line)
@@ -195,9 +193,9 @@ func TestNoCapabilityPathReachesTheListenerSocket(t *testing.T) {
 	}
 }
 
-// TestTheTestClosureReachesNoSocketSurface is the same rule over the tests: the suite that proves
-// the two stateless surfaces agree mounts the call history endpoints beside this one, which is a
-// documented dependency of the suite and not of the surface. The sockets stay out of both.
+// TestTheTestClosureReachesNoSocketSurface: the suite proving the two stateless
+// surfaces agree mounts the call history endpoints beside this one, a documented
+// dependency of the suite and not of the surface; the sockets stay out of both.
 func TestTheTestClosureReachesNoSocketSurface(t *testing.T) {
 	for _, line := range importClosure(t, "-test", ".") {
 		for _, reserved := range []string{
