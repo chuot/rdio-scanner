@@ -27,17 +27,17 @@ import (
 // versionURI is the resource an assistant reads to learn what deployment it is talking to.
 const versionURI = "rdio-scanner://version"
 
-// versionInfo is the shape the version resource carries. It is a DTO: the answer is shaped for the
-// question "what am I talking to", and it is not the configuration document.
+// versionInfo is the shape the version resource carries: a DTO answering
+// "what am I talking to", not the configuration document.
 type versionInfo struct {
 	Version string `json:"version"`
 
-	// Docker is the server's own reading of whether it is running in a container, the same answer the
-	// administrator's page reads.
+	// Docker is the server's own reading of whether it is running in a
+	// container, the same answer the administrator's page reads.
 	Docker bool `json:"docker"`
 
-	// PasswordNeedChange is the server telling the operator the default credential is still in place.
-	// An assistant reads this and acts on it with the operator in the loop.
+	// PasswordNeedChange is the server telling the operator the default
+	// credential is still in place.
 	PasswordNeedChange bool `json:"passwordNeedChange"`
 }
 
