@@ -36,16 +36,10 @@ import (
 	"rdio-scanner/internal/infrastructure/persistence"
 )
 
-// The composition root is the one place that decides whose copy of the server's log entries an operator
-// reads. A server running in a terminal says every entry it files out loud; a server the service manager
-// started says them to the manager's log and has nothing to say to a terminal. The hub and the listener
-// endpoint have no console of their own — everything they say about a connection is an entry in the server
-// log — so the only way to prove the wiring is to drive a real connection through the real server and read
-// the console the composition root handed it. A hub handed a log no operator ever reads would pass every
-// test in the hub's own package.
+// console-and-log copies: proves the composition root hands the hub and the
+// listener endpoint a log an operator actually reads.
 
-// TestAServerAnOperatorStartedSaysItsLogEntriesToTheTerminal is the copy of the log an operator running the
-// server in a terminal expects: every entry the server writes to its log view is said out loud as well.
+// a server in a terminal says every log entry it files out loud.
 func TestAServerAnOperatorStartedSaysItsLogEntriesToTheTerminal(t *testing.T) {
 	var terminal bytes.Buffer
 
@@ -67,18 +61,15 @@ func TestAServerAnOperatorStartedSaysItsLogEntriesToTheTerminal(t *testing.T) {
 			"wrote it", terminal.String())
 	}
 
-	// The stored copy is the sentence on its own. The level and the source belong to the rendering, not to
-	// what the log view holds, and an operator filtering the log view by subsystem must not have to know how
-	// the terminal prints it.
+	// the stored entry is the sentence alone; level and source belong to the
+	// rendering.
 	if !hasLogMessage(t, srv.db, message) {
 		t.Errorf("the log view does not hold the entry the server wrote")
 	}
 }
 
-// TestAServerTheServiceManagerStartedSaysItsLogEntriesToTheManager is the same server with a service manager
-// in front of it instead of a terminal: the entries go to the manager's log, at the level each entry is
-// filed under, and the terminal stays silent — which is what the legacy server does when it is running as a
-// service, and what an operator reading the service's own log expects to find.
+// a server the service manager started files entries to the manager and
+// stays silent on the terminal.
 func TestAServerTheServiceManagerStartedSaysItsLogEntriesToTheManager(t *testing.T) {
 	var terminal bytes.Buffer
 
@@ -106,16 +97,14 @@ func TestAServerTheServiceManagerStartedSaysItsLogEntriesToTheManager(t *testing
 		t.Errorf("the terminal holds %q, want a server running as a service to have nothing to say to one", terminal.String())
 	}
 
-	// The administrator's copy is the same either way: which operator copy was used changes who reads the
-	// line, not whether the line is in the log.
+	// the administrator's copy is the same either way.
 	if !hasLogMessage(t, srv.db, message) {
 		t.Errorf("the log view does not hold the entry the server wrote")
 	}
 }
 
-// TestTheServiceLogTakesEachEntryAtTheLevelItIsFiledUnder is the routing itself, including the entry filed
-// under a level the service manager has no word for: the legacy server's switch has no default case, so such
-// an entry reaches the log view and no operator's copy of it.
+// each entry reaches the manager's log at the level it is filed under,
+// including levels with no word for them.
 func TestTheServiceLogTakesEachEntryAtTheLevelItIsFiledUnder(t *testing.T) {
 	manager := &recordedServiceLogger{}
 
@@ -141,9 +130,7 @@ func TestTheServiceLogTakesEachEntryAtTheLevelItIsFiledUnder(t *testing.T) {
 	}
 }
 
-// TestAConnectionTheServerWouldNotTakeOverIsSaidOutLoud is the line the listener endpoint used to only
-// print, now stored as well: an operator reading the terminal and an operator reading the log view are told
-// about the same connection, in the shape each of them searches in.
+// a refused connection is said out loud and stored, not printed alone.
 func TestAConnectionTheServerWouldNotTakeOverIsSaidOutLoud(t *testing.T) {
 	var terminal bytes.Buffer
 
@@ -164,11 +151,8 @@ func TestAConnectionTheServerWouldNotTakeOverIsSaidOutLoud(t *testing.T) {
 	}
 }
 
-// TestWhatTheHubReportsAboutAListenerIsSaidOutLoud is the other half of the live feed's lines. The hub has no
-// console of its own: everything it says about a connection — a listener that joined, a frame it could not
-// read, a frame it could not write — is an entry in the server log, and the composition root is what says those
-// entries out loud. Driving a real listener through the real hub is what proves the wiring, because the hub
-// could be handed a log no operator ever reads and every test in the hub's own package would still pass.
+// hub lines about a listener reach the operator through the log the
+// composition root handed the hub.
 func TestWhatTheHubReportsAboutAListenerIsSaidOutLoud(t *testing.T) {
 	var terminal bytes.Buffer
 
@@ -188,9 +172,7 @@ func TestWhatTheHubReportsAboutAListenerIsSaidOutLoud(t *testing.T) {
 	}
 }
 
-// testServerUnderTheServiceManager is the server the composition root assembles when the service manager is
-// the one that started the program: the manager's log is the operator's copy, and the terminal the program
-// was started with has nothing to say.
+// the manager-started server: the manager's log is the operator's copy.
 func testServerUnderTheServiceManager(t *testing.T, out io.Writer, manager *recordedServiceLogger) *Server {
 	t.Helper()
 
@@ -207,9 +189,8 @@ func testServerUnderTheServiceManager(t *testing.T, out io.Writer, manager *reco
 	return srv
 }
 
-// The manager's log has three levels and a formatted form of each, and every one of them reports whether the
-// line got through. Nothing here cares: the server's log entries are the unformatted kind, and a line that
-// did not get through is not something the server can do anything about.
+// the manager's log has three formatted levels; none of them matter to
+// the server.
 type recordedServiceLogger struct {
 	mutex   sync.Mutex
 	levels  []string
@@ -286,12 +267,8 @@ func (manager *recordedServiceLogger) String() string {
 	return out
 }
 
-// TestTheOptionsSecretReportsAReadFailure: the signing secret
-// is read from the options when a token is made, and today a read that fails
-// answers with the empty string — the server then signs a session token with an
-// empty key and reports the login as a success, telling the operator nothing. The
-// seam reports the failure, Issue fails beside it, and the login handler's
-// existing failure report is the one log entry the operator reads.
+// a failed read of the options signing secret is reported, not swallowed
+// as the empty string.
 func TestTheOptionsSecretReportsAReadFailure(t *testing.T) {
 	db, err := persistence.Open(persistence.Settings{Dialect: persistence.DialectSqlite, FilePath: filepath.Join(t.TempDir(), "rdio-scanner.db")})
 	if err != nil {
@@ -314,12 +291,9 @@ func TestTheOptionsSecretReportsAReadFailure(t *testing.T) {
 	}
 }
 
-// TestARequestThatNamesItsStatusThenWritesItsBodyKeepsEveryByte:
-// a content endpoint answers the way `http.ServeContent` answers — the status
-// first, then the bytes, in as many writes as the content needs. The deadline's
-// writer treats the first write as the answer and drops what follows, which
-// silently truncates every such endpoint to an empty body: the recording is
-// announced with its length and delivered as nothing.
+// a ServeContent-style endpoint keeps every byte behind the deadline
+// writer.
+// see the request-and-stream-deadline-constants maintainer note.
 func TestARequestThatNamesItsStatusThenWritesItsBodyKeepsEveryByte(t *testing.T) {
 	handler := withRequestDeadline(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "audio/wav")
@@ -346,20 +320,16 @@ func TestARequestThatNamesItsStatusThenWritesItsBodyKeepsEveryByte(t *testing.T)
 	}
 }
 
-// TestARequestWhoseWorkBlocksIsAnsweredWithAFailureByTheDeadline:
-// the socket timeouts bound the socket, not the work — a handler blocked on a
-// database that does not answer holds the request open, and the administrator's
-// browser sits waiting with no answer at all. The deadline gives every request a
-// context that expires, and a request whose work outlives the deadline is answered
-// with a failure the administrator can read.
+// a blocked handler is answered with a failure once its work outlives the
+// request deadline.
+// see the request-and-stream-deadline-constants maintainer note.
 func TestARequestWhoseWorkBlocksIsAnsweredWithAFailureByTheDeadline(t *testing.T) {
 	release := make(chan struct{})
 	t.Cleanup(func() { close(release) })
 
 	handler := withRequestDeadline(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// The repository behind this one answers a minute later; the
-		// cancellation the deadline brings is the work's problem to notice,
-		// and today it never arrives.
+		// the repository answers a minute later; the deadline's cancellation is
+		// the work's to notice.
 		select {
 		case <-time.After(time.Minute):
 		case <-release:
@@ -389,27 +359,15 @@ func TestARequestWhoseWorkBlocksIsAnsweredWithAFailureByTheDeadline(t *testing.T
 	}
 }
 
-// TestTheRequestDeadlineIsTwentyFiveSeconds: the bound is
-// twenty-five seconds — inside the thirty-second socket timeouts, so the request
-// is answered with a failure the administrator can read, not a socket that goes
-// silent.
+// the request deadline is twenty-five seconds.
+// see the request-and-stream-deadline-constants maintainer note.
 func TestTheRequestDeadlineIsTwentyFiveSeconds(t *testing.T) {
 	if got, want := requestDeadline, 25*time.Second; got != want {
 		t.Errorf("request deadline = %v, want %v: inside the socket timeouts, so the answer is a readable failure", got, want)
 	}
 }
 
-// TestTheModelContextProtocolSubtreeIsBoundedByItsOwnDeadline: the assistant's endpoint rides the
-// server's routes, and the server's bound is the administrator's — 25 seconds, chosen to answer a
-// request blocked on a database before the socket goes silent. Two kinds of work on the assistant's
-// endpoint legitimately outlive that: a composite capability that runs several queries over a full
-// deployment, and the session's own stream, which stays open for the life of the session. A bound
-// chosen for a request that answers in a few seconds cuts both of them off. The routes are therefore
-// hung as two subtrees with two bounds: the assistant's endpoint carries the stream bound, and every
-// other route keeps the request bound.
-//
-// The bounds here are the composition root's own, scaled down by the same factor, so the test watches
-// both of them fire in the time a test has. The numbers themselves are the test below.
+// the mcp subtree rides its own stream bound on separate route subtrees.
 func TestTheModelContextProtocolSubtreeIsBoundedByItsOwnDeadline(t *testing.T) {
 	release := make(chan struct{})
 
@@ -421,8 +379,8 @@ func TestTheModelContextProtocolSubtreeIsBoundedByItsOwnDeadline(t *testing.T) {
 
 	blocked := func(answer string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			// The repository behind both handlers answers a minute later; the cancellation the
-			// bound brings is the work's problem to notice, and today it never arrives.
+			// both handlers sit behind the one-minute repository; the bound's
+			// cancellation is theirs to notice.
 			select {
 			case <-time.After(time.Minute):
 			case <-release:
@@ -446,8 +404,10 @@ func TestTheModelContextProtocolSubtreeIsBoundedByItsOwnDeadline(t *testing.T) {
 
 	defer server.Close()
 
-	// The assistant's endpoint is bounded by the stream bound and not by the request bound: the
-	// request is still working well past the request bound, and is refused only at its own.
+	// the assistant endpoint refuses at the stream bound, not the request
+	// bound.
+	// see the request-and-stream-deadline-constants maintainer note.
+	// see the request-and-stream-deadline-constants maintainer note.
 	refused := awaitTheAnswer(t, startTheRequest(server.URL+"/mcp"))
 
 	if refused.status != http.StatusServiceUnavailable {
@@ -468,9 +428,10 @@ func TestTheModelContextProtocolSubtreeIsBoundedByItsOwnDeadline(t *testing.T) {
 			refused.elapsed, 10*streamBound)
 	}
 
-	// A request on the assistant's endpoint that outlives the request bound is not what the request
-	// bound is for: it is still working when the administrator's request is refused, and it finishes
-	// with its own answer.
+	// a request past the request bound keeps working and answers with its own
+	// result.
+	// see the request-and-stream-deadline-constants maintainer note.
+	// see the request-and-stream-deadline-constants maintainer note.
 	assistant := startTheRequest(server.URL + "/mcp")
 
 	administered := awaitTheAnswer(t, startTheRequest(server.URL+"/api/admin/alerts"))
@@ -512,10 +473,7 @@ func TestTheModelContextProtocolSubtreeIsBoundedByItsOwnDeadline(t *testing.T) {
 	}
 }
 
-// TestTheStreamDeadlineIsMateriallyLargerThanTheRequestDeadline: the bound the assistant's endpoint
-// carries is the one its work needs. A composite capability runs several queries, and the session's
-// stream lives for the life of the session; a bound within a few seconds of the administrator's
-// request bound would cut off the very work it was added to allow.
+// the stream bound is materially larger than the request bound.
 func TestTheStreamDeadlineIsMateriallyLargerThanTheRequestDeadline(t *testing.T) {
 	if streamDeadline <= 10*requestDeadline {
 		t.Fatalf("the stream bound is %v and the request bound is %v: the assistant's endpoint needs a "+
@@ -524,8 +482,8 @@ func TestTheStreamDeadlineIsMateriallyLargerThanTheRequestDeadline(t *testing.T)
 	}
 }
 
-// startTheRequest issues a request and leaves it running: the point of these tests is what a request
-// is doing while another one is being answered.
+// startTheRequest issues a request and leaves it running.
+// see the request-and-stream-deadline-constants maintainer note.
 func startTheRequest(url string) chan requestAnswer {
 	running := make(chan requestAnswer, 1)
 
@@ -554,8 +512,8 @@ func startTheRequest(url string) chan requestAnswer {
 	return running
 }
 
-// requestAnswer is what one request answered, and how long it took to answer: the elapsed time is
-// what a bound is measured by.
+// requestAnswer is what a request answered and how long it took.
+// see the request-and-stream-deadline-constants maintainer note.
 type requestAnswer struct {
 	status  int
 	body    string
@@ -564,8 +522,8 @@ type requestAnswer struct {
 	err error
 }
 
-// awaitTheAnswer waits for a request that is running to answer. The bound under test is a fraction of
-// a second; a minute is the point at which the test says the bound did not fire at all.
+// awaitTheAnswer waits for the running request; a minute means the bound
+// never fired.
 func awaitTheAnswer(t *testing.T, running chan requestAnswer) requestAnswer {
 	t.Helper()
 
@@ -584,11 +542,8 @@ func awaitTheAnswer(t *testing.T, running chan requestAnswer) requestAnswer {
 	}
 }
 
-// TestTheHourlyPruningRunsUnderAContextWithADeadline: the
-// hourly retention pass runs on the server's own schedule with nobody waiting
-// for its answer, and a pass that blocks on a database that does not answer
-// holds the schedule and writes no report. The pass runs under a context with a
-// deadline.
+// the hourly retention pass runs under a context with a deadline.
+// see the request-and-stream-deadline-constants maintainer note.
 func TestTheHourlyPruningRunsUnderAContextWithADeadline(t *testing.T) {
 	scheduler := fakes.NewScheduler()
 
@@ -612,8 +567,8 @@ func TestTheHourlyPruningRunsUnderAContextWithADeadline(t *testing.T) {
 	}
 }
 
-// recordedPruning is the retention pass as the schedule sees it: it records the
-// context it was run under, which is where the deadline is visible.
+// recordedPruning keeps the context the pass ran under.
+// see the request-and-stream-deadline-constants maintainer note.
 type recordedPruning struct {
 	calls int
 	ctx   context.Context

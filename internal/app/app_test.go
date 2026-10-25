@@ -26,16 +26,13 @@ import (
 	"rdio-scanner/internal/infrastructure/persistence"
 )
 
-// The configuration is the whole of what a deployment says about itself, and the composition root is the
-// only thing that reads it. Two facts about it belong here: the paths, which the server resolves against
-// the directory it was installed in, and the backend names, which are the strings an ini file and a
-// command line carry. The third thing this file proves is the one mode the composition root runs that is
-// not a server: setting the administrator's credential from a script, which opens the database, writes
-// the whole configuration, and closes it again.
+// The configuration is the whole of what a deployment says about itself,
+// and the composition root is the only thing that reads it: the paths,
+// resolved against the installation directory, the backend names an ini
+// file and a command line carry, and the credential-setting script mode.
 
-// Every path the server uses is resolved against the base directory, and an absolute path is the path the
-// operator gave. A relative path joined twice is a file nobody can find; an absolute path joined onto the
-// base directory is a file nobody can find.
+// TestTheConfigurationResolvesEveryPathAgainstTheBaseDirectory joins
+// relative paths onto the base directory and leaves absolute paths alone.
 func TestTheConfigurationResolvesEveryPathAgainstTheBaseDirectory(t *testing.T) {
 	config := Config{
 		BaseDir:     "/srv/rdio",
@@ -62,10 +59,9 @@ func TestTheConfigurationResolvesEveryPathAgainstTheBaseDirectory(t *testing.T) 
 	}
 }
 
-// The folder the server writes the programs it carries into is not a path the operator configures:
-// it is the server's own folder in the system's temp directory, disposable by rule — a host that
-// clears its temp dir costs the server nothing beyond writing the programs out again at the next
-// startup — and shared with the probe files the length probe writes and removes.
+// TestTheFfmpegFolderIsTheServersOwnInTempDirectory puts the carried
+// programs in the server's own folder in the system temp directory.
+// see the ffmpeg-carried-by-the-server-and-hosted-by-the-operator maintainer note.
 func TestTheFfmpegFolderIsTheServersOwnInTempDirectory(t *testing.T) {
 	config := Config{BaseDir: "/srv/rdio"}
 
@@ -76,9 +72,9 @@ func TestTheFfmpegFolderIsTheServersOwnInTempDirectory(t *testing.T) {
 	}
 }
 
-// The backend names are part of the configuration contract: they appear in rdio-scanner.ini and on the
-// command line of deployed instances. A name the server cannot open a database under is a configuration
-// it refuses to start with.
+// TestTheDatabaseBackendsAreTheNamesAConfigurationCarries pins the
+// backend names an ini file and a command line carry, which the server
+// refuses to start without.
 func TestTheDatabaseBackendsAreTheNamesAConfigurationCarries(t *testing.T) {
 	for _, name := range []string{DbTypeSqlite, DbTypeMariadb, DbTypeMysql, DbTypePostgresql} {
 		if _, err := dialectOf(name); err != nil {
@@ -91,11 +87,9 @@ func TestTheDatabaseBackendsAreTheNamesAConfigurationCarries(t *testing.T) {
 	}
 }
 
-// The -admin_password mode is the way a deployment sets its credential from a script, and the way an
-// operator recovers a server whose credential was lost. It writes the whole configuration, which is also
-// what stores the signing secret the options read generated, and it says in the log view what it did. The
-// credential the server ships with is one the administration interface insists on replacing, so the mode marks it
-// as needing replacement and marks a credential the operator chose as not needing one.
+// TestChangeAdminPasswordStoresTheCredentialAndSaysSoInTheLogView stores
+// the chosen credential and says so in the log view, and it marks the
+// shipped default as needing replacement.
 func TestChangeAdminPasswordStoresTheCredentialAndSaysSoInTheLogView(t *testing.T) {
 	ctx := context.Background()
 
@@ -131,8 +125,6 @@ func TestChangeAdminPasswordStoresTheCredentialAndSaysSoInTheLogView(t *testing.
 		t.Error("the log view does not say the credential was changed")
 	}
 
-	// The credential the server ships with is the one the administration interface insists on replacing, so the
-	// mode that stores it marks it as needing replacement.
 	if err := srv.ChangeAdminPassword(ctx, domain.DefaultAdminPassword); err != nil {
 		t.Fatalf("ChangeAdminPassword with the default credential: %v", err)
 	}
@@ -147,9 +139,8 @@ func TestChangeAdminPasswordStoresTheCredentialAndSaysSoInTheLogView(t *testing.
 	}
 }
 
-// The base directory is the directory the server was installed in, and the paths it resolves are the
-// paths a deployment's files are at. A server pointed at a directory it has never written to opens its
-// own database there, which is what makes the base directory the one fact a deployment has to state.
+// TestAServerPointedAtAFreshDirectoryPutsItsFilesWhereTheBaseDirectorySays writes
+// its own database into a directory it has never written to.
 func TestAServerPointedAtAFreshDirectoryPutsItsFilesWhereTheBaseDirectorySays(t *testing.T) {
 	base := t.TempDir()
 

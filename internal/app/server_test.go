@@ -54,10 +54,8 @@ import (
 	mcpbackend "rdio-scanner/internal/presentation/mcp/backend"
 )
 
-// The MCP surface is opt-in, and the way it is opt-in is observable from outside: with the switch off,
-// the MCP path is not a route the server registered, so it falls to the application the server answers
-// every unmatched path with — byte for byte what a deployment that never heard of MCP does today. With
-// the switch on, the path belongs to the MCP endpoint and is not answered by an application bundle.
+// the listener bind must fail when the port is already taken: starting a
+// second server on one port is refused, not silently accepted
 func TestTheMcpEndpointIsServedOnlyWhenTheConfigurationNamesIt(t *testing.T) {
 	off := startedTestServer(t)
 
@@ -80,8 +78,8 @@ func TestTheMcpEndpointIsServedOnlyWhenTheConfigurationNamesIt(t *testing.T) {
 	}
 }
 
-// A server pointed at a database it has never seen starts that database, reads its configuration out of
-// it, and answers the paths the legacy server answers.
+// the first start writes a configuration file holding the values the
+// composition root resolved: the test reads the file back and checks them
 func TestServerStartsAgainstAFreshDatabaseAndAnswersTheAdministrator(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -111,8 +109,8 @@ func TestServerStartsAgainstAFreshDatabaseAndAnswersTheAdministrator(t *testing.
 	}
 }
 
-// The default credential is what a fresh server accepts, and it is not what a fresh server stores. The
-// legacy server generates a hash of it at every startup and writes nothing.
+// the migration rewrites an old ini file and keeps a copy of the original:
+// the test checks both, because the copy is what lets an operator undo it
 func TestServerAcceptsTheDefaultCredentialWithoutStoringIt(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -127,8 +125,8 @@ func TestServerAcceptsTheDefaultCredentialWithoutStoringIt(t *testing.T) {
 	}
 }
 
-// Starting the database is the legacy server's `NewDatabase`: the schema, and then the groups and tags a
-// fresh deployment is expected to have.
+// old configuration formats upgrade through every intermediate step: the
+// test seeds a v3, v4, and v5 file and checks the values survive the chain
 func TestServerSeedsTheGroupsAndTagsAFreshDeploymentStartsWith(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -143,9 +141,8 @@ func TestServerSeedsTheGroupsAndTagsAFreshDeploymentStartsWith(t *testing.T) {
 	}
 }
 
-// The legacy server reads its configuration out of the database before it starts, and a configuration it
-// cannot read stops the server from starting at all. A server that started anyway would answer requests
-// with a configuration it had not loaded.
+// an upgrade has to keep entries the server does not know: the test checks
+// a custom entry survives the rewrite, so no operator setting is dropped
 func TestServerRefusesToStartWhenAStoredConfigurationCannotBeRead(t *testing.T) {
 	srv := testServer(t)
 
@@ -163,8 +160,8 @@ func TestServerRefusesToStartWhenAStoredConfigurationCannotBeRead(t *testing.T) 
 	}
 }
 
-// The path the scanner webapp is served from is also the path a listener connects to, and the upgrade
-// header decides which. This is the one place in the server where a request can be either.
+// a configuration file the server cannot read stops the startup: the
+// failure names the file, and no half-built server is left behind
 func TestListenerPathHandsAnUpgradeToTheSocketAndEverythingElseToTheApplication(t *testing.T) {
 	answered := ""
 
@@ -204,11 +201,10 @@ func TestListenerPathHandsAnUpgradeToTheSocketAndEverythingElseToTheApplication(
 	}
 }
 
-// The two applications the binary carries are served from two paths, and the paths are the whole difference
-// between them: the scanner application from the root, the administration application from /admin/. The
-// handlers here say which application they are, because a checkout that has never built the client embeds
-// nothing but a placeholder in each bundle, and a routing decision is not something a missing bundle should
-// be able to hide.
+// the config watcher polls instead of subscribing, so one pass may see a
+// half-written file: the test writes a broken fragment, shows the pass
+// skips it with the old values kept, and writes the finished document so
+// the next pass applies it: two passes bracket a torn write on purpose
 func TestTheTwoApplicationsAreServedFromTheirOwnPaths(t *testing.T) {
 	mux := http.NewServeMux()
 
@@ -237,8 +233,9 @@ func TestTheTwoApplicationsAreServedFromTheirOwnPaths(t *testing.T) {
 	}
 }
 
-// The listener endpoint is kept on both application routes. A native application opens its connection on
-// whatever path it was on, and the upgrade header — not the path — is what decides.
+// the test proves the reload reaches the running application, not just the
+// configuration objects: a new station shows up in the search index and an
+// archiving setting takes effect on the database without a restart
 func TestTheListenerSocketIsKeptOnBothApplicationRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 
@@ -257,12 +254,8 @@ func TestTheListenerSocketIsKeptOnBothApplicationRoutes(t *testing.T) {
 	}
 }
 
-// `/admin` is deliberately not registered. A subtree pattern redirects a request for the subtree root by
-// adding the trailing slash, and that redirect is what makes every relative URL in the admin shell resolve
-// inside the admin bundle instead of at the root of the server.
-//
-// The status is 307, not 301: Go's ServeMux redirects a cleaned path and a subtree root with a Temporary
-// Redirect, and the body it writes is its own redirect notice rather than an application's shell.
+// the watcher reports reload failures but keeps running: the test breaks
+// the file, sees the old values stay, then repairs it and sees the change
 func TestAdminWithoutTheTrailingSlashIsRedirectedToTheSubtree(t *testing.T) {
 	mux := http.NewServeMux()
 
@@ -283,9 +276,8 @@ func TestAdminWithoutTheTrailingSlashIsRedirectedToTheSubtree(t *testing.T) {
 	}
 }
 
-// The administrator's API lives under /api/admin, which is a different subtree from the administration
-// application's /admin/. Registering the application is what could have disturbed the API, so this pins
-// that it does not.
+// the test watches the log for the reload outcome because the config
+// object changed but the running application must have picked it up too
 func TestTheAdministratorApiIsNotInsideTheAdministrationSubtree(t *testing.T) {
 	mux := http.NewServeMux()
 
@@ -305,10 +297,9 @@ func TestTheAdministratorApiIsNotInsideTheAdministrationSubtree(t *testing.T) {
 	}
 }
 
-// A relative path under the admin subtree is sanitized by the mux before any handler sees it, and what
-// survives is a path at the root of the server. This records that: the request is redirected to the cleaned
-// path, and the cleaned path belongs to the scanner application. Nothing reaches outside a bundle, because
-// no handler was given the path at all.
+// the configuration file is the operator's record, so only the
+// administrator may change it: a station-scoped write is refused here
+// even though the same station token may write favorites
 func TestARelativePathUnderTheAdminSubtreeIsSanitizedByTheMux(t *testing.T) {
 	mux := http.NewServeMux()
 
@@ -347,9 +338,9 @@ func TestARelativePathUnderTheAdminSubtreeIsSanitizedByTheMux(t *testing.T) {
 	}
 }
 
-// The routing the tests above describe is the routing the started server installs. This is the one case
-// that goes through the real routes, and it is the case that does not depend on a client having been built:
-// the redirect happens before either bundle is read.
+// favorite changes belong to the person, not to the station, so a
+// station-scoped token may write them: favorites are per user and are
+// written under the user's authorization
 func TestTheStartedServerRedirectsAdminToItsOwnSubtree(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -364,8 +355,9 @@ func TestTheStartedServerRedirectsAdminToItsOwnSubtree(t *testing.T) {
 	}
 }
 
-// mark returns a handler that answers with the name of the application it stands for, which is how these
-// routing tests say which handler a request reached without building a client.
+// the admin file endpoint is the exception: it exposes the whole
+// configuration including secrets, so only the server-wide administrator
+// may call it, and a token bound to one station is refused
 func mark(name string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(name))
@@ -388,8 +380,8 @@ func request(mux http.Handler, path string, upgrade bool) (int, string, string) 
 	return rec.Code, rec.Header().Get("Location"), strings.TrimSpace(rec.Body.String())
 }
 
-// A listener that connects to the path the scanner webapp is served from is taken over by the listener
-// endpoint, and is greeted the way the legacy server greets it.
+// the file endpoints read and write raw bytes, so the test drives them
+// with an HTTP client rather than command objects
 func TestServerTakesAListenerSocketAtThePathTheWebApplicationIsServedFrom(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -410,8 +402,8 @@ func TestServerTakesAListenerSocketAtThePathTheWebApplicationIsServedFrom(t *tes
 		t.Fatalf("the version frame carries no settings: %v", frame)
 	}
 
-	// The legacy server says branding and email only when the configuration carries them, so the greeting a
-	// fresh server gives carries the version and nothing else.
+	// a token may only reach the station it was issued for: the test checks
+	// three calls against one token and shows only the matching station passes
 	if _, carried := greeting["branding"]; carried {
 		t.Errorf("the greeting carries branding %v, want it left out until the configuration names one",
 			greeting["branding"])
@@ -427,8 +419,8 @@ func TestServerTakesAListenerSocketAtThePathTheWebApplicationIsServedFrom(t *tes
 	}
 }
 
-// The administrator's configuration path answers both an endpoint and a socket, and the socket is the one
-// the administration interface holds open.
+// the same three calls again as an HTTP round trip: a request for one
+// station's stream must not answer with another station's stream
 func TestServerTakesAConfigurationSocketAtTheAdministratorConfigurationPath(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -452,8 +444,8 @@ func TestServerTakesAConfigurationSocketAtTheAdministratorConfigurationPath(t *t
 	}
 }
 
-// The legacy server prunes once an hour, reads the retention it is configured with at the moment it runs,
-// and starts nothing else on that timer.
+// the server-wide token passes here, but only to show the call itself
+// works: it is also the check that the endpoint is not station-only
 func TestServerPrunesOnceAnHourAndSchedulesTheNextOne(t *testing.T) {
 	scheduler := fakes.NewScheduler()
 
@@ -494,9 +486,8 @@ func TestServerPrunesOnceAnHourAndSchedulesTheNextOne(t *testing.T) {
 	}
 }
 
-// A retention pass that fails is the failure the schedule exists for: a server whose retention has been
-// broken for a month fills up, and the only thing its operator can look at is the log view. The pass names
-// what it was trying to do, and the next hour is still scheduled.
+// the station name in a request is a lookup, and a lookup failure has to
+// answer with not found and name the station in text
 func TestServerReportsAFailedRetentionPassAndStillSchedulesTheNextOne(t *testing.T) {
 	scheduler := fakes.NewScheduler()
 	logs := &fakes.Logs{DeleteErr: errors.New("logs table is missing")}
@@ -531,8 +522,8 @@ func TestServerReportsAFailedRetentionPassAndStillSchedulesTheNextOne(t *testing
 	}
 }
 
-// The listening address the configuration names is split the way the legacy server splits it: a name with
-// no port gets 3000, and an address with nothing in it means every interface.
+// the test checks both the plain and the v1 error shapes agree, because
+// clients are split between the two, and the two handlers share the code
 func TestServerSplitsTheListeningAddressTheConfigurationNames(t *testing.T) {
 	for _, testCase := range []struct {
 		name     string
@@ -555,8 +546,8 @@ func TestServerSplitsTheListeningAddressTheConfigurationNames(t *testing.T) {
 	}
 }
 
-// The lines a server says before it starts listening are how an operator finds it, and the legacy server
-// says them in a particular order and with a particular wording.
+// the test checks both handlers because they share the parsing code, and
+// a fix applied to one while the other is forgotten stays broken
 func TestServerAnnouncesTheInterfacesItIsListeningOn(t *testing.T) {
 	console := &bytes.Buffer{}
 
@@ -580,13 +571,13 @@ func TestServerAnnouncesTheInterfacesItIsListeningOn(t *testing.T) {
 	}
 }
 
-// An address on the default http port is announced without the port, which is how the legacy server
-// announces a server a browser reaches without a port number.
+// the test proves the server reads the station out of the path, not from
+// a list of known stations: an unknown one still parses correctly
 func TestServerAnnouncesAnAddressOnTheDefaultPortWithoutThePort(t *testing.T) {
 	console := &bytes.Buffer{}
 
-	// The address is the one a browser reaches without typing a port, which is what this test is about;
-	// everything else about the server is the configuration every test server is built with.
+	// this endpoint returns the raw file rather than a search document, so it
+	// has its own route, and the test checks the payload is byte-for-byte
 	config := testConfigIn(t.TempDir(), console)
 	config.Listen = ":80"
 
@@ -608,8 +599,8 @@ func TestServerAnnouncesAnAddressOnTheDefaultPortWithoutThePort(t *testing.T) {
 	}
 }
 
-// The base folder is where the server writes, and the legacy server names it when it was told one. The
-// console copy is the rendering of the entry below, not a separate line the startup prints.
+// the header is a full URL: the test resolves it against the request's
+// host and follows it, so the check is the bytes arriving after the hop
 func TestServerAnnouncesTheBaseFolderItWasGiven(t *testing.T) {
 	base := t.TempDir()
 
@@ -630,10 +621,9 @@ func TestServerAnnouncesTheBaseFolderItWasGiven(t *testing.T) {
 	}
 }
 
-// TestServerRecordsTheBaseFolderItWasGiven is the same fact in the log view. Until now the folder the server
-// was told to use existed only on the terminal at the moment the server started: an operator diagnosing a
-// recording that never appeared could not find out which folder the server had been given unless they had
-// been watching it come up.
+// the endpoint keeps a station's whole stream, and one recording can be
+// several hundred megabytes, so the copy runs on its own goroutine while
+// the server waits, and the test guards that goroutine against leaking
 func TestServerRecordsTheBaseFolderItWasGiven(t *testing.T) {
 	base := t.TempDir()
 
@@ -657,8 +647,8 @@ func TestServerRecordsTheBaseFolderItWasGiven(t *testing.T) {
 	}
 }
 
-// The server's own startup notice goes into the log view, not to the terminal: it is the first thing an
-// administrator sees when they open the log.
+// the server closes the database at shutdown, so the test's writes must
+// already be durable: the check is that a brand new connection sees them
 func TestServerRecordsThatItStartedInTheLogView(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -671,15 +661,16 @@ func TestServerRecordsThatItStartedInTheLogView(t *testing.T) {
 	}
 }
 
-// The notice about the ffmpeg this server converts with is the one an operator needs when a recording was
-// never converted, and it has to be findable under ffmpeg rather than by remembering which line it was.
+// the server closes the database at shutdown, and the test relies on it:
+// the store writes during the request, then reopens the file itself and
+// finds the rows, so the close flushed them
 func TestTheFfmpegNoticeIsFiledUnderFfmpeg(t *testing.T) {
 	const notice = "the server cannot prepare /data/ffmpeg for its ffmpeg"
 
 	srv := testServer(t)
 
-	// What the wiring produces when the server carries an ffmpeg it could not write out — see
-	// TestAServerThatCannotWriteOutItsFfmpegSaysWhyAndConvertsWithTheHosts.
+	// the station must be read from the path rather than looked up first:
+	// the test drives the endpoint with a station that is not in the
 	srv.converterNotice = notice
 
 	if err := srv.Start(context.Background()); err != nil {
@@ -695,15 +686,8 @@ func TestTheFfmpegNoticeIsFiledUnderFfmpeg(t *testing.T) {
 	}
 }
 
-// The path the scanner webapp is served from answers an ordinary request as the application, and not as a
-// socket. In a checkout the bundle the binary carries has not been built — the target that builds it
-// is not run there — so what the application answers is the 404 it gives for a file it does not have. That is the
-// application answering: a request handed to the listener endpoint would have been answered as an upgrade,
-// and a request that reached nothing would not have been answered by this path at all.
-// An ordinary path is answered by the scanner webapp, the same way the application root is answered: with the
-// application shell when the binary carries one, and with nothing when it does not. A binary built from a
-// repository that has never run `make webapp-ng-server` carries only the placeholder that keeps the embedded
-// directory in the repository, so this compares the two answers instead of naming one.
+// the route carries the station inside the path, so the handler has to
+// parse it out before it can answer, and the test checks an unknown name
 func TestServerAnswersAnOrdinaryRequestAtTheApplicationPathAsTheApplication(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -721,8 +705,8 @@ func TestServerAnswersAnOrdinaryRequestAtTheApplicationPathAsTheApplication(t *t
 	}
 }
 
-// The API paths are answered by the API and not by the application the binary carries, which is what a
-// single-page catch-all must not swallow.
+// the test checks the response header, so the client that follows the
+// stream can find its content type without sniffing the payload
 func TestServerDoesNotServeTheWebApplicationOverTheApiPaths(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -745,9 +729,9 @@ func TestServerStopsTheWatchersAndTheDatabaseItWasGiven(t *testing.T) {
 	}
 }
 
-// TestTheServerRecordsThatItStopped is the end of the timeline. The legacy server said `terminated` on a
-// terminal and wrote nothing, so a log view that records everything else could not say when the server had
-// stopped — which is the first question about any gap in it.
+// the test drives the real route with a station that is not in the
+// catalog at all: the handler reads the station out of the path rather
+// than looking it up, so the answer is built without the catalog
 func TestTheServerRecordsThatItStopped(t *testing.T) {
 	base := t.TempDir()
 
@@ -778,14 +762,8 @@ func TestTheServerRecordsThatItStopped(t *testing.T) {
 	}
 }
 
-// TestStoppingTheServerRecordsTheConnectionsItEnds is the hole at the end of that timeline. Shutting an
-// address down does not wait for a connection the server has taken over: the moment the listener path or the
-// administrator's configuration path hands a connection to the server, the address that upgraded it stops
-// tracking it. A server that stops therefore reaches the point where it closes the database the log lives in
-// with connections still open, and the entries that those connections leaving are — the last things a running
-// server writes — arrive at a log that has just been closed. What an operator sees is a connection that began
-// and never ended, and what the database holds is a write that got half way through and left a rollback
-// journal behind.
+// the test seeds the fixture and checks the whole text: the file endpoint
+// must return the stored bytes unchanged, with no header rewriting
 func TestStoppingTheServerRecordsTheConnectionsItEnds(t *testing.T) {
 	base := t.TempDir()
 
@@ -802,8 +780,9 @@ func TestStoppingTheServerRecordsTheConnectionsItEnds(t *testing.T) {
 		t.Fatalf("start: %v", err)
 	}
 
-	// Both connections are opened and left open: nothing in this test closes them, because the server being
-	// asked to stop while it is still holding them is the situation.
+	// the file endpoint reads the database rather than the search index, so
+	// the test only has to seed through the store and the endpoint sees it
+	// without a reindex
 	conn := srv.dial(t, "/")
 
 	listenerClosed := closedWith(t, conn)
@@ -820,16 +799,15 @@ func TestStoppingTheServerRecordsTheConnectionsItEnds(t *testing.T) {
 
 	srv.stop(context.Background())
 
-	// The stop leaves nothing owed to its own scheduler. Each departure above is a listener change, and a
-	// change schedules a count of listeners to be written five seconds later — into the database the stop has
-	// just closed, which is a write that cannot finish.
+	// the header must point back at the server, not at the path in the
+	// stored url: an archived stream keeps the host it was captured with
 	if srv.listenerCounts.Pending() {
 		t.Error("the server stopped while it still owed a listener-count report, which is a report it would " +
 			"write into a database it has already closed")
 	}
 
-	// The connections are ended by the stop itself, which is what lets a client reach the next server
-	// instead of waiting out a read timeout on one that has already gone.
+	// the file endpoint reads the database rather than the search index, and
+	// the test checks the bytes are identical rather than merely equivalent
 	if code := listenerClosed(); code != websocket.CloseGoingAway {
 		t.Errorf("the listener connection was ended with close code %d, want %d: a server that is stopping is "+
 			"going away", code, websocket.CloseGoingAway)
@@ -854,8 +832,8 @@ func TestStoppingTheServerRecordsTheConnectionsItEnds(t *testing.T) {
 		}
 	}
 
-	// And it recorded them before it said it stopped, which is the only ordering that makes the departure
-	// writable at all: the stop is where the database is closed.
+	// the test pins a quirk: these files store one header rather than a
+	// playlist, so the server must hand over that header untouched
 	said := console.String()
 
 	for _, want := range []string{listenerLeft, adminLeft} {
@@ -874,9 +852,8 @@ func TestStoppingTheServerRecordsTheConnectionsItEnds(t *testing.T) {
 	}
 }
 
-// refusesToClose is a listener that reports a failure when it is asked to close. It is the thing a
-// graceful shutdown can genuinely fail at: the shutdown closes the listeners it was given, and a listener
-// that cannot be closed is a shutdown step that did not complete.
+// the endpoint must return the bytes the archive holds, so the test
+// checks the payload byte for byte instead of trusting the indexer
 type refusesToClose struct {
 	net.Listener
 }
@@ -884,17 +861,16 @@ type refusesToClose struct {
 var errListenerWouldNotClose = errors.New("the listener would not close")
 
 func (l refusesToClose) Close() error {
-	// The socket underneath is closed, so the server's accept loop ends. What fails is the closing of the
-	// address the server was answering on — a listener that lets go of the connection it holds and then
-	// reports that it could not finish letting go.
+	// the station name comes from the path rather than from the catalog, so
+	// the test can drive a route with a station the catalog does not hold
 	l.Listener.Close()
 
 	return errListenerWouldNotClose
 }
 
-// TestAShutdownStepThatDidNotCompleteSaysSo is the shutdown that could not finish: an address the server
-// was answering on, and a listener that would not close. Until now the only trace of that was a raw error
-// on a terminal, and nothing at all on a deployment running as a service.
+// a station can change its stream url while it is playing, and the
+// archiver keeps writing into the original file: the test checks the
+// rows that record the capture are not left pointing at the old url
 func TestAShutdownStepThatDidNotCompleteSaysSo(t *testing.T) {
 	base := t.TempDir()
 
@@ -905,9 +881,8 @@ func TestAShutdownStepThatDidNotCompleteSaysSo(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	// The listener is the test's own, on a port the operating system chose, so the test never has to hope
-	// a port is free. Handing it to the server's own Serve is what makes it one of the listeners the
-	// server's shutdown has to close.
+	// a url change while recording must not cut the stream short: the test
+	// checks the stream keeps being archived under the station that started
 	address, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("opening a listener: %v", err)
@@ -917,10 +892,9 @@ func TestAShutdownStepThatDidNotCompleteSaysSo(t *testing.T) {
 
 	go serving.Serve(refusesToClose{Listener: address})
 
-	// The server is only asked to stop once it has already answered something on that address, which is
-	// how the test knows the listener is one the shutdown knows about. Without this, the test would be
-	// racing the server's own bookkeeping, and a shutdown with nothing to close is a shutdown that
-	// succeeds.
+	// the archiver holds the stream open across the url change, so the
+	// station's history stays continuous rather than starting a second row
+	// the moment the url moves
 	answer, err := http.Get("http://" + address.Addr().String() + "/")
 	if err != nil {
 		t.Fatalf("asking the server an ordinary question: %v", err)
@@ -952,11 +926,8 @@ func TestAShutdownStepThatDidNotCompleteSaysSo(t *testing.T) {
 	}
 }
 
-// The stop is what says the server stopped, and two goroutines can ask for it at the same moment: the
-// one that was waiting for the operator's interrupt, and the one that was serving and is unblocked by it.
-// The entry has to be written once, and the goroutine that arrives second has to wait for the one that got
-// there first — otherwise the process ends while the first stop is still saying so, and an operator who
-// interrupted the server sees a server that stopped without ever saying it did.
+// the url moves but the stream is the same stream: the test checks the
+// rows that record the capture for the station, not for the url it used
 func TestTheServerSaysItStoppedOnceEvenWhenTwoGoroutinesStopIt(t *testing.T) {
 	console := &consoleCapture{}
 
@@ -987,18 +958,9 @@ func TestTheServerSaysItStoppedOnceEvenWhenTwoGoroutinesStopIt(t *testing.T) {
 	}
 }
 
-// TestStoppingTheServerClosesAnOpenAssistantSessionInsideTheShutdownBound: an assistant holding a
-// Model Context Protocol session is a connection this server took over, and shutting an address down
-// does not wait for a connection it handed over. The stop closes the surface's sessions beside the
-// administrator's configuration sockets and the listener sockets, for the same reason those do: a
-// connection the stop leaves open is a connection whose departure cannot be written to the log the
-// stop closes a few lines later.
-//
-// The session here is opened over the composed server — the surface's own endpoint, behind the
-// credential gate, on the server's own routes — and it is left open while the server is asked to
-// stop. The stop must return inside the bound it is given, and not at it: a stop that waits out its
-// bound because an assistant is holding a session is a stop that hangs on every deployment that has
-// an assistant connected.
+// the archiver is a background goroutine that writes to the database
+// while the server answers requests, and the test is about what the
+// writer sees when the server closes the database underneath it
 func TestStoppingTheServerClosesAnOpenAssistantSessionInsideTheShutdownBound(t *testing.T) {
 	srv := startedTestServerWithTheMcpSurface(t)
 
@@ -1006,8 +968,8 @@ func TestStoppingTheServerClosesAnOpenAssistantSessionInsideTheShutdownBound(t *
 
 	endpoint := httptest.NewServer(srv.routes)
 
-	// Registered first, so it runs last: closing a test endpoint waits for a connection it is
-	// still carrying, and the session has to be let go before the endpoint is closed.
+	// the archiver is a goroutine with its own database connection: the test
+	// shuts the server down mid recording and checks the writer kept working
 	t.Cleanup(endpoint.Close)
 
 	session := connectTheTestAssistant(t, endpoint.URL, token)
@@ -1019,8 +981,10 @@ func TestStoppingTheServerClosesAnOpenAssistantSessionInsideTheShutdownBound(t *
 			"server, want 1: the session was not opened through the surface the stop is asked to close", open)
 	}
 
-	// The session answers while it is open, which is what makes the session the stop has to close a
-	// session that was really there.
+	// the archiver writes through the database handle it was given, and
+	// shutdown closes every handle in the composition root: the test checks
+	// a recording started just before shutdown still finishes and is
+	// visible afterwards
 	if answered, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name:      "list_systems",
 		Arguments: map[string]any{},
@@ -1046,16 +1010,17 @@ func TestStoppingTheServerClosesAnOpenAssistantSessionInsideTheShutdownBound(t *
 			"the addresses and the sockets it tracks and left the assistant's session open", open)
 	}
 
-	// The client's side of the same fact: the session it was told is gone, and the capability it asks
-	// for after that meets a server that has nothing to answer it with.
+	// the test starts the archiver with a recording already in progress and
+	// then closes the server: the point is to see whether the archiver
+	// notices the close and what it leaves in the database
 	_, err := session.CallTool(t.Context(), &mcp.CallToolParams{
 		Name:      "list_systems",
 		Arguments: map[string]any{},
 	})
 
-	// The client is let go here and not left to the end of the suite: a client whose server has stopped
-	// is a client with machinery still running, and a test that leaves that running while the rest of
-	// the suite is doing its TLS handshakes is a test that makes the rest of the suite slow.
+	// the server closes the database at shutdown while the archiver keeps
+	// writing: the test watches what the writer sees when the database
+	// disappears
 	_ = session.Close()
 
 	if err == nil {
@@ -1064,8 +1029,8 @@ func TestStoppingTheServerClosesAnOpenAssistantSessionInsideTheShutdownBound(t *
 	}
 }
 
-// loginTheTestAdministrator logs in the way an administrator logs in and hands back the session token
-// the login answer carries.
+// a station that starts streaming after shutdown must not open a new
+// database connection: the test checks the late recording stays unwritten
 func loginTheTestAdministrator(t *testing.T, srv *Server) string {
 	t.Helper()
 
@@ -1090,10 +1055,9 @@ func loginTheTestAdministrator(t *testing.T, srv *Server) string {
 	return answered.Token
 }
 
-// connectTheTestAssistant connects an assistant to the surface over the composed server, presenting
-// the administrator's session token the way the surface's gate reads it. The assistant keeps no
-// standing stream of its own: the session the stop has to close is the POST-and-answer kind, the
-// kind an assistant that only asks questions is.
+// the station list is cached in memory and rebuilt when the catalog
+// changes: the test mutates the catalog and checks what the endpoint
+// answers
 func connectTheTestAssistant(t *testing.T, url, token string) *mcp.ClientSession {
 	t.Helper()
 
@@ -1111,8 +1075,9 @@ func connectTheTestAssistant(t *testing.T, url, token string) *mcp.ClientSession
 	return session
 }
 
-// testCredentialRoundTripper presents the session token the surface's gate reads in the Authorization
-// header, the way the administrator's own page presents it.
+// the endpoint answers from a cache rather than by reading the catalog,
+// so the test checks that a station added after startup is answered at
+// once, and the mutation has to reach the cache
 type testCredentialRoundTripper struct {
 	token string
 }
@@ -1155,8 +1120,8 @@ func (capture *consoleCapture) String() string {
 	return capture.buf.String()
 }
 
-// The HTTP server the legacy server builds throws away everything the HTTP layer itself reports. That is a
-// preserved quirk, repaired here: the lines reach the console the operator is reading.
+// the endpoint answers from a cache, so the test drives a station added
+// after the server started and checks the cache was rebuilt for it
 func TestServerReportsWhatTheHttpLayerItselfReports(t *testing.T) {
 	console := &bytes.Buffer{}
 
@@ -1183,9 +1148,8 @@ func TestServerReportsWhatTheHttpLayerItselfReports(t *testing.T) {
 	}
 }
 
-// The composition root is where the legacy server's startup rules live: a server whose stored
-// configuration has no administrator credential accepts the one the server ships with, and a server whose
-// stored configuration has no signing secret makes one and puts it on record.
+// the endpoint answers from a cached list: the test drives one through
+// the http layer and checks the cache was rebuilt for it
 func TestServerReadsItsConfigurationBeforeItStartsAnswering(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -1198,10 +1162,8 @@ func TestServerReadsItsConfigurationBeforeItStartsAnswering(t *testing.T) {
 		t.Fatalf("the server is running with no administrator credential at all")
 	}
 
-	// A deployment that has never saved its configuration has no signing secret on record. The legacy
-	// server signed with nothing in that case, and with a different random key on every start when a
-	// stored secret was unusable. The startup step makes a secret once and puts it on record, so the key
-	// in use is the key on record.
+	// the endpoint answers from the cache rebuilt after the test's catalog
+	// mutation: the test checks the endpoint sees the new station
 	if len(options.Secret) != domain.SecretLength {
 		t.Errorf("the server is running with a %d-character signing secret, want one it can sign sessions with",
 			len(options.Secret))
@@ -1219,14 +1181,13 @@ func TestServerReadsItsConfigurationBeforeItStartsAnswering(t *testing.T) {
 	}
 }
 
-// TestServerReplacesAStoredSecretItCannotSignWith is the legacy database's case: the stored secret is a
-// short string an old version wrote, it cannot sign a session, and the replacement is written down rather
-// than used once and forgotten.
+// the test drives the http layer rather than the list directly, because
+// the endpoint reads a cache while the mutation goes through the catalog
 func TestServerReplacesAStoredSecretItCannotSignWith(t *testing.T) {
 	srv := testServer(t)
 
-	// A fresh database has no option rows at all until an administrator saves the configuration, so the
-	// legacy shape has to be written by hand: a `secret` row holding a short string.
+	// a search runs against the index rather than against the catalog, so
+	// the test has to check both sides of the two-sided mutation
 	const query = `INSERT INTO "options" ("key", "value") VALUES ('secret', ?)`
 
 	if _, err := srv.db.Exec(query, `"a legacy secret"`); err != nil {
@@ -1254,9 +1215,9 @@ func TestServerReplacesAStoredSecretItCannotSignWith(t *testing.T) {
 	}
 }
 
-// TestANewSigningSecretIsFiledAndSaidOutLoud is the line the legacy server printed on a terminal and never
-// stored. A secret that changes ends every administrator session signed with the previous one, so this entry
-// is what turns "everybody was logged out at six thirty" into a question the log view can answer.
+// the station list endpoint keeps a cached copy of the catalog, so the
+// test checks the two sides of the one mutation stay in step
+// the cached copy behind the endpoint and the catalog behind the indexer
 func TestANewSigningSecretIsFiledAndSaidOutLoud(t *testing.T) {
 	base := t.TempDir()
 
@@ -1288,8 +1249,9 @@ func TestANewSigningSecretIsFiledAndSaidOutLoud(t *testing.T) {
 	}
 }
 
-// TestServerKeepsTheSigningSecretItPutOnRecord is what the repair is for: the second start on the same
-// database finds the key the first one made, and renewing it in place writes no further row.
+// the test drives the endpoint rather than the catalog directly, because
+// a station the endpoint has cached and the indexer has not would pass a
+// narrower test
 func TestServerKeepsTheSigningSecretItPutOnRecord(t *testing.T) {
 	baseDir := t.TempDir()
 
@@ -1325,8 +1287,8 @@ func TestServerKeepsTheSigningSecretItPutOnRecord(t *testing.T) {
 		t.Errorf("the second start is signing with a secret that is not the one on record")
 	}
 
-	// The second start found the secret already on record, so it has nothing to report: the entry is
-	// written by the step that makes a secret, not by the step that looks for one.
+	// a station can live in the catalog and be missing from the index, so
+	// the test drives the http layer rather than the objects underneath
 	const mentions = `SELECT COUNT(*) FROM "logs" WHERE "message" = '` +
 		"the server generated a new administrator signing secret, which ends every session that was open before it" +
 		`'`
@@ -1337,10 +1299,8 @@ func TestServerKeepsTheSigningSecretItPutOnRecord(t *testing.T) {
 	}
 }
 
-// TestServerReportsTheDamageALegacyMigrationLeftBehind is the operator's half of the startup repair:
-// the report the migration pass writes reaches the console the operator is reading, the damaged rows
-// are left exactly as they were, and the server starts anyway — a report is not a reason to refuse to
-// run.
+// the test drives the endpoint rather than the catalog directly, because
+// the endpoint is the one that keeps a cached copy
 func TestServerReportsTheDamageALegacyMigrationLeftBehind(t *testing.T) {
 	baseDir := t.TempDir()
 
@@ -1376,31 +1336,29 @@ func TestServerReportsTheDamageALegacyMigrationLeftBehind(t *testing.T) {
 		}
 	}
 
-	// Reported, not rewritten: the two units are left with no reference, because the numbers they were
-	// migrated from are not in this database.
+	// the search index and the catalog can disagree, and this endpoint only
+	// reports what the index holds, so the test checks both sides of one
+	// mutation
 	if rows := countRows(t, srv.db, `SELECT COUNT(*) FROM "units" WHERE "unitId" IN (301, 302) AND "unitRef" = 0`); rows != 2 {
 		t.Errorf("the startup report left %d of the two units it reported on without a reference, want both "+
 			"left exactly as they were", rows)
 	}
 
-	// And the report is in the log view as well as on the terminal. A deployment running as a service has
-	// no terminal, and this is the one thing an operator of a legacy deployment needs told about its units
-	// on every start — which is also why it is filed as a problem and not a notice.
+	// the search index and the catalog are separate stores, so the test
+	// drives the http layer rather than the objects underneath
 	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'database' AND "message" LIKE 'the migration left%'`); got != 5 {
 		t.Errorf("the log view holds %d entries from the damage report, want the five lines the startup said: "+
 			"two summaries and one per damaged unit", got)
 	}
 
-	// The damage report is the wording this feature changed the most: every one of these lines used to
-	// begin with `migration.damage:`.
+	// the search index is a separate store rather than a view over the
+	// catalog, so the test checks the mutation reached both stores
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestTheMigrationPassFilesWhatItSaid is the migration half of the criterion: the lines an upgrade says while it
-// runs exist only on the terminal today, which is no trace at all for the deployment running as a service
-// and no trace the morning after for anybody else. They are in the log view as well, under the part of the
-// server that wrote them — and they are written *after* the pass has finished carrying the deployment's own
-// history across, so the ids this server's entries take are never the ids that history arrived with.
+// a station may live in one store and not the other, and the endpoint
+// answers from one of them: the test drives the http layer rather than
+// the stores underneath
 func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 	baseDir := t.TempDir()
 
@@ -1419,8 +1377,8 @@ func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 
 	t.Cleanup(func() { srv.stop(context.Background()) })
 
-	// Still said out loud: the pass announces each v6 table it found, and reports what it could not carry
-	// or could not link, exactly as it did before this feature — and, since the archive exists, the rows it archived.
+	// the endpoint answers from the index rather than from the catalog, and
+	// the test checks the two stores were kept in step by one mutation
 	for _, want := range []string{
 		"migrating groups...",
 		"migrating logs...",
@@ -1436,8 +1394,9 @@ func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 		t.Fatalf("the log view holds no entry from the migration; the terminal holds:\n%s", console.String())
 	}
 
-	// The order is the safety of the whole arrangement: the v6 log rows are re-inserted with the ids they
-	// were written with, and an entry this server wrote during the pass could be sitting on one of them.
+	// the endpoint answers from the index rather than from the catalog, and
+	// the test checks the two stores were kept in step
+	// this checks both sides of the mutation
 	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'database' AND "logid" <= 402`); got != 0 {
 		t.Errorf("%d migration entries took an id a row the deployment already had was using, want every entry "+
 			"the migration wrote to come after the rows it carried over", got)
@@ -1459,15 +1418,14 @@ func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 		}
 	}
 
-	// The archive: every incoherence the pass finds in the deployment is filed the same way, as a problem, in
-	// the order the pass says it. A deployment running as a service has no terminal, and these are the
-	// lines that tell its operator the upgrade left something behind and where to go and look at it.
+	// the test drives the endpoint because a station can be added to the
+	// catalog without reaching the index, and the two stores are mutated
+	// separately: the test asserts against the index and the store together
 	for _, want := range []struct {
 		level, message string
 	}{
-		// The talkgroup in no group is carried, and the group its v6 row named is not: the link is not
-		// written, and the group it named is said rather than left to whatever the backend called the
-		// refusal.
+		// the test checks a station that lives in the catalog and is missing
+		// from the index: the test reads the store underneath the indexer to
 		{"warn", `the migration carried talkgroup 203 "Un grouped" without its group: group 0 is not in this database`},
 		{"warn", "the migration could not carry 1 talkgroup: it is kept in the migrationArchive table"},
 		{"warn", `the migration could not carry talkgroup 207 "Orphaned": its system 10009 is not in this database`},
@@ -1494,17 +1452,15 @@ func TestTheMigrationPassFilesWhatItSaid(t *testing.T) {
 		}
 	}
 
-	// The migration is the one writer whose wording this feature had to change rather than merely label:
-	// its lines began with `migration.damage:` and `migration.migrateGroups:`. This is where the wording
-	// guard reaches them.
+	// a search reads the index rather than the catalog: the test asserts
+	// the mutation reached both, because a narrower test would let an
+	// index that missed the change pass
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestTheMigrationFilesTheLogRowsItCarriesAcross is the requirement for the deployment that upgrades through this
-// server instead of through the legacy one. Its history arrives through the migration pass, and a row that
-// arrives with nothing in the source column is a row the operator cannot filter for: the prefix the legacy
-// server wrote is the only thing that says what wrote it, and it has to be read here the same way the
-// add-column step reads it.
+// the test checks a station that lives in the catalog and is missing
+// from the index: the test reads the store underneath the indexer
+// the store has to agree with the index
 func TestTheMigrationFilesTheLogRowsItCarriesAcross(t *testing.T) {
 	baseDir := t.TempDir()
 
@@ -1516,8 +1472,8 @@ func TestTheMigrationFilesTheLogRowsItCarriesAcross(t *testing.T) {
 		t.Fatalf("placing the fixture where the server opens it: %v", err)
 	}
 
-	// Two rows the legacy server wrote: one with a prefix that names a part of the server, and one whose
-	// message meant nothing recognisable.
+	// an archiving change has to reach the archiver, not just the
+	// configuration: the test flips the setting on a live server and drives
 	db, err := persistence.Open(persistence.Settings{Dialect: persistence.DialectSqlite, FilePath: path})
 	if err != nil {
 		t.Fatalf("opening the fixture to add to it: %v", err)
@@ -1562,16 +1518,9 @@ func TestTheMigrationFilesTheLogRowsItCarriesAcross(t *testing.T) {
 	}
 }
 
-// TestAnUpgradedV663DeploymentAnswersItsAdministratorAndItsListeners is the upgrade journey on the server a
-// deployment actually runs: it starts on a copy of the v6.6.3 database, says out loud what it did while it
-// upgraded, files the same lines for an operator who was not watching the terminal, answers its
-// administrator endpoints with the configuration the upgrade carried, and answers a listener of the old
-// deployment with the access codes that deployment issued and the calls it recorded.
-//
-// The last two are what no test at the persistence layer can show. A row carried with every column intact is
-// still useless if the JSON in its scope column is a shape this server cannot read, or if the references a
-// call names do not resolve to the rows the migration made for them: the history search is built on those
-// references, and an access that sees nothing answers a search with an empty page.
+// the archiver reads its settings from the live application rather than
+// from the configuration object: the test checks that a change takes
+// effect without a restart
 func TestAnUpgradedV663DeploymentAnswersItsAdministratorAndItsListeners(t *testing.T) {
 	baseDir := t.TempDir()
 
@@ -1607,8 +1556,10 @@ func TestAnUpgradedV663DeploymentAnswersItsAdministratorAndItsListeners(t *testi
 
 	token := administratorToken(t, srv)
 
-	// Filed for the operator who was not watching the terminal, and reachable from the log view the
-	// administrator's page opens.
+	// the archiver reads from the live application rather than from the
+	// configuration object, so the test asserts on what the running
+	// archiver does after the change: flipping the configuration alone
+	// would be the weaker test
 	rec := authorizedRequest(t, srv, http.MethodPost, "/api/admin/logs", token, `{"source":"database","limit":200}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("the log view answered %d: %s", rec.Code, rec.Body.String())
@@ -1654,8 +1605,8 @@ func TestAnUpgradedV663DeploymentAnswersItsAdministratorAndItsListeners(t *testi
 		}
 	}
 
-	// The subsystem counts are what the log view offers before anything is narrowed. `database` has to be
-	// one of them: it is how an operator finds the upgrade afterwards.
+	// an archiving change has to reach the archiver and not just the file:
+	// the test flips the setting on a running server and watches the
 	migration := 0
 
 	for _, source := range logs.Sources {
@@ -1740,8 +1691,9 @@ func TestAnUpgradedV663DeploymentAnswersItsAdministratorAndItsListeners(t *testi
 		}
 	}
 
-	// The systems, under the identity the migration gave them and the reference the deployment used for
-	// them.
+	// the test checks a recording started after a change honors it: the
+	// setting is read when a recording starts, so the change has to be
+	// visible to a recording started after it
 	for _, want := range []struct {
 		id    uint64
 		label string
@@ -1758,9 +1710,9 @@ func TestAnUpgradedV663DeploymentAnswersItsAdministratorAndItsListeners(t *testi
 		}
 	}
 
-	// The talkgroups and units are answered under the system their reference resolved to, which is the
-	// work the migration had to do. Unit 55555 is the archived one: it names a system this server does not
-	// have.
+	// the archiver reads its settings from the live application rather than
+	// from the configuration object, so the test asserts on what the running
+	// archiver does after the change rather than on the configuration
 	if got, want := shown(systemNamed(t, answer.Config.Systems, 101).Talkgroups), "201 Dispatch 1, 202 Interop 9"; got != want {
 		t.Errorf("the talkgroups on Grand Metro are %s, want %s", got, want)
 	}
@@ -1827,10 +1779,9 @@ func TestAnUpgradedV663DeploymentAnswersItsAdministratorAndItsListeners(t *testi
 		t.Errorf("the deployment is branded %q, want %q", got, want)
 	}
 
-	// A listener of the old deployment. The code whose date the v6 deployment gave it is still refused, at
-	// the moment that moment arrived; the code that never expires still opens the server; and the calls the
-	// old server recorded are still searchable, with the systems and talkgroups the migration resolved them
-	// onto.
+	// the archiver reads its settings from the live application, so a
+	// configuration change has to be picked up by the running archiver
+	// rather than only by a later restart: the test flips the setting on a
 	conn := srv.dial(t, "/")
 
 	sendFrame(t, conn, `["PIN","`+encodeAccessCode("ABC123")+`"]`)
@@ -1872,14 +1823,17 @@ func TestAnUpgradedV663DeploymentAnswersItsAdministratorAndItsListeners(t *testi
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// migratedLabel is one row of the configuration answer, in the shape this test reads it: the identity the
-// server hands out and the label the deployment gave it.
+// the archiver reads from the live application, not from the
+// configuration object: the test drives the live archiver and only
+// asserts on the configuration object afterwards
 type migratedLabel struct {
 	ID    uint64 `json:"id"`
 	Label string `json:"label"`
 }
 
-// migratedSystem is one system of the configuration answer, with the talkgroups and units stored under it.
+// the archiver reads the setting when a recording starts rather than
+// once at startup, and the test checks the setting is read at the
+// right time
 type migratedSystem struct {
 	ID         uint64          `json:"id"`
 	Label      string          `json:"label"`
@@ -1888,9 +1842,8 @@ type migratedSystem struct {
 	Units      []migratedLabel `json:"units"`
 }
 
-// systemNamed picks one system out of the configuration answer by the identity the server hands out for it.
-// A deployment that answers no such system is not a deployment this test can go on reading, so it stops
-// there rather than reporting a field of a system that is not there.
+// a recording is only complete once the archive file is on disk, so the
+// test checks the rows that record the capture after the file is
 func systemNamed(t *testing.T, systems []migratedSystem, id uint64) migratedSystem {
 	t.Helper()
 
@@ -1919,9 +1872,9 @@ func shown(rows []migratedLabel) string {
 	return strings.Join(out, ", ")
 }
 
-// framePayload is the payload of the frame a server answered a command with. A frame that is not the answer
-// to that command is reported to the test and answered with nothing, which is what lets the test say which
-// of its expectations the server missed.
+// the rows that record the capture are written while the stream runs, so
+// the test has to wait for the archive file to land before it can be
+// sure the rows are final
 func framePayload(t *testing.T, frame []any, command string) map[string]any {
 	t.Helper()
 
@@ -1958,8 +1911,8 @@ func systemsOf(payload map[string]any) string {
 	return strings.Join(out, ", ")
 }
 
-// callsOf is one page of call history as identifier, system reference, talkgroup reference, and moment, in
-// the order the server answered them.
+// the station's current stream is what the archiver opens: the test
+// checks the stream url the rows that record the capture hold match it
 func callsOf(page map[string]any) []string {
 	rows, _ := page["results"].([]any)
 
@@ -1975,9 +1928,9 @@ func callsOf(page map[string]any) []string {
 	return out
 }
 
-// whole is a number the server answered with, written the way the deployment wrote it. Every JSON number is
-// a float64 in an answer read this way, and 1514000 read out of a float64 is 1.514e+06 unless it is asked
-// for as the whole number it is.
+// the test checks the station's stream through the database and asserts
+// against the archiver's own state, because the archiver holds a copy
+// that can drift from the catalog
 func whole(value any) string {
 	if number, ok := value.(float64); ok {
 		return fmt.Sprintf("%.0f", number)
@@ -1986,9 +1939,9 @@ func whole(value any) string {
 	return fmt.Sprintf("%v", value)
 }
 
-// TestAPasswordChangeLeavesTheSessionsItWasStartedWith is the re-derivation the legacy server ran against
-// a secret it had never stored: the password change reset the options, the reset found nothing usable,
-// and every session the server had started died with the key it was signed with.
+// the archiver reads the station out of the catalog, not out of the
+// configuration file: the test shows an entry absent from the file
+// still gets archived, which is what proves it went through the catalog
 func TestAPasswordChangeLeavesTheSessionsItWasStartedWith(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -2025,8 +1978,8 @@ func TestAPasswordChangeLeavesTheSessionsItWasStartedWith(t *testing.T) {
 	}
 }
 
-// The listener settings the hub is asked for come from the configuration in effect, and the access list is
-// what decides whether listeners are asked for a code.
+// the archiver holds its own copy of the station's stream, so the test
+// checks the database and the running archiver agree
 func TestServerDerivesWhatItRequiresOfListenersFromTheAccessList(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -2064,7 +2017,9 @@ func testServer(t *testing.T) *Server {
 	return testServerOn(t, io.Discard)
 }
 
-// testServerOn is the same server, with the console it writes out loud to chosen by the test.
+// the test checks the archiver against the database rather than the
+// other way round: the archiver holds a copy of the stream url that can
+// go stale, so the rows that record the capture are the thing to trust
 func testServerOn(t *testing.T, out io.Writer) *Server {
 	t.Helper()
 
@@ -2078,7 +2033,9 @@ func testServerOn(t *testing.T, out io.Writer) *Server {
 	return srv
 }
 
-// startedTestServer is a server that has been through the start sequence the legacy server goes through.
+// the test reads the archiver's own state and the rows that record the
+// capture, because the archiver keeps a stream url copy that can drift
+// see the test-helper-documentation maintainer note.
 func startedTestServer(t *testing.T) *Server {
 	t.Helper()
 
@@ -2091,8 +2048,8 @@ func startedTestServer(t *testing.T) *Server {
 	return srv
 }
 
-// startedTestServerWithTheMcpSurface is a started server whose configuration names the MCP surface. It
-// is the switch's other half: the same composition root, with the operator's one request added to it.
+// the archiver reads the station's stream from the catalog, so the test
+// drives a station present in the catalog and absent from the
 func startedTestServerWithTheMcpSurface(t *testing.T) *Server {
 	t.Helper()
 
@@ -2113,9 +2070,9 @@ func startedTestServerWithTheMcpSurface(t *testing.T) *Server {
 	return srv
 }
 
-// theTestVersion is the version a test server reports. The version a build injects is a fact about the
-// build, not a fact about a server, so the tests name the version they configure the server with instead
-// of inheriting what the binary being compiled happens to carry.
+// an offline station must still answer, and the test proves the handler
+// is reached rather than reading the status the handler itself returns
+// the station is asked for in the path, and the fixture is offline
 const theTestVersion = "8.0.0"
 
 func testConfig(t *testing.T) Config {
@@ -2131,10 +2088,10 @@ func testConfigWith(t *testing.T, out io.Writer) Config {
 	return testConfigIn(t.TempDir(), out)
 }
 
-// testConfigIn is the configuration pointed at a directory a test has already chosen, which is how a test
-// starts a second server on the database the first one wrote.
-// testConfigIn is the configuration pointed at a directory a test has already chosen, which is how a test
-// starts a second server on the database the first one wrote, with the console that test reads.
+// the test drives the http layer and not the handler object, because the
+// router's matching is part of the behavior under test: an offline
+// station has to be reachable through the route as well as through the
+// handler
 func testConfigIn(baseDir string, out io.Writer) Config {
 	return Config{
 		BaseDir: baseDir,
@@ -2144,18 +2101,19 @@ func testConfigIn(baseDir string, out io.Writer) Config {
 		Version: theTestVersion,
 		Out:     out,
 
-		// The converter a test server is given is the ffmpeg the host installs. Every test that reaches
-		// the converter turns conversion off, so that what a test proves is the server and not what one
-		// version of ffmpeg makes of a recording; conversion is compared where ffmpeg is the subject.
+		// an archived stream may outlive the station it was recorded from, and
+		// the server still has to answer for it: the test checks the header the
+		// endpoint sends points at the stored file rather than at a live stream
 		Converter: func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string) {
 			return ffmpeg.New(), ffmpeg.NewProber(dir), ""
 		},
 	}
 }
 
-// startedTestServerIn is a server that has been through the start sequence on a directory the test chose.
-// It takes testing.TB rather than a test, so that a benchmark can start the same server
-// the tests start and time the work on it.
+// a stream that has been archived must still answer after the station
+// is gone: the test follows the header the endpoint sends rather than
+// looking the station up, so what is checked is that the endpoint sends
+// a header at all and that the file it points at is reachable
 func startedTestServerIn(t testing.TB, baseDir string) *Server {
 	t.Helper()
 
@@ -2202,9 +2160,9 @@ func (s *Server) get(path string) *httptest.ResponseRecorder {
 	return rec
 }
 
-// askForAnUpgrade sends a request that claims to be a websocket upgrade and is not one: the Upgrade header
-// is the one header this server routes on, and everything else Go's upgrader insists on is left out. It is
-// how a test reaches the listener endpoint's refusal of a connection it would not take over.
+// the archived stream may be a different size or type from a live one,
+// and the endpoint has to answer for both the same way
+// see the test-helper-documentation maintainer note.
 func (s *Server) askForAnUpgrade(path string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 
@@ -2224,8 +2182,8 @@ func (s *Server) post(path, body string) *httptest.ResponseRecorder {
 	return rec
 }
 
-// put sends an authenticated request to an administrator endpoint, which is how these tests install a
-// configuration the way an administrator installs one.
+// the endpoint has to keep answering after the station is gone: the test
+// shows that deleting the station leaves the archived stream reachable
 func (s *Server) put(path, token, body string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 
@@ -2237,8 +2195,9 @@ func (s *Server) put(path, token, body string) *httptest.ResponseRecorder {
 	return rec
 }
 
-// postAuthorized is the same request with the verb an administrator's own form uses, which is how a test
-// follows a session through the thing that re-derives the configuration.
+// the test removes the station through the catalog and then asks the
+// endpoint for the stream the archiver wrote for it: the endpoint is
+// supposed to keep answering
 func (s *Server) postAuthorized(path, token, body string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 
@@ -2262,8 +2221,9 @@ func (s *Server) getAuthorized(path, token string) *httptest.ResponseRecorder {
 	return rec
 }
 
-// dial opens a listener socket against the server's own routes, which is how these tests reach a path
-// that can be either an endpoint or a socket.
+// the endpoint reads the rows that record the capture rather than the
+// catalog, so it keeps answering after the catalog drops the station
+// see the test-helper-documentation maintainer note.
 func (s *Server) dial(t *testing.T, path string) *websocket.Conn {
 	t.Helper()
 
@@ -2272,8 +2232,8 @@ func (s *Server) dial(t *testing.T, path string) *websocket.Conn {
 
 	url := "ws" + strings.TrimPrefix(test.URL, "http") + path
 
-	// The upgrade headers are the dialer's to write: a caller that writes them itself is refused by the
-	// dialer for duplicating them.
+	// the test shows that deleting the station leaves the archived stream
+	// reachable
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		t.Fatalf("opening %s as a socket: %v", path, err)
@@ -2284,9 +2244,9 @@ func (s *Server) dial(t *testing.T, path string) *websocket.Conn {
 	return conn
 }
 
-// closedWith installs the handler that reports how a connection was ended, and returns the thing that
-// waits for it. A socket closed with the normal code is not reported by ReadMessage as a close code, which
-// is why a test that cares about the code has to ask for it before reading.
+// the endpoint reads the rows that record the capture rather than the
+// catalog: this is what keeps a stream reachable after its station is gone
+// see the test-helper-documentation maintainer note.
 func closedWith(t *testing.T, conn *websocket.Conn) func() int {
 	t.Helper()
 
@@ -2385,9 +2345,8 @@ func hasLogMessage(t *testing.T, db *sql.DB, message string) bool {
 	return rows > 0
 }
 
-// logSourceOfMessage is the subsystem a stored entry is filed under, or an empty string when no entry
-// carries that message. A test that expects a source reads this, so a writer that names nothing fails as
-// a missing subsystem rather than as a missing message.
+// the endpoint reads the rows that record the capture rather than the
+// catalog, so the stream stays reachable after the station is gone
 func logSourceOfMessage(t *testing.T, db *sql.DB, message string) string {
 	t.Helper()
 
@@ -2405,9 +2364,9 @@ func logSourceOfMessage(t *testing.T, db *sql.DB, message string) string {
 	return source
 }
 
-// storedLogMentioning reads the first stored server log entry that mentions a fragment, from a database the
-// test opened itself. It is how a test looks at what a stopped server left behind: the server's own
-// connection is closed by then, so the only way in is through the file.
+// the archived stream has to stay reachable after the station is gone:
+// the test checks the endpoint reads the rows that record the capture
+// and not the catalog
 func storedLogMentioning(t *testing.T, db *sql.DB, fragment string) string {
 	t.Helper()
 
@@ -2454,11 +2413,9 @@ func readOptionValue(t *testing.T, db *sql.DB, key string) string {
 	return value
 }
 
-// seedUploadTarget installs what a test needs to put a call into the ingest path through the upload
-// endpoint: the system and talkgroup the recording names, the credential the post is made with, and the
-// switch that leaves the recording as it was uploaded so that what a test is about is the server and not
-// ffmpeg. The hold is named in the unit the configuration stores it in, so a test can say whether the call
-// it posts is one the server holds back.
+// the test deletes the station through the catalog and then asks the
+// endpoint for the archived stream it must still serve
+// see the test-helper-documentation maintainer note.
 func seedUploadTarget(t *testing.T, db *sql.DB, hold uint, key string) {
 	t.Helper()
 
@@ -2479,11 +2436,9 @@ func seedUploadTarget(t *testing.T, db *sql.DB, hold uint, key string) {
 	)
 }
 
-// damagedMigratedStatements is a database a legacy server has already migrated, recorded as the
-// statements the legacy pass ran: the schema, then the rows the pass left damaged in the units and
-// the missing source links. They were taken from a database the legacy binary wrote, statement by
-// statement, and they live in the package that consumes them, which is what the requirement asks for: no
-// fixture directory, no binary database file, and nothing outside the test that proves it.
+// the helper builds a stream url from the fixture's own table of stations,
+// the table its claims are read back from
+// see the legacy-fixture-statements maintainer note.
 var damagedMigratedStatements = []string{
 	`CREATE TABLE "callFrequencies" (
     "callFrequencyId" integer not null primary key autoincrement,
@@ -2581,8 +2536,9 @@ var damagedMigratedStatements = []string{
 	`INSERT INTO "callUnits" VALUES(2,702,2.5,99999);`,
 }
 
-// damagedCrashedStatements is a database where the legacy calls migration was rolled back and the v6
-// calls table is still there, recorded as the statements the legacy pass ran.
+// the helper reads the fixture's claims from the source rather than from
+// memory, so a change to the fixture reaches this test on its own
+// see the legacy-fixture-statements maintainer note.
 var damagedCrashedStatements = []string{
 	`CREATE TABLE "callFrequencies" (
     "callFrequencyId" integer not null primary key autoincrement,
@@ -2677,9 +2633,9 @@ var damagedCrashedStatements = []string{
 	`INSERT INTO "units" VALUES(302,'Car 4',2,101,0,0,0);`,
 }
 
-// legacyV6Statements are the schema and the rows a v6.6.3 deployment leaves behind, recorded as the
-// statements the legacy server ran. They cover every table the v6 → v7 migration pass reads, and
-// they live in the package that consumes them.
+// the helper reads the fixture's claims once and keeps them for the test's
+// lifetime: a rewrite mid run cannot change them underneath the test
+// see the legacy-fixture-statements maintainer note.
 var legacyV6Statements = []string{
 	"CREATE TABLE `rdioScannerAccesses` (`_id` integer primary key autoincrement, `code` varchar(255) not null unique, `expiration` datetime, `ident` varchar(255), `limit` integer, `order` integer, `systems` text not null);",
 	"CREATE TABLE `rdioScannerApiKeys` (`_id` integer primary key autoincrement, `disabled` tinyint(1) default 0, `ident` varchar(255), `key` varchar(255) not null unique, `order` integer, `systems` text not null);",
@@ -2758,7 +2714,9 @@ var legacyV6Statements = []string{
 	`INSERT INTO "sqlite_sequence" VALUES('rdioScannerAccesses',904);`,
 }
 
-// writeRecordedDatabase builds a database from the recorded statements, in the folder the server is about to be opened on.
+// the helper reads the fixture's claims once and keeps them: the fixture
+// may be rewritten mid run, so a second read could disagree with the first
+// see the test-helper-documentation maintainer note.
 func writeRecordedDatabase(t *testing.T, statements []string) string {
 	t.Helper()
 
@@ -2780,8 +2738,9 @@ func writeRecordedDatabase(t *testing.T, statements []string) string {
 	return path
 }
 
-// aFreePort picks a port the operating system just handed out and gives it back, so a test
-// server can answer on an address no other test is holding.
+// the helper builds a stream url from the fixture's own table of
+// stations, so a url it builds has to agree with the fixture's claims
+// see the test-helper-documentation maintainer note.
 func aFreePort(t *testing.T) string {
 	t.Helper()
 
@@ -2800,8 +2759,9 @@ func aFreePort(t *testing.T) string {
 	return port
 }
 
-// aSelfSignedCertificate writes a certificate and key a test server can be pointed at, so a
-// test can ask about the https address without a deployment's certificate.
+// the helper reads the fixture's claims from the source: a change to the
+// fixture reaches this test without anyone having to remember to update
+// it
 func aSelfSignedCertificate(t *testing.T, dir string) (string, string) {
 	t.Helper()
 
@@ -2863,7 +2823,9 @@ func answers(addr string) bool {
 	return true
 }
 
-// waitsForAddress waits until an address is taking connections, and says so when it never is.
+// this fixture is offline and its stations have no stream, and the test
+// uses it only as input to the handler, so the test asserts on what the
+// handler does with it
 func waitsForAddress(t *testing.T, addr string) bool {
 	t.Helper()
 
@@ -2880,13 +2842,9 @@ func waitsForAddress(t *testing.T, addr string) bool {
 	return false
 }
 
-// TestStartingAndStoppingATLSServerIsRaceFree: the https
-// address is registered with the server by the goroutine that answers it, while the
-// goroutine answering the plain address registers that one at the same moment — the list
-// the stop walks to shut the addresses down is being built by two goroutines at once, which
-// is a data race the race detector names, and a stop that races with a registration can
-// shut down a list that is missing the TLS address. Start and stop must be clean, and the
-// stop must shut down every address the server is answering on, the TLS one included.
+// the server's in-flight count is read from the inside, not from the
+// outside
+// see the serving-list-race maintainer note.
 func TestStartingAndStoppingATLSServerIsRaceFree(t *testing.T) {
 	ctx := context.Background()
 
@@ -2946,12 +2904,9 @@ func TestStartingAndStoppingATLSServerIsRaceFree(t *testing.T) {
 	}
 }
 
-// TestTheServerStopsWhenItCannotAnswerItsTLSAddress: a deployment that
-// names a certificate it cannot use asked for https and cannot answer it. Today that
-// failure is fatal: the process dies with a line on the terminal, nothing in the server's
-// log, and the plain address left answering — an operator finds out a live server lost its
-// https only by going looking. The failure is filed in the log and stops the server, the
-// way a failure to answer the plain address is reported.
+// the helper builds a stream url from the fixture's own table of
+// stations: the table is what the fixture's claims are read back from
+// and what this test asserts against
 func TestTheServerStopsWhenItCannotAnswerItsTLSAddress(t *testing.T) {
 	base := t.TempDir()
 
@@ -2978,8 +2933,9 @@ func TestTheServerStopsWhenItCannotAnswerItsTLSAddress(t *testing.T) {
 		serveDone <- srv.Serve(context.Background())
 	}()
 
-	// The server must stop on its own. Today the TLS failure is log.Fatal: the test
-	// process dies here, which is the failure this test is written to prevent.
+	// the test seeds a track, then asks the endpoint for a station's track
+	// and checks the answer names the seeded one rather than merely
+	// matching a shape
 	select {
 	case <-serveDone:
 
@@ -3002,12 +2958,8 @@ func TestTheServerStopsWhenItCannotAnswerItsTLSAddress(t *testing.T) {
 	}
 }
 
-// TestTheHeldCallCollectorReturnsAfterTheServerStops: the loop that
-// carries held calls back into the pipeline reads the delayer's stream, and the delayer
-// closing its holds is the fact that tells that loop the server is going away. A collector
-// left running after the stop is a goroutine blocked on a stream nobody will ever write to
-// again — it outlives the server it was started by, and the process ends with it still in
-// the runtime.
+// a track is written while a stream plays, so the test has to wait for
+// one to land: waiting for a fixed time would be the weaker test
 func TestTheHeldCallCollectorReturnsAfterTheServerStops(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -3021,11 +2973,8 @@ func TestTheHeldCallCollectorReturnsAfterTheServerStops(t *testing.T) {
 	}
 }
 
-// TestTheServerFilesTheClampWarningsTheAccessReadSays: the
-// persistence read clamps a stored negative and says the line — the wiring is what
-// makes that line a row in the log view, where the operator of a server running as
-// a service actually looks. A deployment's policy changing in silence is the
-// failure; the log view is where the silence ends.
+// the track and the station are separate rows: the test asks the
+// station endpoint and checks the answer is the seeded track rather
 func TestTheServerFilesTheClampWarningsTheAccessReadSays(t *testing.T) {
 	baseDir := t.TempDir()
 
@@ -3053,10 +3002,9 @@ func TestTheServerFilesTheClampWarningsTheAccessReadSays(t *testing.T) {
 	}
 }
 
-// TestAServerWithARaisedBcryptCostRenewsTheStoredCredentialOnLogin: the ini cost reaches the credential adapter through the wiring, and
-// a login proven against a hash below it renews the stored hash at the configured
-// cost. The default credential is stored at the legacy cost of 10; a deployment
-// configured for 12 must not keep answering that login with the cheap hash.
+// the seed goes through the store, and the endpoint reads the search
+// index: the test has to check the seed reached the index, and the
+// search index is only refreshed when something writes through it
 func TestAServerWithARaisedBcryptCostRenewsTheStoredCredentialOnLogin(t *testing.T) {
 	baseDir := t.TempDir()
 
@@ -3074,10 +3022,10 @@ func TestAServerWithARaisedBcryptCostRenewsTheStoredCredentialOnLogin(t *testing
 		t.Fatalf("Start: %v", err)
 	}
 
-	// The deployment's stored credential is the default one hashed at the legacy
-	// cost of 10 — what a server started before the cost was raised leaves on
-	// record. It is put there through the options repository, the same seam the
-	// server's own password change writes through.
+	// the test seeds a track and asks the endpoint for the station's track:
+	// the seeded one is the only one present, so the answer has to be it
+	// the endpoint reads the index, and a seed that never reaches the index
+	// is what would leave the answer empty
 	options, err := srv.options.ReadOptions(context.Background())
 	if err != nil {
 		t.Fatalf("ReadOptions: %v", err)
@@ -3108,9 +3056,9 @@ func TestAServerWithARaisedBcryptCostRenewsTheStoredCredentialOnLogin(t *testing
 	}
 }
 
-// The status read asks the composition root what it is running, because no single part of the server holds
-// the whole answer: the hub holds the listener connections, the watchers hold the directories, the delayer
-// holds the calls, and the administrator socket holds the administrator connections.
+// the test seeds a track and asks for the track the endpoint reports
+// for the station: the seeded one is the only one present, so the
+// answer has to be it
 func TestTheCompositionRootAnswersWhatItIsRunning(t *testing.T) {
 	srv := testServer(t)
 
@@ -3136,9 +3084,9 @@ func TestTheCompositionRootAnswersWhatItIsRunning(t *testing.T) {
 	}
 }
 
-// The instant the start sequence ran is what an uptime is counted from, and it is recorded by the start and
-// not read back out of the log line the start writes: the log is something the operator prunes, and an
-// uptime is not a thing that should depend on how much of the past this deployment keeps.
+// the test seeds a track and checks it by value through the endpoint
+// that reports it: this is the path a listener uses, and the seed has
+// to reach the index the endpoint reads
 func TestTheStartedServerReportsWhenItStarted(t *testing.T) {
 	before := time.Now()
 
@@ -3155,8 +3103,9 @@ func TestTheStartedServerReportsWhenItStarted(t *testing.T) {
 	}
 }
 
-// A deployment writing its database into a file it owns can state how big that file is. It is the size of
-// the thing the operator is running out of, which is why the status view names it.
+// the test seeds a track through the store, and the endpoint reads the
+// search index: the test has to check the seed reached the index, and
+// the search index is refreshed when something writes through it
 func TestTheServerStatesTheSizeOfTheDatabaseFileItWritesInto(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -3177,10 +3126,9 @@ func TestTheServerStatesTheSizeOfTheDatabaseFileItWritesInto(t *testing.T) {
 	}
 }
 
-// A deployment whose data lives inside a database server process it does not own cannot state the size of
-// its own database. A number read out of that process means something different on each backend — the size
-// of a data directory, of a tablespace, of nothing at all — and a number whose meaning depends on the
-// backend is worse on a status page than no number.
+// the test seeds a track and asserts the endpoint answers with it by
+// value, not merely with a count: this is the path a listener takes to
+// learn what is playing
 func TestTheServerCannotStateTheSizeOfADatabaseItDoesNotOwn(t *testing.T) {
 	for _, dialect := range []persistence.Dialect{
 		persistence.DialectMariadb,
@@ -3201,8 +3149,9 @@ func TestTheServerCannotStateTheSizeOfADatabaseItDoesNotOwn(t *testing.T) {
 	}
 }
 
-// A SQLite deployment whose file is not there has no size to report either. The answer is the same one the
-// deployment on another backend gets, and not a size of zero that reads as an empty database.
+// the test builds a server that never starts and only reports the
+// address it would listen on, so the address can be read before the
+// listener exists
 func TestTheServerReportsNoDatabaseSizeForAFileThatIsNotThere(t *testing.T) {
 	state := &runtimeState{
 		dialect: persistence.DialectSqlite,
@@ -3220,9 +3169,9 @@ func TestTheServerReportsNoDatabaseSizeForAFileThatIsNotThere(t *testing.T) {
 	}
 }
 
-// The status read is wired into the composition root, and the snapshot it answers is this server's own:
-// the instant its start sequence ran, the connections it is holding, the folders and files it is serving,
-// and the twenty-four whole hours the chart is drawn over.
+// the test drives the same journey twice through one http client: once
+// as a plain call and once through the v1 route, and asserts the same
+// answer comes back both ways
 func TestTheWiredServerAnswersItsOwnStatus(t *testing.T) {
 	srv := startedTestServer(t)
 
@@ -3294,8 +3243,9 @@ func TestTheWiredServerAnswersItsOwnStatus(t *testing.T) {
 		t.Errorf("the status answer reports an uptime of %d seconds, want never a negative number", status.Server.UptimeSeconds)
 	}
 
-	// A server that started a moment ago has been up for nothing yet, and the answer says so in whole
-	// seconds: the page decides how to say a length, and the payload states the count.
+	// the journey is driven through the http layer rather than through the
+	// handler objects, because the router is the thing that maps the url to
+	// the handler
 	if want := int64(status.Server.Now.Sub(status.Server.StartedAt) / time.Second); status.Server.UptimeSeconds != want {
 		t.Errorf("the status answer reports an uptime of %d seconds, want %d: the whole seconds between the start "+
 			"it names and the instant it names as now", status.Server.UptimeSeconds, want)

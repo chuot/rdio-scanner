@@ -28,16 +28,10 @@ import (
 	"rdio-scanner/internal/infrastructure/persistence"
 )
 
-// The status read is the one thing the administration page asks for, and it asks every few seconds for as
-// long as an operator is looking at it. What one read costs is therefore not one operator's cost: it is
-// that cost multiplied by every administration page open on the server, all day. These time the read as
-// the server composes it — the same use case, the same persistence adapters, the same live-state answer
-// the composition root builds — against a database holding a month of calls and log lines at the size a
-// working deployment holds.
-//
-// They are run on purpose, and not by the test suite:
-//
-//	go test ./internal/app/ -bench 'StatusRead' -benchtime=200x -count=3
+// The status read is what every open administration page polls every few seconds, so its
+// cost is that cost times every page open all day. These time the read, its real use case,
+// adapters, and live-state answer, against a month of calls and log lines at deployment
+// size. They run by hand, not with the suite.
 
 // BenchmarkOneStatusRead times a single read: what one administration page pays for one of its reads.
 func BenchmarkOneStatusRead(b *testing.B) {
@@ -54,9 +48,8 @@ func BenchmarkOneStatusRead(b *testing.B) {
 	}
 }
 
-// BenchmarkTenConcurrentStatusReads times ten reads made at the same moment, which is what ten
-// administration pages open across a shift do to the server when their polls land together. One benchmark
-// iteration is one such moment, so the figure per read is the reported figure over ten.
+// BenchmarkTenConcurrentStatusReads times ten reads made at the same moment, what ten open
+// administration pages do when their polls land together; the figure per read is the reported
 func BenchmarkTenConcurrentStatusReads(b *testing.B) {
 	handler := statusReadAgainstASeededServer(b)
 
@@ -83,9 +76,8 @@ func BenchmarkTenConcurrentStatusReads(b *testing.B) {
 	}
 }
 
-// BenchmarkOneStatusReadOnAFreshDatabase times the same read against a database that has recorded nothing
-// yet: the floor the same benchmark measures against a deployment-sized history is compared with. It is
-// the same composition, the same statements, and no seeded rows.
+// BenchmarkOneStatusReadOnAFreshDatabase times the same read against a recorded-empty
+// database, the floor the deployment-sized history figure is compared with.
 func BenchmarkOneStatusReadOnAFreshDatabase(b *testing.B) {
 	srv := startedTestServerIn(b, b.TempDir())
 
@@ -107,9 +99,8 @@ func BenchmarkOneStatusReadOnAFreshDatabase(b *testing.B) {
 	}
 }
 
-// BenchmarkStatusReadOneStatement times each of the read's statements on its own, against the same seeded
-// database, so that a read which costs more than it should says which of its tallies costs it rather than
-// leaving that to be found in a diff.
+// BenchmarkStatusReadOneStatement times each of the read's statements on its own, so an
+// expensive read names the tally that costs it.
 func BenchmarkStatusReadOneStatement(b *testing.B) {
 	srv := startedTestServerIn(b, b.TempDir())
 
@@ -177,10 +168,9 @@ func BenchmarkStatusReadOneStatement(b *testing.B) {
 	})
 }
 
-// statusReadAgainstASeededServer starts a server on a directory of its own, puts a month of calls and log
-// lines on the database it opened, and hands back the status read exactly as the server's own wiring
-// builds it. The history is seeded after the start, so that none of the server's own startup work is
-// inside the timed loop.
+// statusReadAgainstASeededServer starts a server on its own directory, seeds a month of calls
+// and log lines after the start, and hands back the status read exactly as the server's own
+// wiring builds it.
 func statusReadAgainstASeededServer(b *testing.B) *application.GetRuntimeStatusHandler {
 	b.Helper()
 
@@ -194,21 +184,19 @@ func statusReadAgainstASeededServer(b *testing.B) *application.GetRuntimeStatusH
 	return application.NewGetRuntimeStatusHandler(srv.runtime, calls, logs, srv.clock)
 }
 
-// The history the read is timed against. The row counts are the ones a working deployment holds — read out
-// of one before these lines were written — spread over the 30 days such a deployment records, so that the
-// read is timed against a table that has grown rather than one that has just been made. The 24 hours the
-// read counts are inside that month, and the newest calls it names are the newest of the month.
+// The history the read is timed against: row counts read off a working deployment, spread
+// over the 30 days it records, so the read is timed against a grown table rather than a new
+// one. The 24 hours the read counts sit inside that month.
 const (
 	statusReadHistoryCalls = 57_000
 	statusReadHistoryLogs  = 58_000
 
-	// The rows go in in chunks of a few hundred. One statement per row would spend the setup making a
-	// commit — and a disk sync — for every call, which is a cost of the benchmark rather than of the read.
+	// Rows go in in chunks of a few hundred: one statement per row would make the setup pay a
+	// commit per call, a cost of the benchmark rather than of the read.
 	statusReadHistoryChunk = 400
 )
 
-// The talkgroups the month is recorded on, in the order they are stored: four on the first system and two
-// on the second, with the identifiers the calls name out.
+// The talkgroups the month is recorded on, in storage order: four on the first system, two
 var statusReadHistoryTalkgroups = []struct {
 	talkgroupID uint64
 	systemID    uint64
@@ -225,13 +213,12 @@ var statusReadHistoryTalkgroups = []struct {
 func seedStatusReadHistory(b *testing.B, db *sql.DB) {
 	b.Helper()
 
-	// The history is laid out backwards from the moment the benchmark runs, because the read counts the
-	// 24 hours it is made in: a month recorded in May would sit outside every window the read asks about,
-	// and the benchmark would be timing a scan that finds nothing.
+	// The history is laid out backwards from when the benchmark runs, because the read counts
+	// the 24 hours it is made in.
 	base := time.Now().UTC()
 
-	// The tag is the one a fresh server puts on record itself when it finds a database with no tags in
-	// it: the benchmark uses the deployment's own rather than adding a second one beside it.
+	// The tag is one a fresh server writes itself into a tagless database:
+	// the benchmark uses the deployment's own, not a second one beside it.
 	seed(b, db,
 		seedStatement{query: `INSERT INTO "systems" ("label", "systemId", "systemRef") VALUES ('Harbour Dispatch', 101, 10001)`},
 		seedStatement{query: `INSERT INTO "systems" ("label", "systemId", "systemRef") VALUES ('County Fire', 102, 10002)`},
@@ -251,9 +238,8 @@ func seedStatusReadHistory(b *testing.B, db *sql.DB) {
 			strings.Join(talkgroups, ", "),
 	})
 
-	// A call every 45 seconds, which is a month of them at a working deployment's rate, landing on the
-	// talkgroups in rotation so that no one talkgroup is the whole ranking, and on the system its
-	// talkgroup is on.
+	// A call every 45 seconds, a month of them at a working deployment's rate, landing on the
+	// talkgroups in rotation and on the system each talkgroup belongs to.
 	seed(b, db, chunkedStatements(
 		`INSERT INTO "calls" ("audio", "audioFilename", "audioLength", "audioMime", "systemId", "talkgroupId", "timestamp") VALUES `,
 		statusReadHistoryCalls,
@@ -270,8 +256,8 @@ func seedStatusReadHistory(b *testing.B, db *sql.DB) {
 	)...,
 	)
 
-	// The log lines a month of running writes: mostly info, with a warning and an error every twenty-fifth
-	// line under the subsystems that have a reason to complain, which is what the log tally counts.
+	// The log lines a month of running writes: mostly info, a warning and an error every
+	// twenty-fifth line under the complaining subsystems, which is what the log tally counts.
 	sources := []string{"dirwatch", "downstream", "delayer", "ffmpeg", "access", "prune", "server"}
 
 	seed(b, db, chunkedStatements(
@@ -300,8 +286,8 @@ func seedStatusReadHistory(b *testing.B, db *sql.DB) {
 	)
 }
 
-// chunkedStatements turns one row-per-number shape into statements that each carry a chunk of the rows:
-// the whole history on record, in a number of round trips a setup can afford.
+// chunkedStatements turns one row-per-number shape into statements each carrying a chunk of
+// the rows: the whole history in a number of round trips a setup can afford.
 func chunkedStatements(prefix string, total int, row func(int) string) []seedStatement {
 	statements := []seedStatement{}
 

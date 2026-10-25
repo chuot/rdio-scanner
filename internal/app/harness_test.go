@@ -31,14 +31,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// These are the helpers the server's own tests share: the way a test logs in, the way a test seeds a
-// configuration in front of a server, and the guard over what the server writes to its log view. The
-// journeys in tests/acceptance run against the same composition root through its exported API and keep
-// their own copy of these, because a test-only package cannot be imported.
+// These are the helpers the server's own tests share: the way a test logs
+// in, the way a test seeds a configuration in front of a server, and the
+// guard over what the server writes to its log view.
 
-// Every capture in this repository was taken with the server's time zone set to UTC, and the recorded
-// runs are compared against what a server in UTC wrote. A server started in a machine's own time zone
-// reads the timestamps its fixtures name as different moments, so the tests in this package run in UTC.
 func init() {
 	os.Setenv("TZ", "UTC")
 }
@@ -46,8 +42,8 @@ func init() {
 // defaultAdminCredential is the credential a fresh server accepts, and the one these tests log in with.
 const defaultAdminCredential = "rdio-scanner"
 
-// administratorToken logs in with the credential a fresh deployment answers with and returns the session
-// the login handed out.
+// administratorToken logs in with the credential a fresh deployment
+// answers with and returns the session the login handed out.
 func administratorToken(t *testing.T, srv *Server) string {
 	t.Helper()
 
@@ -72,8 +68,9 @@ func administratorToken(t *testing.T, srv *Server) string {
 	return answered.Token
 }
 
-// authorizedRequest reaches a path that needs the session a login handed out. The credential goes in the
-// Authorization header raw, with no scheme in front of it, because that is how the administration interface sends it.
+// authorizedRequest reaches a path that needs the session a login handed
+// out, sending the credential raw in the Authorization header because
+// that is how the administration interface sends it.
 func authorizedRequest(t *testing.T, srv *Server, method, path, token, body string) *httptest.ResponseRecorder {
 	t.Helper()
 
@@ -96,14 +93,15 @@ func sendFrame(t *testing.T, conn *websocket.Conn, frame string) {
 	}
 }
 
-// encodeAccessCode encodes an access code the way a client does, because the wire carries it that way.
+// encodeAccessCode encodes an access code the way a client does,
+// because the wire carries it that way.
 func encodeAccessCode(code string) string {
 	return base64.StdEncoding.EncodeToString([]byte(code))
 }
 
-// waitForLogMentioning waits for a log entry whose message contains this fragment, which is how a test
-// waits for a run to have reached a particular point without repeating the parts of the line that the
-// configuration decides.
+// waitForLogMentioning waits for a log entry whose message contains the
+// fragment, so a test can wait for a run to reach a point without
+// repeating what the configuration decides.
 func waitForLogMentioning(t *testing.T, db *sql.DB, fragment string) {
 	t.Helper()
 
@@ -145,16 +143,10 @@ func waitForLogMentioning(t *testing.T, db *sql.DB, fragment string) {
 	}
 }
 
-// assertEveryServerLogEntry is the guard over a real server's log view: every row names the part of the
-// server that wrote it, and no row begins with the internal name of the code that wrote it.
-//
-// The application layer's writers are guarded in internal/application/logs_wording_test.go. This is the same
-// two rules at the level where the watched directories, the livefeed hub, the upload endpoint and the
-// retention pass actually write, read back out of the store every entry is written through — which is also
-// the only place a row the *other* server wrote can be told apart from one this server wrote.
-//
-// It is called at the end of the tests that already reach each subsystem, rather than from one test that
-// tries to reach all of them, so a failure names the test that produced the entry.
+// assertEveryServerLogEntry is the guard over a real server's log view:
+// every row names the part of the server that wrote it, and no row
+// begins with the internal name of the code that wrote it. It runs at the
+// end of the tests that already reach each subsystem.
 func assertEveryServerLogEntry(t *testing.T, db *sql.DB) {
 	t.Helper()
 
@@ -208,12 +200,10 @@ func assertEveryServerLogEntry(t *testing.T, db *sql.DB) {
 	}
 }
 
-// internalPrefixAt is the front-of-message shape the wording rule forbids: a token naming a section and an
-// operation, or a bare section name, ending in a colon.
-//
-// Only the front counts. The failure's own text is kept verbatim after the sentence this feature puts in
-// front of it, because that text names the statement or the syscall that failed, so `the log search failed:
-// logs.search: no such table: logs` is the rule being followed and not broken.
+// internalPrefixAt is the front-of-message shape the wording rule forbids:
+// a token naming a section and an operation, or a bare section name,
+// ending in a colon. Only the front counts; the failure's own text is
+// kept verbatim after it because it names what failed.
 func internalPrefixAt(message string) string {
 	first := message
 
@@ -228,15 +218,16 @@ func internalPrefixAt(message string) string {
 	return ""
 }
 
-// seedStatement is one of the statements that put a configuration in front of the server, with the values
-// it needs passed in rather than written into it.
+// seedStatement is one of the statements that put a configuration in
+// front of the server, with the values it needs passed in rather than
+// written into it.
 type seedStatement struct {
 	query string
 	args  []any
 }
 
-// seed takes testing.TB rather than a test: a benchmark seeds the same history a test
-// seeds, and the history is what makes the thing being timed worth timing.
+// seed takes testing.TB rather than a test because a benchmark seeds the
+// same history that makes the thing being timed worth timing.
 func seed(t testing.TB, db *sql.DB, statements ...seedStatement) {
 	t.Helper()
 
@@ -247,10 +238,6 @@ func seed(t testing.TB, db *sql.DB, statements ...seedStatement) {
 	}
 }
 
-// recording is audio for a watched file. Nothing in these tests looks inside the recording — a watch reads
-// a recording's name and its sidecar, and the ingest path only asks whether there is more audio than a
-// container header — so what matters is that it is as long as the recording the recorded run was captured
-// from.
 func recording(bytes int) []byte {
 	audio := make([]byte, bytes)
 
