@@ -29,10 +29,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// errNoCaller is what a capability says when it was reached with no caller decided for it. That
-// is a wiring fault, not a caller fault: the gate is the only thing that puts a caller in front of
-// these capabilities, and a capability reached past the gate must stop rather than answer with an
-// administrator's reach.
+// errNoCaller is what a capability says when it was reached with no caller
+// decided for it. That is a wiring fault: the gate is the only thing that
+// puts a caller in front of these capabilities, and a capability reached
+// past the gate must stop rather than answer with an administrator's reach.
 var errNoCaller = errors.New("the capability was reached with no caller decided for it")
 
 // isNotFound is the store's own "that record is not there".
@@ -40,13 +40,10 @@ func isNotFound(err error) bool {
 	return errors.Is(err, ports.ErrNotFound)
 }
 
-// The read-only capabilities an access-code caller reaches: the history search, one recorded call,
-// and the discovery step every one of them needs.
-//
-// They are answers to questions, not REST routes with a new name. `search_calls` is one tool with
-// every filter the history accepts; there is no `search_calls_by_system` beside it. Each one runs
-// the same use case the REST surface runs, over the same scope the gate decided, so a page an
-// assistant gets and a page a listener at a desk gets come from one rule.
+// The read-only capabilities an access-code caller reaches: the history
+// search, one recorded call, and discovery. Each runs the use case the
+// REST surface runs, over the scope the gate decided; see the capabilities-
+// are-questions-not-routes maintainer note.
 
 // registerCallTools adds the history search, one call, and the scoped systems projection.
 func registerCallTools(target *mcp.Server, deps Deps) {
@@ -158,12 +155,10 @@ type searchCallsInput struct {
 	Sort      int    `json:"sort,omitempty" jsonschema:"negative for newest first, zero or positive for oldest first"`
 }
 
-// criteria is the history's own parsing of these filters, the same function the REST surface
-// parses its body with, so one rule reads a listener's payload and an assistant's arguments.
-//
-// Only the filters the caller named are handed over. The parser reads an absent page size as the
-// default and a named zero as a request for zero rows, and an assistant that named no page size
-// asked for the default, not for nothing.
+// criteria is the history's own filter parsing, the same function the
+// REST surface parses its body with. Only the filters the caller named
+// are handed over: an absent page size means the default, a named zero
+// means zero rows.
 func (in searchCallsInput) criteria() domain.CallSearch {
 	payload := map[string]any{}
 
@@ -205,8 +200,9 @@ type callPage struct {
 	Results   []callRow   `json:"results"`
 }
 
-// callOptions echoes what this server was asked for, which is not always what it used: a page
-// asking for more rows than the history will ever return gets the ceiling.
+// callOptions echoes what this server was asked for, which is not always
+// what it used: a page asking for more rows than the history will ever
+// return gets the ceiling.
 type callOptions struct {
 	Limit  uint `json:"limit"`
 	Offset uint `json:"offset"`
@@ -221,11 +217,9 @@ type callRow struct {
 	AudioLength string `json:"audioLength,omitempty" jsonschema:"the recording's length as mm:ss, empty when it was never measured"`
 }
 
-// pageAnswer is one page of the history, with the page it applied echoed back.
-//
-// The echo is the criteria as this server used them, and not the arguments as they arrived: an
-// assistant paging further along has to know the page size that was applied to work out the offset
-// of the next page, and an argument naming no page size is not a number it can compute with.
+// pageAnswer is one page with the criteria as this server applied them
+// echoed back, so an assistant paging further knows the page size that
+// was used.
 func pageAnswer(page ports.CallSearchPage, criteria domain.CallSearch) callPage {
 	answer := callPage{
 		Count: page.Count,
@@ -257,8 +251,8 @@ func pageAnswer(page ports.CallSearchPage, criteria domain.CallSearch) callPage 
 	return answer
 }
 
-// audioLength is a recording's length as the product states it — mm:ss — and nothing at all when
-// the server never measured it.
+// audioLength is a recording's length as the product states it, mm:ss, and
+// nothing at all when the server never measured it.
 func audioLength(length time.Duration) string {
 	if length <= 0 {
 		return ""
@@ -325,8 +319,8 @@ func callAnswer(call domain.Call) callDetail {
 	return answer
 }
 
-// listSystemsInput is the discovery step's empty argument list: what a caller may see is decided by
-// the credential, not by an argument.
+// listSystemsInput is the discovery step's empty argument list: what a
+// caller may see is decided by the credential, not an argument.
 type listSystemsInput struct{}
 
 // systemsView is the scoped projection an assistant names its filters with.
@@ -411,9 +405,10 @@ func refused(reason string) *mcp.CallToolResult {
 	return result
 }
 
-// newRefusal is a capability's refusal as the protocol reports it. A tool has a failure answer of
-// its own that a client shows as an answer; a resource read has none, so a resource that refuses
-// answers the protocol's error, carrying the same sentence a tool's refusal carries.
+// newRefusal is a capability's refusal as the protocol reports it. A tool
+// has a failure answer a client shows as an answer; a resource read has
+// none, so a resource that refuses answers the protocol's error with the
+// same sentence.
 func newRefusal(reason string) error {
 	return fmt.Errorf("%s", reason)
 }
