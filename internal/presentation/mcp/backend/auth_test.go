@@ -26,8 +26,8 @@ import (
 	"rdio-scanner/internal/presentation/common/httpaddr"
 )
 
-// ask posts to the listener surface. A POST with no body is refused by the SDK with 400, so a
-// 401 here can only have come from the gate.
+// ask posts to the listener surface: a 401 here can only have come from the gate.
+// An empty POST is refused 400 by the SDK itself.
 func ask(t *testing.T, bundle *serverBundle, addr string, headers map[string]string) (int, string) {
 	t.Helper()
 
@@ -111,8 +111,8 @@ func TestAListenerRefusesAnAdministratorCredentialThatIsNotASession(t *testing.T
 	}
 }
 
-// A server with no access list lets an anonymous caller in, the way the listener socket does with
-// the same configuration. The caller reads; it does not write.
+// An unrestricted server takes an anonymous caller, as the listener socket does,
+// and the caller reads without writing.
 func TestAListenerTakesAnAnonymousCallerOnAnUnrestrictedServer(t *testing.T) {
 	bundle := newServer(t, false)
 
@@ -139,8 +139,8 @@ func TestAListenerRefusesAnAnonymousCallerOnARestrictedServer(t *testing.T) {
 	}
 }
 
-// The refusal for a spent guess budget is indistinguishable from the refusal for a wrong
-// credential: same status, same body.
+// A spent guess budget is refused exactly like a wrong credential:
+// same status, same body.
 func TestAListenerRefusesASpentGuessBudgetIndistinguishablyFromAWrongCredential(t *testing.T) {
 	bundle := newServer(t, true)
 
@@ -275,8 +275,8 @@ func TestTheGateCarriesTheCallersTierToTheCapabilities(t *testing.T) {
 	}
 }
 
-// An access code that names systems carries its scope to the capabilities; the administrator's
-// credential is not scoped by the listener access list.
+// An access code scoped to systems carries that scope to the capabilities; the
+// administrator's credential is not scoped by the listener access list.
 func TestTheGateCarriesTheScopeOfTheCredentialItResolved(t *testing.T) {
 	bundle := newServer(t, true)
 	bundle.accesses.Stored = domain.Accesses{
