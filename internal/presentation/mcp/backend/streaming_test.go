@@ -31,21 +31,13 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The assistant's endpoint carries a bound of its own, because its work is not the administrator's
-// work: a composite capability runs several queries over a deployment with a full history, and a
-// session's stream stays open for the life of the session. Two things follow, and both are the
-// surface's own business rather than the composition root's.
-//
-// A capability runs under a bound of its own, well inside the endpoint's bound, so the assistant
-// gets an answer naming the work that ran out of time and not a stream that dies with nothing said.
-//
-// A session's stream is kept writing. The socket's write bound closes a connection that writes
-// nothing for its length; a stream that opens and then falls silent is closed, and the assistant's
-// session goes with it. The surface keeps each session it is holding alive by asking it, at an
-// interval, whether it is still there.
+// The assistant's endpoint carries a bound of its own: composites run several
+// queries, and a session's stream stays open for the session's life. Two pins
+// follow: a capability runs inside its own bound, so the assistant gets an
+// answer naming the work that ran out of time, and held streams keep writing.
 
-// newSurfaceWithDeps is the surface with its streaming dependencies named: the bound one capability's
-// work gets, and the interval its sessions are kept alive at.
+// newSurfaceWithDeps is the surface with its streaming dependencies named:
+// the bound one capability's work gets, and the session keepalive interval.
 func newSurfaceWithDeps(t *testing.T, tweak func(*serverBundle, Deps) Deps) *serverBundle {
 	t.Helper()
 
@@ -59,11 +51,10 @@ func newSurfaceWithDeps(t *testing.T, tweak func(*serverBundle, Deps) Deps) *ser
 	return bundle
 }
 
-// TestAToolWhoseWorkOutlivesItsOwnDeadlineAnswersAFailureTheAssistantCanRead: the endpoint's bound is
-// generous because a composite capability legitimately runs several queries. A capability that
-// outlives its own bound is the deployment's problem — a log view that does not answer, a history
-// bigger than the server expected — and the assistant should hear about it from the capability, in
-// time to ask a narrower question, rather than from a stream that stops.
+// TestAToolWhoseWorkOutlivesItsOwnDeadlineAnswersAFailureTheAssistantCanRead:
+// the endpoint's bound is generous for legitimate composites. A capability
+// outliving its own bound is the deployment's problem, and the assistant must
+// hear it from the capability in time to ask a narrower question.
 func TestAToolWhoseWorkOutlivesItsOwnDeadlineAnswersAFailureTheAssistantCanRead(t *testing.T) {
 	const (
 		itsOwnDeadline = 50 * time.Millisecond
@@ -101,9 +92,9 @@ func TestAToolWhoseWorkOutlivesItsOwnDeadlineAnswersAFailureTheAssistantCanRead(
 	}
 }
 
-// TestAToolWhoseWorkFitsItsOwnDeadlineIsNotRefusedByIt: the bound is a bound, not a delay. A
-// capability that answers inside its bound answers as it always did, with no notice of the bound at
-// all.
+// TestAToolWhoseWorkFitsItsOwnDeadlineIsNotRefusedByIt: a capability that
+// answers inside its own bound answers as it always did, with no notice of the
+// bound at all.
 func TestAToolWhoseWorkFitsItsOwnDeadlineIsNotRefusedByIt(t *testing.T) {
 	bundle := newSurfaceWithDeps(t, func(b *serverBundle, deps Deps) Deps {
 		deps.ToolDeadline = 5 * time.Second
@@ -127,10 +118,10 @@ func TestAToolWhoseWorkFitsItsOwnDeadlineIsNotRefusedByIt(t *testing.T) {
 	}
 }
 
-// TestTheSurfaceKeepsItsSessionsStreamsAlive: a session's stream is open for the life of the session,
-// and a connection that writes nothing for the length of the socket's write bound is closed. The
-// surface keeps the sessions it is holding alive by pinging them: the ping is the protocol's own
-// "are you there", it asks the client to answer, and the write is what keeps the stream live.
+// TestTheSurfaceKeepsItsSessionsStreamsAlive: a session's stream is open for the
+// session's life and is kept live by the protocol's own ping, which asks the
+// client to answer and writes what keeps the stream live; a connection writing
+// nothing past the socket's write bound is closed.
 func TestTheSurfaceKeepsItsSessionsStreamsAlive(t *testing.T) {
 	const interval = 40 * time.Millisecond
 
@@ -162,8 +153,8 @@ func TestTheSurfaceKeepsItsSessionsStreamsAlive(t *testing.T) {
 		}
 	}
 
-	// A session the server has closed is not kept alive: the surface keeps the sessions it is
-	// holding, and a stream nobody is holding gets nothing.
+	// A session the server has closed is not kept alive: the surface keeps the
+	// sessions it is holding, and a stream nobody holds gets nothing.
 	if err := bundle.server.CloseSessions(context.Background()); err != nil {
 		t.Fatalf("closing the surface's sessions: %v", err)
 	}
@@ -183,9 +174,9 @@ func TestTheSurfaceKeepsItsSessionsStreamsAlive(t *testing.T) {
 	}
 }
 
-// TestTheKeepaliveIntervalKeepsAStreamWritingInsideTheSocketWriteBound: the interval is chosen
-// against the socket's write bound, which is thirty seconds. An interval at or beyond that length
-// keeps nothing alive: the stream is closed before the next ping is due.
+// TestTheKeepaliveIntervalKeepsAStreamWritingInsideTheSocketWriteBound:
+// the interval is chosen against the socket's thirty second write bound,
+// at or beyond which the stream closes before the next ping is due.
 func TestTheKeepaliveIntervalKeepsAStreamWritingInsideTheSocketWriteBound(t *testing.T) {
 	if sessionKeepalive > 10*time.Second {
 		t.Fatalf("the surface pings its sessions every %v: the socket's write bound is 30 seconds, and a "+
@@ -194,10 +185,10 @@ func TestTheKeepaliveIntervalKeepsAStreamWritingInsideTheSocketWriteBound(t *tes
 	}
 }
 
-// TestTheToolDeadlineIsWellInsideTheEndpointBound: the endpoint's bound is the assistant's whole
-// exchange, generous because a composite capability runs several queries. A capability's own bound is
-// what tells the assistant its question was too big, and it has to arrive early enough in the
-// exchange that the answer is the capability's failure and not a stream that stopped.
+// TestTheToolDeadlineIsWellInsideTheEndpointBound: the endpoint bound is the
+// assistant's whole exchange, generous for composites, and the capability's own
+// bound has to arrive early enough that the failure reads as the capability's
+// and not as a stream that stopped.
 func TestTheToolDeadlineIsWellInsideTheEndpointBound(t *testing.T) {
 	if toolDeadline < 30*time.Second {
 		t.Fatalf("a capability runs under %v: a composite capability runs several queries over a full "+
@@ -211,9 +202,9 @@ func TestTheToolDeadlineIsWellInsideTheEndpointBound(t *testing.T) {
 	}
 }
 
-// slowLogs is the log view of a deployment whose log repository does not answer for a while: the
-// shape a capability meets on a busy server, and the reason a capability carries a bound of its own.
-// It notices the cancellation the bound brings, the way a repository reached through a context does.
+// slowLogs is a log repository that does not answer for a while and notices the
+// cancellation the bound brings: the shape a capability meets on a busy server,
+// and the reason a capability carries a bound of its own.
 type slowLogs struct {
 	*fakes.Logs
 
@@ -231,9 +222,9 @@ func (logs slowLogs) SearchLogs(ctx context.Context, search domain.LogSearch) (p
 	return logs.Logs.SearchLogs(ctx, search)
 }
 
-// recordingStream is the client's side of a session, keeping what the surface writes to the stream.
-// The keepalive is proven by what arrives on the stream, and nothing else in the surface writes
-// there.
+// recordingStream is the client's side of a session, keeping what the surface
+// writes: the keepalive is proven by what arrives here, and nothing else in the
+// surface writes here.
 type recordingStream struct {
 	requests chan recordedRequest
 
