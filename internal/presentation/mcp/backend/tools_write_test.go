@@ -27,15 +27,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The administrator's write capabilities. Each one changes the deployment, so each one says what it
-// is about to change and asks the operator before it changes it: the assistant states the change,
-// the operator confirms it, and the write happens only in the confirmed round.
-//
-// These are the tests for that contract. A refused ask changes nothing at all. An accepted ask
-// changes exactly what was named, and nothing beside it. A change that removes entries names them,
-// because a section replace deletes rows the operator cannot get back. A client that cannot ask the
-// operator cannot make a change. And every one of these capabilities declares, in the catalog, that
-// it is not a read.
+// The administrator's write capabilities: each changes the deployment, so each
+// says what it is about to change and asks the operator first. Pinned: a
+// refused ask changes nothing, an accepted ask changes exactly what it named,
+// removals name the rows they delete, and each write declares itself a write.
 
 // confirmer is the operator standing at the client: what the surface asked, and what the operator
 // answered at each ask.
@@ -61,8 +56,8 @@ func (c *confirmer) asked() string {
 	return strings.Join(c.asks, "\n")
 }
 
-// newConfirmingSession is the administrator's capability set with a client that answers the surface's
-// asks. The action is what the operator does at the prompt: accept, decline, or dismiss it.
+// newConfirmingSession is the administrator's capability set with a client
+// that answers the surface's asks: accept, decline, or dismiss.
 func newConfirmingSession(t *testing.T, action string) (*session, *confirmer) {
 	t.Helper()
 
@@ -77,9 +72,9 @@ func newConfirmingSession(t *testing.T, action string) (*session, *confirmer) {
 	return s, operator
 }
 
-// deploymentState is the whole configuration the fixture's stores hold, as one comparable string.
-// A test that says a refused ask changed nothing has to be able to prove it about every store the
-// surface can write to, and not about the one it happened to be aiming at.
+// deploymentState is the whole configuration the fixture's stores hold, as one
+// comparable string: a refused ask has to be proven to have changed every store
+// the surface can write to, not only the one it aimed at.
 func deploymentState(t *testing.T, bundle *serverBundle) string {
 	t.Helper()
 
@@ -310,9 +305,9 @@ func TestAnAcceptedConfirmationMakesExactlyTheStatedChange(t *testing.T) {
 	})
 }
 
-// The ask names every entry that will change, by the reference an operator reads it by. An ask that
-// says "3 changes" is an ask the operator cannot read: the point of confirming is knowing what is
-// being confirmed.
+// The confirmation names every entry that will change, by the reference an
+// operator reads it by: an ask saying only how many changes is an ask the
+// operator cannot read.
 func TestTheConfirmationNamesEveryEntryThatWillChange(t *testing.T) {
 	s, operator := newConfirmingSession(t, "decline")
 
@@ -334,9 +329,9 @@ func TestTheConfirmationNamesEveryEntryThatWillChange(t *testing.T) {
 	}
 }
 
-// A section replace deletes the rows the submission does not carry, and the ask says so before it
-// asks. An operator confirming "replace the talkgroups of system 1" has to know that the talkgroup
-// not in the payload is gone.
+// A section replace deletes the rows the submission does not carry, and the ask
+// says so before it asks: the operator confirming a replace has to know which
+// rows are gone.
 func TestASectionReplaceThatRemovesEntriesNamesThemBeforeItAsks(t *testing.T) {
 	s, operator := newConfirmingSession(t, "decline")
 
@@ -369,9 +364,9 @@ func TestASectionReplaceThatRemovesEntriesNamesThemBeforeItAsks(t *testing.T) {
 	}
 }
 
-// A submission that names the section exactly as it is changes nothing: the capability asks nothing,
-// writes nothing, and says there is nothing to confirm. An operator confirming a no-op learns
-// nothing, and an assistant that asks for one spends the operator's attention for nothing.
+// A submission naming the section exactly as it is asks nothing, writes nothing,
+// and says there is nothing to confirm: a no-op confirmation spends the
+// operator's attention for nothing.
 func TestAChangeThatChangesNothingAsksNothingAndWritesNothing(t *testing.T) {
 	s, operator := newConfirmingSession(t, "accept")
 
@@ -404,10 +399,9 @@ func TestAChangeThatChangesNothingAsksNothingAndWritesNothing(t *testing.T) {
 	}
 }
 
-// Every write capability declares, in the catalog an assistant reads, that it is not a read and that
-// it can destroy data. An assistant that plans a sequence of calls reads the annotations first: a
-// capability that quietly looks like a read is a capability that gets called while the operator is
-// looking away.
+// Every write capability declares in the catalog that it is not a read and can
+// destroy data: an assistant plans from the annotations first, and a capability
+// that looks like a read gets called while the operator is looking away.
 func TestTheWriteCapabilitiesDeclareTheyAreNotReadOnlyAndAreDestructive(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
 
@@ -440,9 +434,9 @@ func TestTheWriteCapabilitiesDeclareTheyAreNotReadOnlyAndAreDestructive(t *testi
 	}
 }
 
-// A client that cannot ask the operator cannot make a change. The confirmation is not a courtesy
-// the surface performs when it is convenient: it is the operator in the loop, and a client that has
-// no way to reach the operator has no way to bring the operator into the loop.
+// A client that cannot ask the operator cannot make a change: the confirmation
+// is the operator in the loop, not a courtesy, and a client with no way to
+// reach the operator has no way to bring them into it.
 func TestAWriteRefusesAClientThatCannotAskTheOperator(t *testing.T) {
 	for _, probe := range writeProbes() {
 		s := newCallerSession(t, Caller{Tier: TierFull})
@@ -462,9 +456,9 @@ func TestAWriteRefusesAClientThatCannotAskTheOperator(t *testing.T) {
 	}
 }
 
-// Removing a listener by identity deletes every access code sharing that name. The ask names every
-// one of them, because the operator is confirming a deletion whose size the operator cannot see
-// from the name alone.
+// Removing a listener by identity deletes every access code sharing that name,
+// and the ask names every one: the operator is confirming a deletion whose
+// size the name alone does not show.
 func TestTheRemoveFormNamesEveryCodeThatWillGo(t *testing.T) {
 	s, operator := newConfirmingSession(t, "decline")
 
@@ -507,9 +501,9 @@ func TestThePasswordChangeNamesWhatItInvalidates(t *testing.T) {
 	}
 }
 
-// A change to a section that carries credentials shows the change with the credentials masked. The
-// answer goes into a chat log, and a section diff is exactly the place a credential would end up in
-// one.
+// A change to a section carrying credentials is shown with the credentials
+// masked: the answer goes into a chat log, and a section diff is exactly where
+// a credential would end up in one.
 func TestAChangeToACredentialSectionAnswersWithTheCredentialsMasked(t *testing.T) {
 	s, _ := newConfirmingSession(t, "accept")
 
@@ -547,9 +541,9 @@ func TestAChangeToACredentialSectionAnswersWithTheCredentialsMasked(t *testing.T
 	}
 }
 
-// The settings a submission does not name are reset to their defaults, because that is what the
-// server's own settings save does. The ask names them: an assistant that sends two settings and
-// tells the operator it is changing two is an assistant that quietly reset the rest.
+// The settings a submission does not name are reset to their defaults, because
+// that is what the server's own settings save does, and the ask names them: an
+// assistant reporting two changes has otherwise quietly reset the rest.
 func TestTheSettingsAChangeResetsAreNamed(t *testing.T) {
 	s, operator := newConfirmingSession(t, "decline")
 
@@ -612,9 +606,9 @@ func TestAWriteAsksNothingAboutAChangeItCannotMake(t *testing.T) {
 	}
 }
 
-// refusedOrRejected is a capability saying no: by the protocol's own refusal, or by refusing the
-// arguments before the capability runs. Both are the answer this test asks about — nothing was
-// asked of the operator, and nothing was written.
+// refusedOrRejected is a capability saying no: the protocol's own refusal, or a
+// refusal of the arguments before the capability runs. Either is the answer
+// here: nothing asked of the operator, nothing written.
 func refusedOrRejected(t *testing.T, s *session, tool string, args map[string]any) string {
 	t.Helper()
 
@@ -629,9 +623,9 @@ func refusedOrRejected(t *testing.T, s *session, tool string, args map[string]an
 	return answeredText(answered)
 }
 
-// The write capabilities, with the arguments each one accepts against the fixture. The arguments
-// have to be arguments the capability takes: the protocol validates them before the capability runs,
-// and a probe whose arguments belong to another capability proves nothing about this one.
+// writeCapabilityProbes is each write capability with arguments it accepts
+// against the fixture: the protocol validates arguments before the capability
+// runs, so a probe with another capability's arguments proves nothing.
 func writeCapabilityProbes() []struct {
 	tool string
 	args map[string]any
@@ -655,9 +649,8 @@ func writeCapabilityProbes() []struct {
 	}
 }
 
-// An access-code caller is refused every write capability, and the refusal it gets is the refusal a
-// caller carrying no credential gets for the same capability: reaching the deployment's writes is
-// done by signing in as an administrator, and no weaker credential is read as a partial signature.
+// An access-code caller is refused every write capability, with the refusal
+// a caller with no credential gets: writes are for signed-in administrators.
 func TestTheAdministratorsWriteCapabilitiesRefuseAnAccessCodeCallerTheSameWayTheyRefuseACallerWithNoCredential(t *testing.T) {
 	asListener := newAdministratorSetSession(t, readScoped())
 	asAnonymous := newAdministratorSetSession(t, Caller{Tier: TierReadOnly})
@@ -678,10 +671,10 @@ func TestTheAdministratorsWriteCapabilitiesRefuseAnAccessCodeCallerTheSameWayThe
 	}
 }
 
-// The refusal above is the drift proof: a write capability standing in front of the caller is
-// refused by its own handler. This is the shape the caller actually reaches — the capability set
-// its credential opens — where the write capabilities are not offered at all and cannot be reached
-// by naming them.
+// The refusal above is the drift proof, a write capability refused by its own
+// handler standing in front of the caller. This is the shape the caller really
+// reaches: the capability set its credential opens, where the write
+// capabilities are not offered and cannot be reached by naming them.
 func TestTheReadOnlyTiersOfferNoWriteCapability(t *testing.T) {
 	for _, who := range []Caller{readScoped(), {Tier: TierReadOnly}} {
 		s := newCallerSession(t, who)
@@ -714,11 +707,10 @@ func TestTheReadOnlyTiersOfferNoWriteCapability(t *testing.T) {
 	}
 }
 
-// The administrator's journey: read a section the way the administrator's page reads it, write it
-// back, write one level of one system, onboard a listener, remove them, and replace the credential.
-// Each step goes over the entry point the capability names, and each answer is the acknowledgement
-// of a change made — the surface's own rows, with the credentials masked, and never the server's
-// domain values.
+// TestTheAdministratorsWriteJourneyGoesOverTheEntryPointsItNames: read a
+// section as the administrator's page reads it, write it back, write one
+// level, onboard and remove a listener, replace the credential. Each answer
+// is an acknowledgement from the surface's own rows, credentials masked.
 func TestTheAdministratorsWriteJourneyGoesOverTheEntryPointsItNames(t *testing.T) {
 	s, _ := newConfirmingSession(t, "accept")
 
@@ -739,8 +731,8 @@ func TestTheAdministratorsWriteJourneyGoesOverTheEntryPointsItNames(t *testing.T
 		t.Fatalf("the settings save moved the prune horizon to %d; the journey did not ask for it", got)
 	}
 
-	// One level of one system, read as the template answers it and written back with one entry
-	// added. The other system is not this level's business and keeps what it had.
+	// One level of one system, read as the template answers it and written back
+	// with one entry added; the other system keeps what it had.
 	levels := readRows(t, s, "rdio-scanner://systems/"+strconv.FormatUint(uint64(systemOneRef), 10)+"/talkgroups")
 
 	levels = append(levels, map[string]any{
@@ -801,8 +793,8 @@ func TestTheAdministratorsWriteJourneyGoesOverTheEntryPointsItNames(t *testing.T
 			len(s.bundle.accesses.Stored), s.bundle.accesses.Stored)
 	}
 
-	// The credential, replaced. The server stops asking for the default one, and the answer never
-	// carries the credential it replaced.
+	// The credential, replaced: the server stops asking for the default one, and
+	// the answer never carries the credential it replaced.
 	answered = call(t, s, "rotate_admin_password", map[string]any{"newPassword": "a-long-new-administrator-credential"})
 
 	assertAcknowledgement(t, "rotate_admin_password", answered)
@@ -815,17 +807,17 @@ func TestTheAdministratorsWriteJourneyGoesOverTheEntryPointsItNames(t *testing.T
 	}
 }
 
-// writeAnswerFields is the vocabulary each write capability answers in. An answer outside it is an
-// answer carrying something the surface never declared: the server's own values, or a credential.
+// writeAnswerFields is the vocabulary each write capability answers in:
+// anything outside it carries the server's own values or a credential.
 var writeAnswerFields = map[string][]string{
 	"manage_config":         {"section", "system", "outcome", "current", "added", "changed", "removed", "settings", "reset", "saved", "note"},
 	"manage_access_user":    {"action", "ident", "outcome", "added", "changed", "removed", "note"},
 	"rotate_admin_password": {"outcome", "passwordNeedsChange", "note"},
 }
 
-// The names the server's domain values are spelled with. They are not this surface's vocabulary:
-// an answer that carries one has handed the caller the server's persistence shape, with the fields
-// a configuration payload does not name.
+// domainSpellings are the names the server's domain values are spelled with, not
+// this surface's vocabulary: an answer carrying one has handed the caller the
+// server's persistence shape, with fields a configuration payload does not name.
 var domainSpellings = []string{
 	"TalkgroupRef", "SiteRef", "UnitRef", "SystemRef", "GroupIDs", "TagID", "AdminPasswordHash",
 	"Secret", "MaxClients", "PruneDays", "AutoPopulate", "KeypadBeeps", "ShowListenersCount",
@@ -833,9 +825,9 @@ var domainSpellings = []string{
 	"SystemID", "DeleteAfter", "Directory", "ID",
 }
 
-// assertAcknowledgement is the shape a write capability's answer has to have: the outcome of the
-// change, in the vocabulary the capability declared, with the credentials masked and the server's
-// own values kept out of the answer.
+// assertAcknowledgement is the shape a write capability's answer has to have:
+// the outcome of the change in the capability's declared vocabulary, the
+// credentials masked, and the server's own values kept out.
 func assertAcknowledgement(t *testing.T, tool string, answered *mcp.CallToolResult) {
 	t.Helper()
 
@@ -886,8 +878,8 @@ func assertAcknowledgement(t *testing.T, tool string, answered *mcp.CallToolResu
 	}
 }
 
-// readSection is a configuration resource read the way an assistant reads it: the text the resource
-// answers, which for a section is the section's rows and for the settings is the settings view.
+// readSection is a configuration resource read the way an assistant reads it:
+// the text the resource answers, a section's rows, or the settings view.
 func readSection(t *testing.T, s *session, uri string) map[string]any {
 	t.Helper()
 
@@ -905,8 +897,8 @@ func readSection(t *testing.T, s *session, uri string) map[string]any {
 	return view
 }
 
-// writableSettingsOf is the settings a caller can write back, read from the settings the server
-// answered. The server's own notices are not settings, and a submission naming one is refused.
+// writableSettingsOf is the settings a caller can write back, read from the
+// settings the server answered: its notices are not settings.
 func writableSettingsOf(view map[string]any) map[string]any {
 	payload := map[string]any{}
 
@@ -955,11 +947,10 @@ func probeToolOf(args map[string]any) string {
 	return "rotate_admin_password"
 }
 
-// The ask is the sentence the operator decides on. The exploratory pass read the surface's own asks
-// back to it, and three of them read wrong: the add named the server twice in one sentence, the
-// removal counted one code in the plural, and a section replace named the server twice. All three are
-// pinned here, because an operator who is asked to confirm a change has to be able to read the
-// sentence in one pass.
+// TestTheAccessCodeAskNamesOneServerOnce: three asks read wrong in the
+// exploratory pass -- the add named the server twice, the removal counted one
+// code in the plural, a section replace named the server twice. An operator
+// confirming a change has to read the sentence in one pass.
 func TestTheAccessCodeAskNamesOneServerOnce(t *testing.T) {
 	s, operator := newConfirmingSession(t, "accept")
 
@@ -1020,8 +1011,8 @@ func TestTheRemovalAskCountsItsCodesInTheWordsTheCountNeeds(t *testing.T) {
 	}
 }
 
-// The same sentence read twice: a section replace is stated as a replace of the section, on one
-// server. The walk read the section asks back and found the server named twice in the sentence.
+// The same sentence read twice: a section replace is stated as a replace of the
+// section, on one server, and the walk found the server named twice in it.
 func TestTheSectionAskNamesOneServerOnce(t *testing.T) {
 	s, operator := newConfirmingSession(t, "accept")
 
