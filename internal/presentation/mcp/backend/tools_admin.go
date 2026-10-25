@@ -29,9 +29,9 @@ import (
 	"rdio-scanner/internal/presentation/common/dto"
 )
 
-// The administrator's reading capabilities. Each one answers a question an operator asks, in one
-// call, over the entry points the OpenAPI document names — and each stands behind the
-// administrator's credential, because what they read is the whole deployment.
+// The administrator's reading capabilities. Each answers a question an
+// operator asks, in one call, over the entry points the OpenAPI document
+// names, and each stands behind the administrator's credential.
 
 // registerAdminTools adds the deployment summary, the log search, and the explanation of a line.
 func registerAdminTools(target *mcp.Server, deps Deps) {
@@ -86,10 +86,10 @@ func registerAdminTools(target *mcp.Server, deps Deps) {
 
 		criteria := in.criteria()
 
-		// A subsystem this server does not have is not a filter that matches nothing: it is a
-		// caller asking about a part of the server that does not exist. The administrator's endpoint
-		// refuses it with the vocabulary, and this capability says the same thing it does: answering
-		// a page of everything is how a typo becomes an assistant concluding that nothing happened.
+		// A subsystem this server does not have is not a filter that matches
+		// nothing: it is a caller asking about a part of the server that does not
+		// exist, and answering a page of everything is how a typo becomes an
+		// assistant concluding that nothing happened.
 		if criteria.SourceWasRejected() {
 			return refused("the subsystem filter takes the names this server files its entries under: " +
 				strings.Join(logSourceNames(), ", ") + ". " +
@@ -176,16 +176,16 @@ func registerAdminTools(target *mcp.Server, deps Deps) {
 // capability. It names what is required and nothing about what the caller is missing.
 const administratorRequired = "this capability needs the administrator's credential"
 
-// isAdministrator is who may read the whole deployment: the administrator's credential, and nothing
-// else. A listener's access code opens the read-only tier, which is scoped to what that code names,
-// and these capabilities read everything — so an anonymous caller on a deployment that lists no
-// access codes reads the scoped tier too, and reaches the whole deployment only by signing in.
+// isAdministrator is who may read the whole deployment: the administrator's
+// credential, and nothing else. A listener's access code opens the scoped
+// read-only tier, so an anonymous caller on a deployment that lists no
+// access codes reads that tier too.
 func isAdministrator(who Caller) bool {
 	return who.Tier == TierFull
 }
 
-// inspectSystemInput is the deployment summary's empty argument list: what is being administered is
-// decided by the credential, not by an argument.
+// inspectSystemInput is the deployment summary's empty argument list: what
+// is being administered is decided by the credential, not an argument.
 type inspectSystemInput struct{}
 
 // deploymentView is the summary an operator reads before changing anything.
@@ -253,8 +253,9 @@ func summarize(deps Deps, configuration domain.Configuration) deploymentView {
 		counts.Units += uint(len(system.Units))
 	}
 
-	// A disabled watcher is not reading its directory, and a disabled forwarder is not forwarding:
-	// those are the two counts an operator is looking for when the history has stopped growing.
+	// A disabled watcher is not reading its directory, and a disabled
+	// forwarder is not forwarding: the two counts an operator looks for when
+	// the history has stopped growing.
 	disabledDirwatches, disabledDownstreams := uint(0), uint(0)
 
 	for _, dirwatch := range configuration.Dirwatches {
@@ -378,8 +379,9 @@ type sourceCount struct {
 	Count  uint64 `json:"count"`
 }
 
-// logCriteria is the filter set as the server used it: a request past the ceiling echoes the
-// ceiling, and a request naming no page echoes the default.
+// logCriteria is the filter set as the server used it: a request past the
+// ceiling echoes the ceiling, and a request naming no page echoes the
+// default.
 type logCriteria struct {
 	Level  string `json:"level,omitempty"`
 	Source string `json:"source,omitempty"`
@@ -516,8 +518,9 @@ func logRowOf(entry domain.LogEntry) logRow {
 	}
 }
 
-// parseDay is the day a capability was given, as the instant the log's own criterion reads. The
-// day arrives normalized by dayOf, so an unparseable value is no day at all.
+// parseDay is the day a capability was given, as the instant the log's own
+// criterion reads. The day arrives normalized by dayOf, so an unparseable
+// value is no day at all.
 func parseDay(day string) time.Time {
 	at, err := time.Parse(time.RFC3339, day)
 	if err != nil {
@@ -527,9 +530,9 @@ func parseDay(day string) time.Time {
 	return at
 }
 
-// logSourceNames is the subsystem vocabulary, in the order the log view lists it. A caller who named
-// a subsystem this server does not have is told what the server has: the answer to a wrong name is
-// the vocabulary, and not just a no.
+// logSourceNames is the subsystem vocabulary, in the order the log view
+// lists it. The answer to a wrong subsystem name is the vocabulary, and
+// not just a no.
 func logSourceNames() []string {
 	known := domain.KnownLogSources()
 
