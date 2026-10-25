@@ -606,9 +606,8 @@ func downstreamRowOf(downstream domain.Downstream) downstreamRow {
 	}
 }
 
-// scopeView is what a credential is entitled to, in the shape the
-// configuration payloads use: the star for everything, or the systems it
-// names with the talkgroups under each.
+// scopeView is what a credential is entitled to, in the configuration payload's shape: the
+// star for everything the server holds, or the systems it names with talkgroups under each.
 func scopeView(scope domain.AccessScope) any {
 	if !scope.Present {
 		return nil
@@ -662,9 +661,8 @@ func parseSystemLevel(uri string) (uint, string, bool) {
 	return uint(systemRef), fields[1], true
 }
 
-// parseLogSlice reads the severity and the day out of a log slice URI. A
-// severity outside the vocabulary the server files entries under is not
-// readable as a slice.
+// parseLogSlice reads the severity and the day out of a log slice URI. A severity outside the
+// vocabulary the server files entries under is not a readable slice.
 func parseLogSlice(uri string) (string, string, bool) {
 	parsed, err := url.Parse(uri)
 	if err != nil {
