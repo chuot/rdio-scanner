@@ -27,9 +27,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The read-only capabilities an access-code caller reaches: the history search, one call, and the
-// discovery step every one of them needs. Each test drives the protocol the way an assistant does,
-// over the in-memory transport, with the caller the gate would have decided.
+// The read-only capabilities an access-code caller reaches: the history
+// search, one call, and the discovery step all of them need, driven over
+// the in-memory transport as an assistant would drive them.
 
 // readScoped is the caller of an access code naming one system.
 func readScoped() Caller {
@@ -56,8 +56,8 @@ func TestTheTierAToolsDeclareTheirSchemasAndAnnotations(t *testing.T) {
 	}
 
 	for name, properties := range want {
-		// The assertions are made on the JSON the client receives, not on the SDK's Go types:
-		// the catalog an assistant reads is the wire shape, and that is what must stay honest.
+		// The assertions are made on the JSON the client receives: the catalog an
+		// assistant reads is the wire shape, and that is what must stay honest.
 		var declared struct {
 			Name        string `json:"name"`
 			Description string `json:"description"`
@@ -141,8 +141,8 @@ func TestSearchCallsAnswersAPageForAnAccessCodeCaller(t *testing.T) {
 	}
 }
 
-// A filter naming a system the caller may not see answers the empty page, the same answer a
-// history with nothing in it gets. Naming the filter refused would say what the caller is missing.
+// A filter naming a system the caller may not see answers the empty page,
+// as an empty history does: naming the refusal would say what is missing.
 func TestSearchCallsAnswersNoRowsForASystemOutsideTheCallersScope(t *testing.T) {
 	s := newCallerSession(t, readScoped())
 
@@ -292,9 +292,9 @@ func call(t *testing.T, s *session, tool string, args map[string]any) *mcp.CallT
 	return answered
 }
 
-// answeredText is what a capability said, as text. A content list printed whole is a list of
-// pointers, and a test that fails without saying what the surface answered is a test that sends
-// the reader back to the code to work out what it said.
+// answeredText is what a capability said, as text: a content list printed whole
+// is a list of pointers, and a failing test has to say what the surface
+// answered.
 func answeredText(answered *mcp.CallToolResult) string {
 	lines := []string{}
 
