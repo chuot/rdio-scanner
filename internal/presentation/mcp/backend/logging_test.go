@@ -27,20 +27,13 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The operator's log view is where the deployment's story is told, and an assistant working through
-// this surface is part of that story: someone changed the configuration through an assistant, and the
-// operator who reads the log view on Monday has to be able to tell that, and by whom.
-//
-// The surface's lines are therefore filed under the subsystem the surface is, and not under the
-// administrator's name — the administrator's own page is a different thing the operator may want to
-// look at without the assistant's work mixed into it.
-//
-// And the surface is built entirely on credentials: an administrator session token, a listener access
-// code, an upload key, the credential hash, the signing secret. A log view an operator reads, quotes in
-// a ticket, and screenshots at a meeting is not where any of them are written down.
+// The surface's log lines are filed under the surface's own subsystem, never
+// the administrator's: the operator reading the log view on Monday has to
+// tell an assistant's work apart. And no credential is ever written to the
+// log an operator reads, quotes, or screenshots.
 
-// TestTheSurfaceFilesItsActivityUnderItsOwnSubsystem: a caller refused by a capability is an event in
-// the deployment, and it is filed where the operator can filter for it.
+// TestTheSurfaceFilesItsActivityUnderItsOwnSubsystem: a refused call is filed
+// under the surface's subsystem, where the operator can filter for it.
 func TestTheSurfaceFilesItsActivityUnderItsOwnSubsystem(t *testing.T) {
 	bundle := newSurfaceWithDeps(t, func(b *serverBundle, deps Deps) Deps {
 		deps.Logger = slog.New(NewLogViewHandler(b.logs, b.clock))
@@ -74,10 +67,9 @@ func TestTheSurfaceFilesItsActivityUnderItsOwnSubsystem(t *testing.T) {
 	}
 }
 
-// TestTheSurfaceFilesACallerItWouldNotLetInByItsAddress: a caller the gate refuses is the shape of a
-// probe against the deployment, and the administrator's login attempts are counted and filed for the
-// same reason. The address is the story; the credential the caller presented is not, and a caller the
-// gate refused is filed without one.
+// TestTheSurfaceFilesACallerItWouldNotLetInByItsAddress: the gate's refusal is
+// filed by address, as the administrator's login attempts are, and a refused
+// caller is filed with no credential.
 func TestTheSurfaceFilesACallerItWouldNotLetInByItsAddress(t *testing.T) {
 	bundle := newSurfaceWithDeps(t, func(b *serverBundle, deps Deps) Deps {
 		deps.Logger = slog.New(NewLogViewHandler(b.logs, b.clock))
@@ -106,10 +98,9 @@ func TestTheSurfaceFilesACallerItWouldNotLetInByItsAddress(t *testing.T) {
 	}
 }
 
-// TestNoEntryTheSurfaceFilesCarriesACredential: the surface runs on credentials at every layer — the
-// session token it recognises, the access code it resolves, the upload keys and the credential hash it
-// reads out of the configuration, the credential an operator replaces. None of them belong in a log
-// view an operator reads out loud, pastes into a ticket, and hands to a client.
+// TestNoEntryTheSurfaceFilesCarriesACredential: the surface runs on credentials
+// at every layer, the session token, access code, upload keys, credential hash,
+// and the credential an operator replaces: none belong in the log view.
 func TestNoEntryTheSurfaceFilesCarriesACredential(t *testing.T) {
 	bundle := newSurfaceWithDeps(t, func(b *serverBundle, deps Deps) Deps {
 		deps.Logger = slog.New(NewLogViewHandler(b.logs, b.clock))
@@ -117,8 +108,8 @@ func TestNoEntryTheSurfaceFilesCarriesACredential(t *testing.T) {
 		return deps
 	})
 
-	// The administrator's reading, the administrator's write, the operator's refusal of a write, a
-	// listener's read, a listener refused a write, and a caller the gate will not let in.
+	// The administrator's read and write, an operator refusing a write, a
+	// listener's read, a listener refused a write, and a caller the gate shuts out.
 	administrator := newSessionOn(t, bundle, bundle.server.full, Caller{Tier: TierFull})
 
 	call(t, administrator, "list_systems", map[string]any{})
@@ -141,9 +132,9 @@ func TestNoEntryTheSurfaceFilesCarriesACredential(t *testing.T) {
 
 	call(t, listener, "list_systems", map[string]any{})
 
-	// A listener asking for a write is refused before it is named: the write capabilities are not on
-	// the read-only set at all, so the caller's question meets a refusal, whatever shape the protocol
-	// answers it in.
+	// A listener asking for a write is refused before the write is named: the
+	// write capabilities are not on the read-only set at all, whatever shape the
+	// protocol answers the question in.
 	refusedOrRejected(t, listener, "manage_config", map[string]any{"section": "options", "payload": map[string]any{"maxClients": float64(50)}})
 
 	rec := httptest.NewRecorder()
@@ -174,10 +165,10 @@ func TestNoEntryTheSurfaceFilesCarriesACredential(t *testing.T) {
 	}
 }
 
-// TestTheSurfacesLinesLandInTheLogViewTheOperatorReads: the surface's lines are filed as log entries,
-// with the instant the server's clock reports, the severity the surface asked for, and the subsystem
-// the surface is. The attributes a line carries travel into the message: the log view has one text, and
-// a line that loses its attributes loses the part of the story the operator needed.
+// TestTheSurfacesLinesLandInTheLogViewTheOperatorReads: the surface's lines are
+// filed as log entries, the server clock's instant, the severity the surface
+// asked for, and the surface's subsystem; the attributes travel into the
+// message, because the log view carries one text.
 func TestTheSurfacesLinesLandInTheLogViewTheOperatorReads(t *testing.T) {
 	logs := bundleWithLogs(t)
 
@@ -217,10 +208,10 @@ func TestTheSurfacesLinesLandInTheLogViewTheOperatorReads(t *testing.T) {
 	}
 }
 
-// TestTheSeveritiesTheSurfaceLogsLandWhereAnOperatorLooks: the surface's info lines are the log view's
-// info, its warnings are warnings, and its failures are errors; its debug detail is not a log view's
-// line at all. An operator filtering for errors is looking for the deployment's failures, and a surface
-// that files its failures as info hides them from that filter.
+// TestTheSeveritiesTheSurfaceLogsLandWhereAnOperatorLooks: the surface's info,
+// warning, and failure lines land as the matching severities and its debug
+// detail stays out of the log view, keeping failures visible to the
+// operator's error filter.
 func TestTheSeveritiesTheSurfaceLogsLandWhereAnOperatorLooks(t *testing.T) {
 	logs := bundleWithLogs(t)
 
