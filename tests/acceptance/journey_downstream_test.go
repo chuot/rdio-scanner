@@ -47,10 +47,9 @@ const (
 	repostGoneKey  = "a-downstream-that-is-switched-off"
 )
 
-// TestARecordedCallIsRepostedToTheOtherServersWhoseScope
-// CoversIt is the whole re-post on a running server: the call an
-// uploader sent arrives at the receiver as this server stored it,
-// recording, references, instant, and credential included
+// The whole re-post on a running server: the call an uploader sent
+// arrives at the receiver as this server stored it, recording,
+// references, instant, and credential included
 func TestARecordedCallIsRepostedToTheOtherServersWhoseScopeCoversIt(t *testing.T) {
 	open := newDownstreamRecorder(t, http.StatusOK)
 	scoped := newDownstreamRecorder(t, http.StatusOK)
@@ -153,9 +152,8 @@ func TestARecordedCallIsRepostedToTheOtherServersWhoseScopeCoversIt(t *testing.T
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestARepostedCallCarriesTheGroupsAndTagItsTalkgroupIs
-// FiledUnder is the part of the re-post that is not the call: the
-// receiver is told the group and tag names the talkgroup has
+// The part of the re-post that is not the call: the receiver is told
+// the group and tag names the talkgroup has
 func TestARepostedCallCarriesTheGroupsAndTagItsTalkgroupIsFiledUnder(t *testing.T) {
 	open := newDownstreamRecorder(t, http.StatusOK)
 

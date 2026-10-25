@@ -164,9 +164,8 @@ const (
 `
 )
 
-// TestASystemsSectionSaveLeavesAutoPopulateInventingThe
-// TalkgroupsRecordingsName pins that a systems-section save keeps
-// the invent-the-talkgroup flag set and later recordings still work.
+// Pins that a systems-section save keeps the invent-the-talkgroup flag
+// set and later recordings still name their talkgroup.
 // see the autopopulate-journey maintainer note.
 func TestASystemsSectionSaveLeavesAutoPopulateInventingTheTalkgroupsRecordingsName(t *testing.T) {
 	srv := journeyServerIn(t, t.TempDir())

@@ -38,10 +38,9 @@ const heldUploadKey = "a-key-that-holds-nothing-back"
 // heldTalkgroupDelay is the hold the seeded talkgroup names, in the unit the configuration stores it in.
 const heldTalkgroupDelay = 1
 
-// TestUploadedCallOnADelayedTalkgroupReachesAListenerOnlyWhen
-// ItsHoldRunsOut is the live half: the recording is stored and
-// written down as waiting, the listener is told nothing, and
-// the call arrives when the hold runs out, marked as held
+// The live half of the hold: the recording is stored and written down as
+// waiting, the listener is told nothing, and the call arrives when the
+// hold runs out, marked as held
 func TestUploadedCallOnADelayedTalkgroupReachesAListenerOnlyWhenItsHoldRunsOut(t *testing.T) {
 	srv := journeyServerIn(t, t.TempDir())
 
@@ -110,8 +109,8 @@ func TestUploadedCallOnADelayedTalkgroupReachesAListenerOnlyWhenItsHoldRunsOut(t
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestTheCallsAStoppedServerWasHoldingBackReachTheNextServers
-// Listener is the restart half: waiting calls are read back at
+// TestTheCallsAStoppedServerWasHoldingBackReachTheNextServersListener is
+// the restart half: waiting calls are read back at
 // startup, the expired ones delivered at once, the others
 // re-armed, all through the same delivery step every call takes
 func TestTheCallsAStoppedServerWasHoldingBackReachTheNextServersListener(t *testing.T) {
@@ -167,8 +166,8 @@ func TestTheCallsAStoppedServerWasHoldingBackReachTheNextServersListener(t *test
 	}
 }
 
-// TestAStoredHoldIsArmedAgainForTheDelayTheConfiguration
-// NamesNow is why startup re-arms a waiting call instead of
+// TestAStoredHoldIsArmedAgainForTheDelayTheConfigurationNamesNow is why
+// startup re-arms a waiting call instead of
 // trusting the stored moment: calls waiting follow the delay set now
 func TestAStoredHoldIsArmedAgainForTheDelayTheConfigurationNamesNow(t *testing.T) {
 	seededAt := time.Now()
