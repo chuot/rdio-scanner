@@ -13,15 +13,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// Package app is the composition root: it opens the database the configuration names, wires the concrete
-// infrastructure adapters into the application use cases, and serves the HTTP and WebSocket interfaces.
-//
-// It is a drop-in for the legacy server: the same configuration files, the same database a legacy
-// deployment left behind, and the same interfaces clients already speak to — including the version it
-// reports, which is pinned in the captures recorded beside the tests that prove them.
-//
-// cmd/rdio-scanner is the thin entry point that parses the command line and calls it. Nothing else
-// depends on this package.
 package app
 
 import (
@@ -37,8 +28,6 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The database backends the server talks to. The values are part of the configuration contract: they
-// appear in rdio-scanner.ini and on the command line of deployed instances.
 const (
 	DbTypeMariadb    string = "mariadb"
 	DbTypeMysql      string = "mysql"
@@ -46,11 +35,6 @@ const (
 	DbTypeSqlite     string = "sqlite"
 )
 
-// Config is the configuration the composition root builds a server from. It is the effective server
-// configuration — command-line flags overlaid with the ini file the deployment left in the base directory
-// — with the three things the composition root decides from the way the program was run: where the server
-// says what it says out loud, whose copy of the log entries an operator reads when there is no terminal,
-// and which ffmpeg the server converts with.
 type Config struct {
 	BaseDir string
 
@@ -62,18 +46,17 @@ type Config struct {
 	DbUsername string
 	DbPassword string
 
-	// DbTLS, DbSslMode, and DbConnectTimeout are the transport options the
-	// operator opts in to: db_tls for the mysql driver, db_sslmode for
-	// postgres, and a connect timeout for both. Empty — the default — is
-	// today's connection, byte for byte: plaintext, the driver's own timing.
+	// DbTLS, DbSslMode, and DbConnectTimeout are the database transport
+	// options the operator opts in to: db_tls for the mysql driver, db_sslmode
+	// for postgres, and a connect timeout for both.
+	// see the configuration-transport-options maintainer note.
 	DbTLS            string
 	DbSslMode        string
 	DbConnectTimeout string
 
 	// BcryptCost is the bcrypt cost the deployment hashes the administrator
-	// credential at. The ini option is validated to 10–14 at the
-	// composition root; the zero value — a Config built without the option —
-	// means bcrypt's default, the legacy server's cost.
+	// credential at. The zero value means bcrypt's own default cost.
+	// see the bcrypt-cost-option maintainer note.
 	BcryptCost int
 
 	Listen      string
@@ -82,35 +65,29 @@ type Config struct {
 	SslKeyFile  string
 	SslListen   string
 
-	// TrustedProxies names the proxy addresses whose X-Forwarded-For the server honors: a
-	// comma-separated list of CIDR prefixes and bare addresses. Empty — the default — means the
-	// server trusts no proxy and names every request by the address of its connection, which is what
-	// the login budget and the access warnings are keyed on.
+	// TrustedProxies names the proxy addresses whose X-Forwarded-For the server
+	// honors, a comma-separated list of CIDR prefixes and bare addresses.
+	// see the trusted-proxies-option maintainer note.
 	TrustedProxies string
 
-	// McpServer is whether this server serves the Model Context Protocol endpoint: the surface an AI
-	// assistant administers the deployment through. Off is the default at every entry point — the zero
-	// value, the flag's default, and an ini file without the key all leave the surface absent, and the
-	// server registers the route only when the operator named it.
+	// McpServer is whether this server serves the Model Context Protocol
+	// endpoint an AI assistant administers the deployment through. Off is the
+	// default at every entry point.
+	// see the legacy-configuration-relocation maintainer note.
 	McpServer bool
 
 	// Version is the release the server reports to clients, and is what the build tool resolved from
 	// VERSION.txt and git.
 	Version string
 
-	// Out is where the server writes the lines it says out loud. The legacy server's console is Go's log
-	// package, which writes to the standard error, so that is what a deployment hands it.
 	Out io.Writer
 
-	// Echo is whose copy of the server's log entries an operator reads when the server has no terminal in
-	// front of it — the service manager's log for a server running as a service. It is nil for a server an
-	// operator started, which says its entries to the console.
 	Echo LogEcho
 
-	// Converter decides which ffmpeg the server converts with and which ffprobe it measures lengths
-	// with, given the folder the server writes the programs it carries into, and answers with the
-	// converter, the prober, and what the operator has to be told about them. It is decided once
-	// while the server is wired, and said once when it starts.
+	// Converter decides which ffmpeg the server converts with and which ffprobe
+	// it measures lengths with, and it is decided once while the server is
+	// wired.
+	// see the ffmpeg-carried-by-the-server-and-hosted-by-the-operator maintainer note.
 	Converter func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string)
 }
 
@@ -143,30 +120,22 @@ func (config *Config) GetAutocertCachePath() string {
 	return config.GetPath("autocert")
 }
 
-// GetFFmpegDirPath returns the directory the server writes the pair it carries inside its own binary
-// into, so that it has programs it can actually run, and the directory the length probe writes its
-// probe files into and clears after each probe. It is the system's temp directory under the server's
-// own name: a disposable folder, not a path the operator configures, and not a thing that joins the
-// data directory the configuration, database, and recordings live in.
+// GetFFmpegDirPath returns the disposable folder under the system temp
+// directory, named for the server, where the carried programs and the
+// probe files are written.
+// see the legacy-configuration-relocation maintainer note.
 func (config *Config) GetFFmpegDirPath() string {
 	return filepath.Join(os.TempDir(), "rdio-scanner.ffmpeg")
 }
 
-// LogEcho is where a log entry is said out loud, as well as being written to the log view the
-// administrator reads. A server an operator is watching says them to the terminal; a server running as a
-// service says them to the service manager, which is what an operator of that deployment reads.
 type LogEcho interface {
 	Echo(level string, source domain.LogSource, message string)
 }
 
-// ChangeAdminPassword stores the credential the administrator chose, says so in the log view, and stops.
-// It is the -admin_password mode: the way a deployment sets its credential from a script, or the way an
-// operator recovers a server whose credential was lost. It writes the whole configuration, as the legacy
-// server does, which is also what stores the signing secret the options read generated — the one thing
-// this mode does that a startup does not.
-//
-// It is a way of running the program and not a thing the server does while it is running, so it is not a
-// use case: the server is not started, nothing is answered, and the database is opened and closed here.
+// ChangeAdminPassword stores the chosen administrator credential, says so
+// in the log view, and exits: the -admin_password mode, run instead of
+// starting the server.
+// see the signing-secret-choice maintainer note.
 func (s *Server) ChangeAdminPassword(ctx context.Context, password string) error {
 	hash, err := s.hashes.Hash(ctx, password)
 	if err != nil {
@@ -180,8 +149,6 @@ func (s *Server) ChangeAdminPassword(ctx context.Context, password string) error
 
 	options.AdminPasswordHash = hash
 
-	// A credential that is still the one the server ships with is one the administrator has to replace,
-	// which is what the administration interface insists on until they do.
 	options.AdminPasswordNeedChange = password == domain.DefaultAdminPassword
 
 	if err := s.options.WriteOptions(ctx, options); err != nil {
@@ -196,9 +163,9 @@ func (s *Server) ChangeAdminPassword(ctx context.Context, password string) error
 	})
 }
 
-// serviceLog is the copy of the server's log entries a service manager keeps: the manager's own log, at the
-// level the entry is filed under. A server running as a service has no terminal in front of it, and the
-// manager's log is what an operator reads.
+// serviceLog is the copy of the server's log entries a service manager
+// keeps, the log an operator of a service deployment reads.
+// see the console-window-and-log-copies maintainer note.
 type serviceLog struct {
 	logger service.Logger
 }

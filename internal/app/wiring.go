@@ -37,58 +37,14 @@ import (
 	scannerbackend "rdio-scanner/internal/presentation/scanner/backend"
 )
 
-// pruneInterval is how often the server applies its retention, which is the legacy server's hourly
-// ticker. The retention itself is read when a pruning runs and not when the timer is set, so a change
-// the administrator makes takes effect on the next hour.
 const pruneInterval = time.Hour
 
-// requestDeadline is thebound on one request. It sits inside
-// httpTimeout, the socket bound: the socket timeouts fire when the socket goes
-// silent, and a handler blocked on a database that does not answer is a request
-// held open with the socket quietly connected — the administrator's browser
-// spins with no answer at all. The deadline gives every request a context that
-// expires, and the answer to a request whose work outlives it is a failure the
-// administrator can read.
 const requestDeadline = 25 * time.Second
 
-// streamDeadline is the bound on one Model Context Protocol exchange, and it is materially larger
-// than the request bound on purpose.
-//
-// The request bound is the administrator's: a request that answers in a few seconds, bounded so a
-// handler blocked on a database that does not answer is answered with a failure the administrator can
-// read. The assistant's endpoint carries two kinds of work that bound would cut off: a composite
-// capability runs several queries over a deployment with a full history, and the session's own stream
-// stays open for the life of the session. A bound chosen for a request that answers in a few seconds
-// is not the bound for either of them, so the endpoint is hung as its own subtree with its own bound,
-// and every other route keeps the administrator's.
-//
-// It is a bound and not a licence to run for ever: a capability that outlives it is answered with the
-// same failure the administrator's blocked request gets, and each capability carries a bound of its
-// own, well inside this one, so the assistant hears the refusal from the capability it asked for.
 const streamDeadline = 10 * time.Minute
 
-// pruneDeadline bounds the hourly retention pass: the pass runs on
-// the server's own schedule with nobody waiting for its answer, and a pass
-// blocked on a database that does not answer would hold the schedule and write
-// no report. Five minutes is long enough for the pass on a full deployment and
-// short enough that the next hour always arrives.
 const pruneDeadline = 5 * time.Minute
 
-// withRequestDeadline is the middleware that gives each request a context with
-// the given deadline and answers with a failure when the work outlives it. The
-// server runs it with requestDeadline; a test runs it with a shorter one to
-// watch it fire.
-//
-// It is not the standard library's http.TimeoutHandler: that hands its handler
-// a response writer that does not implement http.Hijacker, and the listener
-// and configuration sockets are built by a library that refuses a writer
-// without it. This middleware passes the server's own writer through, wrapped
-// so the deadline answer can be written exactly once: a request that has
-// answered, or has taken over its connection, is left alone when the deadline
-// arrives — those connections live by what their sockets do, not by a request
-// context, and the middleware waits for the handler rather than returning in
-// the middle of a stream it has begun — and a request that has answered
-// nothing gets the failure.
 func withRequestDeadline(next http.Handler, at time.Duration) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), at)
@@ -99,10 +55,6 @@ func withRequestDeadline(next http.Handler, at time.Duration) http.Handler {
 		finished := make(chan struct{})
 
 		go func() {
-			// The handler's panic rides back to the server goroutine that is
-			// answering this request, where the server's own panic rules
-			// apply; a panic swallowed in this goroutine would leave the
-			// server running with a bug it never hears about.
 			defer func() {
 				if problem := recover(); problem != nil {
 					answered.panic = problem
@@ -131,12 +83,6 @@ func withRequestDeadline(next http.Handler, at time.Duration) http.Handler {
 			return
 		}
 
-		// The handler has begun answering, and what it began is a connection that lives by what
-		// its socket does, not by a request context: a stream it is still writing, a content
-		// endpoint naming its status before its bytes, a socket it has taken over. Returning here
-		// would end a stream mid-sentence — the assistant's session stream, an event stream
-		// carrying a capability's answer — so the deadline waits for the handler to finish, and
-		// the socket's own bounds decide when the connection is given up.
 		<-finished
 
 		if answered.panic != nil {
@@ -145,19 +91,6 @@ func withRequestDeadline(next http.Handler, at time.Duration) http.Handler {
 	})
 }
 
-// withSubtreeDeadlines hangs the server's surfaces on the routes the server serves, with each subtree
-// under the bound its work needs: the request bound on every route the server answers, and the stream
-// bound on the Model Context Protocol endpoint alone.
-//
-// The two bounds cannot be nested — a request context takes the earlier of the deadlines put on it, so
-// a bound hung inside the administrator's bound is the administrator's bound, and the assistant's
-// endpoint would be cut off by a bound it was given a larger one to escape. The routes are therefore
-// split into two subtrees, each wrapped once, and the tree that hangs them carries no bound of its
-// own.
-//
-// The endpoint is hung on its exact path and on the subtree below it, so the assistant's address is
-// answered by the surface and not by the application behind it, whichever form the assistant was
-// given to configure.
 func withSubtreeDeadlines(routes http.Handler, streams http.Handler, streamAt, requestAt time.Duration) http.Handler {
 	tree := http.NewServeMux()
 
@@ -173,20 +106,10 @@ func withSubtreeDeadlines(routes http.Handler, streams http.Handler, streamAt, r
 	return tree
 }
 
-// deadlineAnswer is the response writer the deadline middleware hands the
-// handler: everything passes through to the server's own writer — including
-// the hijack the websocket endpoints take — and the middleware watches what
-// arrived, so the deadline's failure is written only for a request that has
-// answered nothing.
-//
-// Two facts are kept apart, and the difference is the whole point of this writer.
-// `answered` means the handler began answering; `refused` means the deadline
-// answered first. A handler that has begun answering keeps answering: a content
-// endpoint names its status and then writes its bytes in as many writes as the
-// content needs, and a writer that delivered only the first of them would
-// truncate every such endpoint to an empty body. Only after the deadline has
-// written its own failure does the handler's late answer get dropped, because
-// by then the request has an answer and two bodies would be one answer too many.
+// deadlineAnswer is the response writer the deadline middleware hands the handler,
+// passing everything through to the server's own writer, including the hijack the
+// websocket endpoints take, while watching what has arrived.
+// see the deadline-response-writer maintainer note.
 type deadlineAnswer struct {
 	w        http.ResponseWriter
 	mu       sync.Mutex
@@ -246,7 +169,7 @@ func (d *deadlineAnswer) Flush() {
 }
 
 // Hijack lets the websocket endpoints take the connection through this writer,
-// which is the whole reason this middleware is not the standard library's.
+// the whole reason this middleware is not the standard library's.
 func (d *deadlineAnswer) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -262,12 +185,10 @@ var (
 	_ http.Flusher        = (*deadlineAnswer)(nil)
 )
 
-// consoleLog is where the server writes the lines it says out loud: the startup lines an operator reads,
-// and the lines the endpoints say about a connection they could not take over. They are not the server's
-// log and never go into it.
-//
-// They are written in the shape the legacy server writes them, because the legacy server's console is Go's
-// log package: the moment the line was said, then the line.
+// consoleLog is where the server writes the lines it says out loud: the startup
+// lines an operator reads and the lines the endpoints say about a connection
+// they could not take over. They are not the server's log and never go into it,
+// written in the shape the legacy server's console wrote them.
 type consoleLog struct {
 	logger *log.Logger
 }
@@ -284,47 +205,37 @@ func (console *consoleLog) printf(format string, a ...any) {
 	console.logger.Printf(format, a...)
 }
 
-// Write lets the console stand in for the plain writer the websocket endpoints write whole lines to.
-//
-// Those endpoints are given a writer rather than a logger because what they say is already a finished
-// line, and a logger that is handed a finished line would say it twice.
+// Write lets the console stand in for the plain writer the websocket endpoints
+// write whole lines to, since what they say is already a finished line and a
+// logger handed a finished line would say it twice.
+// see the console-window-and-log-copies maintainer note.
 func (console *consoleLog) Write(b []byte) (int, error) {
 	console.logger.Print(strings.TrimRight(string(b), "\n"))
 
 	return len(b), nil
 }
 
-// renderLogEntry is the operator's copy of a stored entry: the level it is filed under, the part of the
-// server that wrote it, then what happened.
-//
-// This is the shape an operator of a deployment that never opens the web log view greps for — `journalctl
-// -u rdio-scanner | grep dirwatch` — which is what carries the subsystem split to the deployments this
-// feature exists for.
-//
-// It is a rendering and not what the log view holds. The stored message says what happened and nothing else,
-// so filtering the log view by subsystem never depends on how one particular copy of it happens to be printed.
+// renderLogEntry is the operator's copy of a stored entry: the level it is filed
+// under, the part of the server that wrote it, then what happened. This is the
+// shape an operator greps for in the system journal. It is a rendering and not
+// what the log view holds, so filtering never depends on how one copy is printed.
 func renderLogEntry(level string, source domain.LogSource, message string) string {
 	return level + " " + string(source) + ": " + message
 }
 
-// Echo is the terminal's copy of a log entry. The legacy server's console copy is the message on its own,
-// with the moment in front of it and no level, so an operator watching a terminal saw the same line for an
-// info and an error.
+// Echo is the terminal's copy of a log entry. The legacy server's console copy is
+// the message on its own, with the moment in front and no level, so an operator
+// watching a terminal saw the same line for an info and an error.
 func (console *consoleLog) Echo(level string, source domain.LogSource, message string) {
 	console.println(renderLogEntry(level, source, message))
 }
 
 var _ LogEcho = (*consoleLog)(nil)
 
-// loggedEvents is the server's log, and the operator's copy of it.
-//
-// The legacy server's LogEvent writes every entry to the console as well as into the log view — unless the
-// server is running as a service, in which case the service's own logger takes the line instead. The log
-// view is the administrator's copy and the console copy is the operator's, and a server that writes only
-// the first leaves the terminal silent while the log fills up.
-//
-// The line is said before the entry is stored, which is the order the legacy server says it in, and a
-// log that cannot be stored does not take the line back.
+// loggedEvents is the server's log and the operator's copy of it. The legacy
+// server wrote every entry to the console as well as into the log view, unless
+// it ran as a service, which took the line instead. The line is said before the
+// entry is stored, and a log that cannot be stored does not take the line back.
 type loggedEvents struct {
 	logs ports.LogRepository
 	echo LogEcho
@@ -346,14 +257,10 @@ func (events *loggedEvents) DeleteLogsBefore(ctx context.Context, before time.Ti
 	return events.logs.DeleteLogsBefore(ctx, before)
 }
 
-// listenerSettings answers what the server requires of listeners, from the configuration in effect.
-//
-// It is asked at the moment of the question rather than told in advance, which is what makes adding the
-// first access code change what listeners that are already connected are asked for: the answer comes from
-// the access list as it is now, and not as it was when each connection joined.
-//
-// The access list is what decides whether listeners are asked for a code, exactly as it is in the legacy
-// server: a server with no access codes is open, and one code is enough to close it.
+// listenerSettings answers what the server requires of listeners, from the
+// configuration in effect, asked at the moment of the question so the answer
+// comes from the access list as it is now.
+// see the listener-settings-from-the-access-list maintainer note.
 type listenerSettings struct {
 	accesses ports.AccessRepository
 	options  ports.OptionsRepository
@@ -366,20 +273,19 @@ func (settings *listenerSettings) Settings() scannerbackend.Settings {
 
 	options, err := settings.options.ReadOptions(ctx)
 	if err != nil {
-		// A server that cannot read its own options has nothing to report about itself, and the
-		// answer it gives is the one a server with no configuration at all runs with. The legacy
-		// server keeps its options in memory and cannot fail here; this one reads them, and the
-		// failure it would report has nowhere to go because the question has no answer to fail
-		// with. The shipped defaults are the least surprising thing to answer with, and they are
-		// not a lie about a fresh deployment.
+		// A server that cannot read its own options has nothing to report about itself,
+		// so it answers with the shipped defaults, the least surprising thing to give
+		// and not a lie about a fresh deployment.
+		// see the listener-settings-from-the-access-list maintainer note.
 		options = domain.DefaultOptions()
 	}
 
 	accesses, err := settings.accesses.AllAccesses(ctx)
 	if err != nil {
-		// Not knowing who is allowed is not the same as everybody being allowed, but it is also not
-		// a reason to turn every listener away: an unreadable access list is a broken deployment,
-		// and the log view is where that becomes visible.
+		// Not knowing who is allowed is not the same as everybody being allowed, but it
+		// is not a reason to turn every listener away: an unreadable access list is a
+		// broken deployment, and the log view is where that becomes visible.
+		// see the listener-settings-from-the-access-list maintainer note.
 		return settingsOf(options, false)
 	}
 
@@ -395,13 +301,10 @@ func settingsOf(options domain.Options, restricted bool) scannerbackend.Settings
 	}
 }
 
-// optionsSecrets hands the token adapter the signing secret the server is running with.
-//
-// The secret is read when a token is made rather than remembered, because the options are the
-// configuration in effect and a re-derivation can replace the secret. An options read that fails is
-// reported, not answered with the empty string: Issue fails beside it, and a token that
-// cannot be signed is a login the administrator is told failed — which is the answer the legacy server
-// gives when its own signing fails.
+// optionsSecrets hands the token adapter the signing secret the server is running
+// with, read when a token is made rather than remembered, and an options read
+// that fails is reported instead of answered with an empty string.
+// see the signing-secret-choice maintainer note.
 type optionsSecrets struct {
 	options ports.OptionsRepository
 }
@@ -411,21 +314,20 @@ var _ tokens.Secrets = optionsSecrets{}
 func (secrets optionsSecrets) Secret() (string, error) {
 	options, err := secrets.options.ReadOptions(context.Background())
 	if err != nil {
-		// The failure is reported, not answered with the empty string:
-		// Issue fails beside it, and the login handler's existing failure report is
-		// the one log entry the operator reads.
+		// The failure is reported, not answered with the empty string: Issue fails beside
+		// it, and the login handler's existing failure report is the one log entry the
+		// operator reads.
+		// see the signing-secret-choice maintainer note.
 		return "", fmt.Errorf("tokens: reading the signing secret: %w", err)
 	}
 
 	return options.Secret, nil
 }
 
-// ingestSink hands a call a directory watcher found to the use case that decides what to do with it.
-//
-// The watcher's seam takes a call and returns an error; the use case takes a command and answers with an
-// outcome as well as an error. The outcome is discarded here for the same reason the watcher discards the
-// error: nobody is waiting for an answer about a file that appeared in a watched directory, and the ingest
-// path writes its own report into the log view.
+// ingestSink hands a call a directory watcher found to the use case that decides
+// what to do with it, discarding the outcome for the same reason the watcher
+// discards the error: nobody waits for an answer about a file that appeared.
+// see the ingest-sink-capture maintainer note.
 type ingestSink struct {
 	ingest *application.IngestCallHandler
 }
@@ -438,14 +340,10 @@ func (sink *ingestSink) IngestCall(ctx context.Context, call domain.Call) error 
 	return err
 }
 
-// listenerChanges is what the hub tells when the number of listeners is no longer what it was, before the
-// thing that answers that news exists.
-//
-// The debouncer needs the hub — the hub is what knows how many listeners there are and who would be told
-// the count — and the hub needs the debouncer, because a change in the count is the debouncer's to hold
-// back. The composition root breaks the circle by giving the hub a forwarder first and telling it where to
-// forward as soon as the debouncer is built. Nothing can reach the hub before the routes are being served,
-// which is after the forwarder knows where it forwards to.
+// listenerChanges is what the hub tells when the number of listeners is no longer
+// what it was. The hub and the debouncer need each other, and the composition
+// root breaks the circle by giving the hub a forwarder first.
+// see the hub-and-debouncer-contract maintainer note.
 type listenerChanges struct {
 	debouncer *application.ListenerCountDebouncer
 }
@@ -460,12 +358,10 @@ func (changes *listenerChanges) ListenerChanged() {
 	changes.debouncer.ListenerChanged()
 }
 
-// catchAll routes a request that is not an API call: a request that asks to become a listener connection
-// goes to the listener endpoint, and everything else goes to the application the binary carries.
-//
-// This is the legacy server's one catch-all handler, and the only place in this server where a request can
-// be either. The decision is the upgrade header alone, and it is made before anything is looked up, which
-// is what lets a native application open a connection on whatever path it was on.
+// catchAll routes a request that is not an API call: one that asks to become a
+// listener connection goes to the listener endpoint, everything else to the
+// application the binary carries, decided by the upgrade header alone.
+// see the catch-all-handler maintainer note.
 func catchAll(listener http.Handler, app http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if upgrade.Wanted(r) {
@@ -478,36 +374,19 @@ func catchAll(listener http.Handler, app http.Handler) http.HandlerFunc {
 	}
 }
 
-// serveApplications registers the two applications the binary carries and the paths they are served from.
-//
-// The path the scanner application is served from is also the path a listener connects to, and the upgrade
-// header decides which. That is the legacy server's one catch-all handler, and this is the only place in this
-// server where a request can be either.
-//
-// The administration application is served from its own subtree, and `/admin` itself is deliberately not
-// registered: a subtree pattern redirects a request for the subtree root by adding the trailing slash, so
-// `/admin` becomes a 307 to `/admin/`, and every relative URL in the admin shell then resolves inside the
-// admin bundle. Registering `/admin` as well would answer it without the redirect and leave those relative
-// URLs resolving at the root of the server instead.
-//
-// The listener stays on the admin route too. No native application opens a listener connection at `/admin`,
-// which is what makes the redirect at that one path an accepted behavior change rather than a break.
+// serveApplications registers the two applications the binary carries and the
+// paths they are served from. The scanner path is also the listener path, told
+// apart by the upgrade header. The admin app keeps its own subtree, and /admin
+// itself is left unregistered so the subtree redirect resolves its relative URLs.
 func serveApplications(mux *http.ServeMux, listener, scannerApp, adminApp http.Handler) {
 	mux.HandleFunc("/", catchAll(listener, scannerApp))
 	mux.HandleFunc("/admin/", catchAll(listener, adminApp))
 }
 
-// pruneHourly reproduces the legacy server's scheduler: a pruning an hour, each one reading the retention
-// the server is configured with at the moment it runs, and a failure reported in the log view and
-// otherwise forgotten — the next hour tries again.
-//
-// The hour is a fresh timer after each pruning rather than a ticker, and cancelling ends the whole schedule
-// rather than only the pruning that happens to be waiting when it is cancelled: a server that has pruned
-// twice and is then stopped does not prune a third time an hour later. A pruning that is already running is
-// not stopped by cancelling, which is the same thing cancelling a timer does.
-//
-// It takes the scheduler rather than using the server's own so that the schedule can be tested without
-// waiting an hour for it.
+// pruneHourly reproduces the legacy scheduler: a pruning an hour, each reading
+// the retention configured at the moment it runs, a failure reported in the log
+// view and otherwise forgotten. It uses a fresh timer after each pruning, and
+// cancelling ends the whole schedule, taking the scheduler so the schedule tests.
 func pruneHourly(scheduler ports.Scheduler, prune pruneRunner) *hourlyPruning {
 	schedule := &hourlyPruning{scheduler: scheduler, prune: prune}
 
@@ -517,8 +396,9 @@ func pruneHourly(scheduler ports.Scheduler, prune pruneRunner) *hourlyPruning {
 }
 
 // pruneRunner is the retention pass as the schedule sees it: the schedule runs
-// the pass and nothing else, and the seam is what lets a test record the
-// context the pass ran under — where the deadline is visible.
+// the pass and nothing else, and the seam is what lets a test record the context
+// the pass ran under, where the deadline is visible.
+// see the request-and-stream-deadline-constants maintainer note.
 type pruneRunner interface {
 	Handle(ctx context.Context, cmd application.PruneOldCallsCommand) (application.PruneOldCallsResult, error)
 }
@@ -540,12 +420,10 @@ var _ ports.Timer = (*hourlyPruning)(nil)
 // next puts the next pruning on the scheduler, unless the schedule has been ended.
 func (schedule *hourlyPruning) next() {
 	timer := schedule.scheduler.Schedule(pruneInterval, func() {
-		// The pass runs under the deadline: a pass blocked on a
-		// database that does not answer stops at its bound, and the next hour
-		// always arrives.
-		//
-		// The legacy server's scheduler.run writes the failure into the log view and keeps going, and the
-		// pruning handler has already written it there. The next hour tries again.
+		// The pass runs under the deadline: a pass blocked on a database that does not
+		// answer stops at its bound, the next hour always arrives, and the failure is
+		// already in the log view for the legacy scheduler to keep going past.
+		// see the request-and-stream-deadline-constants maintainer note.
 		ctx, cancel := context.WithTimeout(context.Background(), pruneDeadline)
 		defer cancel()
 

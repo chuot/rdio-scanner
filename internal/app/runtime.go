@@ -26,14 +26,6 @@ import (
 	"rdio-scanner/internal/infrastructure/persistence"
 )
 
-// runtimeState answers what this server is running, which is the one question the status read asks that
-// no single part of the server can answer on its own: the hub holds the listener connections, the
-// watchers hold the directories, the delayer holds the calls, the socket holds the administrator
-// connections, and the composition root is the only thing holding all of them.
-//
-// It is an adapter of the composition root rather than a read added to each holder, and it is read-only:
-// nothing here starts, stops, or changes anything, which is what keeps it apart from the write-shaped port
-// the configuration saves already use.
 type runtimeState struct {
 	hub      ports.Hub
 	watches  *dirwatch.Dirwatchers
@@ -43,31 +35,27 @@ type runtimeState struct {
 	converter ports.AudioConverter
 	prober    ports.AudioLengthProber
 
-	// dialect and dbPath are what decides whether this server can state the size of its own database at
-	// all: a deployment writing into a file it owns can, and a deployment whose data lives inside a
-	// database server process it does not own cannot.
+	// dialect and dbPath decide whether this server can state its own database size at all.
 	dialect persistence.Dialect
 	dbPath  string
 
-	// startedAt is the instant this server's start sequence ran, and the zero instant until it has run.
-	// It is guarded because the status read is answered on a request goroutine while the start sequence
-	// runs on another.
+	// startedAt is the instant this server's start sequence ran, zero until it has run.
+	// see the status-endpoint-reads maintainer note.
 	mutex     sync.RWMutex
 	startedAt time.Time
 }
 
-// administratorConnections is the one question the status read asks of the administrator socket. It is
-// asked through this small interface rather than added to the port the configuration saves notify,
-// because counting the connections an operator is holding is not the same job as telling them the
-// configuration changed.
+// administratorConnections is the question the status read asks of the admin socket.
+// see the status-endpoint-reads maintainer note.
 type administratorConnections interface {
 	Count() int
 }
 
 var _ ports.RuntimeState = (*runtimeState)(nil)
 
-// markStarted records the instant the start sequence ran. A server that has not started has not recorded
-// anything, and the status read says so rather than inventing an uptime.
+// markStarted records the instant the start sequence ran; an unstarted server records
+// nothing, and the status read says so rather than inventing an uptime.
+// see the status-endpoint-reads maintainer note.
 func (state *runtimeState) markStarted(at time.Time) {
 	state.mutex.Lock()
 	defer state.mutex.Unlock()
@@ -88,14 +76,14 @@ func (state *runtimeState) ListenerCount() int {
 	return state.hub.ListenerCount()
 }
 
-// AdministratorSessionCount reports how many administrator connections the server is holding, the page
-// asking about them among them.
+// AdministratorSessionCount reports how many administrator connections the server holds.
+// see the status-endpoint-reads maintainer note.
 func (state *runtimeState) AdministratorSessionCount() int {
 	return state.sessions.Count()
 }
 
-// DirwatchersRunning reports how many directory watchers this server has started and has not stopped,
-// which is not the number the configuration names and not the number that is enabled.
+// DirwatchersRunning reports how many directory watchers this server has started and has
+// not stopped, which is neither the number the configuration names nor the number enabled.
 func (state *runtimeState) DirwatchersRunning() int {
 	return state.watches.Running()
 }
@@ -115,12 +103,9 @@ func (state *runtimeState) AudioProbeAvailable() bool {
 	return programIsAvailable(state.prober)
 }
 
-// DatabaseSize reports the size of the file this server writes its database into.
-//
-// Only a deployment writing into a file it owns can answer. A number read out of a database server
-// process this server does not own means something different on each backend — the size of a data
-// directory, of a tablespace, of nothing at all — and a number whose meaning depends on the backend is
-// worse on a status page than no number.
+// DatabaseSize reports the size of the file this server writes its database into, known only
+// when it owns that file: a backend-dependent number misleads a status page.
+// see the status-endpoint-reads maintainer note.
 func (state *runtimeState) DatabaseSize() (bytes int64, known bool) {
 	if state.dialect != persistence.DialectSqlite || state.dbPath == "" {
 		return 0, false
@@ -134,13 +119,10 @@ func (state *runtimeState) DatabaseSize() (bytes int64, known bool) {
 	return info.Size(), true
 }
 
-// audioProgramIsAvailable is the question this server asks of the two audio programs it runs: whether the
-// program answered the probe it was asked when the server started.
-//
-// It is asked here, in the composition root that built the program, rather than added to the port the
-// ingest path converts through: converting is what the pipeline needs and reporting what this deployment
-// has is what the status view needs, and neither should depend on the other's question. A program that
-// cannot be asked is a program this server cannot count on, and is reported as not available.
+// audioProgramIsAvailable is the server's question to the audio programs it runs: did the
+// program answer the probe asked at startup. It stays in the composition root so the status
+// view does not depend on the ingest port, and a program that cannot be asked is reported
+// as not available.
 type audioProgramIsAvailable interface {
 	Available() bool
 }

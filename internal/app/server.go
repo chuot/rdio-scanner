@@ -53,21 +53,17 @@ import (
 	scannerfrontend "rdio-scanner/internal/presentation/scanner/frontend"
 )
 
-// everyInterface is the address the server binds when the configuration names an address with nothing in
-// it, which is the legacy server's default and means every interface on the machine.
 const everyInterface = "0.0.0.0"
 
-// httpTimeout bounds how long one request may take in either direction. It is the interval the legacy
-// server gives its HTTP servers, and it is long enough that an upload of a recorded call is not cut off
-// by it.
+// httpTimeout bounds how long one request may take in either direction, long enough
+// that an upload of a recorded call is not cut off by it.
+// see the request-and-stream-deadline-constants maintainer note.
 const httpTimeout = 30 * time.Second
 
-// Server is the assembled server: the adapters, the use cases, and the endpoints the composition root put
-// together, and the thing that starts them, answers with them, and stops them.
-//
-// The fields are the pieces the composition root itself reaches for after assembly — what it reads at
-// startup, what it has to stop again, and what a test looks at. Everything else is held by the use case it
-// was built into, and the composition root never touches it again.
+// Server is the assembled server: the adapters, the use cases, and the endpoints the
+// composition root put together, and the thing that starts, answers with, and stops them.
+// Its fields are only the pieces the composition root reaches for after assembly: what it
+// reads at startup, what it has to stop again, and what a test looks at.
 type Server struct {
 	config  *Config
 	console *consoleLog
@@ -75,26 +71,24 @@ type Server struct {
 	db      *sql.DB
 	dialect persistence.Dialect
 
-	// repos are the eight configuration sections and the recorded calls, as the ports the use cases
-	// are given. The composition root reads them at startup, in the order the legacy server reads them.
 	repos application.ConfigurationRepositories
 
-	// options and accesses are kept as the adapters the composition root itself talks to: the options
-	// because it supplies the credential a server starts with, the accesses because a test asks what
-	// the server requires of listeners after it changes them.
+	// options and accesses are the adapters the composition root itself talks to: the options
+	// because it supplies the credential a server starts with, the accesses because a test
+	// asks what the server requires of listeners after it changes them.
 	options  *persistence.Options
 	accesses *persistence.Accesses
 
-	// signing is the startup step that gives the server a signing secret it can sign sessions with and
-	// puts it on record, so the key outlives the process that made it.
+	// signing is the startup step that gives the server a signing secret to sign sessions
+	// with and puts it on record, so the key outlives the process that made it.
 	signing *application.EnsureAdminSigningSecretHandler
 
 	// logs is the log the whole server writes into, including the server's own notices.
 	logs ports.LogRepository
 
-	// converterNotice is what the operator has to be told about the ffmpeg this server converts with,
-	// and is empty when there is nothing to say. It is decided once while the server is wired, and
-	// said once when it starts.
+	// converterNotice is what the operator must be told about the ffmpeg this server
+	// converts with, empty when there is nothing to say. It is decided once while the
+	// server is wired and said once when it starts.
 	converterNotice string
 
 	clock     ports.Clock
@@ -110,78 +104,68 @@ type Server struct {
 	prune   *application.PruneOldCallsHandler
 	held    *delayer.Delayer
 
-	// collectorDone is closed when the loop carrying held calls back into the pipeline has
-	// returned: the delayer closing its stream is what ends that loop, and a server that
-	// has stopped does not leave a collector behind.
+	// collectorDone closes when the loop carrying held calls back into the pipeline has
+	// returned: a server that has stopped does not leave a collector behind.
 	collectorDone chan struct{}
 
-	// ingest is the path every recorded call goes through, kept because the calls whose hold has run
-	// out are delivered through the same path rather than through a copy of it.
+	// ingest is the path every recorded call goes through, kept because calls whose hold
+	// has run out are delivered through that same path rather than through a copy of it.
 	ingest *application.IngestCallHandler
 
-	// serving holds the addresses this server is answering on, so that stopping the server stops them.
-	//
-	// The list is written by the goroutine that is serving and read by the goroutine that is
-	// stopping — the operator's interrupt can ask for the stop while the addresses are still
-	// being registered — so the list is carried under servingMutex. Building every address
-	// before any goroutine runs keeps the registrations themselves in
-	// one goroutine; the mutex is what makes the stop see a complete list, never a
+	// serving holds the addresses this server is answering on, so stopping the server stops
+	// them. The serving goroutine writes the list while the stopping goroutine reads it,
+	// so the list is carried under servingMutex: the stop sees a complete list, never a
 	// half-built one.
 	serving      []*http.Server
 	servingMutex sync.Mutex
 
-	// listeners, adminSessions, and listenerCounts are the connections the server has taken over and the
-	// report it owes about how many of the first kind there are. Shutting an address down does not wait for
-	// a connection the server has handed over, so stopping the server has to end these itself — and end them
-	// while the log their departures are written into can still be written to.
+	// listeners, adminSessions, and listenerCounts are the connections the server has taken
+	// over and the report it owes about how many listeners there are. Shutting an address
+	// down does not wait for a handed-over connection, so the stop ends these itself, while
+	// the log their departures are written into can still be written to.
 	listeners      *scannerbackend.Hub
 	adminSessions  *adminbackend.Sessions
 	listenerCounts *application.ListenerCountDebouncer
 
-	// runtime is the composition root's own answer to what it is running, for the status read. It is
-	// built while the server is wired and marked started when the start sequence runs, so that a server
-	// that was assembled and never started reports no uptime instead of an uptime counted backwards from
-	// the Unix epoch.
+	// runtime is the composition root's own answer to what it is running. It is marked
+	// started when the start sequence runs, so a server assembled but never started
+	// reports no uptime instead of an uptime counted backwards from the Unix epoch.
+	// see the status-endpoint-reads maintainer note.
 	runtime *runtimeState
 
-	// mcpSurface is the Model Context Protocol endpoint, built only when the configuration names it. An
-	// assistant holding a session is a connection the server took over and has to end itself, the same
-	// reason the listener and the administrator's configuration sockets are ended here.
+	// mcpSurface is the Model Context Protocol endpoint, built only when the configuration
+	// names it. An assistant holding a session is a connection the server took over and
+	// has to end itself, the same reason the listener and admin sockets are ended here.
 	mcpSurface *mcpbackend.Server
 
 	routes http.Handler
 
-	// stopping guards the stop, so that the two goroutines that can ask for it — the one waiting for the
-	// operator's interrupt and the one that was serving — do not both do it, and the second one waits for
-	// the first to finish.
+	// stopping guards the stop, so the two goroutines that can ask for it do not both run
+	// it, and the second one waits for the first to finish.
 	stopping sync.Once
 
-	// trusted is the parsed TrustedProxies configuration: the proxy list every endpoint that names an
-	// address honors, so the address an operator reads and the address the limiter counts are one address.
+	// trusted is the parsed TrustedProxies configuration: the proxy list every endpoint
+	// that names an address honors, so the address an operator reads and the address the
+	// limiter counts are one address.
 	trusted *httpaddr.Trusted
 
-	// stopFailed is the failure the stop could not file: the database that would have held the report is
-	// the database that failed to close.
+	// stopFailed is the failure the stop could not file: the database that would have held
+	// the report is the database that failed to close.
 	stopFailed error
 }
 
-// New opens the database the configuration names, brings it to the schema this server reads, seeds
-// what a fresh deployment starts with, and wires everything to everything else.
-//
-// It starts nothing: opening a database and assembling a server should not begin watching directories or
-// pruning history, because a caller that finds the assembly unusable has nothing to undo.
-//
-// The configuration says where the server writes the lines it says out loud, whose copy of the log entries
-// an operator reads when the server has no terminal in front of it, which ffmpeg the server converts with,
-// and the version the server reports.
+// New opens the database the configuration names, brings it to this server's schema,
+// seeds what a fresh deployment starts with, and wires everything to everything else.
+// It starts nothing: a caller that finds the assembly unusable has nothing to undo.
+// The configuration names the console, the operator's log copy, the ffmpeg, and the version.
 func New(config Config) (*Server, error) {
 	ctx := context.Background()
 
 	srv := &Server{config: &config, console: newConsoleLog(config.Out)}
 
-	// The proxy list is parsed before anything opens, because a list the operator wrote that is not a
-	// list of addresses is a configuration error the server refuses at startup, not one it discovers
-	// while deciding who to trust mid-request.
+	// The proxy list is parsed before anything opens, so a list the operator wrote that is
+	// not a list of addresses is a configuration error refused at startup, not one
+	// discovered while deciding who to trust mid-request.
 	trusted, err := httpaddr.ParseTrusted(config.TrustedProxies)
 	if err != nil {
 		return nil, err
@@ -214,24 +198,16 @@ func New(config Config) (*Server, error) {
 
 	srv.db = db
 
-	// The clock is created before the migration because the migration stamps the rows it archives with
-	// the server's clock, the way every writer this server owns stamps its entries.
+	// The clock is created before the migration because the migration stamps the rows it
+	// archives with the server's clock, as every writer this server owns stamps its entries.
 	srv.clock = clock.NewClock()
 
-	// The migration and the seed are the legacy server's NewDatabase: the schema first, then the groups
-	// and tags a deployment that has never been started is expected to have. Both do nothing on a
-	// database that already has them, which is what makes an upgrade in place the ordinary case.
-	//
-	// What the pass says is printed as it happens — that is what an operator watching an upgrade sees —
-	// and kept, because it cannot be written to the log view yet: the pass is rebuilding that table, and
-	// an entry written now takes an id in the very range the deployment's own history is being moved into.
-	// wire writes them once there is a log repository to write them through.
 	migrationLines := []domain.LogEntry{}
 
 	if err := persistence.Migrate(ctx, db, dialect, srv.clock, func(level, message string) {
-		// Said out loud in the same shape every other line the server says has, so that the word an
-		// operator greps for finds this line too. It is not the echo of an entry — there is no entry yet —
-		// which is why the level and the subsystem are put on it here.
+		// Said out loud in the shape every other line the server says has, so the word an
+		// operator greps for finds this line too. It is not the echo of an entry: there is no
+		// entry yet, which is why the level and the subsystem are put on it here.
 		srv.console.println(renderLogEntry(level, domain.LogSourceDatabase, message))
 
 		migrationLines = append(migrationLines, domain.LogEntry{Level: level, Message: message})
@@ -250,16 +226,10 @@ func New(config Config) (*Server, error) {
 	return srv, nil
 }
 
-// wire builds the adapters, hands each one to the use cases that need it, and hangs the endpoints on the
-// paths the legacy server answers.
-//
-// The order is the order the pieces need each other in: the repositories before the adapters that read
-// them, the hub before the use cases that report through it, and the use cases before the endpoints that
-// answer with them.
-//
-// migrationLines are what the migration pass said while it was rebuilding the log table. They are filed
-// here, at the first moment there is a log repository to file them in, and before anything else the server
-// writes.
+// wire builds the adapters, hands each one to the use cases that need it, and hangs the
+// endpoints on the paths the legacy server answers, in the order the pieces need each other.
+// migrationLines are what the migration said while it rebuilt the log table. They are
+// filed here, first, once a log repository exists.
 func (s *Server) wire(migrationLines []domain.LogEntry) error {
 	ctx := context.Background()
 
@@ -288,12 +258,10 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		Tags:        tags,
 	}
 
-	// s.clock was created in newServer, before the migration, because the migration stamps the rows it
-	// archives with the server's clock.
-	// Scheduled work that panics is recovered by the scheduler and said here
-	//: a debounced listener report, an hourly pruning, or a delayed
-	// call that falls over is a failure the operator sees in the log view, not
-	// a server that dies on a goroutine nobody owns.
+	// The scheduler runs the server's timed work, pruning and delayed holds among it, and
+	// recovers a job that panics: the failure is filed in the log view for the operator
+	// instead of taking the server down on a goroutine nobody owns.
+	// see the configuration-option-name-reuse maintainer note.
 	s.scheduler = clock.NewScheduler(func(problem any) {
 		_ = logs.AppendLog(ctx, domain.LogEntry{
 			DateTime: s.clock.Now(),
@@ -303,11 +271,10 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		})
 	})
 
-	// The clamp lines: a stored value the read cannot hold — a negative
-	// expiration, limit, or order — is clamped to the safe reading, and the row and
-	// its values are filed as a problem in the log view, naming what the server
-	// enforces instead. A deployment's policy changing in silence is the failure
-	// this ends.
+	// A stored value the read cannot hold, such as a negative expiration, limit, or order,
+	// is clamped to the safe reading, and the row and its values are filed as a problem in
+	// the log view, naming what the server enforces instead.
+	// see the request-and-stream-deadline-constants maintainer note.
 	clampWarning := func(message string) {
 		_ = logs.AppendLog(ctx, domain.LogEntry{
 			DateTime: s.clock.Now(),
@@ -323,12 +290,10 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 	credentials := passwords.NewBcrypt(s.config.BcryptCost)
 	s.hashes = credentials
 
-	// The migration said these things while the log table was still being rebuilt, which is why they were
-	// kept rather than written: an entry written during the pass takes an id in the log table, and the pass
-	// is busy moving the deployment's own history into that table with the ids that history arrived with.
-	// They are filed now, in the order they were said, through the plain repository and not the echoing one
-	// — the terminal already heard every one of them as it happened, and saying them again would be two
-	// lines for one event.
+	// The migration said these things while the log table was still being rebuilt, which is
+	// why they were kept rather than written: an entry written during the pass takes an id
+	// in the table the pass is rebuilding. They are filed now, in the order they were said,
+	// through the plain repository and not the echoing one.
 	for _, entry := range migrationLines {
 		entry.DateTime = s.clock.Now()
 		entry.Source = domain.LogSourceDatabase
@@ -336,9 +301,9 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		_ = logs.AppendLog(ctx, entry)
 	}
 
-	// Every log entry the server writes is also said out loud, which is what the legacy server's
-	// LogEvent does and what an operator running the server in a terminal expects. A server running as a
-	// service says them to the manager instead, at the level each entry is filed under.
+	// Every log entry the server writes is also said out loud, which is what an operator
+	// running the server in a terminal expects. A server running as a service says them to
+	// the manager instead, at the level each entry is filed under.
 	echo := s.config.Echo
 
 	if echo == nil {
@@ -347,22 +312,20 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	s.logs = &loggedEvents{logs: logs, echo: echo}
 
-	// The ffmpeg this server converts with is the one compiled for the architecture this binary was
-	// built for, written out of the binary into the server's own folder. A server whose bundle produced
-	// nothing — a developer's plain go build, and a target whose pair was never built for it — converts
-	// with the ffmpeg its host installs instead, which is what those deployments have always done. The
-	// ffprobe that measures the lengths of the recordings that conversion did not report travels the same
-	// decision: the pair the server carries, or the pair its host installs.
+	// The converter and prober come from the server's bundle, written out of the binary into
+	// the server's own folder; when the bundle produced nothing, the host-installed pair
+	// converts and measures instead, as those deployments have always done.
+	// see the ffmpeg-carried-by-the-server-and-hosted-by-the-operator maintainer note.
 	converter, prober, notice := s.config.Converter(s.config.GetFFmpegDirPath())
 
 	s.converterNotice = notice
 	forwarder := downstream.NewForwarder(groups, tags)
 	reader := parsers.New(systems, s.clock)
 
-	// The calls that are being held back are held here: written down with the instant they stop being
-	// held back, so that a server that stops and starts again picks them up. What the delayer hands
-	// back is delivered by the same step an ingested call ends with, which is the wiring the legacy
-	// server gets from its one ingest queue and this server has to do on purpose.
+	// Held calls are written down with the instant they stop being held back, so a server
+	// that stops and starts again picks them up, and the delayer hands them to the same
+	// delivery step an ingested call ends with.
+	// see the hub-and-debouncer-contract maintainer note.
 	held := delayer.New(delayer.Deps{
 		Delayed:   delayed,
 		Calls:     calls,
@@ -373,10 +336,9 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	s.held = held
 
-	// The credential a server accepts when its stored configuration has none is made at every startup and
-	// never written down, which is what the legacy server does — and why a session started before a
-	// restart does not survive it. It has to be supplied before the first read, because the read that
-	// follows is the one that puts it in place.
+	// The default admin credential is made at every startup and never written down, which is
+	// why a session started before a restart does not survive it. It has to be supplied
+	// before the first read, because that read is the one that puts it in place.
 	initial, err := credentials.Hash(ctx, domain.DefaultAdminPassword)
 	if err != nil {
 		return err
@@ -384,10 +346,10 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	options.StoreInitialCredential(initial)
 
-	// The startup step that makes sure the server has a signing secret worth having, and the one that puts
-	// it on record. It is built here because it needs the options adapter, and it is run by start after the
-	// configuration has been read: the options the step decides about are the ones the server is running
-	// with, and a step that read them before the start sequence had loaded them would decide about nothing.
+	// signing is the startup step that makes sure the server has a signing secret worth
+	// having and puts it on record. It is built here because it needs the options adapter,
+	// and start runs it after the configuration has been read, so it decides about the
+	// options the server is running with.
 	s.signing = application.NewEnsureAdminSigningSecretHandler(options, options, s.logs, s.clock)
 
 	s.settings = &listenerSettings{accesses: accesses, options: options}
@@ -398,15 +360,15 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	debouncer := application.NewListenerCountDebouncer(hub, s.logs, options, s.scheduler, s.clock)
 
-	// The hub counts listeners and says when the count is no longer what it was; the debouncer decides
-	// when to report it, so that a client that connects and drops repeatedly costs one report and not
-	// one per connection.
+	// The hub counts listeners and says when the count is no longer what it was, and the
+	// debouncer decides when to report it, so a client that connects and drops repeatedly
+	// costs one report.
+	// see the hub-and-debouncer-contract maintainer note.
 	changes.debouncer = debouncer
 
-	// The composition root keeps what it has to end: the hub's connections, the administrator's connections,
-	// and a listener-count report that is owed but not yet written. None of them are things shutting an
-	// address down reaches, and all of them are things the log stops holding once the stop closes the
-	// database it lives in.
+	// The composition root keeps what it has to end itself: the hub's connections, the
+	// admin's connections, and the listener-count report that is owed but not yet written.
+	// see the stop-and-shutdown-ordering maintainer note.
 	s.listeners = hub
 	s.listenerCounts = debouncer
 
@@ -433,9 +395,10 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	s.adminSessions = adminSessions
 
-	// The status read asks what this server is running, and only the composition root is holding all of
-	// it at once: the hub's connections, the watchers, the holds, the administrator connections, the two
-	// audio programs, and the file the database is written into.
+	// The status read asks what this server is running, and only the composition root holds
+	// all of it at once: the connections, the watchers, the holds, the audio programs, and
+	// the file the database is written into.
+	// see the status-endpoint-reads maintainer note.
 	s.runtime = &runtimeState{
 		hub:       hub,
 		watches:   watches,
@@ -482,8 +445,8 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		RemoveUser:           application.NewRemoveAccessUserHandler(accessUserPorts),
 		Session:              application.NewCheckAdminSessionHandler(tokensAdapter),
 
-		// Status answers what this server is doing right now, which is the whole of what the
-		// administrator's landing page is built from.
+		// Status answers what this server is doing right now: the whole of
+		// what the administrator's landing page is built from.
 		Status: application.NewGetRuntimeStatusHandler(s.runtime, calls, logs, s.clock),
 
 		Version: s.config.Version,
@@ -512,24 +475,22 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 		Trusted:  s.trusted,
 	})
 
-	// The access-code resolver is built once for the whole listener. Its guess budget belongs to
-	// the address that spends it, not to the entry point the address arrives at: an address that
-	// guesses at the call history and then at the Model Context Protocol surface is one address
-	// guessing, and it spends one budget.
+	// The access-code resolver is built once for the whole listener. Its guess budget
+	// belongs to the address that spends it, not to the entry point the address arrives at:
+	// one address guessing at several surfaces spends one budget.
 	resolveAccess := application.NewResolveAccessQueryHandler(accesses, s.logs, s.clock)
 
-	// The Model Context Protocol surface is built only when the configuration names it. The use cases it
-	// answers with are the same ones the administrator's own page and the listener socket answer with:
-	// the surface adds no use case of its own, and no path from it reaches a socket.
+	// The Model Context Protocol surface is built only when the configuration names it. It
+	// answers with the same use cases the administrator's page and the listener socket
+	// answer with, adds no use case of its own, and reaches no socket.
 	if s.config.McpServer {
 		s.mcpSurface = mcpbackend.New(mcpbackend.Deps{
 			Version: s.config.Version,
 			Docker:  os.Getenv("DOCKER") != "",
 
-			// The surface's lines land in the log view the operator already reads, filed under the
-			// subsystem the surface is, and echoed out loud the way every other writer's lines are:
-			// the same repository, the same clock, the same view. An assistant's work on this
-			// deployment is part of the deployment's story.
+			// MCP lines land in the operator's log view, filed under the
+			// surface's subsystem and echoed like every other writer's lines:
+			// same repository, clock, and view.
 			Logger:  slog.New(mcpbackend.NewLogViewHandler(s.logs, s.clock)),
 			Session: application.NewCheckAdminSessionHandler(tokensAdapter),
 			Resolve: resolveAccess,
@@ -540,9 +501,6 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 			Search:  application.NewSearchCallsQueryHandler(calls, systems, groups, tags),
 			Clock:   s.clock,
 
-			// The writes go through the same use cases, built from the same ports, that the
-			// administrator's own page saves with: an assistant's change and an operator's
-			// change run the same rules over the same stores.
 			Section:    application.NewUpdateConfigurationSectionHandler(configurationPorts),
 			SubSection: application.NewUpdateSystemSubSectionHandler(configurationPorts),
 			AddUser:    application.NewAddAccessUserHandler(accessUserPorts),
@@ -556,11 +514,10 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 	adminAPI.Register(mux)
 	uploads.Register(mux)
 
-	// The call history surface is registered unconditionally. It is the HTTP half of the
-	// recorded-call capability — open to any client under the same GNU General Public License the rest
-	// of the server is under — and it is what the Model Context Protocol surface is built on. A
-	// deployment that never enabled the MCP surface still answers its call history over REST, the way it
-	// answers every other REST route.
+	// The call history surface is registered unconditionally: it is the HTTP half of the
+	// recorded-call capability, open to any client under the server's GNU General
+	// Public License. A deployment without the MCP surface still answers call history.
+	// see the api-unconditional-mcp-an-option maintainer note.
 	callsAPI := callsbackend.NewCalls(callsbackend.CallsDeps{
 		Call:    application.NewGetCallQueryHandler(calls),
 		Clock:   s.clock,
@@ -573,9 +530,9 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	callsAPI.Register(mux)
 
-	// The Model Context Protocol surface is served only when the operator named it. A deployment
-	// that never asked for it never learns the path exists: the unmatched-path answer an assistant
-	// gets from it is the answer every unmatched path gets.
+	// The MCP surface is served only when the operator named it. A deployment that never
+	// asked for it never learns the path exists: an assistant there gets the answer every
+	// unmatched path gets.
 	var assistant http.Handler
 
 	if s.mcpSurface != nil {
@@ -584,33 +541,27 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	serveApplications(mux, listener, scannerfrontend.Embedded(), adminfrontend.Embedded())
 
-	// Every request the server answers carries a deadline: the administrator's request is answered
-	// with a failure by 25 seconds, not held open by a database that does not answer. The
-	// assistant's endpoint carries the stream bound beside it, and not this one: a composite
-	// capability runs several queries, and the session's stream lives for the life of the session.
+	// Every request the server answers carries a deadline, so an administrator's request
+	// fails cleanly instead of hanging on a silent database. The assistant endpoint carries
+	// the stream bound instead, because a session's stream lives as long as the session.
+	// see the request-and-stream-deadline-constants maintainer note.
 	s.routes = withSubtreeDeadlines(mux, assistant, streamDeadline, requestDeadline)
 
 	return nil
 }
 
-// Start runs the startup the legacy server runs: the notice that the server is up, the base folder it was
-// given, the configuration read out of the database, the calls this server was holding when it last
-// stopped, the pruning timer, and the directory watches.
-//
-// Three parts of the legacy startup are not here because they are not things this server has. The ingest
-// consumer goroutine is gone: a call is finished before the thing that found it is answered, which is
-// The register-and-forget loop is gone: the hub holds its own
-// sessions, and the listener-count debouncer is the thing the hub tells when the count of listeners
-// changes. The administrator's socket has nothing to start: it starts when an administrator connects.
+// Start runs the startup the legacy server runs: the up notice, the base folder, the
+// configuration read out of the database, the held calls from the last stop, the
+// pruning timer, and the directory watches.
+// Three legacy parts are absent because this server does not have them: the ingest
 func (s *Server) Start(ctx context.Context) error {
-	// The instant this server's start sequence ran is what the status read counts an uptime from. It is
-	// recorded here and not read back out of the log line the start writes: the log is something the
-	// operator prunes, and an uptime is not a thing that should depend on how much of the past this
-	// deployment keeps.
+	// The instant the start sequence ran is what the status read counts an uptime from. It
+	// is recorded here and not read back from a log line: the log is something the operator
+	// prunes, and an uptime should not depend on how much past the deployment keeps.
 	s.runtime.markStarted(s.clock.Now())
 
-	// The legacy server ignores a startup notice it cannot store, and the line has already reached the
-	// console by the time the log view is asked for it.
+	// The legacy server ignores a startup notice it cannot store, and the line has already
+	// reached the console by the time the log view is asked for it.
 	_ = s.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: s.clock.Now(),
 		Level:    domain.LogLevelWarn,
@@ -619,9 +570,10 @@ func (s *Server) Start(ctx context.Context) error {
 	})
 
 	if len(s.config.BaseDir) > 0 {
-		// The folder the server was told to use is the fact behind every path it writes to, and until now
-		// it existed only on a terminal, at the moment the server came up. It is filed as a notice and not
-		// a warning: nothing is wrong, this is simply which folder this server is serving.
+		// The base folder is the fact behind every path the server writes to, and until now it
+		// existed only on the terminal at startup. It is filed as a notice, not a warning:
+		// nothing is wrong, this records which folder this deployment is serving.
+		// see the stop-and-shutdown-ordering maintainer note.
 		_ = s.logs.AppendLog(ctx, domain.LogEntry{
 			DateTime: s.clock.Now(),
 			Level:    domain.LogLevelInfo,
@@ -630,9 +582,10 @@ func (s *Server) Start(ctx context.Context) error {
 		})
 	}
 
-	// Which ffmpeg the server converts with is decided while it is wired and said here, once, so that
-	// an operator whose server could not use the ffmpeg it carries learns that at startup rather than
-	// from a recording that was never converted.
+	// Which ffmpeg the server converts with is decided while it is wired and said here once,
+	// so an operator whose server could not use the ffmpeg it carries learns that at
+	// startup rather than from a recording that was never converted.
+	// see the ffmpeg-carried-by-the-server-and-hosted-by-the-operator maintainer note.
 	if s.converterNotice != "" {
 		_ = s.logs.AppendLog(ctx, domain.LogEntry{
 			DateTime: s.clock.Now(),
@@ -646,23 +599,18 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 
-	// The signing secret is the startup rule the legacy server never finished: it made a fresh random key
-	// every time the stored one was unusable and never wrote it down, so a deployment that had never saved
-	// its configuration signed sessions with nothing, and a legacy database holding a short secret changed
-	// keys at every start and killed every session issued before it. This step makes a key once and puts it
-	// on record, after the configuration has been read and before anything is answered from it.
-	// The secret is the server's own, and the step reports to the server log what it decided about it:
-	// the composition root says that entry out loud the way it says every other one.
+	// The signing secret is the startup rule the legacy server never finished: it made a
+	// fresh random key whenever the stored one was unusable and never wrote it down, so
+	// sessions died at every start. This step makes and records a key once.
+	// see the signing-secret-choice maintainer note.
 	if _, err := s.signing.Handle(ctx, application.EnsureAdminSigningSecretCommand{}); err != nil {
 		return err
 	}
 
-	// The calls this server was holding when it last stopped are picked up here, which is where the
-	// legacy server picks them up: before anything is answered, so that a hold that ran out while the
-	// server was down is delivered now and a hold still running is armed again.
-	//
-	// The loop that carries them into the pipeline starts before they are read back, so that the ones
-	// handed over at once have somewhere to go.
+	// The calls this server was holding when it last stopped are picked up here, before
+	// anything is answered: a hold that ran out while the server was down is delivered now,
+	// and a hold still running is armed again.
+	// see the stop-and-shutdown-ordering maintainer note.
 	s.collectorDone = make(chan struct{})
 
 	go s.deliverHeldCalls(ctx)
@@ -683,17 +631,6 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
-// deliverHeldCalls carries the calls whose hold has run out back into the pipeline: the same delivery
-// step an ingested call ends with, so that a call that waited out its hold is told to the other servers
-// and to the listeners by the one path every other call takes, and not by a copy of it written for
-// delayed calls.
-//
-// It runs for as long as the server does. A hold that runs out after the server has stopped is not
-// delivered by this loop, and the call is still where it was written down, which is how the next
-// startup finds it.
-//
-// The delayer closing its stream is the loop's own ending: the stream closes with the server's
-// stop, and the loop leaves with it.
 func (s *Server) deliverHeldCalls(ctx context.Context) {
 	defer close(s.collectorDone)
 
@@ -716,13 +653,10 @@ func (s *Server) deliverHeldCalls(ctx context.Context) {
 	}
 }
 
-// readConfiguration reads the stored configuration in the order the legacy server reads it, and stops at
-// the first section it cannot read.
-//
-// The order is not cosmetic: a deployment whose systems table is unreadable is told about the accesses it
-// could not read first, which is what an operator comparing two startup logs is looking at. And the reads
-// happen before the server answers anything, so a server that cannot load its configuration does not spend
-// the interval answering requests with a configuration it never loaded.
+// readConfiguration reads the stored configuration in the order the legacy server
+// reads it and stops at the first section it cannot read. The order is not cosmetic:
+// an operator comparing two startup logs sees the same first failure.
+// see the startup-configuration-read-order maintainer note.
 func (s *Server) readConfiguration(ctx context.Context) error {
 	if _, err := s.repos.Accesses.AllAccesses(ctx); err != nil {
 		return err
@@ -752,31 +686,16 @@ func (s *Server) readConfiguration(ctx context.Context) error {
 	return nil
 }
 
-// shutdownTimeout bounds how long the server waits for what it was answering to stop answering.
-//
-// The legacy server's Terminate called os.Exit, which stops everything at once. This server shuts its
-// addresses down instead, and a graceful shutdown waits for the connections that are still in use. Most of
-// them it closes on the spot — a client that connected and has sent nothing is closed, not waited for — so
-// the wait is for the connection the server cannot let go of: one whose handler never returns. Without a
-// bound, that is a server that stops stopping, and because the entry saying the server stopped is written
-// after the addresses are shut down, the log never records that a stop was even asked for. With one, the
-// server stops waiting, says which address it could not stop answering and why, and ends.
-//
-// The bound covers the waiting, not the closing: a listener whose accept loop never ends blocks the
-// shutdown whatever deadline it is given, because the shutdown waits for that loop before it looks at the
-// clock. That is why the failure entry names the address rather than the timeout.
+// shutdownTimeout bounds how long the server waits for what it was answering to stop
+// answering. The wait is only for handlers that never return, so without a bound that
+// is a server that stops stopping and never logs that a stop was asked for.
+// see the stop-and-shutdown-ordering maintainer note.
 const shutdownTimeout = 10 * time.Second
 
-// stop ends what the server started running — the pruning timer, the holds armed for calls that are
-// waiting out a delay, the directory watches, and the addresses it was answering on — and then the
-// database it was given.
-//
-// The legacy server's Terminate calls os.Exit, which is how a blocked ListenAndServe is stopped. This one
-// shuts the addresses down instead, so the goroutine that was serving returns and the process ends by
-// running out of work. That means two goroutines can ask for the stop at the same moment — the one that
-// was waiting for the operator's interrupt and the one that was serving — and the second one waits for the
-// first to finish rather than doing it again. Without that, the process would end while the first stop was
-// still saying so.
+// stop ends what the server started running: the pruning timer, the armed holds, the
+// directory watches, and the addresses it was answering on, then the database.
+// Unlike the legacy Terminate's os.Exit, a second stop request waits for the first.
+// see the stop-and-shutdown-ordering maintainer note.
 func (s *Server) stop(ctx context.Context) {
 	s.stopping.Do(func() {
 		shuttingDown, cancel := context.WithTimeout(ctx, shutdownTimeout)
@@ -794,10 +713,9 @@ func (s *Server) stop(ctx context.Context) {
 			s.watches.Stop(shuttingDown)
 		}
 
-		// The list of addresses is read under the lock that registers them: the stop is
-		// often the operator's interrupt asking for it while the addresses are still being
-		// registered, and a stop that reads the list unlocked can miss an address that is
-		// about to be registered and leave it answering after the server has stopped.
+		// The address list is read under the lock that registers it: the stop
+		// is often an interrupt arriving mid-registration, and an unlocked
+		// read can miss an address and leave it answering after the stop.
 		s.servingMutex.Lock()
 
 		serving := make([]*http.Server, len(s.serving))
@@ -816,20 +734,15 @@ func (s *Server) stop(ctx context.Context) {
 			}
 		}
 
-		// Shutting an address down does not wait for a connection the server took over from it: an upgraded
-		// connection is one the address no longer tracks. So the listener connections and the administrator's
-		// configuration sockets are still open here, and the entries their departures are belong to a log that
-		// lives in the database this method closes a few lines from now. Ending them here, and saying so here,
-		// is what keeps the last entries a running server writes from being entries it can no longer write:
-		// otherwise the log view holds a connection that began and never ended, which is the shape an operator
-		// spends an afternoon chasing.
+		// Shutting an address down does not wait for handed-over connections,
+		// so the listener and admin sockets are closed here: their departure
+		// entries belong to the log in the database closed a few lines below.
 		if s.adminSessions != nil {
 			s.adminSessions.CloseAll(shuttingDown)
 		}
 
-		// An assistant holding a Model Context Protocol session is a connection this server took over,
-		// and shutting an address down does not wait for a connection it handed over. So the surface's
-		// sessions are ended here, beside the sockets the same reasoning applies to.
+		// An MCP session is a handed-over connection too, so the surface's
+		// sessions end here, beside the sockets the same reasoning covers.
 		if s.mcpSurface != nil {
 			if err := s.mcpSurface.CloseSessions(shuttingDown); err != nil {
 				_ = s.logs.AppendLog(ctx, domain.LogEntry{
@@ -845,19 +758,16 @@ func (s *Server) stop(ctx context.Context) {
 			s.listeners.Close(shuttingDown)
 		}
 
-		// The listener-count report is dropped last, because the departures above are themselves listener
-		// changes: each one asks for a count of listeners that no longer exist, scheduled to be written after
-		// this method has closed the database the log lives in. A server that is stopping does not owe a
-		// count — the connections it is ending are each reported by their own departure — and a write that
-		// reaches a database which has just been closed is a write that does not finish.
+		// The listener-count report is dropped last: the departures above each
+		// schedule a count after the database closes. A stopping server owes
+		// no count, and a write to a closed database never finishes.
 		if s.listenerCounts != nil {
 			s.listenerCounts.Cancel()
 		}
 
-		// The stop is the last entry the server can write to its own log view: the log view lives in the
-		// database this method closes next. The legacy server said `terminated` on a terminal and wrote
-		// nothing, so a log that recorded everything else could not say when the server had stopped —
-		// which is the first question about any gap in it.
+		// The stop is the last entry the server can write to its own log view:
+		// the log lives in the database closed next. The legacy server wrote
+		// nothing, so the first question about any log gap went unanswered.
 		_ = s.logs.AppendLog(ctx, domain.LogEntry{
 			DateTime: s.clock.Now(),
 			Level:    domain.LogLevelInfo,
@@ -867,9 +777,9 @@ func (s *Server) stop(ctx context.Context) {
 
 		if s.db != nil {
 			if err := s.db.Close(); err != nil {
-				// This line cannot be filed: the log view is stored in the database that just failed to
-				// close. The terminal is the only copy left, so this is the one place the composition
-				// root says an entry itself rather than leaving the saying to the log.
+				// This failure line cannot be filed: the log view lives in the
+				// database that just failed to close. The terminal is the only
+				// copy left, the one place the root says an entry itself.
 				s.console.println(renderLogEntry(domain.LogLevelError, domain.LogSourceDatabase,
 					fmt.Sprintf("the server could not close its database: %v", err)))
 
@@ -879,25 +789,27 @@ func (s *Server) stop(ctx context.Context) {
 	})
 }
 
-// ServeHTTP answers a request with the routes the composition root hung the endpoints on. It is the
-// handler the addresses the server answers on are built with, and anything that has a listener of its own
-// answers with the same routes.
+// ServeHTTP answers a request with the routes the composition root hung the endpoints
+// on. It is the handler the addresses the server answers on are built with, and
+// anything with a listener of its own answers with the same routes.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.routes.ServeHTTP(w, r)
 }
 
-// Close stops the server and closes the database it was opened with. A server that was assembled and never
-// started has nothing running to stop, so closing it is closing its database. The stop is said once, so a
-// server that was interrupted and then closed reports itself stopped once.
+// Close stops the server and closes the database it was opened with. A server
+// assembled but never started has nothing running to stop, and the stop is said once,
+// so an interrupted and then closed server reports itself stopped once.
+// see the stop-and-shutdown-ordering maintainer note.
 func (s *Server) Close() error {
 	s.stop(context.Background())
 
 	return s.stopFailed
 }
 
-// Serve answers the configured address, and the https address when the configuration names a certificate
-// or asks for one obtained automatically. It does not return until the server stops, and it stops the
-// server when the operator interrupts it.
+// Serve answers the configured address, and the https address when the configuration
+// names a certificate or asks for one obtained automatically. It returns only when the
+// server has stopped, and an operator's interrupt stops the server.
+// see the stop-and-shutdown-ordering maintainer note.
 func (s *Server) Serve(ctx context.Context) error {
 	s.waitForInterrupt()
 
@@ -905,11 +817,10 @@ func (s *Server) Serve(ctx context.Context) error {
 
 	s.announce(addresses)
 
-	// Both addresses are built and registered with the server before any goroutine runs
-	//: the list the stop walks to shut the addresses down was being
-	// appended by the serving goroutine and the TLS goroutine at the same moment — a data
-	// race, and a stop racing with the registration could shut down a list that is missing
-	// the TLS address.
+	// Both the plain and the https listeners are built and registered with the server before
+	// any goroutine runs, so the list the stop walks to shut the addresses down is complete
+	// before the serving and TLS goroutines could start appending to it.
+	// see the serving-list-race maintainer note.
 	serving := s.httpServer(fmt.Sprintf("%s:%s", addresses.addr, addresses.port))
 
 	if len(s.config.SslCertFile) > 0 && len(s.config.SslKeyFile) > 0 {
@@ -932,8 +843,9 @@ func (s *Server) Serve(ctx context.Context) error {
 	return nil
 }
 
-// tlsServer builds the https listener, registered with the server the way every address it
-// answers on is registered, before the goroutine that answers it starts.
+// tlsServer builds the https listener, registered with the server the way every address
+// it answers on is registered, before the goroutine that answers it starts.
+// see the stop-and-shutdown-ordering maintainer note.
 func (s *Server) tlsServer(addresses addresses, tlsConfig *tls.Config) *http.Server {
 	server := s.httpServer(fmt.Sprintf("%s:%s", addresses.sslAddr, addresses.sslPort))
 
@@ -942,14 +854,10 @@ func (s *Server) tlsServer(addresses addresses, tlsConfig *tls.Config) *http.Ser
 	return server
 }
 
-// listenTLS answers the https address, in the two ways the legacy server answers it: with a certificate the
-// deployment provided, or with one the server obtains for itself.
-//
-// A listener that cannot start stops the server: a deployment that asked for https and
-// cannot answer it is not a server that should carry on with only http. The legacy server made this fatal
-// — log.Fatal killed the process with a line on the terminal, nothing in the server's log, and the plain
-// address left answering until the process died. The failure is filed in the server's log, said on the
-// terminal with it, and the server stops the way it stops for its operator's interrupt.
+// listenTLS answers the https address with a certificate the deployment provided or
+// one the server obtains for itself. A listener that cannot start stops the server:
+// a deployment that asked for https must not go on answering over http only.
+// see the tls-choice maintainer note.
 func (s *Server) listenTLS(serving *http.Server, addresses addresses) {
 	s.announceTLS(addresses)
 
@@ -975,12 +883,10 @@ func (s *Server) listenTLS(serving *http.Server, addresses addresses) {
 	}
 }
 
-// httpServer builds one listener.
-//
-// The timeouts are the legacy server's, and so is keeping keep-alives on. What is not the legacy server's
-// is the logger: the legacy server hands the HTTP server a logger that throws everything away, which is a
-// preserved quirk — a recovered panic and its stack, a TLS handshake failure, a broken write, none of it reaching
-// anybody. This server hands it the console the operator is reading. What the client sees is unchanged.
+// httpServer builds one listener with the legacy server's timeouts and keep-alives, but
+// not with the legacy server's discarding logger: this one hands the HTTP server the
+// console the operator is reading, while what the client sees is unchanged.
+// see the tls-choice maintainer note.
 func (s *Server) httpServer(addr string) *http.Server {
 	server := &http.Server{
 		Addr:         addr,
@@ -999,14 +905,10 @@ func (s *Server) httpServer(addr string) *http.Server {
 	return server
 }
 
-// waitForInterrupt stops the server when the operator interrupts it, which is the legacy server's SIGINT
-// handling.
-//
-// The first interrupt asks for the stop, and the stop is the polite way out. A second interrupt is the
-// operator saying the polite way is not working: the server says so on the terminal the
-// operator is reading and ends the process, rather than hanging until the SIGKILL that leaves no trace.
-// The second interrupt is watched for while the stop runs, because a stop that cannot finish is exactly
-// the one that never returns to ask.
+// waitForInterrupt stops the server when the operator interrupts it, the legacy
+// SIGINT handling. The first interrupt asks for the polite stop; a second ends the
+// process, and it stays watched while the stop runs, because a stop can hang.
+// see the stop-and-shutdown-ordering maintainer note.
 func (s *Server) waitForInterrupt() {
 	signals := make(chan os.Signal, 8)
 
@@ -1025,8 +927,8 @@ func (s *Server) waitForInterrupt() {
 
 		select {
 		case <-stopped:
-			// The stop finished on its own: the serving path returns the process to its
-			// caller, and the watcher has nothing left to watch.
+			// The stop finished on its own: the serving path returns the
+			// process to its caller, and the watcher has nothing to watch.
 			return
 
 		case <-signals:
@@ -1037,7 +939,8 @@ func (s *Server) waitForInterrupt() {
 	}()
 }
 
-// addresses is the pair of addresses the configuration names, split the way the legacy server splits them.
+// addresses is the pair of addresses the configuration names, split the way the legacy
+// server splits them.
 type addresses struct {
 	hostname string
 
@@ -1048,11 +951,9 @@ type addresses struct {
 }
 
 // serverAddresses splits the listening addresses the configuration names.
-//
-// The split is the legacy server's and so are its defaults: a name with no port gets 3000, an address with
-// nothing in it means every interface, and the https address falls back to 3000 rather than to 443. That
-// last one is not a mistake this server corrects — a deployment that configured ssl_listen without a port
-// has always been answering on 3000, and moving it would take its clients with it.
+// The legacy server's defaults are kept: a name with no port gets 3000, an empty
+// address means every interface, and the https address falls back to 3000 not 443.
+// The https default is kept because moving it would take its clients with it.
 func serverAddresses(config *Config, hostname string) addresses {
 	addr, port := splitListenAddress(config.Listen)
 	sslAddr, sslPort := splitListenAddress(config.SslListen)
@@ -1080,7 +981,9 @@ func splitListenAddress(listen string) (string, string) {
 	return addr, port
 }
 
-// announce says what the server is listening on, in the order and the wording the legacy server uses.
+// announce states the addresses the server is listening on, in the order and the wording
+// the legacy server uses.
+// see the legacy-announcement-wording maintainer note.
 func (s *Server) announce(addresses addresses) {
 	s.console.printf("main interface at %s", httpInterface(addresses.hostname, addresses.port))
 
@@ -1091,8 +994,9 @@ func (s *Server) announce(addresses addresses) {
 	s.console.println("please consider sponsoring the project at https://github.com/sponsors/chuot")
 }
 
-// announceTLS says the https half of the announcement, which the legacy server says from the goroutine
-// that serves it.
+// announceTLS states the https half of the listening announcement, which the legacy
+// server states from the goroutine that serves it.
+// see the legacy-announcement-wording maintainer note.
 func (s *Server) announceTLS(addresses addresses) {
 	base := fmt.Sprintf("https://%s:%s", addresses.hostname, addresses.sslPort)
 	if addresses.sslPort == "443" {
@@ -1103,8 +1007,9 @@ func (s *Server) announceTLS(addresses addresses) {
 	s.console.printf("admin interface at %s/admin", base)
 }
 
-// httpInterface names an address the way the legacy server names one: a server on the port a browser
-// assumes is not given the port.
+// httpInterface names an address the way the legacy server names one: a server on the
+// port a browser assumes is not given the port.
+// see the legacy-announcement-wording maintainer note.
 func httpInterface(hostname, port string) string {
 	if port == "80" {
 		return fmt.Sprintf("http://%s", hostname)
@@ -1117,8 +1022,10 @@ func (s *Server) tlsConfigured() bool {
 	return (len(s.config.SslCertFile) > 0 && len(s.config.SslKeyFile) > 0) || s.config.SslAutoCert != ""
 }
 
-// dialectOf names the database this server talks to. The configuration has already rejected a type it does
-// not support; this is where that decision becomes the thing the repositories are built with.
+// dialectOf names the database this server talks to. The configuration has already
+// rejected a type it does not support; this turns that decision into the thing the
+// repositories are built with.
+// see the legacy-configuration-relocation maintainer note.
 func dialectOf(dbType string) (persistence.Dialect, error) {
 	switch dbType {
 	case DbTypeSqlite:
