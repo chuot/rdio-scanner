@@ -13,12 +13,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// Package upgrade says whether a request is asking to become a websocket connection.
-//
-// It lives on its own because two endpoints of this server can be either a socket or an ordinary endpoint —
-// the administrator's configuration path, and the path the scanner webapp is served from — and a server
-// whose two endpoints disagree about what an upgrade request looks like answers the same request two
-// different ways depending on which one it reached first.
+// Package upgrade says whether a request asks to become a websocket
+// connection. It lives on its own because two endpoints must read an
+// upgrade request the same way. see the
+// upgrade-required-is-decided-elsewhere maintainer note.
 package upgrade
 
 import (
@@ -26,11 +24,10 @@ import (
 	"strings"
 )
 
-// Wanted reports whether a request is asking for a websocket upgrade.
-//
-// It is the legacy server's own test, applied to one header and to nothing else: the Upgrade header, read
-// without regard to how it is spelled. The Connection header a proxy may add is not looked at, so a request
-// that only claims to be upgradable is answered as the ordinary request it is.
+// Wanted reports whether a request asks for a websocket upgrade: the
+// legacy server's own test, the Upgrade header read without regard to
+// spelling, and nothing else. see the
+// upgrade-required-is-decided-elsewhere maintainer note.
 func Wanted(r *http.Request) bool {
 	return strings.EqualFold(r.Header.Get("upgrade"), "websocket")
 }
