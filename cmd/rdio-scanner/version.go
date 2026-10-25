@@ -13,21 +13,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// Command rdio-scanner is this server's composition root: it loads configuration,
-// wires the concrete infrastructure adapters into the application use cases, and
-// serves the HTTP and WebSocket interfaces.
-//
-// It is a drop-in for the legacy server: the same configuration files, the same
-// database a legacy deployment left behind, and the same interfaces clients already
-// speak to — including the version it reports, which is pinned in the captures recorded beside the
-// tests that prove them.
+// command rdio-scanner is the server's composition root: it loads
+// configuration, wires infrastructure adapters into the use cases, and serves
+// the HTTP and WebSocket interfaces
+// see the legacy-drop-in-contract maintainer note.
 package main
 
-// Version is the release version this binary reports. cmd/build replaces it at build time with
-// -ldflags -X main.Version=<version>, where the tool resolves the version from VERSION.txt and git.
-//
-// A binary built by any other route reports this fallback, and reports it in its banner: `dev` is not
-// a version any release ever had, which is the point. It is not a version a pinned wire contract can
-// pin either, which is why TestVersionMatchesThePinnedWireContract compares the core the build system
-// resolves rather than the value compiled into the binary it happens to be running.
+// Version is the release version the build injects with -ldflags, resolved
+// from VERSION.txt and git, and a binary built any other way reports the dev
+// fallback on purpose
+// see the buildinfo-version-derivation maintainer note.
 var Version = "dev"

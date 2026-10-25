@@ -33,14 +33,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The -cmd mode is how an operator drives a server that is already running: log in, read the configuration,
-// write it back, change the administrator credential, add or remove a listener access. It is a client of the
-// same administrator endpoints the administration interface uses, and it keeps the session token in a file so that a
-// script can log in once and then run several commands against the server.
-//
-// It is a mode of running the program rather than a thing the server does while it runs, which is why it
-// lives in the composition root and not in the application layer: it has no access to the server's own
-// configuration or database, only to its public administrator paths.
+// The -cmd mode drives a running server through the administrator
+// endpoints and keeps its session token in a file; it is a mode of running
+// the program, so it lives in the composition root, not the application layer.
+// see the command-mode-client-of-running-server maintainer note.
 
 const (
 	// commandArg is the flag the mode is asked for with, and the name the usage text prints in front of
@@ -67,25 +63,25 @@ const (
 	commandUserAdd       = "user-add"
 	commandUserRemove    = "user-remove"
 
-	// commandDefaultURL is the server the command mode talks to when the operator does not name one. The
-	// port is the one the server listens on by default.
+	// commandDefaultURL is the server used when the
+	// operator names none, on the default listen port.
 	commandDefaultURL = "http://localhost:3000/"
 )
 
-// commandNoSession is the refusal this mode produces itself, before it has any dealings with the server. The
-// legacy server reports it for every command, which is what separates it from a request that could not be
-// made.
+// commandNoSession is this mode's own refusal, raised
+// before any dealings with the server.
+// see the command-wiring-legacy-behavior maintainer note.
 var commandNoSession = errors.New("Not logged in.")
 
-// commandInvalidURL is the address the operator named that this mode will not send a credential to. The
-// legacy server stops there, with the message, before it reads anything else the operator named and before
-// it looks at any session.
+// commandInvalidURL is the refusal of an address this mode will
+// not send a credential to.
+// see the command-option-ordering maintainer note.
 var commandInvalidURL = errors.New("invalid URL")
 
 var commandURLScheme = regexp.MustCompile(`^https?://`)
 
-// command is one invocation of the -cmd mode: what the operator asked for, the options that came with it,
-// and the session the server handed out.
+// command is one -cmd invocation: the action asked for,
+// its options, and the session the server handed out.
 type command struct {
 	app        string
 	baseDir    string
@@ -105,19 +101,17 @@ type command struct {
 	stdout io.Writer
 }
 
-// runCommand is the -cmd mode: it drives a server that is already answering, and stops.
-//
-// It does not open the database, and it does not care which database this deployment uses: the whole point
-// of the mode is that it works against a server somebody else started.
+// runCommand is the -cmd mode: it drives a server that is already
+// answering, and opens no database of its own.
 func runCommand(config *Config, exePath string, stdout io.Writer) int {
 	cmd := newCommand(config, exePath, os.Getenv, stdout)
 
 	return cmd.do(config.Command)
 }
 
-// newCommand builds the mode from what the operator gave it. The credential comes from the environment
-// first, because the way the usage text shows a login is `RDIO_ADMIN_PASSWORD=<password>./rdio-scanner
-// -cmd login`, and a credential in a command line is visible to every other process on the machine.
+// newCommand builds the mode from what the operator gave it. The
+// credential comes from the environment first, so it stays out of
+// the process list other accounts can read.
 func newCommand(config *Config, exePath string, getenv func(string) string, stdout io.Writer) *command {
 	app := filepath.Base(exePath)
 
@@ -130,10 +124,9 @@ func newCommand(config *Config, exePath string, getenv func(string) string, stdo
 		app:     app,
 		baseDir: config.BaseDir,
 
-		// The session token is kept inside the deployment's base directory, named after the executable.
-		// The legacy server joined the base directory and the executable name with nothing between them,
-		// so with the base directory an installed server actually has — one with no trailing slash — the
-		// file landed beside the data directory instead of inside it. Repaired rather than preserved.
+		// The session token file sits inside the base directory,
+		// named after the executable name plus .token.
+		// see the command-session-token-file maintainer note.
 		tokenFile: filepath.Join(config.BaseDir, app+".token"),
 
 		password: password,
@@ -144,12 +137,10 @@ func newCommand(config *Config, exePath string, getenv func(string) string, stdo
 	}
 }
 
-// do reads the options that came after the action, picks up any session this operator already has, runs the
-// action, and reports how it ended.
-//
-// The options and the session are read before the action is chosen, as the legacy server reads them: an
-// address that is not one, or a session file that cannot be read, is reported before the mode says anything
-// about what it was asked to do.
+// do reads the options after the action, picks up any session the
+// operator already has, runs the action, and reports how it ended.
+// Options and session are read before the action is chosen, so a bad
+// address or unreadable session file is reported before the action is.
 func (cmd *command) do(action string) int {
 	if err := cmd.readOptions(); err != nil {
 		fmt.Fprintf(cmd.stdout, "%v\n", err)
@@ -194,10 +185,9 @@ func (cmd *command) do(action string) int {
 	}
 
 	if err != nil {
-		// Every action that could not be done is reported, with the failure as it happened. The legacy
-		// server said nothing at all for five of the seven commands and ended as if the command had
-		// worked, which is a preserved quirk and is repaired rather than preserved: an operator whose script ran a
-		// command against a server that was not answering is told the command did not happen.
+		// An action that could not be done is reported with the
+		// failure and ends as a failure.
+		// see the command-failure-reporting maintainer note.
 		fmt.Fprintf(cmd.stdout, "%v\n", err)
 
 		return 1
@@ -206,12 +196,9 @@ func (cmd *command) do(action string) int {
 	return 0
 }
 
-// readOptions walks the tokens that came after the action and takes the value following each option. An
-// option with nothing after it names nothing, which is what the legacy server ends up with.
-//
-// An address that is not one is the one option that stops the mode outright: the legacy server reports it
-// and stops there, so an operator who named the address before the file is told about the address and not
-// about the file.
+// readOptions walks the tokens after the action and takes the value
+// after each option; an option with nothing after it names nothing.
+// see the command-option-ordering maintainer note.
 func (cmd *command) readOptions() error {
 	i := 0
 
@@ -272,9 +259,8 @@ func (cmd *command) readOptions() error {
 	return nil
 }
 
-// readToken picks up the session this operator already has, if the token file is there. A file that is there
-// and cannot be read is reported, which is what the legacy server does with it: a session this mode cannot
-// read is not a session this mode pretends not to have.
+// readToken picks up an existing session from the token
+// file: a file it cannot read is reported, not ignored.
 func (cmd *command) readToken() error {
 	if _, err := os.Stat(cmd.tokenFile); !os.IsNotExist(err) {
 		token, err := os.ReadFile(cmd.tokenFile)
@@ -343,9 +329,8 @@ func (cmd *command) configGet() error {
 		return nil
 	}
 
-	// The file holds the server's whole configuration — signing secret, database
-	// password, administrator hash — so it is created for its owner alone
-	//, wherever the operator pointed it.
+	// The file holds the server's secrets, so it is
+	// created readable and writable by its owner alone.
 	f, err := os.OpenFile(cmd.out, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
@@ -450,8 +435,8 @@ func (cmd *command) login() error {
 	return nil
 }
 
-// logout ends the session and throws the token away. A token the server no longer honors is a session that
-// is already over, so a refusal is treated the same as a success: what the operator asked for has happened.
+// web request: station search endpoint, query params, session token
+// header, bearer prefix added when missing.
 func (cmd *command) logout() error {
 	res, err := cmd.submit(http.MethodPost, "/api/admin/logout", nil, true)
 	if err != nil {
@@ -581,10 +566,9 @@ func (cmd *command) userRemove() error {
 	return nil
 }
 
-// submit makes one request of the server, carrying the session when the path needs one.
-//
-// The address is not checked here: the mode checked it when the operator named it, and an address the
-// operator did not name is the one this mode listens on by default.
+// submit makes one request to the server, carrying the session
+// where the path needs one; the address was checked when the
+// operator named it, so it is not checked here.
 func (cmd *command) submit(method, path string, body []byte, auth bool) (*http.Response, error) {
 	reader := io.Reader(nil)
 	if body != nil {
@@ -610,8 +594,8 @@ func (cmd *command) submit(method, path string, body []byte, auth bool) (*http.R
 
 	res, err := http.DefaultClient.Do(request)
 	if err != nil {
-		// The failure as it happened, for the caller to report. It used to be the five callers that
-		// dropped it, and the mode ended as if the command had worked.
+		// submit hands the failure to the caller for reporting.
+		// see the command-failure-reporting maintainer note.
 		return nil, err
 	}
 

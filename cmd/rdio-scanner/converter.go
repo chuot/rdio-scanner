@@ -20,14 +20,13 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// theHostFFmpeg is the ffmpeg a deployment installs for itself, which is what a server runs when its
-// own bundle produced nothing: a plain `go build` a developer runs, and a target whose pair was never
-// built for it. Every release archive carries its own pair, so a release deployment never takes this
-// branch.
+// theHostFFmpeg is the ffmpeg a host installs for itself, used when the
+// server's own bundle produced nothing.
+// see the ffmpeg-bundle-provenance maintainer note.
 const theHostFFmpeg = "ffmpeg"
 
-// theHostFFprobe is the ffprobe that same deployment installs, measured the same way: the server
-// probes lengths with the ffprobe of the pair it carries, and with its host's when it carries none.
+// theHostFFprobe is this host's own ffprobe, used for length probes.
+// see the ffmpeg-bundle-provenance maintainer note.
 const theHostFFprobe = "ffprobe"
 
 // converterChoice is which ffmpeg this server converts with, which ffprobe it measures lengths
@@ -55,9 +54,8 @@ func (choice converterChoice) converter() *ffmpeg.Converter {
 	return ffmpeg.NewAt(choice.Program)
 }
 
-// prober builds the prober this server measures lengths with, working in the folder the server
-// writes its programs into: the probe files share that folder with the programs, and the probe
-// removes them when the probe ends.
+// prober builds the prober for this server's ffprobe, working in the
+// folder of the server's programs: probe files share it and are removed.
 func (choice converterChoice) prober(workDir string) *ffmpeg.Prober {
 	if choice.ProbeProgram == theHostFFprobe {
 		return ffmpeg.NewProber(workDir)
@@ -66,15 +64,10 @@ func (choice converterChoice) prober(workDir string) *ffmpeg.Prober {
 	return ffmpeg.NewProberAt(choice.ProbeProgram, workDir)
 }
 
-// theConverter decides which ffmpeg a server converts with, and which ffprobe measures its
-// lengths, from what its own bundle produced.
-//
-// The ffmpeg the server carries wins over whatever the host happens to have installed, because the
-// server was built for the host it will run on and its ffmpeg was compiled for that architecture.
-// A server that carries none converts with the host's and has nothing to say about it; a server that
-// carried one and could not use it converts with the host's too, and says why. The ffprobe travels
-// the same branch: the pair the bundle materializes is one decision, not two programs decided
-// apart.
+// theConverter picks the ffmpeg and ffprobe from what the binary's
+// bundle produced: a carried pair wins over the host's install, and a
+// pair that could not be used falls back to the host's and says why.
+// see the ffmpeg-bundle-provenance maintainer note.
 func theConverter(bundled string, bundledProbe string, failure string) converterChoice {
 	if bundled != "" && bundledProbe != "" {
 		return converterChoice{Program: bundled, ProbeProgram: bundledProbe}
@@ -83,11 +76,9 @@ func theConverter(bundled string, bundledProbe string, failure string) converter
 	return converterChoice{Program: theHostFFmpeg, ProbeProgram: theHostFFprobe, Notice: failure}
 }
 
-// bundledFFmpeg writes the pair this binary carries into the folder the server was given for it and
-// returns the paths to run them from, or reports why the server will have to do without.
-//
-// A server whose target carries no ffmpeg is not a failure and reports no reason: it is the ordinary
-// case for the targets this project does not compile an ffmpeg for.
+// bundledFFmpeg writes the pair this binary carries into the given
+// folder and returns their run paths, or reports why they are absent.
+// A target with no bundled ffmpeg is the ordinary case, not a failure.
 func bundledFFmpeg(dir string) (string, string, string) {
 	bundled, ok := bundle.Lookup()
 	if !ok {

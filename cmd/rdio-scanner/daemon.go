@@ -22,19 +22,13 @@ import (
 	"github.com/kardianos/service"
 )
 
-// The -service mode is the server running under the operating system's service manager: systemd on a Linux
-// deployment, the service control manager on Windows. It has two halves that look alike and are not the same
-// thing at all.
-//
-// When the operator names an action — start, stop, restart, install, uninstall — this process is a client of
-// the service manager. It asks for the action and ends with the code that says whether the manager did it,
-// and it never becomes a server.
-//
-// When the service manager is the one that asked for this program, with the action it wrote into the service
-// configuration at install time, this process *is* the service, and the server starts underneath it.
+// the -service mode runs the server under the operating system's service
+// manager, and it has two halves that look alike and are not the same:
+// naming an action makes this process a client that asks the manager and
+// ends, and the manager's own run action makes it the service itself.
 
-// serviceActionRun is the action the service manager runs the service with. It is what the installed service
-// configuration says, and not something an operator types.
+// serviceActionRun is the action the installed service configuration runs
+// the service with, not something an operator types.
 const serviceActionRun = "run"
 
 // daemon is one deployment's arrangement with the service manager.
@@ -44,18 +38,18 @@ type daemon struct {
 	logger  service.Logger
 }
 
-// newDaemon builds that arrangement: the name the manager knows the service by, the description an operator
-// sees in the manager's own tools, and the command line the manager will run the service with.
+// newDaemon builds that arrangement: the name the manager knows the service
+// by, the description an operator sees, and the command line to run it with.
 func newDaemon() (*daemon, error) {
-	// The manager on FreeBSD will not accept a service name with a hyphen in it, which is why the service
-	// has two names. https://github.com/kardianos/service/issues/223
+	// the FreeBSD manager rejects a hyphen in a service name, so the service is
+	// registered under two names.
 	name := "rdio-scanner"
 	if runtime.GOOS == "freebsd" {
 		name = "rdioscanner"
 	}
 
-	// The process a stop signals is this one. A process id is always a process, and on the systems that
-	// answer this way the lookup cannot fail, which is why the failure is left as it is.
+	// a process id is always a process, so this lookup cannot fail on the
+	// systems that answer this way, and its error is left as it is.
 	process, _ := os.FindProcess(os.Getpid())
 
 	d := &daemon{iface: &daemonInterface{process: process}}
@@ -81,8 +75,8 @@ func newDaemon() (*daemon, error) {
 	return d, nil
 }
 
-// run hands this process to the service manager and lets it carry on, which is what the legacy server does:
-// the manager's own loop runs on a goroutine of its own, and the server starts as it would have anyway.
+// run hands the process to the manager, whose own loop starts the server
+// see the daemon-run-under-manager maintainer note.
 func (d *daemon) run() {
 	go func() {
 		if err := d.service.Run(); err != nil {
@@ -91,18 +85,15 @@ func (d *daemon) run() {
 	}()
 }
 
-// asksTheServiceManager reports whether the action the operator named is something to ask the service
-// manager to do, rather than the action the manager itself runs the service with. An empty action means the
-// operator did not use this mode at all.
+// asksTheServiceManager reports whether the named action is one to ask the
+// manager to do rather than the action the manager runs the service with;
 func asksTheServiceManager(action string) bool {
 	return action != "" && action != serviceActionRun
 }
 
-// controlService asks the service manager to do what the operator asked for.
-//
-// An action the manager does not know is refused, and the legacy server says nothing about it: the exit code
-// is the only thing the operator is given. That is reproduced, because a script that ran
-// `-service install` on a system it has no business touching is told by the exit code and nothing else.
+// controlService asks the manager to act, and an unknown action is refused
+// with only the exit code said to the operator
+// see the daemon-control-exit-code maintainer note.
 func controlService(action string) int {
 	d, err := newDaemon()
 	if err != nil {
@@ -116,13 +107,10 @@ func controlService(action string) int {
 	return 0
 }
 
-// daemonInterface is what the service manager is told this service does. Its start is the server's start,
-// which the composition root is already doing; its stop is the interrupt this server already answers by
-// shutting its listeners down and closing what it had open.
-//
-// The stop signals this process rather than calling the shutdown directly for the same reason the legacy
-// server does it that way: the manager's stop arrives on the manager's own goroutine, and the way this
-// server shuts down is the way it shuts down when an operator presses the keys — one path, one owner.
+// daemonInterface is what the manager is told the service does: its start is
+// the server's start, and its stop signals this process so shutdown happens
+// on the one path the server already answers
+// see the daemon-stop-signals-itself maintainer note.
 type daemonInterface struct {
 	process *os.Process
 }

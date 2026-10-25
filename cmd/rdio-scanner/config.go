@@ -30,9 +30,8 @@ import (
 	"rdio-scanner/internal/app"
 )
 
-// Supported database backends. The values are part of the configuration contract: they appear in
-// rdio-scanner.ini and on the command line of deployed instances, and the composition root names the same
-// values for the database it opens.
+// Supported database backend names: they appear in the ini file and
+// on the command line, and the composition root names the same values.
 const (
 	DbTypeMariadb    = app.DbTypeMariadb
 	DbTypeMysql      = app.DbTypeMysql
@@ -65,9 +64,8 @@ const (
 	ModeCommand
 )
 
-// Config is the effective server configuration: command-line flags overlaid with
-// the rdio-scanner.ini file found in the base directory. The part of it the composition root builds a
-// server from is the composition root's own configuration, so the flags fill that in directly.
+// Config is the effective server configuration: command-line flags
+// overlaid with the rdio-scanner.ini file found in the base directory.
 type Config struct {
 	app.Config
 
@@ -76,17 +74,16 @@ type Config struct {
 	// Special-mode inputs, dispatched by the composition root.
 	Command string
 
-	// CommandArgs are the tokens that came after the -cmd action. The flag parser stops at the first
-	// argument that is not a flag, and every option this mode takes (`+ident`, `+password`, …) is such an
-	// argument, so what the parser leaves over is exactly the options the mode was given.
+	// CommandArgs are the tokens after the -cmd action: parsing stops at the
+	// first non-flag argument, which is every option this mode takes.
 	CommandArgs []string
 
 	ServiceAction    string
 	NewAdminPassword string
 }
 
-// newConfig parses the command line and overlays the ini file. exePath is injected
-// so the base-directory default can be exercised without a real installed binary.
+// newConfig parses the command line and overlays the ini file. exePath is
+// injected so the base-directory default can be tested without an install.
 func newConfig(args []string, exePath string, stdout io.Writer) (*Config, ConfigMode, error) {
 	config := &Config{}
 
@@ -160,14 +157,10 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 		return nil, ModeExit, fmt.Errorf("unknown database type %s", config.DbType)
 	}
 
-	// The bcrypt cost is checked here, at the composition root, because a cost
-	// outside 10 to 14 is a typo: a server that started with the
-	// typo's cost would hash the administrator credential at a cost the
-	// operator never asked for, and the credential on record is the one thing
-	// a typo must not touch.
-	// The connect timeout is a duration: "5" is not one, and a server
-	// that started with a typo's timeout would connect on a timing the
-	// operator never named.
+	// A bcrypt cost outside 10 to 14 is a typo, and a typo here would hash
+	// the administrator credential at a cost the operator never asked for.
+	// The connect timeout must parse as a duration, or the server would
+	// connect on a timing the operator never named.
 	if config.DbConnectTimeout != "" {
 		if _, err := time.ParseDuration(config.DbConnectTimeout); err != nil {
 			return nil, ModeExit, fmt.Errorf("database connect timeout %s is not a duration: %w", config.DbConnectTimeout, err)
@@ -178,10 +171,9 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 		return nil, ModeExit, fmt.Errorf("bcrypt cost %d is outside the range 10 to 14", config.BcryptCost)
 	}
 
-	// The -cmd mode is decided here rather than left for the composition root to notice, because this is
-	// where the legacy server decides it: after the configuration file has been read and the database type
-	// has been checked, and before the service mode or the server itself. It outranks -admin_password for
-	// the same reason — the legacy reaches it before main.go looks at the password.
+	// The -cmd mode is decided during config parsing, after the ini file is
+	// read, and it outranks -admin_password.
+	// see the cmd-mode-decision-order maintainer note.
 	if config.Command != "" {
 		return config, ModeCommand, nil
 	}
@@ -189,9 +181,9 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	return config, ModeServe, nil
 }
 
-// defaultBaseDir reproduces the legacy install heuristic: the executable's directory,
-// falling back to ~/Rdio Scanner when that directory is not writable. Go's own
-// `go run` build cache directory is excluded so development runs stay in place.
+// defaultBaseDir picks the executable's directory, falling back to
+// ~/Rdio Scanner when it is not writable; go run caches are excluded.
+// see the base-dir-default-heuristic maintainer note.
 func defaultBaseDir(exePath string) string {
 	if exePath == "" {
 		return ""
@@ -219,8 +211,8 @@ func defaultBaseDir(exePath string) string {
 	return baseDir
 }
 
-// applyIniFile overlays the ini file over the parsed flags. A missing or unreadable
-// ini file leaves the flag values untouched, exactly as the legacy server does.
+// applyIniFile overlays the ini file over the parsed flags: a missing or
+// unreadable file leaves the flag values untouched.
 func (config *Config) applyIniFile() error {
 	cfg, err := ini.Load(config.GetConfigFilePath())
 	if err != nil {
@@ -271,9 +263,8 @@ func overlayString(section *ini.Section, key string, target *string) {
 	}
 }
 
-// overlayBool overlays one switch from the ini file. A key that is absent, or that does not read as a
-// boolean, leaves the flag's own value alone: an ini file that says nothing about the switch is not the
-// file that decides it.
+// overlayBool overlays one switch from the ini file: an absent key, or
+// one that does not read as a boolean, leaves the flag's value alone.
 func overlayBool(section *ini.Section, key string, target *bool) {
 	if v, err := section.Key(key).Bool(); err == nil {
 		*target = v
@@ -310,8 +301,8 @@ func isWritableDir(dir string) bool {
 	return true
 }
 
-// saveConfig writes the effective configuration back to the ini file, in the same
-// key order the legacy server writes, so files stay comparable between binaries.
+// saveConfig writes the ini file in the legacy server's key order.
+// see the ini-file-compatibility maintainer note.
 func (config *Config) saveConfig() error {
 	ini := []string{}
 
@@ -382,9 +373,9 @@ func (config *Config) saveConfig() error {
 		ini = append(ini, fmt.Sprintf("trusted_proxies = %s", config.TrustedProxies))
 	}
 
-	// The switch is written only when the operator asked for the surface, the way bcrypt_cost is
-	// written only when it differs from its default: a saved file stays comparable with the files the
-	// deployments that never asked for the MCP surface carry.
+	// The mcp_server key is saved only when it is on, like bcrypt_cost only
+	// when it differs from its default.
+	// see the ini-file-compatibility maintainer note.
 	if config.McpServer {
 		ini = append(ini, "mcp_server = true")
 	}
@@ -393,9 +384,8 @@ func (config *Config) saveConfig() error {
 		ini = append(ini, fmt.Sprintf("bcrypt_cost = %d", config.BcryptCost))
 	}
 
-	// The ini holds the database password, so it is created readable and writable
-	// by its owner alone: a world-readable ini on a shared host hands
-	// that password to every account on the machine.
+	// The ini holds the database password, so it is created readable and
+	// writable by its owner alone.
 	file, err := os.OpenFile(config.GetConfigFilePath(), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
