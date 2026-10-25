@@ -202,9 +202,8 @@ func registerStandingQuestions(target *mcp.Server, deps Deps) {
 	})
 }
 
-// answer is a standing question's one instruction, on the user's turn: the
-// protocol hands a prompt's messages to the assistant as the user's own
-// words.
+// answer is a standing question's one instruction, on the user's turn: the protocol hands a
+// prompt's messages to the assistant as the user's own words, asked once in full.
 func answer(description, instruction string) (*mcp.GetPromptResult, error) {
 	return &mcp.GetPromptResult{
 		Description: description,
