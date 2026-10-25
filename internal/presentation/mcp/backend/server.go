@@ -64,20 +64,17 @@ type Deps struct {
 	// own logger; the composition root hands this surface the server's.
 	Logger *slog.Logger
 
-	// Session is the administrator's session check, the gate the
-	// administrator's own REST surface uses, so this surface recognises the
-	// same credential.
+	// Session is the administrator's session check: the gate the administrator's own REST
+	// surface uses, so this surface recognises the same credential the page does.
 	Session *application.CheckAdminSessionHandler
 
-	// Resolve is what a listener access code entitles its holder to. It is the
-	// same use case the call history endpoints gate with, carrying the
-	// per-address guess budget, so this surface spends that budget and not a
-	// second one.
+	// Resolve is what a listener access code entitles its holder to. It is the same use case
+	// the call history endpoints gate with, carrying the per-address guess budget, so this
+	// surface spends that budget and not a second one.
 	Resolve *application.ResolveAccessQueryHandler
 
-	// Trusted is the operator's trusted-proxy list, the same one the rest of
-	// the listener reads. It decides which forwarding entry the surface may
-	// attribute an attempt to.
+	// Trusted is the operator's trusted-proxy list, the same one the rest of the listener
+	// reads. It decides which forwarding entry the surface may attribute an attempt to.
 	Trusted *httpaddr.Trusted
 
 	// Config reads the configuration the deployment is running.
@@ -130,9 +127,8 @@ type Server struct {
 	resolve *application.ResolveAccessQueryHandler
 	trusted *httpaddr.Trusted
 
-	// log is where the surface's own lines go: the caller it would not let
-	// in, the caller a capability refused, the capability that changed the
-	// deployment.
+	// log is where the surface's own lines go: the caller it would not let in, the caller a
+	// capability refused, the capability that changed the deployment.
 	log *slog.Logger
 
 	// writeTools names the capabilities that change the deployment, recorded
@@ -168,10 +164,9 @@ func New(deps Deps) *Server {
 
 	srv.registerCapabilities(deps)
 
-	// Every capability runs under a bound of its own, and the stream carrying
-	// its answer is kept writing while the work runs. This is the narrower
-	// bound that lets a capability that runs out of time answer its own
-	// failure.
+	// Every capability runs under a bound of its own, and the stream carrying its answer is
+	// kept writing while the work runs. This is the narrower bound that lets a capability
+	// that runs out of time answer its own failure.
 	srv.readonly.AddReceivingMiddleware(withToolDeadline(deps.toolDeadline(), deps.sessionKeepalive()))
 	srv.full.AddReceivingMiddleware(withToolDeadline(deps.toolDeadline(), deps.sessionKeepalive()))
 
@@ -181,9 +176,8 @@ func New(deps Deps) *Server {
 	srv.readonly.AddReceivingMiddleware(withActivityLog(logger, srv.writeTools))
 	srv.full.AddReceivingMiddleware(withActivityLog(logger, srv.writeTools))
 
-	// The sessions the surface is holding are asked whether they are still
-	// there, at the interval that keeps a stream writing inside the socket's
-	// write bound.
+	// The sessions the surface is holding are asked whether they are still there, at the
+	// interval that keeps a stream writing inside the socket's write bound.
 	if keepalive := deps.sessionKeepalive(); keepalive > 0 {
 		srv.keepSessionsAlive(keepalive)
 	}
@@ -294,10 +288,9 @@ func ranOutOfItsBound(working, request context.Context) bool {
 	return working.Err() != nil && request.Err() == nil
 }
 
-// theWorkFailed reports whether the capability did not answer: a tool-level
-// failure the caller read as a refusal, or a work failure that reached the
-// protocol. A refusal the capability answered on its own is not the bound's
-// doing.
+// theWorkFailed reports whether the capability did not answer: a tool-level failure the
+// caller read as a refusal, or a work failure that reached the protocol. A refusal the
+// capability answered on its own is its answer and not the bound's.
 func theWorkFailed(answered mcp.Result, err error) bool {
 	if err != nil {
 		return errors.Is(err, context.DeadlineExceeded)
