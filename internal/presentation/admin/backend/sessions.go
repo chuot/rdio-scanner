@@ -13,11 +13,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// Package adminws is the administrator's configuration socket: the connection the administration interface holds open so it
-// learns about configuration changes as they happen instead of on its next reload.
-//
-// It is not a listener connection and shares nothing with one. It has no commands, no live feed, no history,
-// and no access codes; it sends its credential, and after that it only ever reads.
+// This file is the administrator's configuration socket: the connection the
+// administration interface holds open so it learns about configuration changes as they
+// happen instead of on its next reload. It is not a listener connection and shares
+// nothing with one: it has no commands, no live feed, no history and no access codes;
+// it sends its credential, and after that it only ever reads.
 package backend
 
 import (
@@ -37,40 +37,38 @@ import (
 	"rdio-scanner/internal/presentation/common/httpaddr"
 )
 
-// writeWait bounds how long the server is willing to spend writing to one administrator connection.
-//
-// The legacy server writes with no deadline at all, which means an administrator connection that stops
-// reading holds whatever save announced the change. The interval is the same one listener connections are
-// written to, and it is far longer than a real client takes.
+// writeWait bounds how long the server is willing to spend writing to one
+// administrator connection, the interval listener connections are written to; the
+// legacy server wrote with no deadline at all; see the administrator-connection-
+// lifecycle maintainer note.
 const writeWait = 10 * time.Second
 
-// closeWait bounds the goodbye written on the way out. The close frame is small, and a peer
-// that cannot take it in two seconds is not going to take it in ten: the
-// server that is stopping owes every connection a goodbye, not a ten-second patience each.
+// closeWait bounds the goodbye written on the way out: the close frame is small, and
+// a peer that cannot take it in two seconds is not going to take it in ten, so the
+// stopping server owes every connection a goodbye rather than ten seconds of patience
+// each.
 const closeWait = 2 * time.Second
 
-// closeWorkers is how many connections the stopping server says goodbye to at the same time.
-// The closes are made together, bounded so a wall of stalled sockets does not add a goroutine
-// per socket on top of the goroutines the stop is already waiting on.
+// closeWorkers is how many connections the stopping server says goodbye to at the same
+// time, bounded so a wall of stalled sockets does not add a goroutine per socket on
+// top of the goroutines the stop is already waiting on.
 const closeWorkers = 64
 
-// maxFrameSize is the largest frame the socket reads from one administrator connection, the
-// same bound the listener socket puts on its frames: a bigger frame is not something the
-// server can act on, and reading it is a way to make the server hold a message it will never
-// use. The socket ends the connection at the limit.
+// maxFrameSize is the largest frame the socket reads from one administrator
+// connection, the same bound the listener socket puts on its frames: a bigger frame
+// is something the server cannot act on, and reading it is a way to make the server
+// hold a message it will never use. The socket ends the connection at the limit.
 const maxFrameSize = 1 << 20
 
-// upgrader is the socket this endpoint hands over.
-//
-// It is left at its zero value because that is what the legacy server uses here, and the zero value is not
-// neutral: with no CheckOrigin the upgrader insists the connection comes from the same origin the page was
-// served from. The listener endpoint asks for the opposite. The asymmetry is the legacy server's own and is
-// reproduced rather than tidied.
+// upgrader is the socket this endpoint hands over. It is left at its zero value
+// because that is what the legacy server uses here, and the zero value is not
+// neutral: with no origin check it insists the connection comes from the same origin
+// the page was served from, the opposite of what the listener endpoint asks for; see
+// the administrator-socket-trust maintainer note.
 var upgrader = websocket.Upgrader{}
 
-// Sessions is the server's set of open administrator connections.
-//
-// It is both the handler the socket upgrade is served by and the thing the application layer asks about when
+// Sessions is the server's set of open administrator connections: both the handler
+// the socket upgrade is served by and the thing the application layer asks about when
 // the configuration has changed.
 type Sessions struct {
 	// session answers whether a credential an administrator connection presents is one this server issued.
@@ -80,9 +78,9 @@ type Sessions struct {
 	// shown.
 	version string
 
-	// logs and clock are how this socket reports what it did with a connection. The socket had no log at
-	// all: a listener connection says who joined, who left and whose credential it would not take, and the
-	// administrator's own connection — the one the administration interface holds open — said none of that, which is the
+	// logs and clock are how this socket reports what it did with a connection: a
+	// listener connection says who joined, who left and whose credential it would not
+	// take, and the administrator's own connection said none of that, which is the
 	// difference between a page that was closed and a server that let go of it.
 	logs  ports.LogRepository
 	clock ports.Clock
@@ -96,16 +94,16 @@ type Sessions struct {
 	mutex sync.Mutex
 	conns map[*websocket.Conn]*administrator
 
-	// held counts the goroutines reading the administrator connections. A server that is stopping has to
-	// finish them before it closes the database the log lives in: the entry saying a connection ended is
-	// written by the goroutine that was reading it, and it is written after that goroutine has already taken
-	// the connection out of the set, so nothing else can tell that the entry is still on its way.
+	// held counts the goroutines reading the administrator connections: the entry
+	// saying a connection ended is written by its reading goroutine after it has left
+	// the set, so a stopping server must finish them before closing the database the
+	// log lives in.
 	held sync.WaitGroup
 
-	// pongWait is how long a connection may go without answering before it is given up on, and
-	// pingPeriod is how often the server asks — the same discipline the listener socket holds
-	// its connections to. They are fields, not constants, for the same reason the
-	// hub's are: only this package's tests need to pick a shorter one at all.
+	// pongWait is how long a connection may go without answering before it is given up
+	// on, and pingPeriod is how often the server asks: the same discipline the listener
+	// socket holds its connections to, and fields rather than constants because only
+	// this package's tests need to pick a shorter one at all.
 	pongWait   time.Duration
 	pingPeriod time.Duration
 }
@@ -115,23 +113,19 @@ type Sessions struct {
 type administrator struct {
 	conn *websocket.Conn
 
-	// remoteAddr is the address the connection came from, which is what an operator reads when they are
-	// looking for one connection among the ones the server has held. It is read the way every other entry
-	// in this log reads an address — the forwarding header honored only for a proxy the operator named —
-	// so that the address on these lines is the address the login budget counts.
+	// remoteAddr is the address the connection came from, what an operator reads when
+	// looking for one connection among the ones the server has held, read the way every
+	// other entry in this log reads an address so that these lines name the address the
+	// login budget counts.
 	remoteAddr string
 
 	// granted says this connection has presented a credential the server accepts, and so may be told what
 	// the configuration is.
 	granted bool
 
-	// writing serializes the writes to this connection.
-	//
-	// The server writes to an administrator connection from two places: the push that announces a saved
-	// configuration, and the close that ends the connection when its credential stops being accepted or its
-	// peer goes away. A websocket connection is not something two goroutines may write to at the same time.
-	// The legacy server does not care, and gets away with it only because the map it walks while broadcasting
-	// is being changed by another goroutine at the same time anyway.
+	// writing serializes the writes to this connection: the server writes from two
+	// places, and a websocket connection is not something two goroutines may write to
+	// at the same time; see the administrator-connection-lifecycle maintainer note.
 	writing sync.Mutex
 
 	// quit is closed when the read loop ends, telling the goroutine that keeps asking this
@@ -139,10 +133,10 @@ type administrator struct {
 	quit chan struct{}
 }
 
-// SessionDeps is what the administrator connections need: the use case that answers whether a credential is one
-// this server issued, the version to report alongside the configuration, the server log this socket
-// reports its own connections to, and the proxy addresses whose forwarding header the socket honors when
-// it names a connection.
+// SessionDeps is what the administrator connections need: the use case that answers
+// whether a credential is one this server issued, the version to report alongside the
+// configuration, the server log this socket reports its connections to, and the proxy
+// addresses whose forwarding header the socket honors when it names a connection.
 type SessionDeps struct {
 	Session *application.CheckAdminSessionHandler
 	Version string
@@ -166,26 +160,24 @@ func NewSessions(deps SessionDeps) *Sessions {
 	}
 }
 
-// ServeHTTP hands over an administrator configuration socket.
-//
-// The upgrade asks for nothing: no credential in a header, no access code. What the connection is allowed to
-// see is decided afterwards, by the frames it sends.
-//
-// A request that is not an upgrade is answered by the upgrader itself, with nothing said about it. The
-// composition root routes those requests to the configuration endpoint instead, which is the same thing the
-// legacy server's one handler does by checking the upgrade header first.
+// ServeHTTP hands over an administrator configuration socket. The upgrade asks for
+// nothing: no credential in a header, no access code, and what the connection may see
+// is decided afterwards by the frames it sends; see the administrator-socket-trust
+// maintainer note. A request that is not an upgrade is answered by the upgrader
+// itself and nothing said about it, the configuration endpoint being routed there by
+// the composition root.
 func (sessions *Sessions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		// The upgrader has already answered the request. The legacy server returns without a word here, and
-		// unlike the listener endpoint it writes no line about it — not to the console and not into the
-		// server's log.
+		// The upgrader has already answered the request, and the legacy server returns
+		// without a word here: unlike the listener endpoint it writes no line about it,
+		// neither to the console nor into the server's log.
 		return
 	}
 
-	// The read limit is set before the connection is held: a frame bigger than the server
-	// will ever read ends the connection at the socket, and is never read into memory to be
-	// looked at — not even as a credential.
+	// The read limit is set before the connection is held: a frame bigger than the
+	// server will ever read ends the connection at the socket and is never read into
+	// memory to be looked at, not even as a credential.
 	conn.SetReadLimit(maxFrameSize)
 
 	admin := sessions.join(conn, httpaddr.Address(r, sessions.trusted))
@@ -199,17 +191,10 @@ func (sessions *Sessions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-// NotifyConfigurationChanged pushes the whole configuration to every administrator connection that has
-// presented a credential.
-//
-// It is the administrator's own view of the configuration — every section, with the identifiers this server
-// hands out and the settings a listener has no business knowing — and not the trimmed one a listener is
-// given.
-//
-// The legacy server pushes to everything it has registered, including a connection that has presented
-// nothing at all, which means a peer that opens this socket and stays silent is handed every access code,
-// every apikey, and every downstream credential as soon as anybody saves a configuration. Repaired by the owner's decision: a connection is open before it is trusted, and it is told nothing
-// until it says who it is.
+// NotifyConfigurationChanged pushes the whole configuration, the administrator's own
+// view of it rather than the trimmed one a listener is given, to every administrator
+// connection that has presented a credential; see the administrator-socket-trust
+// maintainer note.
 func (sessions *Sessions) NotifyConfigurationChanged(ctx context.Context, configuration domain.Configuration) {
 	body, err := json.Marshal(dto.AdminConfigPayload{
 		Accesses:    configuration.Access,
@@ -249,17 +234,15 @@ func (sessions *Sessions) NotifyConfigurationChanged(ctx context.Context, config
 	}
 }
 
-// listen reads the frames an administrator connection sends.
-//
-// Every frame is checked against the credentials this server still accepts, and not only the first one: the
-// rolling window retires an old login's credential, and a connection holding one is ended the next time it
-// says anything.
+// listen reads the frames an administrator connection sends. Every frame is checked
+// against the credentials this server still accepts, not only the first one; see the
+// administrator-socket-trust maintainer note.
 func (sessions *Sessions) listen(admin *administrator) {
-	// An administrator connection is held to the same interval a listener connection is
-	//: the server asks every so often, and a connection that stops answering
-	// is one the server cannot send the configuration to — a half-open peer holds its
-	// goroutine, its slot, and the server that is stopping and waits on it. The hosted web
-	// app answers pings automatically; a native administrator client must answer them too.
+	// An administrator connection is held to the same ping and pong discipline a
+	// listener connection is, and one that stops answering is ended: a half-open peer
+	// holds its goroutine, its slot, and the stop that waits on them. The hosted web
+	// app answers pings automatically; a native administrator client must answer them
+	// too.
 	admin.conn.SetReadDeadline(time.Now().Add(sessions.pongWait))
 	admin.conn.SetPongHandler(func(string) error {
 		return admin.conn.SetReadDeadline(time.Now().Add(sessions.pongWait))
@@ -267,11 +250,11 @@ func (sessions *Sessions) listen(admin *administrator) {
 
 	defer close(admin.quit)
 
-	// The asking happens while the reading waits: a connection that has gone quiet is not
-	// one whose next frame the server is sitting down to read. The ping goroutine writes
-	// under the same lock every other writer of this connection takes, and it is counted
-	// with the rest: a server that is stopping finishes every goroutine that can still
-	// speak on a connection before it closes the log they write to.
+	// The asking happens while the reading waits: a connection that has gone quiet is
+	// not one whose next frame the server is sitting down to read, and the ping
+	// goroutine writes under the same lock every other writer of this connection takes
+	// and is counted with the rest; see the administrator-connection-lifecycle
+	// maintainer note.
 	sessions.held.Add(1)
 
 	go func() {
@@ -355,11 +338,10 @@ func (sessions *Sessions) grant(admin *administrator) {
 	admin.granted = true
 }
 
-// write pushes one frame to one connection.
-//
-// The write is bounded, which the legacy server's is not: a stalled administrator connection must not be able
-// to hold a configuration save. A connection that cannot be written to is not a connection any more, and the
-// caller forgets it.
+// write pushes one frame to one connection. The write is bounded, which the legacy
+// server's is not, and a connection that cannot be written to is not a connection any
+// more and is forgotten by the caller; see the administrator-connection-lifecycle
+// maintainer note.
 func (sessions *Sessions) write(admin *administrator, body []byte) error {
 	admin.writing.Lock()
 	defer admin.writing.Unlock()
@@ -371,13 +353,11 @@ func (sessions *Sessions) write(admin *administrator, body []byte) error {
 	return admin.conn.WriteMessage(websocket.TextMessage, body)
 }
 
-// leave ends a connection: it is removed from the set, told why in a close frame, and closed.
-//
-// The close is written before the socket is closed. The legacy server hands the connection to its
-// register-and-forget loop and then writes the close, which races the loop closing the socket; the capture
-// shows the close frame arriving, so this order is what the legacy server was observed to do and is the one
-// kept.
-// leave forgets one administrator connection and says it went, when this half is the one that found it.
+// leave ends a connection: it is removed from the set, told why in a close frame, and
+// closed; the close is written before the socket is closed; see the administrator-
+// connection-lifecycle maintainer note.
+// leave forgets one administrator connection and says it went, when this half is the
+// one that found it.
 func (sessions *Sessions) leave(admin *administrator) {
 	sessions.mutex.Lock()
 
@@ -387,20 +367,20 @@ func (sessions *Sessions) leave(admin *administrator) {
 	sessions.mutex.Unlock()
 
 	if !was {
-		// The socket ended this connection already, which is what happens when the server stops while it is
-		// still holding it. The departure has been said; saying it again would tell an operator that two
-		// administrators left when one did.
+		// The socket ended this connection already, which happens when the server stops
+		// while still holding it: the departure has been said, and saying it again would
+		// tell an operator that two administrators left when one did.
 		return
 	}
 
 	sessions.depart(context.Background(), admin)
 }
 
-// Count reports how many administrator connections the server is holding, including the one asking.
-//
-// The status view shows this as what it is: the connections the administration interface holds open,
-// the page reading this count among them. It is not a count of other people, and it is not a count of
-// who is logged in — an administrator holding the page in two tabs is two connections.
+// Count reports how many administrator connections the server is holding, including
+// the one asking. The status view shows it as what it is: the connections the
+// administration interface holds open, the page reading the count among them; it is
+// not a count of who is logged in - an administrator holding the page in two tabs is
+// two connections.
 func (sessions *Sessions) Count() int {
 	sessions.mutex.Lock()
 	defer sessions.mutex.Unlock()
@@ -408,19 +388,10 @@ func (sessions *Sessions) Count() int {
 	return len(sessions.conns)
 }
 
-// CloseAll ends every administrator connection the server is holding and reports each one leaving.
-//
-// This is what a server that is stopping needs: shutting an address down does not wait for a connection the
-// server has handed over, so these connections are still open at the point where the stop closes the
-// database the log lives in, and a departure noticed after that is an entry the server can no longer write.
-//
-// The connections are taken out of the set first, so the read loop each one unblocks has nothing left to
-// report: a departure is said by the half that ended the connection, once.
-//
-// The goodbyes are made together: each one is a write, and a peer that stopped
-// reading holds its write for the full close deadline. Made one connection at a time, a wall of stalled
-// sockets takes a deadline per connection and blows past the server's own shutdown window — which is
-// how a stopping server ends up needing the kill signal.
+// CloseAll ends every administrator connection the server is holding and reports each
+// one leaving; the set is emptied first, the goodbyes are written together, and the
+// close waits for the goroutines that were reading; see the administrator-connection-
+// lifecycle maintainer note.
 func (sessions *Sessions) CloseAll(ctx context.Context) {
 	sessions.mutex.Lock()
 
@@ -453,20 +424,17 @@ func (sessions *Sessions) CloseAll(ctx context.Context) {
 
 	wg.Wait()
 
-	// And the close waits for the goroutines that were reading those connections. The entry saying a
-	// connection ended is written by the goroutine that was reading it, after that goroutine has already
-	// taken the connection out of the set, so a close that only ended the connections would report its own
-	// departures and return while someone else's was still on its way — into a log whose database is closed
-	// on the next line.
+	// And the close waits for the goroutines that were reading those connections:
+	// each one writes its own departure entry after taking the connection out of the
+	// set, so a close that only ended the connections would return while another's
+	// entry was still on its way into a log whose database closes on the next line.
 	sessions.held.Wait()
 }
 
-// depart says that one administrator's connection ended and ends it, with the close code the web
-// application reads as a socket the server let go of.
-//
-// The write is bounded by the shutdown context the server is stopping under, and by closeWait
-// whichever is shorter: the goodbye is owed to every connection, and a stalled peer collects
-// only its own two seconds.
+// depart says that one administrator's connection ended and ends it, with the close
+// code the web application reads as a socket the server let go of, bounded by the
+// shutdown context and closeWait whichever is shorter: every connection is owed a
+// goodbye and a stalled peer collects only its own two seconds.
 func (sessions *Sessions) depart(ctx context.Context, admin *administrator) {
 	sessions.log(context.Background(), domain.LogLevelInfo,
 		fmt.Sprintf("an administrator disconnected from %s", admin.remoteAddr))
@@ -491,11 +459,10 @@ func (sessions *Sessions) depart(ctx context.Context, admin *administrator) {
 	admin.conn.Close()
 }
 
-// log writes one entry to the server log, filed under the administrator's own subsystem: these are the
-// administrator's connections, and an operator tracing the administration interface filters the log to this.
-//
-// A connection outlives the request that upgraded it, so none of these entries belong to a request's
-// lifetime and none are written with one's context.
+// log writes one entry to the server log, filed under the administrator's own
+// subsystem: an operator tracing the administration interface filters the log to this.
+// A connection outlives the request that upgraded it, so none of these entries are
+// written with a request's context.
 func (sessions *Sessions) log(ctx context.Context, level, message string) {
 	if err := sessions.logs.AppendLog(ctx, domain.LogEntry{
 		DateTime: sessions.clock.Now(),
