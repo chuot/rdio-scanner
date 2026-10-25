@@ -24,13 +24,13 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The administrator's own endpoints answer with payloads of their own, and the captures taken from the
-// legacy server are compared byte for byte.
+// The administrator's own endpoints answer with payloads of their own,
+// and the legacy server captures are compared byte for byte.
 
 func TestAdminLoginReplyMatchesTheCapturedLogin(t *testing.T) {
-	// The flag is carried and not decided here: the use case reports it as true on every accepted login,
-	// and this is what the capture shows the legacy server answering. The captured credential is a
-	// placeholder, because a session credential is different on every run of the capture.
+	// The needs-changing flag is carried from the use case, true on every
+	// accepted login, as the capture shows the legacy server answering.
+	// The captured credential is a placeholder: it differs per capture run.
 	got := marshal(t, AdminLoginReply{PasswordNeedChange: true, Token: "capture-token"})
 	want := replaceInOrder(t, capturedAnswer(t, "rest-login.json"), "<token>", "capture-token")
 
@@ -39,8 +39,8 @@ func TestAdminLoginReplyMatchesTheCapturedLogin(t *testing.T) {
 	}
 }
 
-// A password change answers with the one thing the administrator's page acts on, and nothing else. The
-// captured answer says the credential on record no longer needs changing, because the capture changed it.
+// TestAdminPasswordReplyMatchesTheCapturedPasswordChange proves a
+// password change answers with only the one flag the page acts on.
 func TestAdminPasswordReplyMatchesTheCapturedPasswordChange(t *testing.T) {
 	got := marshal(t, AdminPasswordReply{PasswordNeedChange: false})
 	want := capturedAnswer(t, "rest-password.json")
@@ -50,8 +50,8 @@ func TestAdminPasswordReplyMatchesTheCapturedPasswordChange(t *testing.T) {
 	}
 }
 
-// The nine alert sequences are not configuration and are not stored anywhere: every client that shows an
-// alert reads the same nine, and the administrator's endpoint is where a client fetches them.
+// TestAlertsPayloadMatchesTheCapturedAlerts proves the nine alert
+// sequences are fixed builtins, not stored configuration.
 func TestAlertsPayloadMatchesTheCapturedAlerts(t *testing.T) {
 	got := marshal(t, Alerts())
 	want := capturedAnswer(t, "rest-alerts.json")
@@ -61,17 +61,10 @@ func TestAlertsPayloadMatchesTheCapturedAlerts(t *testing.T) {
 	}
 }
 
-// The log view is answered with the total the criteria matches, the span of time everything that matches
-// covers, the criteria echoed back, the per-subsystem counts, and the entries of this page.
-//
-// The captured view is the one the capture script asked for: warnings only, a page of two hundred from
-// the start, ascending. Its timestamps are placeholders in the capture, and the test fills them back in
-// with the instants the test's own log holds, in the order the payload writes them.
-//
-// The capture is no longer the bytes the legacy server wrote for this endpoint: the legacy server has no
-// subsystem to report. It is the shape this server's contract declares, taken over the same scenario the
-// capture script ran — a deployment whose log holds the startup line the other server wrote, and the two
-// configuration changes an administrator made afterwards. The manifest records that.
+// TestAdminLogsPagePayloadMatchesTheCapturedLogView proves the log
+// view answers the total match count, the match span, the echoed
+// criteria, the per-subsystem counts, and this page's entries.
+// see the call-search-echoes-and-status-shortcuts maintainer note.
 func TestAdminLogsPagePayloadMatchesTheCapturedLogView(t *testing.T) {
 	first := time.Date(2026, 5, 11, 9, 0, 0, 0, time.UTC)
 	second := first.Add(time.Second)
@@ -112,10 +105,10 @@ func TestAdminLogsPagePayloadMatchesTheCapturedLogView(t *testing.T) {
 	}
 }
 
-// The criteria are echoed back as they were submitted, because the log view pages by resubmitting what
-// it was last answered with. Two things follow, and both are the legacy server's behavior: a criterion
-// that was not submitted is not echoed, and a limit larger than the most the search will ever return is
-// echoed as the number that was asked for and not as the number that was used.
+// TestAdminLogsPagePayloadEchoesTheCriteriaTheSearchWasAskedWith
+// proves criteria echo as submitted: unsubmitted criteria stay absent,
+// and an overlarge limit echoes as asked, not as clamped.
+// see the call-search-echoes-and-status-shortcuts maintainer note.
 func TestAdminLogsPagePayloadEchoesTheCriteriaTheSearchWasAskedWith(t *testing.T) {
 	page := ports.LogSearchPage{Count: 0, Results: []domain.LogEntry{}}
 
@@ -134,9 +127,9 @@ func TestAdminLogsPagePayloadEchoesTheCriteriaTheSearchWasAskedWith(t *testing.T
 	}
 }
 
-// A date that the log view submitted is echoed back as the instant it parsed to, and a date that is not
-// an instant is not echoed at all: the search runs without that criterion, and the view is answered with
-// the criteria the search actually had.
+// TestAdminLogsPagePayloadEchoesTheDateItUnderstood proves a parsable
+// date echoes as the instant it parsed to, and an unparsable one is
+// not echoed at all.
 func TestAdminLogsPagePayloadEchoesTheDateItUnderstood(t *testing.T) {
 	page := ports.LogSearchPage{Count: 0, Results: []domain.LogEntry{}}
 
@@ -153,11 +146,9 @@ func TestAdminLogsPagePayloadEchoesTheDateItUnderstood(t *testing.T) {
 	}
 }
 
-// Every entry the log view is answered with says which part of the server wrote it. That is what the
-// stored column is for: an operator looking at a page of warnings is looking for the ones the watcher
-// wrote, and a page that does not say cannot be narrowed at all.
-//
-// The field sits between the level and the message, which is the order the contract declares.
+// TestAdminLogsPagePayloadCarriesTheSubsystemThatWroteEachEntry
+// proves every entry names the subsystem that wrote it, so the operator
+// can narrow the page, between level and message as the contract says.
 func TestAdminLogsPagePayloadCarriesTheSubsystemThatWroteEachEntry(t *testing.T) {
 	at := time.Date(2026, 5, 11, 9, 0, 0, 0, time.UTC)
 
@@ -197,10 +188,9 @@ func TestAdminLogsPagePayloadCarriesTheSubsystemThatWroteEachEntry(t *testing.T)
 	}
 }
 
-// The per-subsystem counts are what the log view offers the operator before they narrow to anything, so
-// they are answered on every search and not only on one that asks for them. They describe everything the
-// criteria match, they arrive in the order the search reported them — most first — and a search that
-// matches nothing answers an empty list rather than a null.
+// TestAdminLogsPagePayloadReportsHowManyEntriesEachSubsystemWrote
+// proves subsystem counts arrive on every search, describe the whole
+// match, come most first, and a matchless search answers an empty list.
 func TestAdminLogsPagePayloadReportsHowManyEntriesEachSubsystemWrote(t *testing.T) {
 	page := ports.LogSearchPage{
 		Count: 183,
@@ -219,8 +209,8 @@ func TestAdminLogsPagePayloadReportsHowManyEntriesEachSubsystemWrote(t *testing.
 			"the subsystem and how many entries it wrote", got)
 	}
 
-	// The counts belong to the whole match and not to the page, so they are answered even when the page is
-	// empty — which is the case an operator is most likely to be in when they are deciding what to narrow.
+	// The counts belong to the whole match, not the page, so they answer
+	// even when the page is empty, as the operator decides what to narrow.
 	if !strings.Contains(got, `"count":183`) {
 		t.Errorf("the total =\n  %s\nwant 183, the total the criteria match", got)
 	}
@@ -232,12 +222,10 @@ func TestAdminLogsPagePayloadReportsHowManyEntriesEachSubsystemWrote(t *testing.
 	}
 }
 
-// The subsystem and the text join the echoed criteria, in the order the contract declares them:
-// date, level, source, text, limit, offset, sort. The log view pages by resubmitting what it was last
-// answered with, so a criterion it asked for has to come back or the next page is a different search.
-//
-// A subsystem that is not a name this server has is not echoed, because the search did not run with one —
-// and the endpoint refuses that request outright, so the echo is the second half of the same decision.
+// TestAdminLogsPagePayloadEchoesTheSubsystemAndTheTextItWasAskedFor
+// proves subsystem and text echo in the contract's order, and an
+// unknown subsystem is not echoed.
+// see the call-search-echoes-and-status-shortcuts maintainer note.
 func TestAdminLogsPagePayloadEchoesTheSubsystemAndTheTextItWasAskedFor(t *testing.T) {
 	page := ports.LogSearchPage{Count: 0, Results: []domain.LogEntry{}}
 
