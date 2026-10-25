@@ -25,9 +25,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The administrator's reading capabilities: what this deployment is, what its log view says, and
-// what was said around a line the operator is looking at. Each one answers a question an operator
-// asks, in one call, with the paging the server accepts echoed back as it was applied.
+// The administrator's reading capabilities: what this deployment is, what its
+// log view says, and what was said around a line the operator is looking at,
+// each one call, with the paging the server applied echoed back.
 
 func TestInspectSystemSummarizesWhatIsBeingAdministered(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
@@ -90,8 +90,8 @@ func TestInspectSystemSummarizesWhatIsBeingAdministered(t *testing.T) {
 		t.Fatalf("the summary does not report that the administrator password still needs changing")
 	}
 
-	// The alert sequences the operator can name in a capture payload: the nine the server carries,
-	// each with the tones it is made of.
+	// The alert sequences an operator can name in a capture payload: the nine the
+	// server carries, each with the tones it is made of.
 	if len(summary.Alerts) != 9 {
 		t.Fatalf("the summary carries %d alert sequences, want the nine the server carries", len(summary.Alerts))
 	}
@@ -102,13 +102,10 @@ func TestInspectSystemSummarizesWhatIsBeingAdministered(t *testing.T) {
 	}
 }
 
-// The administrator's reading capabilities carry their own credential check, and not only the tier
-// routing: a capability registered on the administrator's set refuses a weaker caller standing in
-// front of it, and the refusal says what is required without naming what the caller is missing.
-//
-// This is the shape the surface has when the registration and the caller disagree. The routing is a
-// registration-time fact that can drift as the catalog grows; the check inside the handler is the
-// lock that cannot.
+// The administrator's reading capabilities carry their own credential check,
+// not only the tier routing: a weaker caller standing in front of one is
+// refused, without naming what the caller is missing. Routing can drift as
+// the catalog grows; the check inside the handler is the lock that cannot.
 func TestTheAdministratorsReadingCapabilitiesRefuseAnAccessCodeCaller(t *testing.T) {
 	s := newAdministratorSetSession(t, readScoped())
 
@@ -121,10 +118,10 @@ func TestTheAdministratorsReadingCapabilitiesRefuseAnAccessCodeCaller(t *testing
 	}
 }
 
-// A deployment that lists no access codes takes an anonymous caller into the read-only tier, not
-// into the administrator's: reaching the whole deployment is done by signing in, and the surface
-// that is open to the network does not decide on its own that an anonymous caller is an
-// administrator.
+// A server listing no access codes takes an anonymous caller into the read-only
+// tier, not the administrator's: reaching the whole deployment is done by
+// signing in, and the surface open to the network does not decide on its own
+// that an anonymous caller is an administrator.
 func TestTheAdministratorsReadingCapabilitiesRefuseAnAnonymousCaller(t *testing.T) {
 	s := newAdministratorSetSession(t, Caller{Tier: TierReadOnly})
 
@@ -137,9 +134,9 @@ func TestTheAdministratorsReadingCapabilitiesRefuseAnAnonymousCaller(t *testing.
 	}
 }
 
-// administratorProbes is each administrator's reading capability with an argument list it accepts:
-// the arguments a capability does not take are refused by its own schema before the capability is
-// reached, and the point of these tests is the credential refusal.
+// administratorProbes is each administrator's reading capability with an
+// argument list it accepts: arguments a capability does not take are refused by
+// its own schema first, and these tests are about the credential refusal.
 func administratorProbes() []struct {
 	tool string
 	args map[string]any
@@ -157,9 +154,9 @@ func administratorProbes() []struct {
 	}
 }
 
-// The read-only tier's catalog names none of the administrator's capabilities. An assistant that has
-// to discover its reach by being refused is an assistant that will spend its turn on calls it cannot
-// make, so the routing hands it the set its credential opens and nothing else.
+// The read-only tier's catalog names none of the administrator's capabilities,
+// so the routing hands an assistant the set its credential opens instead of
+// leaving it to discover its reach by being refused.
 func TestTheReadOnlyTiersCatalogNamesNoAdministratorsCapability(t *testing.T) {
 	for _, who := range []Caller{readScoped(), {Tier: TierReadOnly}} {
 		s := newCallerSession(t, who)
@@ -218,8 +215,8 @@ func TestSearchLogsAnswersTheFiltersAndEchoesThePageItUsed(t *testing.T) {
 		}
 	}
 
-	// The page is echoed as the server applied it, not as it was asked for: a request past the
-	// ceiling gets the ceiling, and a request naming no page gets the default.
+	// The page is echoed as the server applied it: a request past the ceiling
+	// gets the ceiling, and one naming no page gets the default.
 	answered := call(t, s, "search_logs", map[string]any{"date": day, "limit": 9000})
 
 	var clamped logPageShape
@@ -241,12 +238,10 @@ func TestSearchLogsAnswersTheFiltersAndEchoesThePageItUsed(t *testing.T) {
 	}
 }
 
-// TestSearchLogsReportsASubsystemThisServerDoesNotHave: a subsystem name outside the vocabulary is not
-// a filter that matches nothing. It is a caller asking about a part of the server that does not exist,
-// and answering them with a page of everything is worse than an empty page — the caller reads it as the
-// answer to the question they asked. The administrator's endpoint refuses it with the vocabulary; the
-// capability promises the same, and a capability that quietly drops the criterion answers a question
-// nobody asked.
+// TestSearchLogsReportsASubsystemThisServerDoesNotHave: a subsystem name
+// outside the vocabulary is a question about a part of the server that does
+// not exist, not a filter matching nothing. A page of everything answers a
+// question nobody asked; the capability refuses it with the vocabulary.
 func TestSearchLogsReportsASubsystemThisServerDoesNotHave(t *testing.T) {
 	s := newCallerSession(t, Caller{Tier: TierFull})
 
@@ -277,8 +272,8 @@ func TestSearchLogsNamesTheSpanTheCriteriaMatch(t *testing.T) {
 		t.Fatalf("the page names no span: %+v", page)
 	}
 
-	// The span belongs to everything the criteria match, so it stays where it is while the page
-	// moves: the same criteria further along answer the same span.
+	// The span belongs to everything the criteria match, so it stays put while the
+	// page moves: the same criteria further along answer the same span.
 	next := call(t, s, "search_logs", map[string]any{"date": fixtureTime.Format("2006-01-02"), "offset": 2})
 
 	var second logPageShape
@@ -316,9 +311,9 @@ func TestExplainErrorReadsTheNeighbourhoodOfALine(t *testing.T) {
 		t.Fatalf("the subsystem's neighbourhood is out of order: %+v", explanation.Same)
 	}
 
-	// The neighbouring subsystems in the same window, grouped, so the answer says what else was
-	// going on: the ingest line that arrived next to the failure, and not the prune line an hour
-	// later filed under its own subsystem.
+	// The neighbouring subsystems in the same window, grouped, so the answer says
+	// what else was going on: the ingest line next to the failure, not the prune
+	// line an hour later under its own subsystem.
 	neighbours := map[string][]logEntryShape{}
 	for _, group := range explanation.Neighbours {
 		neighbours[group.Source] = group.Entries
