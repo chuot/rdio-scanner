@@ -23,10 +23,9 @@
 // server.
 package dto
 
-// Tone is one oscillator setting in a tone the server can make: when it starts, when it stops, how
-// high, and what shape.
-//
-// The four keys, and the order they are written in, belong to the clients that read them.
+// Tone is one oscillator setting in a tone the server can make: when it
+// starts, when it stops, how high, and what shape. The four keys, and the
+// order they are written in, belong to the clients that read them.
 type Tone struct {
 	Begin     float32 `json:"begin"`
 	End       float32 `json:"end"`
@@ -34,10 +33,9 @@ type Tone struct {
 	Kind      string  `json:"type"`
 }
 
-// alertTones are the nine alert sequences the server carries. They are not configuration: no option
-// and no administrator changes them, and every client that shows an alert reads the same nine.
-//
-// They are copied from the server they replace, value for value, because they are the payload.
+// alertTones are the nine alert sequences the server carries, copied from
+// the server it replaces because they are the payload. see the
+// tones-fixtures-and-the-golden-capture-contract maintainer note.
 var alertTones = map[string][]Tone{
 	"alert1": {
 		{
@@ -284,8 +282,8 @@ type KeypadBeeps struct {
 	Denied     []Tone `json:"denied"`
 }
 
-// keypadBeeps picks the panel's tones by the brand the server was told it is talking to. A brand the
-// server does not know is answered with three empty lists rather than with another brand's tones.
+// keypadBeeps picks the panel's tones by the brand it serves. see the
+// tones-fixtures-and-the-golden-capture-contract maintainer note.
 func keypadBeeps(option string) KeypadBeeps {
 	switch option {
 	case "uniden":
