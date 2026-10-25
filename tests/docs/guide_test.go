@@ -27,11 +27,9 @@ import (
 	"testing"
 )
 
-// The administrator guide is one file a reader opens where nothing else is available: an extracted
-// release archive, a mail attachment, a USB stick, a machine with no network. These tests pin the two
-// properties that make that true — the document carries everything it renders inside itself, and it
-// carries every chapter the reader is promised — so a guide that quietly reaches out to the network, or
-// that loses a chapter on the way, fails the suite instead of failing the reader.
+// these checks hold the administrator guide to one self-contained file: it carries
+// everything it renders and every chapter it promises.
+// see the docs-guide-checks maintainer note.
 
 // guideFile is the guide the tests read: the file the reader opens, in the documentation folder.
 func guideFile(t *testing.T) string {
@@ -56,9 +54,8 @@ func guidePath(t *testing.T) string {
 	return string(body)
 }
 
-// repoFile reads a file of the repository the guide documents. The guide's tables are transcriptions of
-// the server's own flag set and of the contract the server publishes, so the tests read what those
-// transcriptions are made from and compare it with the tables the reader sees.
+// repoFile reads a file of the repository the guide documents, the source its tables
+// are transcribed from.
 func repoFile(t *testing.T, parts ...string) string {
 	t.Helper()
 
@@ -95,8 +92,7 @@ func tableWithCaption(t *testing.T, body, caption string) string {
 	return ""
 }
 
-// The chapters the guide is written to, in the order a reader works through them: install, run,
-// configure, ingest, expose, operate, recover, reference. The contents aid names every one of them.
+// guideChapters lists the guide's chapters in the order a reader works through them.
 var guideChapters = []string{
 	"ch-01-overview",
 	"ch-02-how-audio-flows",
@@ -127,16 +123,14 @@ var guideChapters = []string{
 	"ch-27-reference",
 }
 
-// The attributes that pull a resource into the page to render it. A navigation link is not one of them:
-// a guide that points a reader at the scanner webapp guide is doing its job, a guide that points the browser at
-// a stylesheet it does not carry is not.
+// subresourcePattern matches the tags that pull a resource into the page to render
+// it; navigation links are not matched.
 var subresourcePattern = regexp.MustCompile(`(?i)<(img|link|script|style|source|video|audio|iframe|object|embed|input|track|picture|use|image)\b[^>]*>`)
 
 var attributePattern = regexp.MustCompile(`(?i)\b(src|href|srcset|data|poster|action|xlink:href)\s*=\s*("([^"]*)"|'([^']*)')`)
 
-// An address is anything the browser has to go out to, or anything that names a file beside the
-// document. A fragment is the reader moving inside the page, and a data URI is the page carrying the
-// thing itself.
+// isSelfContained reports whether an address renders from inside the document: a
+// fragment or a data URI, not a fetch or a file beside the document.
 func isSelfContained(value string) bool {
 	v := strings.TrimSpace(value)
 
@@ -149,12 +143,12 @@ func isSelfContained(value string) bool {
 		return false
 	}
 
-	// Anything else names a file: a relative path, a protocol-relative path, a scheme we do not know.
+	// Anything else names a file beside the document.
 	return false
 }
 
-// The guide renders everything it shows from bytes inside itself: every picture, every stylesheet, every
-// script. A reader with no network gets the whole document, not a document with holes in it.
+// the guide carries every image, stylesheet, and script inside itself, so a reader
+// with no network gets the whole document.
 func TestTheGuideCarriesEverythingItRendersInsideItself(t *testing.T) {
 	body := guidePath(t)
 
@@ -199,8 +193,8 @@ func TestTheGuideCarriesEverythingItRendersInsideItself(t *testing.T) {
 	}
 }
 
-// The guide is read by jumping to the chapter a reader needs, so every chapter has to be in the document,
-// in the order the reader works through it, and named by the contents aid.
+// the guide carries every chapter it promises, in the order the reader works through
+// them, and the contents aid names every one.
 func TestTheGuideCarriesEveryChapterInTheOrderTheReaderWorksThrough(t *testing.T) {
 	body := guidePath(t)
 
@@ -223,8 +217,7 @@ func TestTheGuideCarriesEveryChapterInTheOrderTheReaderWorksThrough(t *testing.T
 	}
 }
 
-// The contents aid is how a reader finds a chapter in a document this long, so it names every chapter and
-// every anchor it names exists.
+// the contents aid names every chapter, and every anchor it names exists.
 func TestTheContentsAidNamesEveryChapter(t *testing.T) {
 	body := guidePath(t)
 
@@ -271,8 +264,8 @@ func firstKey(m map[string]bool) string {
 	return ""
 }
 
-// chapterOf returns one chapter's body: the text from its heading to the end of the section that carries
-// it, which is the part of the document a reader lands on when they jump to that chapter.
+// chapterOf returns one chapter's body: from its heading to the end of the section
+// that carries it.
 func chapterOf(t *testing.T, body string, id string) string {
 	t.Helper()
 
@@ -289,9 +282,8 @@ func chapterOf(t *testing.T, body string, id string) string {
 	return body[start : start+end]
 }
 
-// The guide is the project's own document, and the reader meets the project's mark in its header before
-// they meet a word of prose. A header whose mark is a file the reader does not have is a header that shows
-// a broken frame offline, which is the one condition the guide is written to survive.
+// the guide's header carries the project mark inline, so it shows whole on a machine
+// with no network.
 func TestTheGuideShowsTheMark(t *testing.T) {
 	body := guidePath(t)
 
@@ -325,14 +317,12 @@ func TestTheGuideShowsTheMark(t *testing.T) {
 	}
 }
 
-// A recorder configured once posts to the endpoint it was told about, and keeps posting there for years.
-// A guide that names the superseded endpoint without saying it is superseded is the guide that keeps the
-// deployment on it. The marking has to be in the chapter the reader is in, not in a chapter they skipped.
+// the guide marks the superseded upload endpoint in the chapter a reader is in, not
+// in one they skipped.
 func TestTheGuideMarksTheSupersededUploadEndpoint(t *testing.T) {
 	body := guidePath(t)
 
-	// The facts are asserted on the document's text, with the line breaks the source is written with
-	// collapsed: a sentence the reader reads as one sentence is one sentence, wherever the author broke it.
+	// checks run against the text with line breaks collapsed.
 	text := strings.Join(strings.Fields(body), " ")
 
 	for _, fact := range []string{
@@ -365,9 +355,7 @@ func TestTheGuideMarksTheSupersededUploadEndpoint(t *testing.T) {
 	}
 }
 
-// The guide is a document the project hands to an administrator, and it closes the way the project hands
-// it over: the sign-off is the last thing the reader meets, inside the file, so a copy of the guide carries
-// it too.
+// the guide closes with the project's sign-off inside the file, so any copy carries it.
 func TestTheGuideClosesWithTheSignOff(t *testing.T) {
 	body := guidePath(t)
 
@@ -391,10 +379,9 @@ func TestTheGuideClosesWithTheSignOff(t *testing.T) {
 	}
 }
 
-// The opening chapter tells an administrator coming from the last published release what they are walking
-// into: the changes, each one operable from a chapter of this guide, and the cost of the update. A list of
-// changes whose links land nowhere is a list the reader cannot act on, and a change summary that hides that
-// the database is rewritten in place is the summary that causes the lost deployment.
+// the opening chapter tells an administrator coming from the last release what changed,
+// every change links to a chapter of this guide, and the summary says the database is
+// rewritten in place.
 func TestTheGuideTellsAVersion6AdministratorWhatChanged(t *testing.T) {
 	body := guidePath(t)
 
@@ -444,8 +431,8 @@ type serverFlag struct {
 	expr string
 }
 
-// serverFlags reads the flag set the server builds at its composition root. The guide's flag tables are
-// transcriptions of that set, so the set is what the tables are checked against.
+// serverFlags reads the flag set the server builds at its composition root, the source
+// the guide's flag tables are checked against.
 func serverFlags(t *testing.T) []serverFlag {
 	source := repoFile(t, "cmd", "rdio-scanner", "config.go")
 
@@ -462,8 +449,8 @@ func serverFlags(t *testing.T) []serverFlag {
 	return flags
 }
 
-// packageConstants collects the constants the composition root's own packages write, so a flag whose
-// default is named by a constant is read as the value the server starts with.
+// packageConstants collects the constants of the composition root's own packages, so a
+// flag default named by a constant resolves to its value.
 func packageConstants(t *testing.T) map[string]string {
 	consts := map[string]string{}
 
@@ -484,8 +471,8 @@ func packageConstants(t *testing.T) map[string]string {
 	return consts
 }
 
-// resolveDefault reads a default expression as the value the server starts with. A default the
-// composition root works out at start-up has no literal to read, and says so.
+// resolveDefault reads a default expression as the value the server starts with, and
+// reports false for defaults computed at start-up.
 func resolveDefault(expr string, consts map[string]string, depth int) (string, bool) {
 	if depth > 6 {
 		return "", false
@@ -527,15 +514,14 @@ func resolveDefault(expr string, consts map[string]string, depth int) (string, b
 	return "", false
 }
 
-// computedDefaults are the flags whose default the composition root works out at start-up instead of
-// writing as a literal. The guide states the outcome, and the outcome is what its cell has to name.
+// computedDefaults are the flags whose default the composition root computes at
+// start-up; the guide's cell must state that outcome.
 var computedDefaults = map[string]string{
 	"base_dir": "~/Rdio Scanner",
 }
 
-// defaultIsStated reports whether the guide's cell states the default the server starts with. An unset
-// default is stated as none, as the em dash the appendix uses, or as the driver's own answer; a switch
-// left off is stated as off or false.
+// defaultIsStated reports whether the guide's cell states the default the server starts
+// with, including none for an unset default and off for a switch left off.
 func defaultIsStated(name, cell, expr string, consts map[string]string) bool {
 	value, literal := resolveDefault(expr, consts, 0)
 
@@ -557,9 +543,8 @@ func defaultIsStated(name, cell, expr string, consts map[string]string) bool {
 	return strings.Contains(cell, value)
 }
 
-// The chapters a reader looks the server's flags up in: the chapter that operates them, and the appendix
-// that lists them. A chapter may split the set across tables — the modes the same command line selects
-// are not the settings the server runs with — so every table in the chapter carrying a default is read.
+// guideFlagChapters are the chapters a reader looks flags up in, the operations chapter
+// and the reference appendix; every table in them carrying a default is read.
 var guideFlagChapters = []string{
 	"ch-06-flags-and-ini",
 	"ch-27-reference",
@@ -585,11 +570,9 @@ func tabulatedFlags(t *testing.T, body, chapter string) map[string]string {
 	return rows
 }
 
-// The navigation is the map an administrator works from, and the guide's table of sections is that map with a
-// chapter beside every item. A table sorted one way while the column is ordered another leaves the reader to
-// match the two up by hand, and a row pointing at the wrong chapter describes a section as if it were
-// documented somewhere it is not. The order is read out of the administration frontend's own declaration, the
-// way the flag defaults are read out of the composition root.
+// the guide's section table repeats the administration navigation's order and chapter
+// for every section, read from the frontend's own declaration.
+// see the docs-guide-checks maintainer note.
 func TestTheGuideTabulatesTheSectionsInTheOrderTheNavigationListsThem(t *testing.T) {
 	body := guidePath(t)
 
@@ -632,9 +615,9 @@ func TestTheGuideTabulatesTheSectionsInTheOrderTheNavigationListsThem(t *testing
 	}
 }
 
-// navigationSections reads the sections the administration navigation declares, in the order it declares them.
-// The declaration is one array of name and label entries; a navigation that stops declaring itself this way is
-// a navigation the guide can no longer be checked against, and that is named rather than guessed at.
+// navigationSections reads the administration navigation's declared sections in
+// declaration order, and fails loudly when the navigation stops declaring itself
+// this way.
 func navigationSections(t *testing.T) []string {
 	t.Helper()
 
@@ -672,10 +655,8 @@ var sectionGuideChapters = map[string]string{
 	"OpenAPI":     "ch-16-rest-api",
 }
 
-// A flag the guide tabulates that the server does not accept is a flag an administrator types and the
-// server refuses. A default the guide states wrongly is a setting the administrator believes they have.
-// Both tables are checked, because a reader looks the flags up in the appendix as often as they read
-// them in the chapter.
+// every flag and default the guide tabulates is one the server accepts and starts with,
+// checked in the operations chapter and the appendix alike.
 func TestTheFlagsTheGuideTabulatesAreTheFlagsTheServerAccepts(t *testing.T) {
 	body := guidePath(t)
 
@@ -717,8 +698,8 @@ func TestTheFlagsTheGuideTabulatesAreTheFlagsTheServerAccepts(t *testing.T) {
 	}
 }
 
-// The HTTP methods the contract publishes as operations. The contract's websocket entries are the
-// listener's channel, not endpoints a client calls.
+// httpMethods are the methods the contract publishes as operations; its websocket
+// entries are the listener's channel, not endpoints a client calls.
 var httpMethods = map[string]bool{
 	"get": true, "post": true, "put": true, "delete": true, "patch": true, "head": true, "options": true,
 }
@@ -729,8 +710,8 @@ var credentialWords = map[string]string{
 	"accessCode": "access code",
 }
 
-// publishedEndpoints reads the endpoints the contract publishes with the credential each takes, and the
-// header each credential is presented in.
+// publishedEndpoints reads the contract's endpoints with the credential each takes and
+// the header that credential is presented in.
 func publishedEndpoints(t *testing.T) (map[string][]string, map[string]string) {
 	var contract struct {
 		Security   []map[string][]string                 `json:"security"`
@@ -793,10 +774,9 @@ func publishedEndpoints(t *testing.T) (map[string][]string, map[string]string) {
 	return endpoints, headers
 }
 
-// The endpoint table is the list an administrator drives a deployment from. A path the guide carries that
-// the contract does not publish is a call that fails; a published endpoint the guide leaves out is the
-// endpoint nobody uses. The credential each endpoint takes is the difference between a script that
-// authenticates and a script that is refused.
+// the guide's endpoint table names exactly the endpoints the contract publishes, each
+// with the credential it takes, so an administrator's scripts authenticate instead of
+// being refused.
 func TestTheEndpointsTheGuideTabulatesAreTheEndpointsTheContractPublishes(t *testing.T) {
 	body := guidePath(t)
 
@@ -853,11 +833,9 @@ func TestTheEndpointsTheGuideTabulatesAreTheEndpointsTheContractPublishes(t *tes
 	}
 }
 
-// The guide is read where nothing else is: an extracted archive, a mail attachment, a machine with no
-// network. A link that leaves the document is a page that renders empty there, and a document the guide
-// names that the reader does not have is the instruction the reader cannot follow. The guide written for
-// the listener who hears calls is the one document this guide names, and it names it as the out-of-scope
-// pointer: the file the reader finds beside this one in the repository and in the release archive.
+// no link, reference, or resource in the guide leaves the file, except the named
+// out-of-scope pointer carried beside it.
+// see the docs-guide-checks maintainer note.
 func TestNothingInTheGuidePointsOutsideItself(t *testing.T) {
 	body := guidePath(t)
 
@@ -901,8 +879,8 @@ func TestNothingInTheGuidePointsOutsideItself(t *testing.T) {
 	}
 }
 
-// The size budget the guide is written to: one file a reader carries. The measurement is recorded on
-// every run, so the number the guide promises is the number the file has.
+// the guide stays inside its size budget for one carried file, and every run records
+// the measured size.
 func TestTheGuideIsSmallEnoughToCarry(t *testing.T) {
 	const budget = 6 << 20
 
@@ -918,11 +896,9 @@ func TestTheGuideIsSmallEnoughToCarry(t *testing.T) {
 	}
 }
 
-// The release matrix table is what an administrator reads to decide what a deployment runs, and the column
-// that says whether the archive carries its own ffmpeg is the reason a deployment installs nothing. Every
-// target this project releases carries one inside the program, and the guide has to say so for every row:
-// every target's ffmpeg is compiled by this project's build, in a container, including the FreeBSD and the
-// two macOS pairs, which are compiled for an operating system the machine that compiled them does not run.
+// every row of the release matrix says its archive carries its own ffmpeg, compiled by
+// this project's build in a container, including the targets built for an operating
+// system the build host does not run.
 func TestTheReleaseMatrixSaysEveryArchiveCarriesItsOwnFfmpeg(t *testing.T) {
 	const caption = "The release matrix, as the build tool defines it. Every release carries its own ffmpeg inside the program, compiled by this project's build in a container on the machine that produces the releases."
 
@@ -967,28 +943,14 @@ func releasedTargets(t *testing.T) map[string]json.RawMessage {
 	return manifest.Targets
 }
 
-// words leaves the words a chapter carries, with the tags and the line wrapping taken out: the phrases
-// the tests pin are the phrases a reader reads, and the guide's source wraps them across lines.
+// words strips tags and line wrapping, leaving the phrases a reader reads.
 func words(body string) string {
 	return strings.Join(strings.Fields(stripTags(body)), " ")
 }
 
-// The macOS and FreeBSD ffmpeg binaries are compiled by the build on the machine that is the target, with
-// the one command the operator already knows, and the guide is where an operator reads that. The statement
-// is pinned in the places the ritual is written — the chapter that says what an archive carries, the
-// chapter that lists the commands, the per-platform sections of the service chapter, and the licence
-// appendix — because a reader who finds the old ritual in one of them follows the old ritual.
-//
-// The hand route stays: binaries built by hand are dropped where the build looks for them, and the build
-// runs them and adopts what converts. What the guide has to stop doing is listing the compile's own steps
-// as the operator's ritual, because the build runs them, and a guide that tells an operator to run them
-// invites binaries the release adopts on nothing.
-// The ffmpeg binaries every release carries are compiled for audio: the recipe disables every component
-// and enables the audio components the converter asks of ffmpeg, and the run that adopts binaries refuses
-// ones that register a video codec. An operator decides what to install, and what to do when a conversion
-// fails, from chapters that say what the program they are installing carries, so the statement is pinned
-// where they read it: the requirements chapter, the installation chapter, the service sections, the
-// troubleshooting entry, the FAQ answer, and the licence appendix.
+// the guide states the ffmpeg is compiled for audio only wherever operators read the
+// ritual, and keeps the hand route as drop two files and run one command.
+// see the docs-guide-checks maintainer note.
 func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 	body := guidePath(t)
 
@@ -1048,20 +1010,9 @@ func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 	}
 }
 
-// The guide is where a reader learns which machine compiles the ffmpeg their own archive carries, and what
-// the build did to believe it. The container is the route for every target this project releases: the Linux
-// and Windows pairs, the FreeBSD pair compiled against a FreeBSD sysroot, and the two macOS pairs compiled
-// against Apple's SDK are compiled in a container by the machine that produces the releases. A Mac is the
-// one host that compiles a target's pair with its own toolchain instead, and the three pairs compiled for an
-// operating system the build host does not run are proved by reading the programs rather than starting them.
-// The statements are pinned in the places the ritual is written — the chapter that says what an archive
-// carries, the chapter that lists the commands, the per-platform sections of the service chapter, and the
-// licence appendix — because a reader who finds the old ritual in one of them follows the old ritual.
-//
-// The hand route stays: binaries built by hand are dropped where the build looks for them, and the build
-// runs them and adopts what converts. What the guide has to stop doing is listing the compile's own steps
-// as the operator's ritual, because the build runs them, and a guide that tells an operator to run them
-// invites binaries the release adopts on nothing.
+// the guide names which machine compiles each archive's ffmpeg, the container route for
+// every target, and what the build reads instead of running.
+// see the docs-guide-checks maintainer note.
 func TestTheGuideSaysWhereTheFfmpegIsCompiledAndWhatTheBuildReadsInsteadOfRunning(t *testing.T) {
 	body := guidePath(t)
 
@@ -1108,8 +1059,7 @@ func TestTheGuideSaysWhereTheFfmpegIsCompiledAndWhatTheBuildReadsInsteadOfRunnin
 		}
 	}
 
-	// The command is the whole of the ritual, so it stands on its own line in the list of commands,
-	// where an operator reads the commands from.
+	// the one build command is the whole ritual, on its own command line.
 	var lines []string
 
 	for _, block := range regexp.MustCompile(`(?is)<pre><code>(.*?)</code></pre>`).FindAllStringSubmatch(chapterOf(t, body, "ch-04-installation"), -1) {
@@ -1134,11 +1084,9 @@ func TestTheGuideSaysWhereTheFfmpegIsCompiledAndWhatTheBuildReadsInsteadOfRunnin
 	}
 }
 
-// The two macOS architectures compile each other's ffmpeg binaries, and the guide is where an operator
-// learns which Mac to stand on when a Mac compiles the macOS pair with its own toolchain. The machine that
-// produces the releases does not stand on either architecture: it compiles both macOS pairs in a container.
-// Rosetta 2 is what lets an Apple Silicon Mac run the Intel binaries it compiled there, and the run an Intel
-// Mac performs on the arm64 binaries is the run that proves the pair that Mac carries.
+// the guide teaches which Mac compiles both macOS architectures when a Mac uses its own
+// toolchain, and that the release build compiles both in a container.
+// see the docs-guide-checks maintainer note.
 func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 	body := guidePath(t)
 
@@ -1200,8 +1148,7 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 		}
 	}
 
-	// The compile across the two architectures is a command an operator runs, so it stands on its own
-	// line in the list of commands, beside the one command for the platform you are on.
+	// the cross-architecture compile is an operator command, on its own line.
 	var lines []string
 
 	for _, block := range regexp.MustCompile(`(?is)<pre><code>(.*?)</code></pre>`).FindAllStringSubmatch(chapterOf(t, body, "ch-04-installation"), -1) {
@@ -1218,8 +1165,7 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 		t.Errorf("the guide's commands are %v, and none of them is the command an Apple Silicon Mac runs to compile the Intel binaries", lines)
 	}
 
-	// The words the operator types are the words go names a macOS machine by, and the guide is where
-	// they are taught: darwin-amd64 and darwin-arm64 are accepted as the release words.
+	// the guide teaches the go names of macOS machines as accepted release words.
 	for _, word := range []string{"darwin-amd64", "darwin-arm64"} {
 		if !strings.Contains(words(chapterOf(t, body, "ch-26-faq")), word) {
 			t.Errorf("the guide never says the build accepts %s", word)
@@ -1227,14 +1173,9 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 	}
 }
 
-// The compile is the check, and it is one command: the guide is where an operator learns that nothing
-// else is asked of them. The check command, the digests to copy, and the manifest to edit are gone, and a
-// guide that still named them would send an operator to a command the tool refuses and a file the build
-// never reads.
-//
-// The compile's own steps are the build's, and the hand route asks the operator to drop two files and run
-// one command: the guide says that, and says nothing about what the build records, because the build
-// records nothing.
+// the guide says the compile is the check, one command, and no longer names a check
+// command, digests to copy, or a manifest to edit.
+// see the docs-guide-checks maintainer note.
 func TestTheGuideSaysTheCompileIsTheCheck(t *testing.T) {
 	body := strings.ToLower(words(guidePath(t)))
 
@@ -1273,11 +1214,9 @@ func TestTheGuideSaysTheCompileIsTheCheck(t *testing.T) {
 	}
 }
 
-// COMPILING.md is the developer's note beside the repository, and it states the same ritual the guide
-// states: one command that compiles the ffmpeg of the target you name, in a container, on any machine that
-// has a container program; one command on a Mac compiling the macOS pair with the Mac's own toolchain; the
-// compile running the binaries its container can start and reading the ones it cannot; no check command; and
-// no digests for anybody to copy.
+// `COMPILING.md` states the same simplified compile the guide states: one container
+// command, one Mac command, no check command, no digests.
+// see the docs-guide-checks maintainer note.
 func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
 	body := strings.ToLower(words(repoFile(t, "COMPILING.md")))
 
@@ -1297,10 +1236,9 @@ func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
 		}
 	}
 
-	// A run whose cache already holds the pair prints the line it says in its own words, and the two routes
-	// say it differently: the container compile says what it compiled, the Mac's own compile says what it
-	// built. The note is where a maintainer learns what a run that compiled nothing looks like, so a note
-	// quoting one of the two lines sends the reader on the other route hunting for a line that never appears.
+	// `COMPILING.md` names both cached-pair lines: container says compiled,
+	// the Mac's own compile says built.
+	// see the docs-guide-checks maintainer note.
 	for _, printed := range []string{"reusing the ffmpeg compiled for", "reusing the ffmpeg built for"} {
 		if !strings.Contains(body, printed) {
 			t.Errorf("COMPILING.md never names %q, which is a line the build prints when its cache already holds the pair", printed)
@@ -1326,12 +1264,8 @@ func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
 	}
 }
 
-// The hand-built drop is adopted by the two macOS targets, and only on a host that runs macOS: every
-// target's compile is a container compile now, and the host route that survives is the Mac's. The other six
-// take the binaries the container produced: a program an operator drops in one of those directories is
-// embedded by the server binary, is used by nothing, and no message says it is there. The guide is where the
-// operator reads the drop route, so the guide names the targets the route belongs to and says what a drop in
-// the other directories costs.
+// the guide scopes the hand-built ffmpeg drop to the two macOS targets on a macOS host,
+// and says a drop elsewhere is embedded in the binary and used by nothing.
 func TestTheGuideScopesTheHandBuiltDropToTheTargetsThatAdoptIt(t *testing.T) {
 	body := guidePath(t)
 
@@ -1360,8 +1294,8 @@ func TestTheGuideScopesTheHandBuiltDropToTheTargetsThatAdoptIt(t *testing.T) {
 	}
 }
 
-// guideFooter returns the closing statement the reader meets at the end of the document, which is where the
-// guide says in one sentence what the project is under.
+// guideFooter returns the closing statement, where the guide says in one sentence what
+// the project is under.
 func guideFooter(t *testing.T, body string) string {
 	t.Helper()
 
@@ -1373,16 +1307,9 @@ func guideFooter(t *testing.T, body string) string {
 	return footer[1]
 }
 
-// The project holds one licence position, and the guide is where an operator reads it: the introduction names
-// the chapter that states it, the chapter that says what a listener reaches says what those parts of the
-// server are free for, the REST chapter says what the real-time connection is under, the reference appendix
-// states the position in full, and the closing statement states it in a sentence.
-//
-// The position is that every interface the server answers is under the GNU General Public License, version
-// 3, and that what limits a listener is the deployment's own access code rather than a licence. The negative
-// half is what keeps it a position and not a preference: a guide that calls one interface proprietary, or
-// asks a self-hosted operator for an agreement with anyone, states a second position, and an operator who
-// reads it will not build something the licence allows.
+// the guide states one licence position in every place an operator reads it: every
+// interface the server answers is under GPL version 3.
+// see the docs-guide-checks maintainer note.
 func TestTheGuideStatesOneLicencePositionForEveryInterface(t *testing.T) {
 	body := guidePath(t)
 
@@ -1445,10 +1372,8 @@ func TestTheGuideStatesOneLicencePositionForEveryInterface(t *testing.T) {
 		}
 	}
 
-	// The second position is what these refusals are for: wordings that used to sit in the guide and would
-	// put a licence in front of an interface the project no longer holds apart. The retired document's own
-	// name is refused across the whole repository by the licence guard, so what this test refuses is the
-	// wording a reader actually reads.
+	// these refusals catch wordings of the retired second licence position.
+	// see the docs-licence-checks maintainer note.
 	all := strings.ToLower(words(body))
 
 	for _, withdrawn := range []string{

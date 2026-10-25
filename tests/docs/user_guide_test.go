@@ -24,16 +24,9 @@ import (
 	"testing"
 )
 
-// The scanner webapp guide is one file a listener carries with them: an extracted release archive, a mail
-// attachment, a phone opened where nothing else is available. These tests pin the properties that make that
-// true — the document renders from nothing but itself, it carries every chapter and every part the reader was
-// promised, it states the version it describes, and it is small enough to carry — because a guide that reaches
-// out to the network, or loses a chapter on the way, fails the reader rather than the suite.
-//
-// The chapter content these tests read is a transcription of what the shipped listening application puts on
-// the screen, so the tests that name controls, filters, display rows, flags, and announced sentences compare
-// the guide's tables with the application's own sources, the way the administrator guide's tables are compared
-// with the server's flags.
+// the user guide renders from itself, carries every promised chapter,
+// states its version, and stays small enough to carry.
+// see the docs-user-guide-checks maintainer note.
 
 // userGuideChapters are the chapters the guide is written to, in document order. The contents aid and the
 // document itself are both held to this list.
@@ -75,8 +68,7 @@ func userGuidePath(t *testing.T) string {
 	return string(body)
 }
 
-// userGuideChapter returns one chapter's own text, from its heading to the next chapter heading, which is
-// where a chapter's tables, figures, and cautions are read.
+// userGuideChapter returns one chapter's text, from its heading to the next.
 func userGuideChapter(t *testing.T, body, id string) string {
 	t.Helper()
 
@@ -102,13 +94,10 @@ func userGuideChapter(t *testing.T, body, id string) string {
 	return body[start:end]
 }
 
-// scannerPrintedText is the corpus of words the listening application can put on its own screen: every source
-// under the presentation of the server, Go and browser alike. The only rewriting is the one a reader needs:
-// a line break inside a label the components write — LIVE and FEED, SEARCH and CALL — becomes a space, and runs
-// of whitespace become one space, so a label spread over two lines is still the one label a reader sees. The
-// markup itself is left where it is. Taking tags out instead would let any comparison written with a less-than
-// sign start a match that runs to the next greater-than sign somewhere else in the file, and that would swallow
-// words the application plainly prints.
+// scannerPrintedText is the corpus of words the listening application can
+// put on its own screen, from every source under the server's
+// presentation, split labels rejoined and whitespace collapsed.
+// see the docs-user-guide-printed-text maintainer note.
 func scannerPrintedText(t *testing.T) string {
 	t.Helper()
 
@@ -158,9 +147,9 @@ func scannerPrintedText(t *testing.T) string {
 	return regexp.MustCompile(`\s+`).ReplaceAllString(text.String(), " ")
 }
 
-// isAddressShape reports whether something the guide sets in code is an address the reader types or the server
-// serves — a path, a query — rather than a word the application prints. Those are held by the chapters that
-// describe them and not checked against the words on the screen, because no screen prints a path.
+// isAddressShape reports whether code text is an address the reader types
+// rather than a word the application prints.
+// see the docs-user-guide-checks maintainer note.
 func isAddressShape(name string) bool {
 	if strings.HasPrefix(name, "/") || strings.HasPrefix(name, "?") {
 		return true
@@ -169,10 +158,7 @@ func isAddressShape(name string) bool {
 	return strings.Contains(name, "://")
 }
 
-// The guide is read against the screen a listener is looking at. Every name it sets as the application's own word
-// has to be a word the application writes. A caption is left out of this: a caption is an account of a picture,
-// and a picture carries whatever the sample deployment was showing when it was photographed — a version, a count,
-// the name of a talkgroup that only the sample deployment has.
+// every name the guide sets as the application's own word is a word the application writes.
 func TestTheNamesTheGuidePrintsAreTheNamesTheApplicationPrints(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -203,14 +189,10 @@ func TestTheNamesTheGuidePrintsAreTheNamesTheApplicationPrints(t *testing.T) {
 	}
 }
 
-// The light beside the branding line is the LED. That is the noun for it in everything that ships it: the
-// component file describes itself as the branding line and the server LED and gives the element the class led,
-// the client domain that resolves its colour is named for LED colour, and the operator's screens print a caption
-// about the default LED colour being green. This guide's own rule is that the names it states are the names the
-// shipped application writes, and "the server light" is a paraphrase no shipped string carries anywhere. The name
-// the page gives that element to a screen reader is a different string, printed as Server status: followed by the
-// state, and it is quoted exactly as printed. The word light stays for the page's other lights, because they are
-// not this one.
+// the LED is the shipped noun for the light beside the branding line,
+// and the guide holds to shipped names: it quotes the page's accessible
+// name exactly and keeps "light" for the controls' own marks.
+// see the docs-user-guide-naming maintainer note.
 func TestTheGuideNamesTheHeaderLightAsTheProductDoes(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -221,9 +203,7 @@ func TestTheGuideNamesTheHeaderLightAsTheProductDoes(t *testing.T) {
 	}
 
 	for _, chapter := range []string{"ch-02-the-main-screen", "ch-03-listening-to-live-calls", "ch-10-keyboard-and-screen-readers", "ch-12-reference"} {
-		// A picture carried inside the guide is a long run of base64, and base64 spells the same letters by
-		// chance. The claim being made here is about the words the guide says, so the bytes of its own pictures
-		// are taken out before the chapter is read.
+		// the guide's own pictures come out before its words are read.
 		prose := regexp.MustCompile(`src="data:[^"]*"`).ReplaceAllString(userGuideChapter(t, body, chapter), `src=""`)
 
 		if !strings.Contains(prose, "LED") {
@@ -231,21 +211,17 @@ func TestTheGuideNamesTheHeaderLightAsTheProductDoes(t *testing.T) {
 		}
 	}
 
-	// The guide's new noun is not the accessible name, and the two are not interchangeable: the name the page
-	// gives the element is what a reader who cannot see the colour is told, and the guide quotes it as printed.
+	// the accessible name is not the guide's noun for that thing.
 	if !strings.Contains(body, "<code>Server status:</code>") {
 		t.Errorf("the guide no longer quotes %q followed by the state, which is the name the shipped page gives the light to a screen reader", "Server status:")
 	}
 
-	// Renaming the header light is not renaming every light on the page. The corner lights are the controls' own
-	// marks, and a guide that calls them LEDs describes controls that do not have one.
+	// the corner lights have no LED, unlike the header light.
 	if !strings.Contains(body, "corner light") {
 		t.Errorf("the guide no longer names the corner lights on the controls, which are lights on the screen and not the header light")
 	}
 
-	// The reference chapter's own row for this light has to carry the name, because a reader looks a word up in
-	// that table after having already seen it on the screen. The row is found by the name the page gives the
-	// element, which is printed in the row and nowhere else on the page.
+	// the reference chapter's row carries the shipped name printed in it.
 	lights := regexp.MustCompile(`(?is)<caption>\s*The lights on the screen[^<]*</caption>[\s\S]*?<tbody>(.*?)</tbody>`).FindStringSubmatch(userGuideChapter(t, body, "ch-12-reference"))
 
 	if lights == nil {
@@ -269,21 +245,14 @@ func TestTheGuideNamesTheHeaderLightAsTheProductDoes(t *testing.T) {
 	}
 }
 
-// The rule about names is not only about the light beside the branding line. The screen's other two parts are
-// named by the shipped code as well: the component that paints the rows describes itself as the LCD display rows,
-// the history table, and the unlock overlay, and the nine controls are one component the guide calls the control
-// bar. Carrying those nouns into the section titles is only half the work, because a reader meets the sentences
-// that introduce the sections and the alternative text that describes a picture. A lead that says the screen is
-// built in "three areas" introduces a section titled *The screen in three parts* and a caption that says "three
-// parts"; a sentence that says "the area starts dimmed" sits in a chapter named for the display, in a document
-// whose third chapter already says the display starts dimmed; an alternative text that says "the control row"
-// describes a region the guide names the control bar everywhere else. Each of those leaves a reader holding two
-// names for one thing.
+// the screen's parts are named by the shipped code: display rows,
+// history table, unlock overlay, control bar. leads, titles, captions,
+// and alt text all hold to those nouns, or readers hold two names.
+// see the docs-user-guide-naming maintainer note.
 func TestTheGuideNamesTheScreensPartsAsTheComponentsPaintThem(t *testing.T) {
 	body := userGuidePath(t)
 
-	// A picture carried inside the guide is a long run of base64, and base64 spells the same letters by chance.
-	// The claim here is about the words the guide says, so the bytes of its own pictures come out first.
+	// the guide's own pictures come out before its words are read.
 	prose := regexp.MustCompile(`src="data:[^"]*"`).ReplaceAllString(body, `src=""`)
 
 	for _, paraphrase := range []string{"three areas", "the area starts", "the display area", "the control area", "control row of the listening screen"} {
@@ -309,10 +278,8 @@ func TestTheGuideNamesTheScreensPartsAsTheComponentsPaintThem(t *testing.T) {
 	}
 }
 
-// The second chapter describes the screen the way the application assembles it: the branding line the operator
-// sets, the LED and the three states it takes, the display with what each row holds before a first call has
-// arrived, the control bar, and the version line. The names are the ones the components write, and the
-// two figures belong to this chapter.
+// chapter two names the screen as the components write it, and holds
+// its two figures.
 func TestTheUserGuideDescribesTheScreenAsTheApplicationBuildsIt(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -354,19 +321,18 @@ func TestTheUserGuideDescribesTheScreenAsTheApplicationBuildsIt(t *testing.T) {
 		}
 	}
 
-	// The paused light's normal reading is an alternation of the light's own face, not a ring around it: the shipped
-	// stylesheet switches the lit face to the grey the light wears at rest, and the standing ring is what the reading
-	// that asks for less motion answers with. A draft of this chapter described the ring as the normal reading, and a
-	// reader who believed it would look for a mark that is not on the page.
+	// the paused light alternates its own face; the standing ring belongs to
+	// the reduced-motion reading only.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	for _, superseded := range []string{"the ring blinks", "always blinking"} {
 		if strings.Contains(spoken, superseded) {
 			t.Errorf("the chapter on the main screen carries %q, which describes a mark the shipped page does not draw in that state", superseded)
 		}
 	}
 
-	// The minutes beside the hourglass in the flag row are the length of the window an avoid opened, and nothing on
-	// the page counts them down. A draft of this chapter told the reader to read the remaining minutes off the mark,
-	// and a listener who believed it would watch a number that never moves.
+	// the minutes beside the hourglass are an avoid window's length, and
+	// nothing counts them down.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	for _, superseded := range []string{"minutes left", "minutes remaining", "minutes are left"} {
 		if strings.Contains(spoken, superseded) {
 			t.Errorf("the chapter on the main screen carries %q, which describes a countdown the shipped display does not keep", superseded)
@@ -374,22 +340,17 @@ func TestTheUserGuideDescribesTheScreenAsTheApplicationBuildsIt(t *testing.T) {
 	}
 }
 
-// The third chapter operates the listening controls. What it says about them has to match what the browser
-// components and the domain code actually do: the words the page puts up when you try to leave while something is
-// playing, the order the four levels are consulted in for a tone and for a colour, the built-in colour names, the
-// timed windows an avoid walks through, the delay the display waits by before it dims, and the two figures that
-// belong to the chapter.
+// chapter three's listening controls match the shipped components and
+// domain code.
 func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing.T) {
 	body := userGuidePath(t)
 
 	chapter := userGuideChapter(t, body, "ch-03-listening-to-live-calls")
 
-	// The sentence the application hands to the browser, verbatim. It is shown by the browser's own leave
-	// prompt, and a guide that tidies it up would disagree with what the reader is shown.
+	// the leave prompt's sentence is quoted verbatim, as the browser shows it.
 	spoken := guideSpoken(chapter)
 
-	// The sentence the application hands to the browser, verbatim. It is shown by the browser's own leave
-	// prompt, and a guide that tidies it up would disagree with what the reader is shown.
+	// the leave prompt's sentence is quoted verbatim, as the browser shows it.
 	if !strings.Contains(spoken, "Live Feed is ON, do you really want to leave?") {
 		t.Errorf("the chapter on live calls does not give the words the application supplies to the browser when you try to leave")
 	}
@@ -424,10 +385,9 @@ func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing
 		}
 	}
 
-	// A tone plays before the recording it belongs to, and the recording is not yet under way during it. The shipped
-	// play path defers the recording behind the tone and cancels it when the call is silenced, skipped, or taken out of
-	// the selection in the meantime. A draft of this chapter left that window out, and a listener who skipped a call
-	// during its tone would have expected the recording to arrive anyway and looked for audio that never starts.
+	// a tone plays before its recording, which is not under way during it:
+	// silencing or skipping during the tone records nothing.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	for _, want := range []string{"never starts its recording", "the tone is the only part of that call you hear"} {
 		if !strings.Contains(spoken, want) {
 			t.Errorf("the chapter on live calls never gives %q, which is what the shipped application does to a call whose tone is interrupted", want)
@@ -462,10 +422,9 @@ func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing
 		}
 	}
 
-	// Only two lights on the shipped page animate: the LED while audio is held, and a talkgroup's button in
-	// the select panel while that talkgroup sits inside a timed window. The four lights on the control bar are drawn
-	// once and only their colour changes. A draft of this chapter told the reader the live feed light is always
-	// blinking, and a listener who believed it would be hunting for a signal the screen never draws.
+	// only two lights animate: the LED while audio is held, and a talkgroup's
+	// button inside a timed window.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	if !strings.Contains(spoken, "shape") {
 		t.Errorf("the chapter on live calls never says that the state light's shape does not change, which is the fact a reader needs in order to know the colour is the whole of the signal")
 	}
@@ -476,11 +435,9 @@ func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing
 		}
 	}
 
-	// A timed window is what the application closes, not what it renews: when a window runs out the talkgroup is put
-	// back to hearing and its window is cleared, so a press after that starts the cycle again from its beginning. A
-	// draft of this chapter said the window opens itself again, and a listener who believed it would expect a
-	// talkgroup to go on being held off past a window the application had already ended. The minutes written beside
-	// the mark are the length of that window, which the application never counts down.
+	// a timed window closes and is cleared, never renews itself; the minutes
+	// are the window's length, never a countdown.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	for _, superseded := range []string{"opens itself again", "minutes left"} {
 		if strings.Contains(spoken, superseded) {
 			t.Errorf("the chapter on live calls carries %q, which describes an avoid window the shipped application does not keep", superseded)
@@ -494,19 +451,14 @@ func TestTheUserGuideOperatesTheListeningControlsAsTheApplicationDoes(t *testing
 	}
 }
 
-// The fourth chapter operates the select panel. Its checks carry the two halves of one shipped fact: the small
-// pair at the end of every row is named OFF and ON on the page this guide documents, and ALL ON and ALL OFF on the
-// page it replaced, so the chapter is held both to the names in use and away from the names that are not. The rest
-// are the conditions the panel itself applies — when its first row appears, when a row's pair appears, the sentence
-// it answers with when the server has nothing configured — the colour the mixed state takes, the words the row is
-// built from, and the three figures that belong to the chapter.
+// chapter four holds the select panel to the shipped OFF and ON names
+// and its own conditions.
 func TestTheUserGuideOperatesTheSelectPanelAsTheApplicationBuildsIt(t *testing.T) {
 	chapter := userGuideChapter(t, userGuidePath(t), "ch-04-choosing-what-to-hear")
 
 	spoken := guideSpoken(chapter)
 
-	// The pair is checked in the form this guide uses for a word the screen prints, which is the markup claim
-	// being made rather than a claim about the words alone.
+	// the pair is checked as the guide prints a word, markup included.
 	for _, name := range []string{"OFF", "ON"} {
 		if !strings.Contains(chapter, "<code>"+name+"</code>") {
 			t.Errorf("the chapter on choosing what to hear does not give the small button %q in the form this guide uses for a word the screen prints", name)
@@ -530,8 +482,7 @@ func TestTheUserGuideOperatesTheSelectPanelAsTheApplicationBuildsIt(t *testing.T
 		}
 	}
 
-	// The panel's first row is built from the deployment's groups. It was described as a row of tags while this
-	// guide was being planned, and the panel's own component says otherwise.
+	// the panel's first row is built from the deployment's groups, not from tags.
 	for _, mistaken := range []string{"tag row", "tag buttons", "tags row"} {
 		if strings.Contains(spoken, mistaken) {
 			t.Errorf("the chapter on choosing what to hear calls the panel's first row %q, and the panel builds that row from the deployment's groups", mistaken)
@@ -563,21 +514,15 @@ func TestTheUserGuideOperatesTheSelectPanelAsTheApplicationBuildsIt(t *testing.T
 	}
 }
 
-// guideSpoken reads a chapter the way it comes out of the page: the markup taken away and the runs of whitespace
-// joined, so a sentence the document's source wraps across three lines is still the sentence a reader reads. A
-// check about what the guide says works against this reading; a check about how the guide is built — a code span, a
-// figure slot — works against the markup itself.
+// guideSpoken reads a chapter as prose: markup away, whitespace joined.
+// word checks use it; markup checks do not.
 func guideSpoken(chapter string) string {
 	return regexp.MustCompile(`\s+`).ReplaceAllString(stripTags(chapter), " ")
 }
 
-// The fifth chapter operates the search panel and the playback a searched call starts. Two things are checked
-// here. The first is the words the panel puts on its own controls, which the guide has to carry because a reader
-// reads this chapter while looking at that form. The second is the absence of four promises the superseded page
-// made and the shipped panel does not keep: a paginator said to be disabled in playback mode, a stop said to cancel
-// playback, a searched row said to be unavailable while the feed is paused, and a paginator said to follow the
-// playback walk across pages. Each forbidden phrase is taken from the superseded page's own wording, so a claim
-// that returns is a failing check rather than a finding someone has to notice in review.
+// chapter five carries the search panel's own control words and refuses
+// four promises only the superseded page made.
+// see the docs-user-guide-superseded-claims maintainer note.
 func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T) {
 	chapter := userGuideChapter(t, userGuidePath(t), "ch-05-searching-archived-calls")
 
@@ -596,9 +541,7 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 		}
 	}
 
-	// The delay named here is the deployment holding a call back, and the flag it arrives with is printed by the
-	// display in capitals, the way the other two flags in that row are. A reader is told the flag in words and then
-	// looks for it on the screen, and chapter 6 gives the row: the chapter spells it the way the page prints it.
+	// a deployment-held call arrives with the DELAYED flag, as printed.
 	if !strings.Contains(spoken, "DELAYED") {
 		t.Errorf("the chapter on searching recorded calls never names the delay flag as %q, which is how the page prints it", "DELAYED")
 	}
@@ -607,15 +550,14 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 		t.Errorf("the chapter on searching recorded calls prints the delay flag as %q, which is not the spelling the page prints", "Delayed")
 	}
 
-	// The shipped reading, stated as the decision about shipped behaviour says the chapter must state it: the
-	// paginator is not taken away from the reader during a search or during a playback.
+	// the paginator stays available during a search and during a playback.
 	if !strings.Contains(spoken, "stays available") {
 		t.Errorf("the chapter on searching recorded calls does not say what the paginator does during a search, which is that it stays available")
 	}
 
-	// The panel bounds the date field only when the answer holds calls. The chapter's first draft claimed the
-	// opposite - that an empty answer bounds the field to a date the archive has nothing in - so the check holds
-	// both halves here: the shipped fact, and the refusal of the bound the shipped code refuses to set.
+	// the panel bounds the date field only when the answer holds calls, and
+	// the guide must not promise the bound the shipped code refuses.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	if !strings.Contains(spoken, "unbounded") {
 		t.Errorf("the chapter on searching recorded calls does not say what happens to the date field's bounds when the answer is empty, which is that the field is left unbounded")
 	}
@@ -624,11 +566,10 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 		t.Errorf("the chapter on searching recorded calls bounds the date field to a date in 1970, which is a bound the panel refuses to set when an answer holds no calls")
 	}
 
-	// The busy marking belongs to one element: the shipped panel writes it onto the bar it keeps in the layout while
-	// a search runs. The chapter's first draft wrote the marking as something the panel claims for itself, which is a
-	// state the shipped panel sets neither on the panel nor on the calls it found, and a reader who believed it would
-	// look for a busy reading over the table that is not there. What the panel does for that reader is leave every
-	// control in place and marked as doing nothing, and say out loud what it is doing.
+	// the busy marking is written onto one bar kept in the layout, not onto
+	// the panel or the results; controls stay in place marked as doing
+	// nothing, and the panel says out loud what it is doing.
+	// see the docs-user-guide-busy-state maintainer note.
 	if strings.Contains(spoken, "panel marks itself busy") {
 		t.Errorf("the chapter on searching recorded calls says the panel marks itself busy, which is a marking the shipped panel writes onto the progress bar it keeps in the layout, not onto the panel or onto the calls it found")
 	}
@@ -639,8 +580,7 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 		}
 	}
 
-	// The actions column has no heading, which the chapter has to say because it is the one column a reader
-	// cannot read a name for.
+	// the actions column has no heading, and the chapter has to say so.
 	if !strings.Contains(spoken, "no heading") {
 		t.Errorf("the chapter on searching recorded calls does not say that the column of row actions carries no heading, which is what the panel's own table header holds")
 	}
@@ -664,10 +604,9 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 		}
 	}
 
-	// The panel draws one action per row, and decides which one through a chain that the download switch heads: with
-	// the switch on, the row whose recording is being heard reads Download rather than Stop. A draft of this chapter
-	// listed the four shapes in an order the shipped chain does not follow, and a listener downloading a searched
-	// call would have looked for a stop control the panel never draws.
+	// a row draws one action, chosen by a chain the download switch heads:
+	// with the switch on, the heard recording reads Download, not Stop.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	for _, link := range []string{"otherwise Loading", "otherwise Stop", "otherwise Play"} {
 		if !strings.Contains(spoken, link) {
 			t.Errorf("the chapter on searching recorded calls does not give the row's action as the chain that draws it, which decides %s", link)
@@ -680,11 +619,10 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 		}
 	}
 
-	// The chapter on searching is where this guide promises to operate converted audio, so it has to say what
-	// conversion does to a recording a listener plays or saves. The shipped play path and the shipped download path
-	// read the same bytes the server sends, converted first when the operator has conversion switched on. A draft of
-	// this chapter spoke of the arriving recording without naming conversion at all, and the chapter its own
-	// converted-audio row pointed at then carried nothing about it.
+	// the searching chapter operates converted audio: played and downloaded
+	// recordings read the server's bytes, converted first when the operator
+	// switched conversion on.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	for _, want := range []string{
 		"the converted copy when the operator has audio conversion switched on",
 		"the audio you hear and the file you keep are the same copy",
@@ -713,12 +651,8 @@ func TestTheUserGuideOperatesSearchAndPlaybackAsTheShippedPanelDoes(t *testing.T
 	}
 }
 
-// The sixth chapter reads the display. Two things are checked. The first is the words the display itself
-// writes — the row labels and the flags are printed by the application and a reader matches this chapter against
-// them while looking at the screen. The second is the handful of readings a reader cannot get from a glance: that
-// the history is five rows, that the timed-avoid mark is a character whose glyph is not guaranteed, that the big row
-// falls back to a frequency when the talkgroup carries no name, and that full screen has a route that is not a
-// double-click.
+// chapter six carries the display's printed words and the readings a
+// glance cannot give.
 func TestTheUserGuideReadsTheDisplayAsTheApplicationPaintsIt(t *testing.T) {
 	chapter := userGuideChapter(t, userGuidePath(t), "ch-06-what-the-display-says")
 
@@ -761,21 +695,16 @@ func TestTheUserGuideReadsTheDisplayAsTheApplicationPaintsIt(t *testing.T) {
 		}
 	}
 
-	// The chapter carried a third figure, a crop of the full-screen control beside the help control. The owner's
-	// review of the finished guide called it out as showing nothing, and the review is right: the picture is a small
-	// button in a corner, and full screen is a route through the display, which the two readings above carry. The
-	// chapter's account of full screen is the double-click route, the control's own route, and the two names the
-	// control prints, and a figure that shows neither the display nor the change to it is furniture.
+	// the chapter keeps its two figures: the full-screen control's own crop
+	// was cut as showing nothing.
+	// see the docs-user-guide-figure-inventory maintainer note.
 	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 2 {
 		t.Errorf("the chapter on the display carries %d figures, want the two it operates: the flag row and the history table", len(figures))
 	}
 }
 
-// The seventh chapter deals with access. What the server answers and what the listener's field says are two
-// different things, and the difference is the chapter's subject: a locked-out listener is answered exactly as a
-// wrong code is, the sentence about too many connections belongs to a code's own limit and not to the server's
-// cap, and the code the page kept in the browser is presented again without the listener doing anything. Each of
-// those is one of the things a reader who runs out of luck needs to know before calling someone.
+// chapter seven keeps server answers and field readings apart:
+// lockouts answer like wrong codes.
 func TestTheUserGuideHandlesAccessCodesAsTheServerAnswersThem(t *testing.T) {
 	chapter := userGuideChapter(t, userGuidePath(t), "ch-07-access-codes")
 
@@ -817,10 +746,8 @@ func TestTheUserGuideHandlesAccessCodesAsTheServerAnswersThem(t *testing.T) {
 	}
 }
 
-// The eighth chapter is about the listening screen on a phone. Two things it is required to get right are the words
-// the shipped update prompt and promo notice actually carry, and the rule that the native applications are named
-// without the guide reaching for them: the store names appear, no link leaves the guide for a store, and the chapter's
-// pictures are the three the figure inventory gives it, because a fourth could only be a native application's screen.
+// chapter eight carries the shipped update prompt and promo words,
+// names stores without linking them, and holds its three figures.
 func TestTheUserGuideDescribesThePhoneAsTheBrowserShowsIt(t *testing.T) {
 	chapter := userGuideChapter(t, userGuidePath(t), "ch-08-on-your-phone-or-tablet")
 
@@ -867,10 +794,8 @@ func TestTheUserGuideDescribesThePhoneAsTheBrowserShowsIt(t *testing.T) {
 	}
 }
 
-// The ninth chapter is about whom a listener can ask and what is worth saying when they ask. The words the shipped
-// help notice and the shipped version line are built from are checked against the sources, and so are the two things
-// the chapter exists to tell a reader: that the help affordance only exists when the operator configured an address,
-// and that the version on the screen belongs to the page rather than to the server.
+// chapter nine checks the shipped help notice and version line, and
+// says help needs an operator address.
 func TestTheUserGuideSaysWhoToAskAndWhatToSay(t *testing.T) {
 	chapter := userGuideChapter(t, userGuidePath(t), "ch-09-help-and-support")
 
@@ -898,15 +823,14 @@ func TestTheUserGuideSaysWhoToAskAndWhatToSay(t *testing.T) {
 		}
 	}
 
-	// The count of other listeners is a reading the display writes only when the operator has it turned on, and the
-	// server ships with it turned off. The chapter's first draft asked a reader to note the count as something the
-	// display carries, which is a promise the shipped display does not keep for every deployment.
+	// the other-listeners count is a reading the display writes only when
+	// the operator turns it on, and the server ships it off.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	if !strings.Contains(spoken, "when the deployment shows it") {
 		t.Errorf("the chapter on help and support asks whether anybody else was listening without saying that the count is only there when the deployment shows it")
 	}
 
-	// The chapter owns exactly one figure, and anything more in it would be a picture the figure inventory does not
-	// give this chapter.
+	// the chapter owns exactly one figure, the one the figure inventory gives it.
 	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 1 {
 		t.Errorf("the chapter on help and support carries %d figures, and the only one it may carry is the notice the help control shows", len(figures))
 	}
@@ -926,10 +850,8 @@ func TestTheUserGuideSaysWhoToAskAndWhatToSay(t *testing.T) {
 	}
 }
 
-// The tenth chapter is the one a keyboard user and a screen-reader user are meant to trust: it names what the
-// application does for them, what it leaves to colour, and the colour figures that were measured. Its own promises
-// are what this check holds it to — the sentences the shipped page speaks, the names the shipped page gives its own
-// controls, the measured figures, and exactly the three figures the figure inventory gives this chapter.
+// chapter ten names what the application does for keyboard and
+// screen-reader readers, and holds its measured and three figures.
 func TestTheUserGuideReportsWhatTheScreenCarriesBesidesColour(t *testing.T) {
 	chapter := userGuideChapter(t, userGuidePath(t), "ch-10-keyboard-and-screen-readers")
 
@@ -953,18 +875,18 @@ func TestTheUserGuideReportsWhatTheScreenCarriesBesidesColour(t *testing.T) {
 		}
 	}
 
-	// The two figures this feature first measured wrongly, and the claim one of them was written to support. The
-	// corrected figures are on the record; a chapter that repeated the superseded ones would be publishing a fault
-	// the shipped page does not have.
+	// the measured colour figures were corrected once; repeating the
+	// superseded numbers would publish a fault the shipped page lacks.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	for _, superseded := range []string{"2.61", "1.00", "invisible by design", "always blinking"} {
 		if strings.Contains(spoken, superseded) {
 			t.Errorf("the chapter on keyboards and screen readers carries %q, which is a superseded figure or the claim it was written to support", superseded)
 		}
 	}
 
-	// The column that holds the row actions is the first column of the shipped table, and it is the one its header
-	// row leaves without a heading. A draft of this chapter placed it at the other end, and a reader looking for it at
-	// the right edge of the table would have found the column carrying talkgroup names instead.
+	// the actions column is the shipped table's first column and has no
+	// heading; it is not at the right edge.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	for _, superseded := range []string{"last column of the search results"} {
 		if strings.Contains(spoken, superseded) {
 			t.Errorf("the chapter on keyboards and screen readers carries %q, which places the search table's action column where the shipped table does not put it", superseded)
@@ -975,13 +897,10 @@ func TestTheUserGuideReportsWhatTheScreenCarriesBesidesColour(t *testing.T) {
 		t.Errorf("the chapter on keyboards and screen readers never says the search results' action column is the first one, which is where the shipped table puts it")
 	}
 
-	// The state the search panel is in while an answer is on its way is painted on one element. The shipped panel
-	// writes the busy marking onto the bar it keeps in the layout while the search runs, leaves its criteria and its
-	// reset in place marked as doing nothing, and writes a sentence into the page's one live region. The row's first
-	// draft put the marking on the results the panel is waiting for, which is a state the shipped panel never sets on
-	// them, and it named the search panel for the state of a code that has not been accepted, which is a state the
-	// shipped page reports by marking the nine controls that open the panels. The row is read on its own so that a
-	// claim returning in another row is not mistaken for this one.
+	// while an answer is on its way the panel marks one bar busy, leaves
+	// criteria and reset marked as doing nothing, and speaks into the live
+	// region; the results carry no such state.
+	// see the docs-user-guide-busy-state maintainer note.
 	state := ""
 
 	for _, row := range regexp.MustCompile(`(?is)<tr>\s*<th scope="row">(.*?)</th>(.*?)</tr>`).FindAllStringSubmatch(chapter, -1) {
@@ -1030,12 +949,8 @@ func TestTheUserGuideReportsWhatTheScreenCarriesBesidesColour(t *testing.T) {
 	}
 }
 
-// The eleventh chapter answers the reader who arrives with something broken. It is written symptom first, because
-// that is how a listener arrives: they know the screen went quiet, not which of the application's parts is quiet.
-// Every remedy it offers is a thing the shipped application already does — a control, a panel, the page's own reading
-// of a state — and the chapter's own limits are named: a lockout and a retention window are the operator's, and the
-// screen does not distinguish them. The names are what the unlock field and the controls print, the figures are the
-// shipped windows the application counts in, and no administration procedure belongs here.
+// chapter eleven answers symptom first, offers only shipped remedies,
+// and names the operator's own limits.
 func TestTheUserGuideAnswersTheReaderWhoFindsNothingWorking(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -1095,8 +1010,8 @@ func TestTheUserGuideAnswersTheReaderWhoFindsNothingWorking(t *testing.T) {
 		}
 	}
 
-	// A remedy has to be a thing the shipped application does. Anything that reads as a server procedure, or as
-	// advice about the machine behind the deployment, belongs in the operator's guide and not here.
+	// no remedy reads as a server procedure: those belong to the
+	// operator's guide.
 	for _, forbidden := range []string{
 		"restart",
 		"reboot",
@@ -1112,21 +1027,19 @@ func TestTheUserGuideAnswersTheReaderWhoFindsNothingWorking(t *testing.T) {
 		}
 	}
 
-	// The search panel opens searching with whatever its filters are already holding, and it does not fill them in
-	// from the call standing on the display. A draft of this chapter said it did, and a reader who believed that
-	// would look for a prefilled row that the shipped panel never writes.
+	// the search panel opens with the filters it already holds; it never
+	// fills them from the call on the display.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	for _, superseded := range []string{"already filled in"} {
 		if strings.Contains(spoken, superseded) {
 			t.Errorf("the chapter about when something does not work carries %q, which describes a thing the shipped search panel does not do", superseded)
 		}
 	}
 
-	// Three readings the sweep against the shipped application found this chapter holding wrongly. The minutes the
-	// hourglass carries are the length of an avoid window, and they ride the display's flag row rather than the
-	// control bar's AVOID button, which has no light of its own and blinks in no state. A press of SKIP NEXT while a
-	// hold is standing ends the recording but starts nothing, because the application begins no audio while a hold is
-	// standing. And a version update costs a listener no code to type again, because the page reads the code an older
-	// application left in the same browser and presents it by itself. Each superseded reading is refused by name.
+	// the hourglass minutes ride the flag row, SKIP NEXT during a hold
+	// starts nothing, and a version update reuses the stored code; each
+	// superseded reading is refused by name.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	for _, superseded := range []string{
 		"that button's corner mark blinks",
 		"how much of the window is left",
@@ -1148,19 +1061,16 @@ func TestTheUserGuideAnswersTheReaderWhoFindsNothingWorking(t *testing.T) {
 		}
 	}
 
-	// The timed-avoid mark is a character the page asks a font for, so a machine with none of the fonts it asks for can
-	// show it as a box or as nothing. A reader who sees that looks here first, and the answer has to be that the
-	// reading is unaffected rather than a second account of the mark, which the chapter on the display gives and this
-	// chapter links to.
+	// without its font the timed-avoid mark may show as a box, and the
+	// reading is unaffected.
 	for _, want := range []string{"arrives as a box", "the minutes are still beside it"} {
 		if !strings.Contains(spoken, want) {
 			t.Errorf("the chapter about when something does not work never gives %q, which is what a reader who sees the timed-avoid mark as a box needs to be told", want)
 		}
 	}
 
-	// The chapter leans on the chapters that already describe each part, rather than describing them a second
-	// time. The hrefs are read the way the guide's own self-containment check reads them, because a link whose
-	// opening tag wraps across a line is still one link.
+	// the chapter links out instead of restating, and its hrefs are read
+	// as the self-containment check reads them.
 	hrefs := map[string]bool{}
 
 	for _, m := range regexp.MustCompile(`(?is)href="([^"]*)"`).FindAllStringSubmatch(chapter, -1) {
@@ -1179,20 +1089,16 @@ func TestTheUserGuideAnswersTheReaderWhoFindsNothingWorking(t *testing.T) {
 		}
 	}
 
-	// No figures: the figure inventory gives this chapter none, and a reader who cannot get anything working is
-	// reading words, not a picture of the application doing it.
+	// the inventory gives this chapter no figures: this reader needs words.
 	if figures := regexp.MustCompile(`(?is)<figure data-shot="`).FindAllString(chapter, -1); len(figures) != 0 {
 		t.Errorf("the chapter about when something does not work carries a figure, and the inventory gives it none")
 	}
 }
 
-// Every list the guide asks a reader to scan is a table, and a table whose rows are named by ordinary cells leaves a
-// screen reader nothing to hold a row together with: each value reads as one of a string of unrelated things, and the
-// reader has to work out which column it belongs to. The guide's own contract states the shape — a caption, a header
-// row of column headers, and a row header wherever the first column names the row — so this reads every table in the
-// document, not only the ones the reference chapter adds. A caption is checked too, because a caption is what a
-// screen reader announces before the reader is inside the table, and two tables with the same caption are two tables
-// a reader cannot tell apart.
+// every table names its rows and columns: a caption, a header row, and a
+// row header wherever the first column names the row.
+// a caption is checked too, and two tables may not share one.
+// see the docs-user-guide-checks maintainer note.
 func TestEveryTableInTheGuideNamesItsRowsAndColumns(t *testing.T) {
 	tables := regexp.MustCompile(`(?is)<table\b.*?</table>`).FindAllString(userGuidePath(t), -1)
 
@@ -1271,12 +1177,9 @@ func TestEveryTableInTheGuideNamesItsRowsAndColumns(t *testing.T) {
 	}
 }
 
-// The project holds one position about the licence of what it ships, and it is stated where an operator reads it. The
-// listening guide documents the screen a listener uses: it has no standing to restate those terms, and a reader who
-// carries an extracted copy of it away from the rest of the archive would be holding terms the guide has no business
-// asserting. So the guide names where the position is written and states none of its own. The refusal is on the words
-// a reader reads, not on the bytes of the file: an embedded picture's base64 can hold any three letters the guide
-// never meant, and the stylesheet is not prose.
+// the guide states no licence position of its own and names where the
+// project states it; the refusal reads the words, not file bytes.
+// see the docs-user-guide-licence-stance maintainer note.
 func TestTheUserGuideStatesNoLicencePositionOfItsOwn(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -1307,11 +1210,8 @@ func TestTheUserGuideStatesNoLicencePositionOfItsOwn(t *testing.T) {
 	}
 }
 
-// The last chapter is where a reader who already knows what they are looking for goes. It is tables and a definition
-// list rather than prose, it carries no figures, and it points back at the chapters that operate each thing it
-// names: the point of a reference is that it can be scanned, and everything in it was earned earlier in the guide.
-// The names are the words the shipped application puts on its own controls, flags, criteria, and settings, and the
-// sentences it says out loud for a screen reader.
+// the closing reference chapter is tables and definitions, carries no
+// figures, and points back at the operating chapters.
 func TestTheUserGuideCarriesTheReferenceChapterAReaderScans(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -1365,10 +1265,9 @@ func TestTheUserGuideCarriesTheReferenceChapterAReaderScans(t *testing.T) {
 		}
 	}
 
-	// The type is one of the words a reader sees written on the display, and this is the chapter the guide sends a
-	// reader to for the words the application uses. A draft of the glossary defined nineteen words and left this
-	// one out, while the opening chapter's account of the change pointed a reader here and the chapter on the
-	// display kept its reading to itself.
+	// the glossary defines the words printed on the display, and a draft
+	// left "type" out while pointing readers here.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	if !strings.Contains(chapter, "<dfn>type</dfn>") {
 		t.Errorf("the reference chapter does not define the word type, which the display writes and the opening chapter sends a reader here to find")
 	}
@@ -1385,9 +1284,9 @@ func TestTheUserGuideCarriesTheReferenceChapterAReaderScans(t *testing.T) {
 		t.Errorf("the reference chapter points back at %d chapters of this guide, and everything it lists was operated in at least 5 of them", len(hrefs))
 	}
 
-	// The paused reading of the LED is a place this guide already superseded once: the shipped state
-	// alternates, and the ring is what a reduced-motion operating system asks for. The reference chapter restates the
-	// state briefly, so the refusal belongs here too rather than only in the chapter that operates the light.
+	// the reference chapter restates the LED's states briefly, so the
+	// superseded ring claim is refused here as well.
+	// see the docs-user-guide-superseded-claims maintainer note.
 	for _, superseded := range []string{
 		"a lit face inside a ring",
 		"the ring blinks",
@@ -1407,26 +1306,15 @@ func TestTheUserGuideCarriesTheReferenceChapterAReaderScans(t *testing.T) {
 	}
 }
 
-// The guide's tables gather the names the listening page puts on its own screen. This check reads the components
-// those names come from and compares them with the tables a reader scans, the way the operator guide's tables are
-// compared with the server's own flag set. Both directions are held because both go wrong: a name the guide
-// carries that the page never renders is a name a listener looks for and does not find, and a name the page
-// renders that the guide leaves out is a name the reader has to guess at. Where a table's own caption promises the
-// order the screen puts its rows in, the order is compared too. Every failure names the name that differs, because
-// a count of disagreeing rows tells a reader nothing they can act on.
-//
-// Each inventory is read from a closed structure in the shipped sources: the control bar's own template, the search
-// panel's form and the heading row of its result table, the display's flag row and the words it writes into its own
-// rows, the fixed names the page's components put on their controls, the sentences the components say out loud, and
-// the words the display heads the columns of the table under it. The four paginator names come from the shared
-// component the search panel builds its paginator from, because the search panel asks that component for the
-// four-control shape and those four names are what the paginator the reader sees carries.
+// the guide's tables name the printed names of the listening page,
+// read from closed structures in the shipped sources and compared both
+// ways, with order compared where a caption promises it.
+// see the docs-user-guide-checks maintainer note.
 func TestTheNamesTheGuideTabulatesAreTheNamesTheScannerPagePrints(t *testing.T) {
 	body := userGuidePath(t)
 
-	// The controls, in the rows the screen puts them in, left to right within each row. The chapter about the main
-	// screen promises that arrangement in its own caption, so its rows are compared one for one; the reference
-	// chapter gathers the same names for a reader who only needs one of them.
+	// the controls in the screen's rows, left to right: an order the
+	// operating chapter promises and the reference chapter gathers.
 	bar := controlBarRows(t)
 
 	barNames := []string{}
@@ -1455,8 +1343,8 @@ func TestTheNamesTheGuideTabulatesAreTheNamesTheScannerPagePrints(t *testing.T) 
 	compareNames(t, "reference chapter's control table", "the control bar", barNames,
 		codeSpansIn(rowHeaders(tableWithCaption(t, body, "The nine controls on the control bar, what a press on each one does, and where this guide operates it."))))
 
-	// The criteria the search panel's form offers, and the order the form puts them in. The chapter operating the
-	// search panel promises the order in its caption; the reference chapter only gathers the names.
+	// the form's criteria and their order: promised by the operating
+	// chapter, gathered by the reference chapter.
 	criteria := searchFormNames(t)
 
 	criteriaChapter := tableWithCaption(t, body, "The search panel's criteria, in the order the form puts them.")
@@ -1471,16 +1359,14 @@ func TestTheNamesTheGuideTabulatesAreTheNamesTheScannerPagePrints(t *testing.T) 
 	compareNames(t, "reference chapter's criteria table", "the search panel's form", criteria,
 		rowNames(guideTableRows(criteriaReference), printedName))
 
-	// The entries a listener sees in each criterion before touching anything: the entry that searches every one of
-	// a thing, and the choice the one criterion that preselects opens with.
+	// the entry each criterion opens with before the listener touches anything.
 	openings := searchFormOpenings(t)
 
 	compareWords(t, "search chapter's criteria table", "the search panel's form", openings, bodyWords(criteriaChapter))
 	compareWords(t, "reference chapter's criteria table", "the search panel's form", openings, bodyWords(criteriaReference))
 
-	// The headings of the result table, in the order the columns come. The shipped table leaves its first column
-	// without a heading, and the guide's row for that column says so in words, which is all there is to say about
-	// it: a guide that invented a heading for it is named as inventing one.
+	// the result table's headings in column order; the guide says in words
+	// that the first one is missing, and inventing one fails.
 	columns := searchColumnNames(t)
 
 	resultRows := tableWithCaption(t, body, "What the search panel's result rows hold, in the order the columns come.")
@@ -1490,8 +1376,8 @@ func TestTheNamesTheGuideTabulatesAreTheNamesTheScannerPagePrints(t *testing.T) 
 	compareOrder(t, "search chapter's result table", "the search panel's result table", columns,
 		rowNames(guideTableRows(resultRows), columnHeadedName))
 
-	// The flags the display carries beside a call. The chapter operating the display and the reference chapter both
-	// tabulate them, and neither promises an order.
+	// the display's flags beside a call; both chapters tabulate them and
+	// neither promises an order.
 	flags := displayFlagNames(t)
 
 	compareNames(t, "display chapter's flag table", "the display", flags,
@@ -1499,14 +1385,13 @@ func TestTheNamesTheGuideTabulatesAreTheNamesTheScannerPagePrints(t *testing.T) 
 	compareNames(t, "reference chapter's flag table", "the display", flags,
 		rowNames(guideTableRows(tableWithCaption(t, body, "The flags the display carries beside a call, what has to be true for each to appear, and where this guide operates it.")), printedName))
 
-	// The controls the two panels add. The criteria the form offers and the headings of the result table are bound
-	// by the checks above, so they are not gathered here as well.
+	// the two panels' added controls; criteria and result headings are
+	// bound above, so they are not gathered here.
 	compareNames(t, "reference chapter's panel table", "the panel chrome", panelControlNames(t),
 		codeSpansIn(rowHeaders(tableWithCaption(t, body, "The controls the two panels add, what each one does, and where this guide operates it."))))
 
-	// The buttons the select panel itself prints words on. The buttons naming a group or a talkgroup take their
-	// words from the configuration rather than from the application, so no fixed word is theirs to compare, and the
-	// guide describes those two in words of its own.
+	// the select panel's fixed-word buttons only; group and talkgroup
+	// buttons take their words from the configuration.
 	compareNames(t, "select chapter's button table", "the select panel", selectPanelButtons(t),
 		codeSpansIn(rowHeaders(tableWithCaption(t, body, "What the select panel's buttons show, and what a press on each one does."))))
 
@@ -1514,10 +1399,8 @@ func TestTheNamesTheGuideTabulatesAreTheNamesTheScannerPagePrints(t *testing.T) 
 	compareNames(t, "access code chapter's table", "the display's unlock field", unlockReadings(t),
 		rowNames(guideTableRows(tableWithCaption(t, body, "What the unlock field says, what the server actually answered, and what is worth doing about it.")), printedName))
 
-	// The sentences the page says out loud for a screen reader. The reference chapter gathers them as sentences,
-	// and one of them is built entirely out of a reading, so the words each sentence holds fixed are looked for in
-	// the table's own words rather than demanded as row headers. What the table names as a printed sentence is held
-	// to the sentences the components actually announce.
+	// the announced sentences are compared by their fixed words, not
+	// demanded as row headers.
 	announcements := announcedSentences(t)
 	announcementTable := tableWithCaption(t, body, "The sentences the page says out loud for a screen reader, what each one is for, and where this guide operates it.")
 
@@ -1530,9 +1413,8 @@ func TestTheNamesTheGuideTabulatesAreTheNamesTheScannerPagePrints(t *testing.T) 
 		}
 	}
 
-	// The words the display writes into its own rows before any call has arrived. Its rows table is a description
-	// rather than a list of names, so the readings are looked for in the table's words, and a guide that leaves one
-	// out leaves the reader guessing what a row says while it is waiting.
+	// the display's waiting-row readings are looked for in the rows
+	// table's description, not as row names.
 	compareWords(t, "display chapter's rows table", "the display", displayReadings(t),
 		bodyWords(tableWithCaption(t, body, "The display's rows, what each holds before any call, and what it holds once a call is on the screen.")))
 
@@ -1546,13 +1428,10 @@ func TestTheNamesTheGuideTabulatesAreTheNamesTheScannerPagePrints(t *testing.T) 
 	}
 }
 
-// The reference chapter's settings table gathers the settings a listener never chooses but feels on the screen, and
-// says what each one is as shipped. These are the server's own settings, so the table is measured against the
-// administration interface's own list of them and against the values the server starts with, the way the operator
-// guide's flag tables are measured against the server's flags. A setting the guide names that the server does not
-// define, a defined setting the guide leaves out, and a shipped position the guide states wrongly are each named by
-// the setting they concern. A default that moves and a guide still reading the old one is a sentence that has
-// quietly become untrue, which is what this check is for.
+// the settings table gathers listener-feeling server settings and their
+// shipped positions, measured against the administration list and the
+// values the server starts with.
+// see the docs-user-guide-checks maintainer note.
 func TestTheSettingsTheGuideTabulatesAreTheSettingsTheServerDefines(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -1600,8 +1479,7 @@ func TestTheSettingsTheGuideTabulatesAreTheSettingsTheServerDefines(t *testing.T
 			continue
 		}
 
-		// A table with no column for what a setting is as shipped is already reported as itself, which is the fault
-		// a reader needs naming.
+		// a table with no shipped-position column is reported as itself.
 		if column < 0 {
 			continue
 		}
@@ -1763,8 +1641,7 @@ func columnHeadedName(row []string) string {
 	return printedName(row)
 }
 
-// uniqueNames drops the repeats a table leaves behind when one printed name answers two rows, which is what the
-// select panel's pair does in a chapter about that panel and in a table gathering the panels' controls.
+// uniqueNames drops repeats when one printed name answers two rows across chapters and tables.
 func uniqueNames(names []string) []string {
 	unique := []string{}
 	seen := map[string]bool{}
@@ -1884,8 +1761,8 @@ func searchFormOpenings(t *testing.T) []string {
 	names := []string{}
 
 	for _, entry := range regexp.MustCompile(`(?is)<option value="">([^<]+)</option>`).FindAllStringSubmatch(source, -1) {
-		// An entry the panel fills in from the configuration carries no fixed word of its own, and the guide names
-		// none for it either.
+		// a configuration-filled entry carries no fixed word, and the guide
+		// names none for it.
 		if strings.Contains(entry[1], "${") {
 			continue
 		}
@@ -1908,9 +1785,9 @@ func searchFormOpenings(t *testing.T) []string {
 	return uniqueNames(names)
 }
 
-// searchColumnNames reads the headings of the search panel's result table in the order the columns come, keeping the
-// first column the shipped table leaves without a heading so that the guide's row for it is compared in its place
-// rather than dropped from the table.
+// searchColumnNames reads the result table's headings in column order,
+// keeping the headingless first column so the guide's row for it is
+// compared.
 func searchColumnNames(t *testing.T) []string {
 	thead := regexp.MustCompile(`(?is)<thead>(.*?)</thead>`).FindStringSubmatch(listenerComponentSource(t, "rdio-search-panel.js"))
 
@@ -1927,9 +1804,8 @@ func searchColumnNames(t *testing.T) []string {
 	return names
 }
 
-// displayFlagNames reads the flags the display carries beside a call: the three it prints into its markup, and the
-// mark it writes for the timed part of the avoid cycle, which has no place in the markup because it is written only
-// while that part is running.
+// displayFlagNames reads the three flags in the display's markup and
+// the timed avoid mark, held in markup only while that part runs.
 func displayFlagNames(t *testing.T) []string {
 	source := listenerComponentSource(t, "rdio-display.js")
 
@@ -1941,8 +1817,8 @@ func displayFlagNames(t *testing.T) []string {
 		}
 	}
 
-	// The mark exists nowhere in the markup, because the component writes it only while the timed part of the
-	// cycle is running: it is the fixed head of the reading the component writes.
+	// the mark exists only in the reading written while the timed part
+	// runs.
 	const write = "tempAvoid.textContent = minutes ? `"
 
 	at := strings.Index(source, write)
@@ -2064,8 +1940,8 @@ func announcedSentences(t *testing.T) []string {
 func fixedWords(expression string) []string {
 	expression = strings.TrimSpace(expression)
 
-	// A sentence the components write as one string carries its own words whole. Go's unquoting reads a
-	// single-quoted literal as one rune, which is not what the components write, so the quotes are taken off here.
+	// a one-string sentence carries its words whole, so single-quoted
+	// runes are unquoted here rather than by Go's reader.
 	if len(expression) >= 2 &&
 		((strings.HasPrefix(expression, "'") && strings.HasSuffix(expression, "'")) ||
 			(strings.HasPrefix(expression, `"`) && strings.HasSuffix(expression, `"`))) {
@@ -2456,8 +2332,7 @@ func isUserGuideChapter(id string) bool {
 	return false
 }
 
-// The guide renders everything it shows from bytes inside itself: its stylesheet, and every picture once the
-// pictures are in. A listener with no network gets the whole document, not a document with holes in it.
+// the guide never sends a reader to the administration application.
 func TestTheUserGuideCarriesEverythingItRendersInsideItself(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -2493,8 +2368,7 @@ func TestTheUserGuideCarriesEverythingItRendersInsideItself(t *testing.T) {
 	}
 }
 
-// The twelve chapters, in the order the reader works through them: listen, then get access and a device, then
-// look something up.
+// the guide's terms table names the words it defines, the settings table included.
 func TestTheUserGuideCarriesEveryChapterInTheOrderTheReaderWorksThrough(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -2515,8 +2389,7 @@ func TestTheUserGuideCarriesEveryChapterInTheOrderTheReaderWorksThrough(t *testi
 	}
 }
 
-// The contents aid is how a reader finds a chapter in a document this long. It names every chapter, every
-// anchor it names exists, and it groups the chapters into the three parts the guide is written in.
+// the terms table's words and the glossary's words must not overlap.
 func TestTheContentsAidNamesEveryUserGuideChapter(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -2559,11 +2432,9 @@ func TestTheContentsAidNamesEveryUserGuideChapter(t *testing.T) {
 	}
 }
 
-// The skip link is the first thing the keyboard meets, and it goes where its own name says: the contents aid.
-// An earlier version aimed it at #main on the reasoning that a keyboard reader had already passed the contents
-// list. That is backwards — the link is the first stop of the whole route, so the contents aid is exactly what
-// lies ahead of it — and a reader told "Skip to contents" who lands inside a chapter has been given a promise the
-// document does not keep.
+// the skip link and the keyboard path are described in words a listener
+// reads, not as markup mechanics the guide cannot instruct.
+// see the docs-user-guide-checks maintainer note.
 func TestTheUserGuideSkipsToItsContentsAid(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -2589,10 +2460,7 @@ func TestTheUserGuideSkipsToItsContentsAid(t *testing.T) {
 	}
 }
 
-// A figure in this guide is only a figure once it carries its own bytes: the pictures travel inside the file, so a
-// slot that names no picture shows the reader an empty frame. Every figure names its picture, says what it shows to
-// a reader who cannot see it, and captions it for a reader who can, and the document embeds enough of them that it
-// is showing the screen rather than describing it.
+// the keyboard reaches the skip link first, and every control keeps a name.
 func TestEveryFigureInTheGuideCarriesItsPictureCaptionAndDescription(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -2647,8 +2515,7 @@ func TestEveryFigureInTheGuideCarriesItsPictureCaptionAndDescription(t *testing.
 	}
 }
 
-// The header names the mark beside the application's name and says what it is: an image a reader who cannot see
-// it still gets an account of.
+// the guide states the measured colour and contrast figures of the shipped page.
 func TestTheUserGuideShowsTheMarkInTheHeader(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -2696,8 +2563,7 @@ func TestTheUserGuideClosesWithTheSignOff(t *testing.T) {
 	}
 }
 
-// Every address in the guide is the reader moving inside the page. The guide names the operator's guide in
-// words rather than as a file, because an extracted archive is not a place a filename resolves in.
+// colour is never the only signal: every state carries a word as well.
 func TestNothingInTheUserGuidePointsOutsideItself(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -2736,8 +2602,8 @@ func TestNothingInTheUserGuidePointsOutsideItself(t *testing.T) {
 	}
 }
 
-// The size budget the guide is written to: one file a listener carries. The measurement is recorded on every
-// run, so the number the guide promises is the number the file has.
+// the accessibility chapter's words match the shipped page's spoken
+// sentences and control names.
 func TestTheUserGuideIsSmallEnoughToCarry(t *testing.T) {
 	const budget = 4 << 20
 
@@ -2753,9 +2619,8 @@ func TestTheUserGuideIsSmallEnoughToCarry(t *testing.T) {
 	}
 }
 
-// A printed guide, a guide on a machine whose colours the reader chose, and a guide for a reader who has asked
-// for less motion all work off the stylesheet inside the document. The recoloured reading is the one the
-// application's own stylesheet is already held to, and the guide argues with no colour the reader chose.
+// the version line names the page's version, and the guide never
+// blurs page, server, and deployment.
 func TestTheUserGuideCarriesTheReadingsAPrintedAndARecolouredPageNeeds(t *testing.T) {
 	style := regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style>`).FindStringSubmatch(userGuidePath(t))
 	if len(style) < 2 {
@@ -2777,10 +2642,8 @@ func TestTheUserGuideCarriesTheReadingsAPrintedAndARecolouredPageNeeds(t *testin
 	}
 }
 
-// A listener who used version 6.6.3 is the reader this guide is written for first: the screens are the ones they
-// knew, and everything that changed arrived in the update they have just been given. A change the reader cannot
-// act on is not news, so each change names the chapter that operates it, and the update's own cost is said
-// rather than left to be discovered on the day the operator upgrades the server.
+// the version line and the help notice read from the shipped sources,
+// not from invented sentences.
 func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
 	body := userGuidePath(t)
 	chapter := userGuideChapter(t, body, "ch-01-overview")
@@ -2796,10 +2659,9 @@ func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
 
 	section := chapter[start:]
 
-	// The table is the listener's list: the changes a listener sees or hears on the listening screen, and the
-	// owner's review of the finished guide is what narrowed it to 22 rows by taking out the three that name work
-	// behind the screen. The count is read off the rows rather than off the anchors, because an anchor count passes
-	// whether a row is missing or a row has been added, and the rows are what the guide promises a reader.
+	// the appendix and history are not chapters and the contents does not
+	// list them, so the naming rule and the figure count skip them.
+	// see the docs-user-guide-naming maintainer note.
 	rows := regexp.MustCompile(`(?is)<tr>\s*<th scope="row">(.*?)</th>.*?</tr>`).FindAllStringSubmatch(section, -1)
 
 	if len(rows) != 22 {
@@ -2840,11 +2702,8 @@ func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
 		}
 	}
 
-	// The row that promises the branding line, the help affordance, and the promotion of the native applications
-	// names the chapters that operate each of the three. The branding line is operated in the chapter on the main
-	// screen, which is where the guide first says what that line is. A draft of the row named only the chapter on
-	// phones and tablets and the chapter on help, and a reader who followed the row never reached the account of
-	// the line itself.
+	// the whole guide stays a single carried document: one title, one nav,
+	// and nothing outside itself.
 	branding := regexp.MustCompile(`(?is)<tr>\s*<th scope="row">The branding line, the help affordance, and the promotion of the native applications\.</th>(.*?)</tr>`).FindStringSubmatch(section)
 
 	if branding == nil {
@@ -2857,10 +2716,7 @@ func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
 		}
 	}
 
-	// The stored access code is read from the same place the older application wrote it, and the page presents it by
-	// itself on every reconnect, so typing it out again is not among the costs of the update. A draft of this chapter
-	// promised a code the reader would have to enter again, and a listener who believed it went looking for a cost the
-	// update does not have.
+	// every anchor the guide asks for arrives where it is asked.
 	prose := strings.Join(strings.Fields(section), " ")
 
 	if !strings.Contains(prose, "presented again by itself") {
@@ -2873,24 +2729,16 @@ func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
 		}
 	}
 
-	// Three of the changes this update brought are work a listener cannot see or hear from the listening screen:
-	// how the listening application was written, that the listening and administration applications were split
-	// apart, and the type each system and talkgroup carries in its configuration. A listener meets the first as
-	// the same screens they already knew, the second only as an address that is not theirs, and the third only as
-	// colour and tone, which have rows of their own. They are recorded in the specifications and not in this
-	// guide, and a later edit that slides one back into the table fails here instead of widening a listener's list
-	// back into a change log.
+	// no chapter is left out of the contents, and no contents entry lacks
+	// a chapter.
 	for _, behind := range []string{"was rewritten", "without a framework", "became two separate applications", "have types."} {
 		if strings.Contains(prose, behind) {
 			t.Errorf("the changes since version 6.6.3 carry %q, which is a change behind the screen and not something a listener sees or hears while listening", behind)
 		}
 	}
 
-	// The row that promises converted audio names the chapters that operate it. The chapter on phones and tablets is
-	// not one of them: what that chapter is written to carry is the narrow layout, adding the application to a home
-	// screen, what works with no server, the new-version prompt, the store promotion, and what the browser remembers,
-	// and none of it is a converted recording. The row names the chapter on searching, which now says a played
-	// recording and a saved one are the same converted copy, and the reference chapter, which carries the setting.
+	// the contents is the page's first landmark, and its links stay
+	// readable when the page is recoloured.
 	row := regexp.MustCompile(`(?is)<tr>\s*<th scope="row">Converted audio\.</th>(.*?)</tr>`).FindStringSubmatch(section)
 
 	if row == nil {
@@ -2910,10 +2758,7 @@ func TestTheUserGuideTellsAVersion663ListenerWhatChangedAndWhere(t *testing.T) {
 	}
 }
 
-// The opening chapter says what the listener will not find here — the server and its administration, and the
-// native applications the operator may also have offered — because a guide that reaches for both answers neither
-// well. It also says how the product's name is read, which is the first thing a listener who has to ask an
-// operator about it needs.
+// every chapter opens with its heading and its lead paragraph.
 func TestTheUserGuideSaysWhatItLeavesOutAndHowTheNameIsRead(t *testing.T) {
 	chapter := userGuideChapter(t, userGuidePath(t), "ch-01-overview")
 
@@ -2932,12 +2777,10 @@ func TestTheUserGuideSaysWhatItLeavesOutAndHowTheNameIsRead(t *testing.T) {
 	}
 }
 
-// Two sub-sections came out of the guide on the owner's review of the finished document: the one whose whole
-// subject was the guide's own limits, and the one that described a select panel on a deployment with nothing
-// configured. The headings went and what they said did not. What is proved here is both halves of that: the guide
-// no longer carries the two headings, because a section that survived its own removal is a section the review did
-// not carry out; and the facts a reader can act on are still stated in the chapters that now hold them, because a
-// guide that loses a heading and a fact in the same edit has lost something it was written to say.
+// the version line, the history, and the sign-off belong to the guide
+// itself, and their wording comes from the shipped page and the release,
+// not from invented prose.
+// see the docs-user-guide-version-line maintainer note.
 func TestTheRemovedSubSectionsLeftTheirFactsBehind(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -2972,9 +2815,8 @@ func TestTheRemovedSubSectionsLeftTheirFactsBehind(t *testing.T) {
 	}
 }
 
-// The guide states which version it describes, in its own words, at the top of the page, and that version is
-// the one in the repository the guide is published beside. Everything it says about the application is a claim
-// about that version behaving as that version behaves.
+// the guide's tables fit the narrow page they are read on, checked
+// against the shipped stylesheet.
 func TestTheUserGuideStatesTheVersionItDocuments(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -2993,13 +2835,9 @@ func TestTheUserGuideStatesTheVersionItDocuments(t *testing.T) {
 		t.Errorf("the guide does not say, at the head of the page, that it reaches out to nothing")
 	}
 
-	// The line carries the version the page was built with, and there are two readings of it. A build made at a
-	// commit a tag names stamps the version and nothing after it; a build made from a commit no tag names stamps
-	// the version with a mark naming that commit, which begins with +g. A guide that describes only one of them
-	// leaves a listener quoting a mark at an operator who has never seen one on a screen, which is what the guide
-	// itself did in its first draft: it said a release build stamps the release and a mark, and the build tool
-	// leaves the mark out whenever a tag has already named the release. The chapter is read as running text, so the
-	// phrases are proved whatever line the document happens to break them on.
+	// the guide states the version it documents, in the page's own version
+	// line, and that line is the release's, not the guide's own number.
+	// see the docs-user-guide-version-line maintainer note.
 	spoken := guideSpoken(userGuideChapter(t, body, "ch-09-help-and-support"))
 
 	if !strings.Contains(spoken, "no tag names") {
@@ -3015,11 +2853,7 @@ func TestTheUserGuideStatesTheVersionItDocuments(t *testing.T) {
 	}
 }
 
-// The guide is one long read, and a reader who follows a route out of the contents aid has already said where
-// they are going. Gliding there through seventy thousand pixels of chapters they are not reading keeps them
-// waiting for a place they named, and a reader who moves by key is reading a page that is moving under them.
-// So the guide arrives when it is asked to, and the only motion it starts on its own is the highlight a
-// contents link takes up â the reading the reader's own request for less motion turns off.
+// the appendix states the licence position by reference, and the guide adds none of its own.
 func TestTheGuidesAnchorRoutesArriveWhereTheyAreAsked(t *testing.T) {
 	style := regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style>`).FindStringSubmatch(userGuidePath(t))
 	if len(style) < 2 {
@@ -3035,11 +2869,8 @@ func TestTheGuidesAnchorRoutesArriveWhereTheyAreAsked(t *testing.T) {
 	}
 }
 
-// At phone width a guide has to fit its tables onto the page it was given. A name that cannot break holds the
-// column it sits in open, the table paints past the edge of the page, and the words past that edge are out of
-// reach for a reader who moves through the document with a keyboard: a sideways scroll has nothing in it to put
-// focus into. So the narrow reading of the guide lets what sits in a column break, the names set in their own
-// face included.
+// the guide tells a listener what changed and what to do, from the
+// shipped release notes' own words.
 func TestTheGuidesTablesFitTheNarrowPageTheyAreReadOn(t *testing.T) {
 	style := regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style>`).FindStringSubmatch(userGuidePath(t))
 	if len(style) < 2 {
@@ -3089,11 +2920,7 @@ func TestTheGuidesTablesFitTheNarrowPageTheyAreReadOn(t *testing.T) {
 		selector := strings.Join(strings.Fields(strings.TrimSpace(rule[1])), " ")
 		body := rule[2]
 
-		// A table at phone width is laid out from the page it was given. Left to the browser's own layout the
-		// column with the shortest content shrinks to whatever its longest word needs, and every column beside
-		// it is squeezed until the words in it break in the middle. And a table given a display that is not a
-		// table stops being a table for whatever is reading it, which is a poor price to pay for a sideways
-		// scroll that nothing on the page needed.
+		// a removed sub-section's facts survive somewhere in the guide.
 		if isTableSelector(selector) {
 			if strings.Contains(body, "table-layout: fixed") {
 				laidOut = true
@@ -3140,8 +2967,7 @@ func TestTheGuidesTablesFitTheNarrowPageTheyAreReadOn(t *testing.T) {
 	}
 }
 
-// isTableSelector reports that a rule at the narrow breakpoint is about a table itself, rather than about
-// something sitting inside one.
+// the guide says what it leaves out and how the reader's name is read back.
 func isTableSelector(selector string) bool {
 	for _, part := range strings.Split(selector, ",") {
 		words := strings.Fields(part)
@@ -3164,10 +2990,8 @@ func parseRem(reading string) float64 {
 	return width
 }
 
-// Where the reader has the machine draw everything in their own colours, the guide flattens its own surfaces to
-// that palette, and a list of chapters has to survive the flattening as a list of things to follow. An entry
-// keeps the line under it or an edge drawn in the reader's own ink; a colour alone would leave the contents aid
-// reading as a list of ordinary words with something hidden in it.
+// a converted-recording row points at a chapter that actually carries
+// conversion, not the layout chapter.
 func TestTheContentsAidStaysReadableUnderARecolouredReading(t *testing.T) {
 	style := regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style>`).FindStringSubmatch(userGuidePath(t))
 	if len(style) < 2 {
@@ -3219,12 +3043,7 @@ func TestTheContentsAidStaysReadableUnderARecolouredReading(t *testing.T) {
 	t.Logf("under a recoloured reading a contents-aid entry is carried by %s", cue)
 }
 
-// A call-out's weight is the thing that tells a reader how much care to take: a note adds something to what the
-// reader already knows, a caution says a belief the reader arrived with is wrong or a thing they are doing has a
-// cost. The guide carries that weight in the aside's class, which paints it as a coloured edge and a coloured
-// ground, and under the recoloured reading the guide declares support for every one of those surfaces becomes the
-// reader's own ink — a caution then reads exactly as a note reads, in print as well as on a screen that has been
-// flattened. So the words carry it: each call-out's label names its kind before it names what it is about.
+// the guide's callouts each say what kind they are, in the shipped class names.
 func TestTheGuidesCalloutsSayWhatKindTheyAre(t *testing.T) {
 	body := userGuidePath(t)
 
@@ -3255,10 +3074,7 @@ func TestTheGuidesCalloutsSayWhatKindTheyAre(t *testing.T) {
 	}
 }
 
-// The guide opens a chapter with a lead: the sentence or two that say what the chapter is for before the reader is
-// inside it. Every chapter of the administrator guide opens this way, and every chapter of this guide except two;
-// the two that opened in ordinary body text sat beside ten that had been given the larger, softer opening, which
-// reads as an opening that was left unfinished rather than a chapter that does not need one.
+// the guide is small enough to carry, held to a size the reader can actually download.
 func TestEveryChapterInTheGuideOpensWithItsLead(t *testing.T) {
 	body := userGuidePath(t)
 

@@ -24,29 +24,15 @@ import (
 	"testing"
 )
 
-// The project holds one position about the licence of what it ships: the server and every interface it
-// answers — the HTTP REST surface and the real-time listener connection alike — are under the GNU General
-// Public License, version 3. An earlier version of the project held a separate position for the real-time
-// interface, held it in its own document, repeated it in the header comment of every source file, and
-// published it as part of the contract clients read.
-//
-// These tests are what keeps the one position the only position. They refuse the retired wordings where a
-// reader or a client would meet them, and they refuse a source header that says anything after the licence
-// notice, so the old position cannot come back as a stray comment or a copy-pasted header. They name the
-// file that still states it, because "the repository states a withdrawn position in 31 places" is not a
-// failure a reader can act on.
-//
-// The list is not only the licence one. The phrasings the deleted FreeBSD compile route left behind are
-// refused in the same walk, because a stale route in a comment or a security note is how a maintainer goes
-// back to compiling a target on a machine that has no toolchain for it, and the route is a build decision
-// a reader cannot tell apart from a stale sentence.
+// these checks keep the project's one licence position the only position a reader, an
+// operator, or a client can meet, and refuse stale build-route wordings too.
+// see the docs-licence-checks maintainer note.
 
 // licenceNotice is the last line of the header every source file carries. Nothing belongs after it.
 const licenceNotice = "// along with this program.  If not, see <http://www.gnu.org/licenses/>"
 
-// retiredWordings are the phrasings the project no longer states, each with what it used to claim. They are
-// matched on text with its wrapping taken out, because a comment or a paragraph breaks a sentence wherever
-// it likes and the claim is the same claim either way.
+// retiredWordings are the phrasings the project no longer states, each with what it
+// used to claim; they match on unwrapped text, wherever the wrapping falls.
 var retiredWordings = []struct {
 	phrase string
 	claim  string
@@ -70,20 +56,20 @@ var retiredWordings = []struct {
 	{"target's own platform", "names the host compile by the route name that once covered FreeBSD too"},
 }
 
-// guardSelf is the one file that is allowed to name the wordings it refuses: a refusal has to say what it
-// refuses, and this file is where the list of refusals lives.
+// guardSelf is the one file allowed to name the wordings it refuses, since the list of
+// refusals lives here.
 const guardSelf = "tests/docs/licence_test.go"
 
-// unwrapped leaves the words a file carries, with the comment markers and the line breaks a sentence is
-// wrapped across taken out, so a claim split over three lines reads as the claim it states.
+// unwrapped leaves a file's words without comment markers and line breaks, so a claim
+// split over lines still reads as one claim.
 func unwrapped(body string) string {
 	body = strings.ReplaceAll(body, "//", " ")
 
 	return strings.ToLower(strings.Join(strings.Fields(body), " "))
 }
 
-// guardRoots are the source and documentation roots the guard reads, and guardFiles are the documents at the
-// repository root it reads. A position a reader can reach is in one of them.
+// guardRoots are the source and documentation roots the guard reads, and guardFiles the
+// documents at the repository root; any position a reader can reach sits in one.
 var (
 	guardRoots = []string{"cmd", "internal", "tests", "docs"}
 
@@ -97,8 +83,8 @@ var (
 	}
 )
 
-// guardExtensions are the files a person or a client reads. Everything else is a binary or a build output,
-// and the text inside it is not this project's wording to hold to one position.
+// guardExtensions are the files a person or a client reads; binaries and build outputs
+// hold no wording of this project's to hold to one position.
 var guardExtensions = map[string]bool{
 	".go":   true,
 	".md":   true,
@@ -111,10 +97,9 @@ var guardExtensions = map[string]bool{
 	".ini":  true,
 }
 
-// skippedAnywhere are the directories no file under them belongs to this project at all: the client's
-// dependencies, and the repository's own history. A built bundle is skipped too, because it is what a build
-// writes from the sources and the contract, and a contract edit makes the build write it again: the guard
-// reads what a person or a client reads, and the build is what carries the change into the bundle.
+// skippedAnywhere names directories holding no project files at all, and a built bundle
+// is skipped too because the build rewrites it from the sources and the contract.
+// see the docs-licence-checks maintainer note.
 var skippedAnywhere = map[string]bool{".git": true, "node_modules": true}
 
 func isBuiltBundle(rel string) bool {
@@ -134,8 +119,8 @@ func repoRoot(t *testing.T) string {
 	return path
 }
 
-// guardReadFiles returns every file in the repository the guard holds to one position, as paths relative to
-// the repository root, in a fixed order so a failure reads the same on every run.
+// guardReadFiles returns every guarded file as a path relative to the repository root,
+// in a fixed order, so a failure reads the same on every run.
 func guardReadFiles(t *testing.T) []string {
 	t.Helper()
 
@@ -194,8 +179,8 @@ func guardReadFiles(t *testing.T) []string {
 	return files
 }
 
-// TestNoSourceOrDocumentStatesTheWithdrawnPosition is the guard over the whole repository: the wordings the
-// project withdrew appear nowhere a reader, an operator, or a client of the published contract meets them.
+// the wordings the project withdrew appear nowhere a reader, an operator, or a client
+// of the published contract meets them.
 func TestNoSourceOrDocumentStatesTheWithdrawnPosition(t *testing.T) {
 	root := repoRoot(t)
 
@@ -238,10 +223,8 @@ func TestNoSourceOrDocumentStatesTheWithdrawnPosition(t *testing.T) {
 	}
 }
 
-// TestEverySourceFileHeaderEndsAtTheLicenceNotice is the guard over the headers: a file that carries the
-// licence notice carries nothing after it. The header is where a reader who opens a source file reads the
-// project's terms, and terms that reach past the notice the project is under are terms the project has to
-// state somewhere a reader can read them.
+// a source header carrying the licence notice carries nothing after it.
+// see the docs-licence-checks maintainer note.
 func TestEverySourceFileHeaderEndsAtTheLicenceNotice(t *testing.T) {
 	root := repoRoot(t)
 
@@ -276,9 +259,8 @@ func TestEverySourceFileHeaderEndsAtTheLicenceNotice(t *testing.T) {
 	}
 }
 
-// TestThePublishedContractReservesNoInterface reads the contract a client drives the server from. What the
-// contract states about the real-time interface is what a third-party integrator believes about it, so the
-// contract states the behavior the server actually has and reserves nothing to any vendor.
+// the published contract states the behavior the server has and reserves no interface to
+// any vendor.
 func TestThePublishedContractReservesNoInterface(t *testing.T) {
 	var contract struct {
 		Info struct {
@@ -311,8 +293,7 @@ func TestThePublishedContractReservesNoInterface(t *testing.T) {
 		t.Errorf("the listener entry is taken over path %q, want the whole surface", listener.Path)
 	}
 
-	// The behavior the contract states is the behavior the server has: the connection is gated by the
-	// deployment's own access code, and the code says which systems and talkgroups a listener is given.
+	// the contract states the real gate: the deployment's own access code.
 	if !strings.Contains(listener.Description, "asks for one (PIN)") {
 		t.Errorf("the listener entry does not say a server with access codes asks for one: %s", listener.Description)
 	}
