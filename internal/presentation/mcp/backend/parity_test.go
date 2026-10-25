@@ -31,11 +31,10 @@ import (
 	"rdio-scanner/internal/presentation/common/httpaddr"
 )
 
-// The parity suite is the proof that the two stateless call surfaces are one rule. The call history
-// endpoints and the Model Context Protocol listener answer the same restricted mode, the same
-// expiries, the same scopes, and the same guess budget, because they read the same use case over
-// the same stores — and an operator who changed one of them would find this suite naming the half
-// that moved.
+// The parity suite is the proof that the two stateless call surfaces are one
+// rule: the call history endpoints and the MCP listener answer the same
+// restricted mode, expiries, scopes, and guess budget over the same use case
+// and stores. Change one half and this suite names it.
 
 const (
 	paritySystemOneRef = uint(10001)
@@ -74,9 +73,9 @@ func newParity(t *testing.T, scope domain.AccessScope) *parityFixture {
 
 	bundle.resolve = application.NewResolveAccessQueryHandler(bundle.accesses, bundle.logs, bundle.clock)
 
-	// One resolver, both surfaces. The guess budget lives in the resolver, so this is the wiring
-	// that makes it one budget per address, and not two budgets side by side that an address
-	// spends twice over.
+	// One resolver shared by both surfaces: the guess budget lives in the
+	// resolver, so it is one budget per address and not two side by side that an
+	// address spends twice over.
 	bundle.server = New(bundle.Deps())
 	bundle.handler = bundle.server.Handler()
 
@@ -86,8 +85,8 @@ func newParity(t *testing.T, scope domain.AccessScope) *parityFixture {
 	return fixture
 }
 
-// buildRoutes is the routing the composition root installs for these two surfaces: the call history
-// registered unconditionally, and the Model Context Protocol listener beside it.
+// buildRoutes is the routing the composition root installs for these surfaces:
+// the call history registered unconditionally, the MCP listener beside it.
 func (fixture *parityFixture) buildRoutes(t *testing.T) http.Handler {
 	mux := http.NewServeMux()
 
@@ -121,8 +120,8 @@ func parityCall(id uint64, systemRef uint, at time.Time) domain.Call {
 	return call
 }
 
-// parityProxy names the address these tests connect from as a peer the operator named, so a test
-// can name the address a guess is attributed to.
+// parityProxy names the address these tests connect from as a peer the operator
+// named, so a test can attribute a guess to that address.
 func parityProxy(t *testing.T) *httpaddr.Trusted {
 	t.Helper()
 
@@ -220,8 +219,8 @@ func TestTheTwoSurfacesRefuseAnExpiredAccessCodeTheSameWay(t *testing.T) {
 	}
 }
 
-// A code that resolves is accepted by both surfaces, and the scope it carries is the same scope on
-// both: the history search is restricted by it, and the capabilities are handed the identical value.
+// A resolving code is accepted by both surfaces and carries one identical
+// scope into the history filter and the capabilities.
 func TestTheTwoSurfacesAcceptOneAccessCodeAndCarryOneScope(t *testing.T) {
 	scope := scopedTo(paritySystemOneRef)
 	fixture := newParity(t, scope)
@@ -288,8 +287,8 @@ func TestTheTwoSurfacesAnswerAnOutOfScopeCallAsAbsent(t *testing.T) {
 		t.Fatal("the Model Context Protocol listener carried no caller to its capabilities")
 	}
 
-	// The capability checks the call the same way the endpoint does, with the domain's own rule,
-	// so the refusal the endpoint gives is the refusal the capability gives.
+	// The capability applies the domain's own grant rule, as the endpoint does,
+	// so its refusal is the endpoint's refusal.
 	if who.Scope.Grants(parityCall(parityCallOnSystemTwo, paritySystemTwoRef, fixtureTime)) {
 		t.Fatal("the scope the listener carries grants a call the call history answered as absent")
 	}
