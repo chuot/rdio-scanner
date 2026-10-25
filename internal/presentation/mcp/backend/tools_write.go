@@ -32,22 +32,15 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The administrator's write capabilities. Each one changes the deployment, so each one states the
-// change it is about to make, asks the operator to confirm it, and writes only in the confirmed
-// round. The ask is the protocol's own elicitation: the surface sends the operator what it is about
-// to change, the client shows it, and the write starts only on an accepted answer.
-//
-// The writes go through the same use cases the administrator's own page saves with, so this surface
-// adds no rule of its own to a save and cannot save a shape the page cannot save. What it adds is
-// the diff: the section as it is, the entries that will change, and the entries that will go.
+// The write capabilities: each states the change, asks the operator to
+// confirm through the protocol's own elicitation, and writes only in the
+// confirmed round; the saves use the same use cases the page saves with.
+// see the every-write-asks-the-operator-before-it-saves maintainer note.
 
-// registerWriteTools adds the administrator's writes to the administrator's capability set. They
-// are registered on that set alone, and their handlers check the credential again: a capability
-// that changes the deployment has no business being reachable by anything weaker, whatever the
-// catalog says about where it was mounted.
-//
-// Each one is recorded in `changes` as it is registered. The surface files a line when one of them
-// writes, and a list built by the code that registers the capabilities cannot drift from them.
+// registerWriteTools adds the writes to the administrator's set alone,
+// and their handlers check the credential again whatever the catalog
+// says; registering each in changes keeps the activity list from drifting.
+// see the every-write-asks-the-operator-before-it-saves maintainer note.
 func registerWriteTools(target *mcp.Server, deps Deps, changes map[string]bool) {
 	addWriteTool(target, changes, &mcp.Tool{
 		Name:  "manage_config",
@@ -94,19 +87,20 @@ func registerWriteTools(target *mcp.Server, deps Deps, changes map[string]bool) 
 	}, rotateAdminPasswordHandler(deps))
 }
 
-// addWriteTool registers one write capability and records its name. The name is recorded as the
-// capability is registered, by the code that registers it: the list of capabilities that change the
-// deployment is built from the registrations themselves, so it cannot name a capability that is not
-// one, and cannot leave out one that is.
+// addWriteTool registers one write capability and records its name, by the
+// code that registers it, so the list of capabilities that change the
+// deployment cannot name one that is not a write and cannot miss one that
+// is.
 func addWriteTool[In, Out any](target *mcp.Server, changes map[string]bool, tool *mcp.Tool, handler mcp.ToolHandlerFor[In, Out]) {
 	changes[tool.Name] = true
 
 	mcp.AddTool(target, tool, handler)
 }
 
-// writes is the annotation set a write capability carries: it is not a read, it can modify or
-// delete data, and the world it touches is this deployment. An assistant reads these before it
-// plans a sequence of calls, so a capability that changes the deployment never looks like a read.
+// writes is the annotation set a write capability carries: it is not a
+// read, it can modify or delete data, and the world it touches is this
+// deployment. An assistant reads these before it plans a sequence of
+// calls.
 func writes(idempotent bool) *mcp.ToolAnnotations {
 	destructive := true
 	closed := false
@@ -119,18 +113,19 @@ func writes(idempotent bool) *mcp.ToolAnnotations {
 	}
 }
 
-// The confirmation. The operator in the loop is the point of a write capability: the surface states
-// the change, the client shows it, and the write starts on the operator's answer. A client that
-// cannot reach the operator cannot make the change, and says so.
+// The confirmation. The operator in the loop is the point of a write
+// capability: the surface states the change, the client shows it, and the
+// write starts on the operator's answer. A client that cannot reach the
+// operator cannot make the change.
 
-// confirmationForm is the operator's answer at an ask. The confirmation is an explicit yes in the
-// form, and not the absence of a no.
+// confirmationForm is the operator's answer at an ask. The confirmation is
+// an explicit yes in the form, not the absence of a no.
 type confirmationForm struct {
 	Confirmed bool `json:"confirmed"`
 }
 
-// confirmationKey is the label the ask is answered under. The client echoes it back with the
-// operator's answer, and the handler reads the answer under it.
+// confirmationKey is the label the ask is answered under. The client echoes
+// it back with the operator's answer, and the handler reads under it.
 const confirmationKey = "confirm"
 
 const (
@@ -141,18 +136,18 @@ const (
 	confirmationDeclined = "the operator did not confirm the change, and nothing was written"
 )
 
-// confirmationState is the token the client echoes back on the confirmed round. It names the
-// capability and the change the operator was asked about, so the round that writes can say that
-// it is answering that ask, and not a call that merely looks like one.
+// confirmationState is the token the client echoes back on the confirmed
+// round. It names the capability and the change the operator was asked
+// about, so the round that writes proves it is answering that ask.
 type confirmationState struct {
 	Stage   string `json:"stage"`
 	Tool    string `json:"tool"`
 	Summary string `json:"summary"`
 }
 
-// canAsk reports whether the caller's client can show the operator an ask. The check is the
-// protocol's own: a client that advertises no elicitation, or one that advertises only URL
-// elicitation, has no way to bring its operator into the loop.
+// canAsk reports whether the caller's client can show the operator an ask.
+// A client that advertises no elicitation, or only URL elicitation, has
+// no way to bring its operator into the loop.
 func canAsk(req *mcp.CallToolRequest) bool {
 	params := req.Session.InitializeParams()
 	if params == nil || params.Capabilities == nil || params.Capabilities.Elicitation == nil {
@@ -161,8 +156,9 @@ func canAsk(req *mcp.CallToolRequest) bool {
 
 	elicitation := params.Capabilities.Elicitation
 
-	// A client that names neither form nor URL is read as supporting form elicitation, which is
-	// what the protocol says a client that predates the modes means.
+	// A client that names neither form nor URL is read as supporting form
+	// elicitation, which is what the protocol says a client that predates the
+	// modes means.
 	if elicitation.Form == nil && elicitation.URL != nil {
 		return false
 	}
@@ -170,15 +166,10 @@ func canAsk(req *mcp.CallToolRequest) bool {
 	return true
 }
 
-// askResult is the ask, as the protocol's multi-round-trip request: the change stated in the
-// message, the form the operator answers in, and the state the confirmed round resumes from.
-//
-// The protocol's own multi-round-trip pattern is the confirmation's shape: the capability returns
-// what it is about to change together with the ask, the client shows it to the operator, and the
-// same call comes back with the operator's answer. A client that supports the pattern re-calls the
-// tool itself; the server answers for a client that does not, by sending the ask to it directly
-// and re-running the handler with the answer. Either way, the write starts only in the round that
-// carries the operator's answer.
+// askResult is the ask in the protocol's multi-round-trip pattern: the
+// change stated in the message, and the state the confirmed round resumes
+// from; the write starts only in the round carrying the operator's answer.
+// see the every-write-asks-the-operator-before-it-saves maintainer note.
 func askResult(message, state string) (*mcp.CallToolResult, error) {
 	schema, err := jsonschema.For[confirmationForm](nil)
 	if err != nil {
@@ -207,16 +198,16 @@ func confirmationStateOf(tool, summary string) string {
 	return string(body)
 }
 
-// awaitingConfirmation reports whether this round is the one that asks. A call that carries no
-// answers, and one that carries answers with no state to resume from, is a call that has to be
-// shown the ask: the state is what proves a round is answering it.
+// awaitingConfirmation reports whether this round is the one that asks. A
+// call with no answers, or with answers and no state to resume from, has to
+// be shown the ask.
 func awaitingConfirmation(req *mcp.CallToolRequest) bool {
 	return len(req.Params.InputResponses) == 0 || req.Params.RequestState == ""
 }
 
-// confirmed reports whether the operator answered the ask with a yes in the form. A decline, a
-// dismissal, an answer that is not the ask's answer, and an accepted form whose confirmation is
-// not a yes are all the same thing from the write's point of view: nothing is confirmed.
+// confirmed reports whether the operator answered the ask with a yes in the
+// form. A decline, a dismissal, an answer that is not the ask's answer, and
+// a form whose confirmation is not a yes all confirm nothing.
 func confirmed(req *mcp.CallToolRequest) bool {
 	answer, ok := req.Params.InputResponses[confirmationKey]
 	if !ok {
@@ -233,13 +224,10 @@ func confirmed(req *mcp.CallToolRequest) bool {
 	return ok && yes
 }
 
-// askToConfirm is a write capability's confirmation round. It answers three ways, and a handler
-// reads them in this order: an error it cannot answer around, a refusal it hands back, and an ask
-// it returns to the operator. When all three are empty, the operator confirmed, and the handler
-// writes.
-//
-// Every write capability goes through here, so no capability can drift into writing on a round
-// that carries no answer.
+// askToConfirm is the confirmation round every write capability goes
+// through, so none can write on a round that carries no answer: it
+// answers error, refusal, or ask, in that reading order, and only when
+// all three are empty has the operator confirmed and may the handler write.
 func askToConfirm(req *mcp.CallToolRequest, tool, message, summary string) (*mcp.CallToolResult, string, error) {
 	if !awaitingConfirmation(req) {
 		if confirmed(req) {
@@ -261,17 +249,19 @@ func askToConfirm(req *mcp.CallToolRequest, tool, message, summary string) (*mcp
 	return asked, "", nil
 }
 
-// proposedChange is a change the capability has worked out and can make: the answer that shows it,
-// the words the ask says, and the write that makes it. The write is a closure over the command the
-// use case takes, so nothing is submitted that the diff did not describe.
+// proposedChange is a change the capability has worked out and can make:
+// the answer that shows it, the words the ask says, and the write that
+// makes it. The write is a closure over the command, so nothing is
+// submitted that the diff did not describe.
 type proposedChange struct {
 	answer  configChangeAnswer
 	message string
 	apply   func(context.Context) (application.UpdateConfigurationResult, error)
 }
 
-// empty reports whether the change would change nothing. A no-op is not worth the operator's
-// attention, and a capability that asks for one trains the operator to confirm without reading.
+// empty reports whether the change would change nothing. A no-op is not
+// worth the operator's attention, and asking for one trains the operator to
+// confirm without reading.
 func (proposal proposedChange) empty() bool {
 	answer := proposal.answer
 
@@ -279,9 +269,9 @@ func (proposal proposedChange) empty() bool {
 		len(answer.Settings) == 0 && len(answer.Reset) == 0
 }
 
-// summary is the change in the fewest words the state token can carry: the counts of what will
-// change. The client echoes the state back, and a state that says what the ask was about is a
-// state a reader of the wire can follow.
+// summary is the change in the fewest words the state token can carry: the
+// counts of what will change. The client echoes the state back, so it is
+// a state a reader of the wire can follow.
 func (proposal proposedChange) summary() string {
 	return fmt.Sprintf("%s: %d added, %d changed, %d removed, %d settings, %d reset",
 		proposal.answer.Section, len(proposal.answer.Added), len(proposal.answer.Changed),
@@ -290,8 +280,8 @@ func (proposal proposedChange) summary() string {
 
 // manage_config
 
-// manageConfigInput is a section change: the section, the system a level belongs to, and the
-// section as it should be after the change.
+// manageConfigInput is a section change: the section, the system a level
+// belongs to, and the section as it should be after the change.
 type manageConfigInput struct {
 	// Section is one of the eight configuration sections, or one of the three levels of a system.
 	Section string `json:"section"`
@@ -305,9 +295,9 @@ type manageConfigInput struct {
 	Payload any `json:"payload"`
 }
 
-// configChangeAnswer is a section change shown back. The rows are the same rows the configuration
-// resources answer, so what an assistant reads of a section and what it is shown before it confirms
-// a change to it are the same shape, with the same fields masked.
+// configChangeAnswer is a section change shown back. The rows are the rows
+// the configuration resources answer, so the section read and the section
+// shown before a change are one shape, with the same fields masked.
 type configChangeAnswer struct {
 	Section  string          `json:"section"`
 	System   uint            `json:"system,omitempty"`
@@ -393,10 +383,9 @@ func manageConfigHandler(deps Deps) func(context.Context, *mcp.CallToolRequest, 
 	}
 }
 
-// proposeChange works out what a submission would do to the configuration, and hands back the
-// change to show, the words to ask with, and the write to make it. A submission this server cannot
-// make is refused here, before anything is asked: the capability cannot show a change it cannot
-// make, and an operator confirming a change that then fails is an operator who confirmed noise.
+// proposeChange works out what a submission would do, and hands back the
+// change to show, the words to ask with, and the write to make it. A
+// submission this server cannot make is refused before anything is asked.
 func proposeChange(deps Deps, configuration domain.Configuration, in manageConfigInput) (proposedChange, string) {
 	if application.IsSystemSubSection(in.Section) {
 		return proposeLevel(deps, configuration, in)
@@ -643,9 +632,9 @@ func proposeLevel(deps Deps, configuration domain.Configuration, in manageConfig
 	return proposedChange{}, fmt.Sprintf("a system has no level named %q", in.Section)
 }
 
-// proposeSettings works out what a settings submission does. The server's own settings save applies
-// every setting a submission does not name to its default, so the diff is the whole effect of the
-// submission: the settings it named, and the settings it quietly reset.
+// proposeSettings works out what a settings submission does. The server's
+// own settings save applies every setting a submission does not name to its
+// default, so the diff shows the settings it named and the ones it reset.
 func proposeSettings(deps Deps, configuration domain.Configuration, in manageConfigInput) (proposedChange, string) {
 	submitted, ok := in.Payload.(map[string]any)
 	if !ok {
@@ -698,9 +687,10 @@ func proposeSettings(deps Deps, configuration domain.Configuration, in manageCon
 	}, ""
 }
 
-// writableSettings is the vocabulary of the settings a submission may name, in the order the
-// server writes them. The retired legacy spelling is accepted by the server's own save and lands on
-// audio conversion, so it is accepted here too and reported as the setting it changes.
+// writableSettings is the vocabulary of the settings a submission may name,
+// in the order the server writes them. The retired legacy spelling is
+// accepted by the server's own save and lands on audio conversion, so it is
+// accepted here and reported as that setting.
 var writableSettings = []string{
 	"audioConversion",
 	"autoPopulate",
@@ -774,8 +764,9 @@ func listProposal(section string, system uint, what string, current []any, chang
 	}
 }
 
-// listChanges is what a submitted list does to the stored one. The names are the identities an
-// operator reads the entries by, and are what the ask is made of.
+// listChanges is what a submitted list does to the stored one. The names
+// are the identities an operator reads the entries by, and what the ask is
+// made of.
 type listChanges struct {
 	Added      []any
 	Changed    []changedEntry
@@ -785,13 +776,10 @@ type listChanges struct {
 	removed    []string
 }
 
-// sameEntry reports whether two rows of a section are the same row to this server.
-//
-// The comparison normalizes empty lists to absent ones, because the configuration's own parsers
-// answer a list a submission does not name with an empty list, and a stored row that holds no list
-// is the same row. A diff that counted that as a change would report every row of a section that
-// has any list in it, and an operator confirming a change that is not a change learns nothing from
-// the ask.
+// sameEntry compares two rows of a section the way the configuration's
+// parsers do, counting an empty list as an absent one, so a diff reports
+// a change the operator could act on; see the write-diffs-read-a-save-the-
+// way-the-server-replaces-it maintainer note.
 func sameEntry(entry, other any) bool {
 	return reflect.DeepEqual(normalize(entry), normalize(other))
 }
@@ -846,14 +834,10 @@ func normalizeValue(value reflect.Value) reflect.Value {
 	}
 }
 
-// listDiff compares a submitted list with the stored one.
-//
-// A section save replaces a section, so the diff is the whole effect of the submission: the rows it
-// adds, the rows it changes, and the rows it deletes. An entry is matched by the reference the
-// store knows it by — a system reference, a talkgroup reference, a row identifier — and a row that
-// carries none of those is a row the store has never held. Entries are compared as the server's
-// own values and not as the masked rows the answer shows, so a change to a credential field is a
-// change the diff sees and the answer masks.
+// listDiff compares a submitted list with the stored one as the whole effect
+// of the save: rows added, changed, deleted, each matched by the reference
+// the store knows, compared as the server's own values, not the masked rows.
+// see the write-diffs-read-a-save-the-way-the-server-replaces-it maintainer note.
 func listDiff[T any](current []T, submitted []T, identity func(T) uint64, name func(T) string, describe func(T) any) listChanges {
 	changes := listChanges{
 		Added:   []any{},
@@ -868,8 +852,9 @@ func listDiff[T any](current []T, submitted []T, identity func(T) uint64, name f
 		}
 	}
 
-	// A row submitted with no identity is a row the store has never held, and is added. A row
-	// submitted twice under one identity is one change, the last spelling of it.
+	// A row submitted with no identity is one the store has never held, and is
+	// added. A row submitted twice under one identity is one change, the last
+	// spelling of it.
 	added := []int{}
 	submittedBy := map[uint64]int{}
 
@@ -924,8 +909,9 @@ func listDiff[T any](current []T, submitted []T, identity func(T) uint64, name f
 	return changes
 }
 
-// listAskMessage is the ask for a list change: what is being changed, every entry that will change
-// by the name an operator reads it by, and what the removals mean.
+// listAskMessage is the ask for a list change: what is being changed, every
+// entry that will change by the name an operator reads it by, and what the
+// removals mean.
 func listAskMessage(tool, what string, changes listChanges) string {
 	parts := []string{}
 
@@ -976,8 +962,8 @@ func settingsAskMessage(settings []settingChange, reset []string, named int) str
 
 // manage_access_user
 
-// manageAccessUserInput is a listener access change: which form, whose code, and for the add form
-// what the code is entitled to.
+// manageAccessUserInput is a listener access change: which form, whose
+// code, and for the add form what the code is entitled to.
 type manageAccessUserInput struct {
 	// Action is the form: add or remove.
 	Action string `json:"action"`
@@ -1002,7 +988,7 @@ type manageAccessUserInput struct {
 	Order uint `json:"order,omitempty"`
 }
 
-// accessUserAnswer is an access change shown back. The rows are the masked access rows: an answer
+// accessUserAnswer is an access change shown back in masked rows: an answer
 // of this tool never carries an access code.
 type accessUserAnswer struct {
 	Action  string         `json:"action"`
@@ -1020,9 +1006,9 @@ const (
 	accessRemoveForm = "remove"
 )
 
-// generatedCodeLength is the length of a code this tool generates when the caller names none. The
-// alphabet is the server's own; the length is long enough that a code is not guessable and short
-// enough for a listener to type.
+// generatedCodeLength is the length of a code this tool generates when the
+// caller names none. The alphabet is the server's own; the length keeps a
+// code unguessable and typeable.
 const generatedCodeLength = 16
 
 func manageAccessUserHandler(deps Deps) func(context.Context, *mcp.CallToolRequest, manageAccessUserInput) (*mcp.CallToolResult, accessUserAnswer, error) {
@@ -1159,9 +1145,10 @@ func removeAccessUser(ctx context.Context, req *mcp.CallToolRequest, deps Deps, 
 			"identity whose codes should go"), accessUserAnswer{}, nil
 	}
 
-	// Removal deletes every code sharing the identity, so the operator confirming it is told the
-	// size of what is being deleted. An identity carrying nothing is not a deletion: it is a
-	// question about a listener this server does not have, and it is answered without an ask.
+	// Removal deletes every code sharing the identity, so the operator
+	// confirming it is told the size of what is being deleted. An identity
+	// carrying nothing is a question about a listener this server does not have,
+	// answered without an ask.
 	going := []domain.Access{}
 
 	for _, access := range configuration.Access {
@@ -1225,9 +1212,9 @@ func removeAccessUser(ctx context.Context, req *mcp.CallToolRequest, deps Deps, 
 	return nil, answer, nil
 }
 
-// scopePayload translates the scope this surface spells — a system named by its reference — into
-// the shape this server's configuration reads a scope from. The surface spells a system by its
-// reference everywhere else, and a caller should not have to learn a second spelling to write.
+// scopePayload translates the scope this surface spells, a system named by
+// its reference, into the shape this server's configuration reads a scope
+// from.
 func scopePayload(value any) (any, string) {
 	switch scope := value.(type) {
 	case string:
@@ -1271,9 +1258,9 @@ func scopePayload(value any) (any, string) {
 
 // rotate_admin_password
 
-// rotateAdminPasswordInput is the credential change. The current credential is optional, and
-// naming it or not naming it is the distinction the server's own credential change makes: a
-// credential that is offered is compared, and one that is not offered skips the comparison.
+// rotateAdminPasswordInput is the credential change. The current credential
+// is optional, and naming it or not is the distinction the server's own
+// credential change makes.
 type rotateAdminPasswordInput struct {
 	NewPassword     string  `json:"newPassword"`
 	CurrentPassword *string `json:"currentPassword,omitempty"`
@@ -1345,9 +1332,9 @@ func currentCredentialOf(credential *string) string {
 	return *credential
 }
 
-// rowsOf is a stored section as the answer shows it. The row builders are shared with the
-// configuration resources, so a section read and a section shown before it is changed are the same
-// shape, and the credentials are masked in both.
+// rowsOf is a stored section as the answer shows it. The row builders are
+// shared with the configuration resources, so a section read and a section
+// shown before it is changed are one shape, with credentials masked in both.
 func accessRowsOf(now time.Time, accesses domain.Accesses) []accessRow {
 	rows := []accessRow{}
 
@@ -1406,8 +1393,9 @@ func systemRowOf(system domain.System) systemRow {
 	}
 }
 
-// anyRows is a list of rows as an answer field carries it. Each section has its own row shape, and
-// the answer shows added, changed, and removed entries in the shape of the section they belong to.
+// anyRows is a list of rows as an answer field carries it: each section has
+// its own row shape, and added, changed, and removed entries show in the
+// shape of the section they belong to.
 func anyRows[T any](rows []T) []any {
 	answer := []any{}
 
@@ -1418,9 +1406,9 @@ func anyRows[T any](rows []T) []any {
 	return answer
 }
 
-// sortedNames is the keys of a name-keyed table in order. An answer that lists changes in map
-// order is an answer that reads differently every time it is read, and an operator confirming a
-// change should be reading the same words the assistant is reading.
+// sortedNames is the keys of a name-keyed table in order. Map order would
+// read differently every time, and an operator confirming a change should
+// read the same words the assistant reads.
 func sortedNames[V any](table map[string]V) []string {
 	keys := []string{}
 
