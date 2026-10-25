@@ -21,24 +21,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// registerCapabilities is where the surface's catalog is built: the tools, the resources, and the
-// prompts an assistant is handed.
-//
-// The catalog is derived from what an administrator asks, not from the REST routes. A capability that
-// answers one question with several endpoints says so in its description, so an assistant can tell what
-// a call is buying. A filter is an argument of the capability that searches, never a capability of its
-// own.
-//
-// Each capability is registered on the servers of the tiers its reach names. The read-only capabilities
-// are on both, because the administrator reads the history and the systems projection too, and reads
-// the whole of them because the administrator's credential is not scoped by a listener access list. The
-// administrator's capabilities are on the administrator's server alone: an access-code caller never
-// sees them in a catalog, and never reaches them by name.
-//
-// Capabilities are added in the order the surface can prove them: the read-only capabilities an access
-// code may use first, then the administrator's read capabilities, then the writes — each write behind a
-// confirmation, and each destructive one behind the protocol's own confirmation round-trip. Nothing is
-// ever reachable before the credential gate that decides who may call it.
+// registerCapabilities builds the catalog an assistant is handed from what
+// an administrator asks, not from REST routes: each capability lands on
+// the servers of the tiers its reach names, writes last, behind a
+// confirmation; see the capabilities-are-questions-not-routes maintainer note.
 func (s *Server) registerCapabilities(deps Deps) {
 	for _, build := range []func(*mcp.Server, Deps){
 		registerVersionResource,
@@ -61,9 +47,8 @@ func (s *Server) registerCapabilities(deps Deps) {
 	}
 }
 
-// registerVersionResource publishes the fact an assistant needs before it asks for anything else: which
-// release this deployment is, whether it thinks it is in a container, and whether the administrator
-// credential still has to be replaced.
+// registerVersionResource publishes the release, the container answer, and
+// whether the administrator credential still needs replacing.
 func registerVersionResource(target *mcp.Server, deps Deps) {
 	target.AddResource(&mcp.Resource{
 		URI:   "rdio-scanner://version",
