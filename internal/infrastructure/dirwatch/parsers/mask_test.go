@@ -27,9 +27,8 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// recordedAt is the moment the parsers run at, in a time zone that is not UTC so that a
-// parser reading a local time and a parser reading a UTC time cannot pass each other by
-// accident.
+// recordedAt is the moment the parsers run at, in a time zone that is
+// not UTC, so local-time and UTC-time parsers cannot pass by accident.
 var recordedAt = time.Date(2026, 10, 6, 12, 0, 0, 0, time.FixedZone("TEST", -4*60*60))
 
 // recording is the audio of a watched file: long enough to be a recording rather than a
@@ -83,9 +82,8 @@ func extract(t *testing.T, watch domain.Dirwatch, name string) (Extracted, bool,
 	return newParsers(configuredSystems()).Extract(context.Background(), watch, watchedFile(t, name))
 }
 
-// TestExtractDefaultReadsTheCallTheMaskNames is the whole point of the default watch: the
-// filename says the system, the talkgroup, the radio, and the moment, and the mask says where
-// in the name each of them sits.
+// TestExtractDefaultReadsTheCallTheMaskNames: the filename says the
+// system, talkgroup, radio, and moment, and the mask says where each sits.
 func TestExtractDefaultReadsTheCallTheMaskNames(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG-#UNIT-#DATE-#TIME"
@@ -136,9 +134,8 @@ func TestExtractDefaultReadsTheCallTheMaskNames(t *testing.T) {
 	}
 }
 
-// TestExtractDefaultWithoutAMaskNamesNoSystemAndIsRefused is the configuration an
-// administrator gets wrong most often: a default watch with no mask, no system, and no
-// talkgroup. Every recording in the directory is refused, and the log says why.
+// TestExtractDefaultWithoutAMaskNamesNoSystemAndIsRefused: a default
+// watch with no mask, system, or talkgroup refuses every recording.
 func TestExtractDefaultWithoutAMaskNamesNoSystemAndIsRefused(t *testing.T) {
 	_, recognized, err := extract(t, domain.NewDirwatch(), "recording.wav")
 
@@ -151,9 +148,8 @@ func TestExtractDefaultWithoutAMaskNamesNoSystemAndIsRefused(t *testing.T) {
 	}
 }
 
-// TestExtractDefaultReadsTheWatchsOwnSystemAndTalkgroup is the other way to configure a
-// default watch: every recording in the directory belongs to one system and one talkgroup, and
-// no mask is needed.
+// TestExtractDefaultReadsTheWatchsOwnSystemAndTalkgroup: every recording
+// belongs to one configured system and talkgroup, with no mask needed.
 func TestExtractDefaultReadsTheWatchsOwnSystemAndTalkgroup(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.SystemID = 1
@@ -180,9 +176,8 @@ func TestExtractDefaultReadsTheWatchsOwnSystemAndTalkgroup(t *testing.T) {
 	}
 }
 
-// TestExtractDefaultAppliesTheWatchSystemAndTalkgroupToWhatTheMaskClaimed pins what a watch
-// that configures both produces: both claims, and the identifier claim is the one the ingest
-// path resolves first.
+// TestExtractDefaultAppliesTheWatchSystemAndTalkgroupToWhatTheMaskClaimed:
+// both claims land, and the ingest path resolves the identifier claim first.
 func TestExtractDefaultAppliesTheWatchSystemAndTalkgroupToWhatTheMaskClaimed(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG"
@@ -206,9 +201,8 @@ func TestExtractDefaultAppliesTheWatchSystemAndTalkgroupToWhatTheMaskClaimed(t *
 	}
 }
 
-// TestExtractDefaultIgnoresAFileThatIsNotTheWatchsExtension is what a watch pointed at a
-// directory holding other applications' output does: it reads its own files and says nothing
-// about the rest.
+// TestExtractDefaultIgnoresAFileThatIsNotTheWatchsExtension: the watch
+// reads its own extension and says nothing about the rest.
 func TestExtractDefaultIgnoresAFileThatIsNotTheWatchsExtension(t *testing.T) {
 	_, recognized, err := extract(t, domain.NewDirwatch(), "recording.mp3")
 
@@ -273,9 +267,8 @@ func TestExtractDefaultReadsTheTalkgroupFromEachShapeTheMaskNames(t *testing.T) 
 		{name: "an Alpha-Net talkgroup", mask: "#SYS-#TGAFS", filename: "10001-12-345.wav", wantRef: 12<<7 | 34<<3 | 5},
 		{name: "a carrier in hertz", mask: "#SYS-#TGHZ", filename: "10001-1514000.wav", wantRef: 1514, wantFreq: 1514000},
 		{name: "a carrier in kilohertz", mask: "#SYS-#TGKHZ", filename: "10001-1514.000.wav", wantRef: 1514, wantFreq: 1514000},
-		// A carrier read in megahertz is read as a 32-bit number and then scaled, which is
-		// what the legacy does, so 151.4000 megahertz is 151399993 hertz and the talkgroup
-		// reference derived from it is 151399.
+		// a megahertz carrier is a 32-bit number and then scaled, as the legacy
+		// reads it: 151.4000 MHz is 151399993 Hz, and the talkgroup reference is 151399.
 		{name: "a carrier in megahertz", mask: "#SYS-#TGMHZ", filename: "10001-151.4000.wav", wantRef: 151399, wantFreq: 151399993},
 	}
 
@@ -363,9 +356,8 @@ func TestExtractDefaultReadsTheInstantFromTheDateAndTimeTokens(t *testing.T) {
 	}
 }
 
-// TestExtractDefaultReadsSeparatorsInTheDateAndTimeTheMaskNames covers the shapes recording
-// tools actually write: dashes and colons in place of the runs of digits the tokens are named
-// for.
+// TestExtractDefaultReadsSeparatorsInTheDateAndTimeTheMaskNames: dashes
+// and colons match where the token patterns are runs of digits.
 func TestExtractDefaultReadsSeparatorsInTheDateAndTimeTheMaskNames(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG-#DATE-#TIME"
@@ -380,10 +372,9 @@ func TestExtractDefaultReadsSeparatorsInTheDateAndTimeTheMaskNames(t *testing.T)
 	}
 }
 
-// TestExtractDefaultReadsABareDateAsAUnixSecondCount is what a mask that names `#DATE` and
-// neither time token does: the digits of the date are read as a moment in 1970. It is the
-// legacy behavior, and it is the one mask configuration that produces calls dated four decades
-// before the recording.
+// TestExtractDefaultReadsABareDateAsAUnixSecondCount: a mask naming
+// #DATE and neither time token reads the date digits as a moment in 1970,
+// the legacy behavior and the one config dating calls four decades early.
 func TestExtractDefaultReadsABareDateAsAUnixSecondCount(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG-#DATE"
@@ -399,9 +390,8 @@ func TestExtractDefaultReadsABareDateAsAUnixSecondCount(t *testing.T) {
 	}
 }
 
-// TestExtractDefaultResolvesASystemNamedByLabelAndTheSiteUnderIt is the half of the site tokens
-// that works: a mask that names the system by label resolves it, and the site is looked up
-// among that system's sites.
+// TestExtractDefaultResolvesASystemNamedByLabelAndTheSiteUnderIt: the
+// label resolves, and the site is looked up among that system's sites.
 func TestExtractDefaultResolvesASystemNamedByLabelAndTheSiteUnderIt(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYSLBL-#SITE"
@@ -421,9 +411,8 @@ func TestExtractDefaultResolvesASystemNamedByLabelAndTheSiteUnderIt(t *testing.T
 	}
 }
 
-// TestExtractDefaultClaimsTheNextFreeReferenceForASystemTheConfigurationDoesNotHave is the
-// claim auto-populate creates a system from: the name the mask read, and a reference nothing
-// else is using.
+// TestExtractDefaultClaimsTheNextFreeReferenceForASystemTheConfigurationDoesNotHave:
+// the claim auto-populate creates a system from: the read name and a free reference.
 func TestExtractDefaultClaimsTheNextFreeReferenceForASystemTheConfigurationDoesNotHave(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYSLBL"
@@ -438,18 +427,16 @@ func TestExtractDefaultClaimsTheNextFreeReferenceForASystemTheConfigurationDoesN
 		t.Errorf("the call claims the system label %q, want the name the mask read", extracted.Call.Meta.SystemLabel)
 	}
 
-	// The reference is the lowest one nothing is using, computed from the configuration the
-	// same way the legacy computes it: for a deployment whose systems are numbered 10001 and
-	// 10002, that is 1.
+	// the reference is the lowest one nothing is using, computed from the
+	// configuration as the legacy computes it: for systems 10001 and 10002, it is 1.
 	if extracted.Call.Meta.SystemRef != 1 {
 		t.Errorf("the call claims system reference %d, want the lowest reference the configuration is not using", extracted.Call.Meta.SystemRef)
 	}
 }
 
-// TestExtractDefaultDropsTheSiteTokensForASystemNamedByReference is the half of the site tokens
-// that has never worked, and the reason a deployment that configured them sees no site: a site
-// is looked up under a resolved system, and a reference claim resolves only later, in the
-// ingest path.
+// TestExtractDefaultDropsTheSiteTokensForASystemNamedByReference: the
+// half of the site tokens that has never worked, because a reference claim
+// resolves only later, in the ingest path.
 func TestExtractDefaultDropsTheSiteTokensForASystemNamedByReference(t *testing.T) {
 	byRef := domain.NewDirwatch()
 	byRef.Mask = "#SYS-#SITE"
@@ -491,11 +478,9 @@ func TestExtractDefaultDropsTheSiteTokensForASystemNamedByReference(t *testing.T
 	}
 }
 
-// TestExtractDefaultReadsTheUnitLabelTokenWhole is a preserved quirk, repaired by the decision:
-// the token table applies longest-first, so a mask naming only `#UNITLBL` — the obvious
-// way to write it — has the label token replaced whole. It used to have `#UNIT` replaced
-// inside the longer token, leaving a literal LBL the filename then had to end with, and
-// the mask silently matched nothing.
+// TestExtractDefaultReadsTheUnitLabelTokenWhole: the token table applies
+// longest-first, so a mask naming only #UNITLBL has the label replaced
+// whole; it used to have #UNIT replaced inside it, leaving a literal LBL.
 func TestExtractDefaultReadsTheUnitLabelTokenWhole(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG-#UNITLBL"
@@ -510,9 +495,8 @@ func TestExtractDefaultReadsTheUnitLabelTokenWhole(t *testing.T) {
 			extracted.Call.Meta.SystemRef, extracted.Call.Meta.TalkgroupRef)
 	}
 
-	// The pairing rule is the legacy's and unchanged: a name lands on the unit the
-	// #UNIT token added. This mask names no unit, so the label is captured and has
-	// nothing to pair with.
+	// the pairing rule is the legacy's: a name lands on the unit the #UNIT
+	// token added, and this mask names no unit, so the label has nothing to pair with.
 	if len(extracted.Call.Units) != 0 {
 		t.Errorf("the call units are %#v, want none: the mask names no unit token", extracted.Call.Units)
 	}
@@ -522,11 +506,9 @@ func TestExtractDefaultReadsTheUnitLabelTokenWhole(t *testing.T) {
 	}
 }
 
-// TestExtractDefaultPairsTheUnitLabelWithTheUnitTheMaskNamed pins the pairing the mask
-// offers, which is one unit and one name however many the filename holds — and that the
-// pairing works when the mask names the unit itself before the label, which is the only way
-// the label token survives the replacement order, as it now does however the mask names
-// the two tokens.
+// TestExtractDefaultPairsTheUnitLabelWithTheUnitTheMaskNamed: one unit
+// and one name however many the filename holds, and the pairing works when
+// the mask names the unit before the label.
 func TestExtractDefaultPairsTheUnitLabelWithTheUnitTheMaskNamed(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG-#UNIT-#UNITLBL"
@@ -604,9 +586,9 @@ func TestExtractDefaultReadsTheGroupAndTagAndIgnoresTheDashRecordingToolsWrite(t
 	}
 }
 
-// TestExtractDefaultReadsNothingFromAFilenameTheMaskDoesNotMatch is the misconfigured watch
-// that looks correct: the mask is there, the filenames are not what it describes, and every
-// recording in the directory is refused.
+// TestExtractDefaultReadsNothingFromAFilenameTheMaskDoesNotMatch: the
+// watch looks configured, the names are not what the mask describes, and all
+// recordings are refused.
 func TestExtractDefaultReadsNothingFromAFilenameTheMaskDoesNotMatch(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYS-#TG"
@@ -618,9 +600,8 @@ func TestExtractDefaultReadsNothingFromAFilenameTheMaskDoesNotMatch(t *testing.T
 	}
 }
 
-// TestExtractDefaultReportsARecordingItCannotRead covers the recording that went away between
-// the notification and the read, which the watcher checks for and a second application sharing
-// the directory does not.
+// TestExtractDefaultReportsARecordingItCannotRead: the recording went
+// away between the notification and the read, which the watcher checks for.
 func TestExtractDefaultReportsARecordingItCannotRead(t *testing.T) {
 	path := watchedFile(t, "recording.wav")
 

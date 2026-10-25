@@ -36,16 +36,9 @@ type maskToken struct {
 	Pattern string
 }
 
-// maskTokens is the table of mask tokens, applied longest-first: a token
-// is replaced the first time its text is found, and a token whose text is the prefix of
-// another one eats the longer token when the shorter one goes first.
-//
-// That is a preserved quirk, repaired: a mask naming only `#UNITLBL` — the obvious way to write
-// it — had `#UNIT` replaced inside the longer token, leaving a literal `LBL` the
-// filename then had to end with, and the mask silently matched nothing. The same ate
-// `#TGHZ` with `#HZ` and `#TGMHZ` with `#MHZ`. A mask naming the shorter token
-// standalone — `#UNIT` on its own — matches exactly what it always matched, because the
-// longer token it does not name is never applied.
+// maskTokens is the table of mask tokens, applied longest-first so a
+// prefix token never eats a longer one; see the watch-mask maintainer
+// note.
 var maskTokens = []maskToken{
 	{Name: "date", Text: "#DATE", Pattern: `\d{4}[-_]{0,1}\d{2}[-_]{0,1}\d{2}`},
 	{Name: "group", Text: "#GROUP", Pattern: `[a-zA-Z0-9\.\ -]+`},
@@ -69,9 +62,9 @@ var maskTokens = []maskToken{
 	{Name: "ztime", Text: "#ZTIME", Pattern: `\d{2}[-:]{0,1}\d{2}[-:]{0,1}\d{2}`},
 }
 
-// The table is ordered longest-first at init, keeping the relative order of same-length
-// tokens as the legacy declared them: the order among tokens that cannot eat each other
-// is the order their positions were lined up in, and nothing about them changes.
+// The table is ordered longest-first at init, keeping the relative order
+// of same-length tokens as the legacy declared them; see the watch-mask
+// maintainer note.
 func init() {
 	sort.SliceStable(maskTokens, func(i, j int) bool {
 		return len(maskTokens[i].Text) > len(maskTokens[j].Text)
@@ -85,10 +78,9 @@ type maskPosition struct {
 	Position int
 }
 
-// MaskWarning reports the mismatch a mask's own regex shows: more captured groups than
-// the tokens it names means the filename's pieces line up with values nobody asked for,
-// and the call built from it reads the wrong pieces. The warning is said when the watch
-// starts, where the operator can read it, not per file in the dark.
+// MaskWarning reports the mismatch a mask's own regex shows: more
+// captured groups than the tokens it names - the call reads the wrong
+// pieces; see the watch-mask maintainer note.
 func MaskWarning(mask string) string {
 	if len(mask) == 0 {
 		return ""
@@ -121,12 +113,9 @@ func MaskWarning(mask string) string {
 	return ""
 }
 
-// applyMask reads the call's metadata out of its filename, at the places the watch's mask
-// says each piece of it sits.
-//
-// A watch with no mask reads nothing from the filename, which is why a default watch with no
-// mask and no system or talkgroup configured ingests nothing: the call it builds names no
-// system and no talkgroup, and the ingest path refuses it.
+// applyMask reads the call's metadata out of its filename, at the places
+// the watch's mask says each piece sits; a watch with no mask reads
+// nothing from the filename; see the watch-mask maintainer note.
 func (parsers *Parsers) applyMask(ctx context.Context, watch domain.Dirwatch, call *domain.Call) error {
 	if len(watch.Mask) == 0 {
 		return nil
@@ -147,9 +136,8 @@ func (parsers *Parsers) applyMask(ctx context.Context, watch domain.Dirwatch, ca
 		return positions[i].Position < positions[j].Position
 	})
 
-	// The mask is matched against the filename without its extension, because the extension
-	// is what selected the file in the first place and a mask written for the name has no
-	// reason to mention it.
+	// The mask is matched against the filename without its extension, which
+	// already selected the file and the mask has no reason to mention.
 	base := strings.TrimSuffix(call.AudioFilename, path.Ext(call.AudioFilename))
 
 	values := map[string]string{}
@@ -160,9 +148,8 @@ func (parsers *Parsers) applyMask(ctx context.Context, watch domain.Dirwatch, ca
 		}
 	}
 
-	// The values are applied in the order the legacy applies them, because two of them read
-	// what an earlier one wrote: the site tokens look for the system the name token attached,
-	// and the unit label only lands on the unit the unit token added.
+	// The values apply in the order the legacy applies them: two of them
+	// read what an earlier one wrote.
 	if err := parsers.applyMaskTimestamps(values, call); err != nil {
 		return err
 	}
@@ -181,14 +168,10 @@ func (parsers *Parsers) applyMask(ctx context.Context, watch domain.Dirwatch, ca
 	return nil
 }
 
-// applyMaskTimestamps reads the instant the call happened, from whichever of the three shapes
-// the mask offers.
-//
-// `#DATE` with `#TIME` is a local time, `#DATE` with `#ZTIME` is already UTC, and `#DATE`
-// alone is read as a Unix second count once its separators are stripped — which is what the
-// token's own pattern makes of a date like 2026-10-06: the digits 20261006, read as a moment
-// in 1970. A mask that names `#DATE` and neither time token therefore records a call at a
-// date in 1970.
+// applyMaskTimestamps reads the instant the call happened, from
+// whichever of the three shapes the mask offers; a mask naming #DATE
+// and neither time token records a call in 1970; see the watch-mask
+// maintainer note.
 func (parsers *Parsers) applyMaskTimestamps(values map[string]string, call *domain.Call) error {
 	value, ok := values["date"]
 	if !ok {
@@ -226,12 +209,10 @@ func (parsers *Parsers) applyMaskTimestamps(values map[string]string, call *doma
 	return nil
 }
 
-// applyMaskSystem reads the system the call belongs to, by reference or by name.
-//
-// A name that matches no configured system claims the next free reference and the name, which
-// is the claim auto-populate creates a system from. A name that does match attaches the stored
-// system to the call, and that is what makes `#SITE` and `#SITELBL` work at all — see
-// applyMaskSites.
+// applyMaskSystem reads the system the call belongs to, by reference or
+// by name: a name matching no configured system claims the next free
+// reference, and a matching name attaches the stored system; see the
+// watch-mask maintainer note.
 func (parsers *Parsers) applyMaskSystem(ctx context.Context, values map[string]string, call *domain.Call) error {
 	if value, ok := values["sys"]; ok {
 		if ref, err := strconv.Atoi(value); err == nil {
@@ -246,9 +227,8 @@ func (parsers *Parsers) applyMaskSystem(ctx context.Context, values map[string]s
 		return nil
 	}
 
-	// A system named by label is looked up in the configuration the server is running with,
-	// which is what the legacy looks it up in. A read that fails is reported rather than
-	// left to look like a mask that named no system.
+	// A system named by label is looked up in the running configuration, as
+	// the legacy looks it up; a read that fails is reported.
 	systems, err := parsers.systems.AllSystems(ctx)
 	if err != nil {
 		return err
@@ -260,9 +240,8 @@ func (parsers *Parsers) applyMaskSystem(ctx context.Context, values map[string]s
 		return nil
 	}
 
-	// The next free reference is claimed here, as the legacy claims it, so a mask that names
-	// an unknown system and a server with auto-populate off burn nothing and record nothing —
-	// the reference is computed from the configuration, not taken from a sequence.
+	// The next free reference is claimed here, as the legacy claims it, not
+	// taken from a sequence.
 	call.Meta.SystemRef = systems.NextSystemRef()
 	call.Meta.SystemLabel = value
 
@@ -314,13 +293,10 @@ func applyMaskFrequencies(values map[string]string, call *domain.Call) {
 	}
 }
 
-// applyMaskSites reads the site the call was heard at.
-//
-// Both tokens only do anything when the call already has a system attached to it, which for a
-// mask means when the same mask named `#SYSLBL` and that name matched a configured system: a
-// site belongs to a system, and there is nowhere to look a site up without one. Otherwise the
-// legacy writes the reference into a metadata field nothing ever reads, so the token is
-// dropped.
+// applyMaskSites reads the site the call was heard at; both tokens only
+// do anything when the call already has a system attached, because a
+// site has nowhere to be looked up without one; see the watch-mask
+// maintainer note.
 func applyMaskSites(values map[string]string, call *domain.Call) {
 	if value, ok := values["site"]; ok {
 		ref, err := strconv.Atoi(value)
@@ -353,12 +329,10 @@ func applyMaskSites(values map[string]string, call *domain.Call) {
 	}
 }
 
-// applyMaskTalkgroup reads the talkgroup the call was on, in whichever of the five shapes the
-// mask names, and its name and tag.
-//
-// The three frequency-shaped tokens do two things each: they name a carrier the call was heard
-// on, and they derive the talkgroup reference from that carrier, in the unit the recording tool
-// wrote it in.
+// applyMaskTalkgroup reads the talkgroup the call was on, in whichever
+// of the five shapes the mask names, and its name and tag: the three
+// frequency-shaped tokens each name a carrier and derive the talkgroup
+// reference from it; see the watch-mask maintainer note.
 func applyMaskTalkgroup(values map[string]string, call *domain.Call) {
 	if value, ok := values["tag"]; ok {
 		if len(value) > 0 && value != "-" {
@@ -418,10 +392,9 @@ func applyMaskTalkgroup(values map[string]string, call *domain.Call) {
 	}
 }
 
-// applyMaskUnits reads the radio that spoke, and its name.
-//
-// The name only lands when the mask also named the radio itself, because a label with nothing
-// to hang it on names no unit the call records.
+// applyMaskUnits reads the radio that spoke, and its name: the name
+// only lands when the mask also named the radio itself; see the
+// watch-mask maintainer note.
 func applyMaskUnits(values map[string]string, call *domain.Call) {
 	if value, ok := values["unit"]; ok {
 		if ref, err := strconv.Atoi(value); err == nil {
