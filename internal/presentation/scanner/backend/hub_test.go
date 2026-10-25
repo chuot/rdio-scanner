@@ -33,23 +33,21 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// openSettings are the settings of a server that admits listeners, which is what most of these tests
-// need and what the server's own options default to. A server configured to admit no listeners admits
-// none, and that is a case of its own: see the limit test.
+// openSettings are the settings of a server that admits listeners,
+// which is what most of these tests need and the server's own options
+// default to.
 var (
 	openSettings       = Settings{MaxClients: 200}
 	restrictedSettings = Settings{MaxClients: 200, Restricted: true}
 )
 
-// hubClockTime is the instant the fixture's clock holds, which is the instant every entry the hub writes has
-// to carry. The hub used to stamp its entries with the wall clock of the machine running it, which is how a
-// join and the ingest line about the same recording could disagree.
+// hubClockTime is the instant the fixture's clock holds and every entry
+// the hub writes must carry.
 var hubClockTime = time.Date(2026, 3, 19, 14, 22, 0, 0, time.UTC)
 
-// A listener becomes a listener when it is told what it is watching. Until the server has written a
-// configuration on its connection it is not counted, not sent a call, and not included in the count
-// reported to anybody else — which is why a restricted server, which writes no configuration until an
-// access code is accepted, can hold a hundred open connections and report no listeners.
+// A listener becomes a listener when the server writes its configuration
+// on the connection: until then it is not counted, not sent calls, and
+// not in the count reported to anybody else.
 func TestAListenerIsCountedOnlyOnceItsConfigurationHasBeenWritten(t *testing.T) {
 	f := newFixture(t, openSettings)
 
@@ -87,11 +85,9 @@ func TestAListenerThatUnlockedAnAccessIsNamedByIt(t *testing.T) {
 	}
 }
 
-// TestWhatTheHubReportsIsStampedWithTheServersClock is the half of the rule the hub had wrong: it stamped its
-// own entries with the wall clock of the machine it was running on, while every other writer stamps the
-// server's clock. A join and the ingest line about the same recording could then disagree by however far the
-// two were apart, on the one machine where an operator is reading the log because the clocks cannot be
-// trusted.
+// TestWhatTheHubReportsIsStampedWithTheServersClock: every entry the hub
+// writes carries the server's clock, the same clock every other writer
+// stamps, so the log view can order entries against each other.
 func TestWhatTheHubReportsIsStampedWithTheServersClock(t *testing.T) {
 	f := newFixture(t, openSettings)
 
@@ -107,11 +103,9 @@ func TestWhatTheHubReportsIsStampedWithTheServersClock(t *testing.T) {
 	f.assertStamped(t, "a listener left from", hubClockTime)
 }
 
-// The limit on listeners is compared against the connections the server is holding, and the
-// comparison is `count >= limit`: a server configured to admit one listener answers the first
-// one and closes the second without a word, and a server configured to admit none closes the
-// first. Every attached connection is against the limit, registered or not, so
-// the registered listeners below fill the server's one allowed slot.
+// The limit on listeners is compared as `count >= limit` against every
+// attached connection, registered or not, so the registered listeners
+// below fill the server's one allowed slot.
 func TestTheServerStopsAdmittingListenersAtItsLimit(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -137,9 +131,10 @@ func TestTheServerStopsAdmittingListenersAtItsLimit(t *testing.T) {
 	}
 }
 
-// A configuration change reaches every listener. On a server that requires an access code it does not
-// reach them as a configuration: every listener is asked for its code again, because the change may
-// have been the access that decides what that listener is allowed to see.
+// A configuration change reaches every listener, and on a server that
+// requires access codes it reaches them as a fresh request for the code,
+// because the change itself may be the access that decides what a
+// listener is allowed to see.
 func TestAConfigurationChangeReachesEveryListener(t *testing.T) {
 	f := newFixture(t, openSettings)
 
@@ -226,10 +221,11 @@ func TestEachListenerIsGivenItsOwnConfiguration(t *testing.T) {
 	}
 }
 
-// A recorded call is delivered to a listener when both things say so: the listener's live-watch
-// selection asks for that system or talkgroup, and — on a server that requires access codes — the
-// listener's access grants it. On a server that requires nothing, the access is not consulted at all,
-// which is how an anonymous listener on an open server sees every call.
+// A recorded call reaches a listener when both things say so: the live-
+// watch selection asks for that system or talkgroup, and on a server
+// that requires access codes the listener's access grants it. On an
+// open server the access is not consulted and an anonymous listener
+// sees every call.
 func TestACallReachesTheListenersWhoseLiveWatchAsksForIt(t *testing.T) {
 	f := newFixture(t, openSettings)
 
@@ -252,8 +248,8 @@ func TestACallReachesTheListenersWhoseLiveWatchAsksForIt(t *testing.T) {
 	}
 }
 
-// On a server that requires an access code, a listener whose access does not grant the call does not
-// get it — and a listener with no access at all gets nothing, because an access that names no systems
+// On a server that requires an access code, a listener whose access does
+// not grant the call gets nothing, and an access naming no systems
 // grants nothing.
 func TestACallIsRefusedToTheListenersWhoseAccessDoesNotGrantIt(t *testing.T) {
 	f := newFixture(t, restrictedSettings)
@@ -324,9 +320,9 @@ func TestALiveWatchSelectionIsAnsweredWithWhetherAnythingIsOn(t *testing.T) {
 	}
 }
 
-// Attempts at an access code are counted per session, and only an accepted code clears the count. A
-// session that is refused — for a bad code, for an expired access, for its connection limit, or for
-// having tried too many times — keeps spending attempts.
+// Attempts at an access code are counted per session, and only an
+// accepted code clears the count: every refusal keeps spending
+// attempts.
 func TestAccessAttemptsAreCountedPerSession(t *testing.T) {
 	f := newFixture(t, restrictedSettings)
 
@@ -347,9 +343,9 @@ func TestAccessAttemptsAreCountedPerSession(t *testing.T) {
 	}
 }
 
-// Sessions are counted against the access they hold, and an access nobody holds has no sessions. The
-// count is of listeners the server is counting, so a connection that has not become a listener is not
-// one of them.
+// Sessions are counted against the access they hold, and the count is of
+// registered listeners, so a connection that has not become a listener
+// is not one of them.
 func TestSessionsHoldingOneAccessAreCountedTogether(t *testing.T) {
 	f := newFixture(t, restrictedSettings)
 
@@ -438,14 +434,10 @@ func TestADisconnectedListenerIsReportedAndForgotten(t *testing.T) {
 	}
 }
 
-// TestStoppingTheHubReportsEveryConnectionItIsHolding is the shutdown half of the departure report.
-//
-// Shutting an address down does not wait for a connection the server has taken over: the moment the
-// listener endpoint hands a connection to the hub, the address that upgraded it stops tracking it. So a
-// server that stops reaches the end of its stop with listener connections still open — and the end of its
-// stop is where the database the log lives in is closed. A departure left to the goroutine that was
-// reading one of those connections is an entry written to a log that has just been closed, which is an
-// entry nobody can read afterwards.
+// TestStoppingTheHubReportsEveryConnectionItIsHolding: the hub close is
+// the only path that reports the connections a stopping server has
+// taken over, before the stop closes the database the log lives in.
+// Departures filed after that are unreadable.
 func TestStoppingTheHubReportsEveryConnectionItIsHolding(t *testing.T) {
 	f := newFixture(t, restrictedSettings)
 
@@ -490,13 +482,10 @@ func TestStoppingTheHubReportsEveryConnectionItIsHolding(t *testing.T) {
 	}
 }
 
-// TestClosingTheHubWaitsForADepartureAlreadyOnItsWay is the half of the shutdown that ending the connections
-// does not cover. A connection that let go a moment earlier is already being reported by the goroutine that
-// was reading it — which had taken the session out of the hub before it wrote the entry, so the close finds
-// nothing to report and nothing to wait for. The server then says it stopped and closes the database the log
-// lives in, and the entry that was already on its way arrives at a log that has just been closed. That is the
-// shape of the flake this feature spent a suite chasing: a departure missing from the log view, and a
-// database left holding a rollback journal nobody can account for.
+// TestClosingTheHubWaitsForADepartureAlreadyOnItsWay: a departure being
+// written by a read loop that has already unregistered its session must
+// finish before the hub close returns, or the entry lands in a log
+// whose database has just closed.
 func TestClosingTheHubWaitsForADepartureAlreadyOnItsWay(t *testing.T) {
 	logs := &heldLogs{
 		Logs:    &fakes.Logs{},
@@ -556,9 +545,9 @@ func TestClosingTheHubWaitsForADepartureAlreadyOnItsWay(t *testing.T) {
 	}
 }
 
-// A listener that never gets a configuration is not left open forever. The server gives a connection a
-// window to become a listener and ends it when the window closes, which is what drops a connection on
-// a restricted server whose access code never arrives.
+// A listener that never gets a configuration is not left open forever:
+// the handshake window ends it, which is what drops a connection on a
+// restricted server whose access code never arrives.
 func TestAConnectionThatNeverBecomesAListenerIsEnded(t *testing.T) {
 	f := newFixture(t, restrictedSettings)
 
@@ -600,9 +589,9 @@ func TestTheServerKeepsAskingALiveListener(t *testing.T) {
 
 	f.register(t, f.id)
 
-	// A websocket client only deals with what arrives on its connection when something reads it, and a
-	// ping is no exception: nothing else on the connection answers it. So somebody has to keep reading
-	// for the listener to keep answering.
+	// Somebody on the server side has to keep reading the connection or
+	// nothing answers its pings, and the pong wait is when the server
+	// notices a listener that stopped answering.
 	go func() {
 		for {
 			if _, _, err := f.client.ReadMessage(); err != nil {
@@ -640,9 +629,9 @@ func TestClosingAListenerEndsTheSession(t *testing.T) {
 	}
 }
 
-// A frame the server cannot read is not a reason to end the connection it arrived on. The server says
-// one line about it and reads the next frame, because a client that sends one broken frame is still a
-// client.
+// TestAnUnreadableFrameDoesNotEndTheSession: a frame the server cannot
+// read costs one log line and the next frame is still read, because
+// the client that sent one broken frame is still a client.
 func TestAFrameTheServerCannotReadDoesNotEndTheConnection(t *testing.T) {
 	f := newFixture(t, openSettings)
 
@@ -681,10 +670,9 @@ func TestAFrameTheServerCannotActOnDoesNotEndTheConnection(t *testing.T) {
 	}
 }
 
-// A frame the server could not put on the connection is the one delivery failure an operator could not see:
-// the listener stays connected, the frame is simply gone, and nothing was written about it. It is filed under
-// the live feed at the level an operator filters problems with, naming the encoding failure itself, and the
-// session survives it — the frame that follows reaches the listener.
+// A frame the hub could not encode is filed in the log at problem level
+// and the session survives it: the frame after the bad one still
+// reaches the listener.
 func TestAFrameTheServerCouldNotWriteIsFiledAndTheListenerKeepsItsConnection(t *testing.T) {
 	f := newFixture(t, openSettings)
 
@@ -724,9 +712,9 @@ func TestASessionKnowsWhereItConnectedFrom(t *testing.T) {
 	}
 }
 
-// A session holds the access it was given, including when it was given one and then refused for a
-// reason that kept it: a session refused for an expired access is still known by the identity it
-// presented, and that is what the disconnect notice names.
+// A session keeps the access it was given even when the presenting
+// attempt is then refused, so the disconnect notice names the identity
+// it presented.
 func TestASessionHoldsTheAccessItWasGiven(t *testing.T) {
 	f := newFixture(t, restrictedSettings)
 
@@ -807,10 +795,9 @@ type fixture struct {
 	client *websocket.Conn
 }
 
-// recordedLogs is the log a test hands the hub and then reads back: the port the hub writes through, plus
-// the entries it was given, in the order it was given them. It is an interface rather than the fake so that
-// a test can hand the hub a log of its own — one that holds a write open, say — and still read what the hub
-// wrote.
+// recordedLogs is the log a test hands the hub and reads back: an
+// interface, so a test can hand the hub a log that holds a write open
+// and still read what it wrote.
 type recordedLogs interface {
 	ports.LogRepository
 
@@ -862,10 +849,10 @@ func newBareFixtureLogging(t *testing.T, settings Settings, logs recordedLogs) *
 
 	f.hub = NewHub(current, changes, logs, fakes.NewClock(hubClockTime))
 
-	// The intervals a connection is held to are the protocol's own, and a test cannot wait a minute
-	// for one of them. They are shortened here rather than made choices a server can pass to the
-	// constructor: nothing outside this package should be able to pick a value that breaks the
-	// protocol, and only this package's tests need to pick one at all.
+	// The protocol's keepalive intervals are shortened here rather than
+	// made constructor choices: only this package's tests need to pick
+	// them, and nothing outside should be able to break the protocol.
+	// They stay package fields, not server options.
 	f.hub.handshakeWait = 200 * time.Millisecond
 	f.hub.pingPeriod = 100 * time.Millisecond
 
@@ -1088,13 +1075,9 @@ func (f *fixture) logAt(t *testing.T, at int) string {
 	return recorded[at].Message
 }
 
-// assertStamped insists that every entry mentioning a fragment carries the instant the server's clock holds,
-// and not the wall clock of the machine the test is running on.
-//
-// The server has one clock, injected into every writer, so that the entries in the log view can be put in
-// order against each other. A writer that stamps `time.Now` instead is a writer whose entries cannot be
-// lined up with the rest of the log on a machine whose clock is wrong — which is the situation an operator
-// is reading the log view because of.
+// assertStamped insists that every entry mentioning a fragment carries
+// the server's clock, not the machine's wall clock, so the log view can
+// order entries against each other on a machine whose clock is wrong.
 func (f *fixture) assertStamped(t *testing.T, fragment string, instant time.Time) {
 	t.Helper()
 
@@ -1118,9 +1101,9 @@ func (f *fixture) assertStamped(t *testing.T, fragment string, instant time.Time
 	}
 }
 
-// loggedAs reports whether the hub wrote a log line naming that part of the server and saying the
-// fragment. A join, a departure and a refused message are all about feeding listeners, so the source is
-// part of what these tests pin.
+// loggedAs reports whether the hub wrote a log line naming that source
+// and fragment: hub entries always name the part of the server they
+// are about, and source is part of what these tests pin.
 func (f *fixture) loggedAs(source domain.LogSource, fragment string) bool {
 	for _, entry := range f.logs.Recorded() {
 		if entry.Source == source && strings.Contains(entry.Message, fragment) {
@@ -1131,9 +1114,9 @@ func (f *fixture) loggedAs(source domain.LogSource, fragment string) bool {
 	return false
 }
 
-// countLogged counts the entries saying exactly that sentence. It is how a test says "once each": a
-// departure filed by the hub and then filed again by the read loop it ended would read as two listeners
-// leaving, and an operator counting listeners from the log would be told a number that never existed.
+// countLogged counts entries saying exactly that sentence, which is how
+// a test says "once each": a departure filed twice would tell an
+// operator a number of listeners that never existed.
 func (f *fixture) countLogged(sentence string) int {
 	count := 0
 
@@ -1146,9 +1129,10 @@ func (f *fixture) countLogged(sentence string) int {
 	return count
 }
 
-// loggedAt reports whether the hub filed the entry under the level an operator filters for. A join is a
-// notice and a frame the server could not act on is a problem, and the log view's level filter is how an
-// operator finds one without reading the other.
+// loggedAt reports whether the hub filed the entry under the level an
+// operator filters for: joins are notices and unreadable frames are
+// problems, and the log view's level filter is how one finds the other.
+// The level is part of what these tests pin.
 func (f *fixture) loggedAt(source domain.LogSource, level string, fragment string) bool {
 	for _, entry := range f.logs.Recorded() {
 		if entry.Source == source && entry.Level == level && strings.Contains(entry.Message, fragment) {
@@ -1177,9 +1161,9 @@ func (f *fixture) waitFor(t *testing.T, until func() bool, want string) {
 	t.Fatalf("timed out waiting for %s", want)
 }
 
-// waitForDeparture waits until the hub has let go of the session and has written the entry saying so. The
-// entry is written after the session has been taken out of the hub, so a test that waited only for the count
-// could read the log before the entry it goes on to assert on had been written at all — which is how a test
+// waitForDeparture waits until the hub has released the session and
+// written its entry: departures are filed after the session leaves the
+// hub, so waiting on the session alone reads the log too early, which
 // fails on a loaded machine over an entry that arrived a moment later.
 func (f *fixture) waitForDeparture(t *testing.T, fragment string) {
 	t.Helper()
@@ -1210,9 +1194,10 @@ func (s *mutableSettings) set(settings Settings) {
 	s.settings = settings
 }
 
-// recordedChanges counts the times the hub said the number of listeners is no longer what it was, and
-// passes the occurrence on to whoever else was told — which is how a test wires the hub to the
-// application's debounced report without either of them knowing about the other.
+// recordedChanges counts the times the hub said the listener count
+// changed and passes the occurrence on, which is how a test wires the
+// hub to the application's debounced report without either knowing
+// about the other.
 type recordedChanges struct {
 	mutex sync.Mutex
 	times int
@@ -1240,10 +1225,10 @@ func (c *recordedChanges) count() int {
 	return c.times
 }
 
-// heldLogs is a server log that holds a departure open until the test lets it finish, and announces the
-// moment that write begins. It is how a test says "this entry is still on its way" without waiting on a wall
-// clock: the entries it holds are the hub's departures, which are the entries a server that is stopping must
-// not still be writing when it closes the database the log lives in.
+// heldLogs is a server log that holds a departure write open until the
+// test lets it finish and records the moment the write begins, so a
+// test can say "this entry is still on its way" without waiting on a
+// clock.
 type heldLogs struct {
 	*fakes.Logs
 
@@ -1387,9 +1372,9 @@ func TestAddressAccessAttemptsWindowAgesOut(t *testing.T) {
 	}
 }
 
-// TestAddressAccessAttemptsWarnOncePerWindow: a tool that guesses a hundred codes from one address
-// must leave one warning line in the operator's log view, not a hundred — and a new window is a
-// new warning.
+// TestAddressAccessAttemptsWarnOncePerWindow: a tool guessing codes
+// from one address leaves one warning line per window in the operator's
+// log view, and a new window is a new warning.
 func TestAddressAccessAttemptsWarnOncePerWindow(t *testing.T) {
 	f := newFixture(t, restrictedSettings)
 
@@ -1421,9 +1406,9 @@ func TestAddressAccessAttemptsWarnOncePerWindow(t *testing.T) {
 	}
 }
 
-// TestAddressAccessAttemptHistoriesAreEvicted: histories quiet for longer than the window are
-// dropped from the map, so a guessing tool rotating its spoofed keys cannot grow the server's
-// memory with every address it ever used.
+// TestAddressAccessAttemptHistoriesAreEvicted: histories quiet longer
+// than the window are dropped from the map, so a guessing tool cannot
+// grow the server's memory with every address it ever used.
 func TestAddressAccessAttemptHistoriesAreEvicted(t *testing.T) {
 	f := newBareFixture(t, restrictedSettings)
 
@@ -1468,10 +1453,10 @@ func TestAddressAccessAttemptHistoriesAreEvicted(t *testing.T) {
 	}
 }
 
-// TestASlowListenerCannotHoldTheHubLockForEveryoneElse: a listener that
-// cannot keep up holds its own frames, not the server. The livefeed answer is delivered the
-// way every other delivery is — sessions chosen under the lock, frames written outside it —
-// so a stalled connection cannot stop the server from reaching everyone else.
+// TestASlowListenerCannotHoldTheHubLockForEveryoneElse: the livefeed
+// answer is delivered the way every delivery is, sessions chosen under
+// the lock and frames written outside it, so a stalled connection
+// cannot stop the server from reaching everyone else.
 func TestASlowListenerCannotHoldTheHubLockForEveryoneElse(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
@@ -1538,10 +1523,10 @@ fill:
 	}
 }
 
-// TestTheServerStopsAdmittingConnectionsThatNeverRegister:
-// the limit is on the connections the server is holding, not on the ones that finished
-// becoming listeners — a limit that a client bypasses by never answering is not a limit. The
-// listeners-count broadcast keeps counting registered listeners, as the contract fixes it.
+// TestTheServerStopsAdmittingConnectionsThatNeverRegister: the limit is
+// on the connections the server holds, not on registered listeners,
+// and a limit a client bypasses by never answering is not a limit; the
+// listeners-count broadcast still counts registered listeners.
 func TestTheServerStopsAdmittingConnectionsThatNeverRegister(t *testing.T) {
 	f := newBareFixture(t, Settings{MaxClients: 1})
 
@@ -1561,8 +1546,9 @@ func TestTheServerStopsAdmittingConnectionsThatNeverRegister(t *testing.T) {
 }
 
 // TestAFrameBiggerThanTheServerReadsEndsTheSession: the server reads a
-// frame up to a fixed size. A bigger frame is not something the server can act on — it is a
-// way to make the server hold a message it will never use — and the connection ends.
+// frame up to a fixed size, a bigger frame is not something it can act
+// on, and reading it would hold memory for a message never used, so
+// the socket ends the connection at the limit.
 func TestAFrameBiggerThanTheServerReadsEndsTheSession(t *testing.T) {
 	f := newFixture(t, openSettings)
 
@@ -1570,9 +1556,9 @@ func TestAFrameBiggerThanTheServerReadsEndsTheSession(t *testing.T) {
 
 	big := make([]byte, 2*1024*1024)
 
-	// A write that fails here is the rule answering early: the socket ends the connection
-	// at the limit, and the client's own write can be the frame's first contact with that
-	// end. What the test insists on is the session being over, whichever half notices.
+	// A write that fails here is the rule answering early at the socket
+	// limit; what the test insists on is the session being over, whichever
+	// half notices first.
 	if err := f.client.WriteMessage(websocket.TextMessage, big); err != nil {
 		t.Logf("the oversized frame's write failed: %v", err)
 	}
@@ -1581,8 +1567,8 @@ func TestAFrameBiggerThanTheServerReadsEndsTheSession(t *testing.T) {
 }
 
 // TestTheSendQueueIsBounded: the frames waiting for one listener are
-// server memory, and a queue of thousands of frames per listener is a way for a handful of
-// slow listeners to spend it. The queue is 256 slots.
+// server memory, so the queue is bounded at 256 slots to keep a
+// handful of slow listeners from spending it.
 func TestTheSendQueueIsBounded(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
@@ -1598,11 +1584,10 @@ func TestTheSendQueueIsBounded(t *testing.T) {
 }
 
 // TestTheHubClosesEveryStalledListenerInsideTheShutdownDeadline: the
-// server that is stopping ends every listener with the protocol's own goodbye, and that
-// goodbye is a delivery. A listener whose writer is stuck in the socket holds that delivery
-// for its full write deadline, and a close made one session at a time takes a deadline per
-// stalled session — the wall of stalled sockets blows past the shutdown window, which is how
-// a stopping server ends up needing the kill signal. The closes are made together.
+// goodbye frame is a delivery, and a stuck writer holds it for its
+// full write deadline, so the hub makes its closes together instead of
+// one at a time, which is how a wall of stalled sockets would blow past
+// the shutdown window.
 func TestTheHubClosesEveryStalledListenerInsideTheShutdownDeadline(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
@@ -1619,9 +1604,9 @@ func TestTheHubClosesEveryStalledListenerInsideTheShutdownDeadline(t *testing.T)
 		session := f.hub.sessions[id]
 		f.hub.mutex.Unlock()
 
-		// Fill the queue: the writer takes the first frame and blocks in the socket, and
-		// the goodbye the close wants to deliver has nowhere to go until the writer gives
-		// up on the frame it is holding.
+		// Fill the queue: the writer takes the first frame and blocks in the
+		// socket, and the goodbye the close wants to deliver has nowhere to go
+		// until the writer gives up on the frame it is holding.
 	fill:
 		for {
 			select {
@@ -1646,11 +1631,10 @@ func TestTheHubClosesEveryStalledListenerInsideTheShutdownDeadline(t *testing.T)
 	}
 }
 
-// TestAConnectionArrivingAfterTheHubClosedIsRefused: the close ends
-// every session the hub was holding and waits for the goroutines running them. A connection
-// taken over after that is a session added to a hub that has finished, with goroutines
-// started on a WaitGroup the close is already waiting on — the misuse the race detector
-// names as an Add during a Wait. A hub that has closed does not attach anything.
+// TestAConnectionArrivingAfterTheHubClosedIsRefused: a connection taken
+// over after the close would add goroutines to a WaitGroup the close is
+// already waiting on, the misuse the race detector names as an Add
+// during a Wait, so a closed hub attaches nothing.
 func TestAConnectionArrivingAfterTheHubClosedIsRefused(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
