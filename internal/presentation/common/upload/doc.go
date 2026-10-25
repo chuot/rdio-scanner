@@ -13,15 +13,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// Package upload is the inbound recording ingestion boundary: the endpoints a radio bridge, a
-// capture application, and another rdio-scanner server posting what it received downstream use to
-// hand a recording to this server.
-//
-// It belongs to neither web application. The calls an upload creates are what the scanner webapp
-// plays, but the uploader is a recorder and not the scanner webapp, and what lets an upload through
-// is the apikey the upload carries and that key's scope — not an administrator session and not a
-// listener's access code.
-//
-// The endpoints answer with plain text and not with JSON, because that is what every program
-// posting to them has been reading since they existed.
+// Package upload is the inbound recording ingestion boundary: the
+// endpoints outside programs use to post a recording to this server.
+// see the call-upload-contract-and-legacy-divergences maintainer note.
 package upload
