@@ -22,9 +22,9 @@ import (
 	"testing"
 )
 
-// The frame is a JSON array of up to three elements: a command, an optional payload, and an
-// optional flag. It is frozen by the protocol contract and consumed by the native applications, so
-// what is written here is what those applications already parse.
+// The frame is a JSON array of up to three elements: a command, an optional payload,
+// and an optional flag, frozen by the protocol contract and parsed by the native
+// applications.
 
 func TestFrameCarriesCommandPayloadAndFlag(t *testing.T) {
 	frame := Message{
@@ -59,8 +59,7 @@ func TestFrameIsOnlyTheCommandWhenThereIsNothingToSay(t *testing.T) {
 	}
 }
 
-// An empty string is not a payload, and the legacy server leaves it out. Every payload the server
-// actually sends is an object, a number, or a boolean, so this is the rule that keeps `["PIN"]` a
+// An empty string is not a payload and is left out: the rule that keeps `["PIN"]` a
 // two-character frame rather than `["PIN",""]`.
 func TestFrameLeavesOutAnEmptyStringPayload(t *testing.T) {
 	got := marshal(t, Message{Command: CommandCall, Payload: ""})
@@ -109,9 +108,8 @@ func TestFrameKeepsAnEmptyObjectOrArrayPayload(t *testing.T) {
 	}
 }
 
-// The flag is appended on its own, without looking at whether a payload was there. No frame the
-// server sends needs this — every frame with a flag has a payload — but a client that reads the
-// array by position depends on the flag landing in the third place, not the second.
+// The flag is appended on its own, without looking at whether a payload was there: a
+// client that reads the array by position expects the flag in the third place.
 func TestFrameKeepsTheFlagInItsOwnPlace(t *testing.T) {
 	got := marshal(t, Message{Command: CommandAccessCode, Flag: "x"})
 	want := `["PIN","x"]`
@@ -199,9 +197,8 @@ func TestReadingAFrameWhoseCommandIsNotKnownStillReads(t *testing.T) {
 	}
 }
 
-// A frame whose first element is not a string is still a frame: the legacy server compares the
-// command against each known one and matches none, so the client is answered with nothing and stays
-// connected. Refusing to read it would be a different server.
+// A frame whose first element is not a string is still a frame: it matches no known
+// command, the client is answered with nothing and stays connected.
 func TestReadingAFrameWhoseCommandIsNotAStringStillReads(t *testing.T) {
 	message, err := ReadMessage([]byte(`[7]`))
 	if err != nil {
@@ -236,14 +233,11 @@ func TestTheCommandConstantsAreTheWireValues(t *testing.T) {
 	}
 }
 
-// protocolCaptures is the completeness guard for the listener protocol: every command constant this
-// package freezes is named here with the capture its frame appears in and the test that compares this
-// server's framing against that capture. A command with no capture in this package says so, with the
-// reason: the two access-code answers the server sends before it closes are frozen by the access-code
-// journey in tests/acceptance, and the three native-application commands are never sent to a web client
-// at all, so the gap is a recorded one and not an accident of which sessions this capture happened to
-// open. A command that quietly lost its capture fails this guard rather than leaving the framing test
-// with nothing to compare.
+// protocolCaptures is the completeness guard for the listener protocol: every command
+// constant this package freezes is named here with the capture its frame appears in
+// and the test that compares this server's framing against that capture, or names the
+// proof it has outside this package. A command that quietly lost its capture fails
+// this guard rather than leaving the framing test with nothing to compare.
 var protocolCaptures = map[string]struct {
 	// capture is the recorded run the frame appears in, and label the session of that run.
 	capture string
@@ -307,10 +301,10 @@ var protocolCaptures = map[string]struct {
 	CommandServer: {outside: "the native applications only: a web session never receives it, and no capture carries it"},
 }
 
-// TestEveryProtocolCommandIsCapturedOrSaysWhyNot is the completeness half: the command constants the
-// server freezes and the captures that freeze their wire shapes have to agree. A constant missing from
-// the table, a capture named by a constant that holds no frame of that command, a capture with no test
-// that reads it, and a command with neither a capture nor a reason are each a failure.
+// TestEveryProtocolCommandIsCapturedOrSaysWhyNot is the completeness half: the command
+// constants and the captures must agree; a constant missing from the table, a capture
+// holding no frame of that command, a capture with no test that reads it, and a
+// command with neither capture nor reason are each a failure.
 func TestEveryProtocolCommandIsCapturedOrSaysWhyNot(t *testing.T) {
 	constants := []string{
 		CommandCall,
@@ -374,9 +368,9 @@ func TestEveryProtocolCommandIsCapturedOrSaysWhyNot(t *testing.T) {
 	}
 }
 
-// TestNoWebCaptureCarriesANativeAppCommand keeps the three native-application commands out of the
-// captured web sessions: the protocol lists them as never sent to a web client, and a capture that
-// gained one would mean this server says something a web client is not written to parse.
+// TestNoWebCaptureCarriesANativeAppCommand keeps the three native-application commands
+// out of the captured web sessions: a capture that gained one would mean this server
+// says something a web client is not written to parse.
 func TestNoWebCaptureCarriesANativeAppCommand(t *testing.T) {
 	for _, command := range []string{CommandIOS, CommandPushID, CommandServer} {
 		for _, session := range []struct {
@@ -417,15 +411,11 @@ func commandOf(frame string) string {
 	return frame[len(open):end]
 }
 
-// TestFramingReproducesTheCapturedFrames is the golden half: a frame taken out of a capture is put
-// back together and has to come out as the bytes the legacy server sent.
-//
-// The frame is decoded with UseNumber so that its numbers go back out as they came in. That is a
-// property of this test and not of the server: the server marshals typed values, and a number that
-// arrived here as a float64 would leave as 1e+07 where the server writes 10000000.
-//
-// It covers every command except the call search, which is the one payload the legacy server does not
-// marshal from a map — see TestCapturedCallListRowsCarryTheirFieldsInWrittenOrder.
+// TestFramingReproducesTheCapturedFrames is the golden half: a frame taken out of a
+// capture is put back together and has to come out as the bytes the legacy server
+// sent. The frame is decoded with UseNumber so its numbers go back out as they came
+// in, and the call search is covered by TestCapturedCallListRowsCarryTheirFieldsIn-
+// WrittenOrder.
 func TestFramingReproducesTheCapturedFrames(t *testing.T) {
 	for _, captured := range []struct {
 		file  string
@@ -473,16 +463,11 @@ func TestFramingReproducesTheCapturedFrames(t *testing.T) {
 	}
 }
 
-// TestCapturedCallListRowsCarryTheirFieldsInWrittenOrder records the one payload in the protocol that
-// is not marshalled from a map, which the framing above cannot reproduce and which the payload layer
-// therefore has to get right on its own.
-//
-// The legacy `server/call.go` `CallsSearchResult` and `CallsSearchResults` are structs, so their keys come out in
-// the order the fields are declared — `id`, `system`, `talkgroup`, `dateTime` — while a call payload
-// is a map and comes out sorted. A search result row and a call of the same shape therefore disagree
-// about the order of the same four keys, and a client that compares the bytes of the two sees it.
-//
-// This is what has to reproduce.
+// TestCapturedCallListRowsCarryTheirFieldsInWrittenOrder records the one payload the
+// legacy server did not marshal from a map: its `CallsSearchResult` rows come out
+// with keys in field-declaration order - `id`, `system`, `talkgroup`, `dateTime` -
+// while a call payload is a map and comes out sorted, and that disagreement is what
+// has to reproduce.
 func TestCapturedCallListRowsCarryTheirFieldsInWrittenOrder(t *testing.T) {
 	frames := capturedFrames("ws-frames-open.json", "listener")
 
@@ -528,9 +513,9 @@ func marshal(t *testing.T, message Message) string {
 	return string(b)
 }
 
-// objectKeys lists the keys of the JSON object that starts at the beginning of body, in the order they
-// were written. Nothing else in this capture is read by key order, and nothing here re-encodes what it
-// reads.
+// objectKeys lists the keys of the JSON object starting at the beginning of body, in
+// written order. Nothing else in this capture is read by key order, and nothing here
+// re-encodes what it reads.
 func objectKeys(t *testing.T, body string) []string {
 	t.Helper()
 

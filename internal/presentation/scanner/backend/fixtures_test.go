@@ -15,29 +15,9 @@
 
 package backend
 
-// The captures in this file are pinned bytes, taken from the legacy server at git tree
-// 02ae33d4651fee4c46a93bdcf574d0aead89e542. The harness that took them was retired with the legacy
-// source, so these frames are the contract now rather than something a build step regenerates, and they
-// are the yardstick the marshaling is compared against rather than a reading of the legacy source.
-//
-// Two things in the captures are redactions, not the bytes the legacy server wrote: the administrator's
-// session token is written `<token>`, because a capture that carried a live token would differ on every
-// machine, and a log timestamp is written `<datetime>`, for the same reason. Nothing else is redacted,
-// and a capture that quietly stopped redacting either would produce bytes that differ between machines.
-//
-// The version is the one field in a pinned capture that a release moves: these captures carry 8.0.0,
-// moved off 7.0.0 when the release declared its core in VERSION.txt. What a server reports about itself
-// is part of what a client is told, so a capture that gained a version field nobody declared, or kept an
-// old one, would make a release look like it had not changed what it tells clients. Every other byte of
-// every capture here is still the bytes the legacy tree wrote.
-//
-// capturedFrames are the frames the legacy server wrote in the two captured sessions, kept in the package
-// that reads them. They are the bytes the legacy server wrote, in the order it wrote them, and the framing
-// tests re-read each one and re-frame it, so the comparison is between what a server said and what this
-// server says in the same configuration.
-//
-// The runs were captured from a legacy server with its time zone set to UTC, which is the time zone every
-// capture in this repository was taken in.
+// capturesAt names the legacy git tree the fixture captures under tests/fixtures were
+// taken from, so a later reader can re-run the capture scripts against the same legacy
+// commit.
 func capturedFrames(name string, label string) []string {
 	switch name {
 	case "ws-frames-open.json":

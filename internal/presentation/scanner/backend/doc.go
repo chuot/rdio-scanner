@@ -13,15 +13,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-// Package backend is the scanner webapp's own surface: the WebSocket connection the web
-// app and the native Rdio Scanner applications hold open, the JSON-array frame they exchange,
-// the command constants of that protocol, and the hub that keeps the server's listener
-// connections.
-//
-// The wire format is frozen: it is what the native applications speak, and it must not change.
-// The commands the protocol has are the ones the protocol-completeness guard in message_test.go
-// enumerates, and each one is compared against a capture taken from the legacy server.
-//
-// The administrator configuration socket is not here. It has no commands, no live feed, no
-// history, and no access codes; it lives in admin/backend.
+// Package backend is the scanner webapp's own surface: the WebSocket connection the
+// web app and the native applications hold open, the JSON-array frame they exchange,
+// the command constants of that protocol, and the hub that keeps the listener
+// connections. The wire format is frozen: the commands and their frames are captured
+// from the legacy server and compared by the completeness guard in message_test.go;
+// see the scanner-wire-format-and-completeness maintainer note. The administrator
+// configuration socket is not here; it lives in admin/backend.
 package backend

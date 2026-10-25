@@ -31,10 +31,10 @@ import (
 	"rdio-scanner/internal/presentation/common/httpaddr"
 )
 
-// trustedLocalhostProxy names the peers these tests connect from — the httptest server's localhost and
-// the documentation address httptest.NewRequest carries — as proxies the operator named, so the
-// forwarding header these tests carry is honored: the address the endpoint names is the address the
-// access warnings are keyed on. The list is a fixed literal; a parse failure is a bug in this file.
+// trustedLocalhostProxy names the peers these tests connect from as proxies the
+// operator named, so the forwarding header these tests carry is honored and the
+// address the endpoint names is the address the access warnings are keyed on. The
+// list is a fixed literal; a parse failure is a bug in this file.
 func trustedLocalhostProxy() *httpaddr.Trusted {
 	trusted, err := httpaddr.ParseTrusted("127.0.0.0/8, 192.0.2.0/24")
 	if err != nil {
@@ -44,9 +44,8 @@ func trustedLocalhostProxy() *httpaddr.Trusted {
 	return trusted
 }
 
-// The version report is answered before anything else, including the request for an access code: a
-// client that is trying to work out what server it is talking to has not been asked for a code yet, and
-// a server that answers that question with a request for one is a server a client cannot identify.
+// The version report is answered before anything else, including the request for an
+// access code.
 func TestTheVersionRequestIsAnsweredBeforeAnyAccessCode(t *testing.T) {
 	f := newBareFixture(t, restrictedSettings)
 
@@ -76,10 +75,8 @@ func TestTheVersionRequestIsAnsweredBeforeAnyAccessCode(t *testing.T) {
 	}
 }
 
-// On a server that requires an access code, every command except the code itself is answered with a
-// request for it — including a command the server does not know, which is answered with a request for
-// the code and not with silence, because the server has not gotten as far as deciding what to do with
-// it.
+// On a server that requires an access code, every command except the code itself is
+// answered with a request for it, including a command the server does not know.
 func TestACommandThatNeedsAnAccessCodeIsAnsweredWithARequestForOne(t *testing.T) {
 	f := newBareFixture(t, restrictedSettings)
 
@@ -131,9 +128,8 @@ func TestAnAcceptedAccessCodeBringsThatListenerItsConfiguration(t *testing.T) {
 	}
 }
 
-// A code the server does not have is answered with another request for the code, and said out loud in
-// the server log with the address that presented it — which is the only way an administrator finds out
-// somebody is guessing.
+// A code the server does not have is answered with another request for the code and
+// said out loud in the server log with the address that presented it.
 func TestARefusedAccessCodeAsksAgainAndSaysSoInTheServerLog(t *testing.T) {
 	f := newBareFixture(t, restrictedSettings)
 
@@ -160,9 +156,8 @@ func TestARefusedAccessCodeAsksAgainAndSaysSoInTheServerLog(t *testing.T) {
 	}
 }
 
-// A code the server cannot decode is reported to its console and costs the session nothing: it never
-// reached the server as a code, so it is not one of the attempts this session is allowed. Five of them
-// still leave a good code accepted on what would otherwise be the sixth attempt.
+// A code the server cannot decode is reported to its console and costs the session
+// nothing; five good-attempt guesses still leave a good code accepted on the sixth.
 func TestAnAccessCodeTheServerCannotDecodeSpendsNoAttempt(t *testing.T) {
 	f := newBareFixture(t, restrictedSettings)
 
@@ -189,9 +184,8 @@ func TestAnAccessCodeTheServerCannotDecodeSpendsNoAttempt(t *testing.T) {
 	}
 }
 
-// An accepted access code clears the attempts this session has spent, even on a server that requires a
-// code. What the limit counts is trying without succeeding: a session that keeps guessing is locked after
-// five attempts, and a session that was let in starts its five over.
+// An accepted access code clears the attempts this session has spent, even on a
+// restricted server.
 func TestAnAcceptedAccessCodeClearsTheAttemptsThatSessionHasSpent(t *testing.T) {
 	f := newBareFixture(t, restrictedSettings)
 
@@ -215,10 +209,9 @@ func TestAnAcceptedAccessCodeClearsTheAttemptsThatSessionHasSpent(t *testing.T) 
 		}
 	}
 
-	// The fifth attempt is the last one the server allows, and a good code arriving on it is still
-	// refused. That it is refused as a locked session — and not as a session that has run out of
-	// attempts — is what proves the accepted code cleared what this session had already spent: without
-	// the clearing, this would be the sixth attempt and the code would never be looked up at all.
+	// The fifth attempt is the last one allowed, and a good code arriving on it is still
+	// refused as a locked session: without the clearing this would be the sixth attempt
+	// and the code would never be looked up.
 	f.send(t, conn, Message{Command: CommandAccessCode, Payload: base64.StdEncoding.EncodeToString([]byte("capture-open"))})
 
 	if frame := f.expectOn(t, conn); frame.Command != CommandAccessCode {
@@ -269,9 +262,8 @@ func TestAFetchOfOneCallCarriesTheFlagTheListenerSent(t *testing.T) {
 	}
 }
 
-// A call the listener asked for that the server does not have is reported to the console and answered
-// with nothing, and the connection stays open: a listener that asks for a call that has been pruned is
-// still a listener.
+// A call the server does not have is reported to the console and answered with nothing,
+// and the connection stays open.
 func TestAFetchOfOneCallThatDoesNotExistIsReportedAndDoesNotEndTheSession(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
@@ -326,9 +318,8 @@ func TestAFetchOfOneCallIsRefusedToAListenerWhoseAccessDoesNotGrantIt(t *testing
 	}
 }
 
-// A history search is answered with the page and with the criteria the listener asked with — the ones
-// the server understood. A criterion the server could not use is not echoed, because the echo says what
-// this server did and not what the listener meant.
+// A history search is answered with the page and with the criteria the server
+// understood; a criterion it could not use is not echoed.
 func TestAHistorySearchIsAnsweredWithThePageAndTheCriteriaTheListenerAskedWith(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
@@ -404,9 +395,8 @@ func TestALiveWatchSelectionIsAnsweredThroughTheEndpoint(t *testing.T) {
 	}
 }
 
-// A command the server has no use for is answered with nothing, and is not an error: the native
-// applications send commands this server does not act on, and a server that reports them as failures is
-// a server its own clients have to work around.
+// A command the server has no use for is answered with nothing, and is not an error.
+// The next frame's answer arriving proves this one was answered with nothing.
 func TestACommandTheServerDoesNotActOnIsAnsweredWithNothing(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
@@ -435,11 +425,9 @@ func TestACommandTheServerDoesNotActOnIsAnsweredWithNothing(t *testing.T) {
 	}
 }
 
-// TestAConnectionTheServerWouldNotTakeOverIsFiled is the only trace an operator has of a client that
-// reached the listener endpoint and never became a listener. The server answers the request the way Go's
-// upgrader answers a request that is not an upgrade, and until this entry existed nothing in the log view
-// said that anything had arrived at all — the whole reason a listener problem and a broken client looked
-// identical.
+// TestAConnectionTheServerWouldNotTakeOverIsFiled: a connection that never became a
+// listener still leaves an entry in the log view; without it a listener problem and a
+// broken client look identical.
 func TestAConnectionTheServerWouldNotTakeOverIsFiled(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
@@ -462,11 +450,10 @@ func TestAConnectionTheServerWouldNotTakeOverIsFiled(t *testing.T) {
 	f.assertStamped(t, "a listener connection was refused", wiredClockTime)
 }
 
-// The address the server names for a listener is the address in the forwarding header, without its port,
-// when the connection came from the proxy the operator named, and the address of the connection when
-// there is no such header. It is the same address the server names in its warnings about guessed access
-// codes, so that a line about a guessed code and a line about a listener joining can be read as being
-// about the same machine.
+// The address the server names for a listener is the forwarding-header address without
+// its port when the connection came from the named proxy, and the connection address
+// otherwise: the same address the guessed-code warnings name, so two log lines can be
+// read as about the same machine.
 func TestTheAddressTheServerNamesIsTheForwardedOneWithoutItsPort(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
@@ -489,11 +476,9 @@ func TestTheAddressTheServerNamesIsTheForwardedOneWithoutItsPort(t *testing.T) {
 	}
 }
 
-// TestAListenerSessionOnAnOpenServerFollowsTheCapturedSession replays the session the capture script
-// ran against the legacy server, in the same order, and compares the frames this server answers with to
-// the frames the legacy server sent. The frames themselves are proven byte for byte by the payload
-// tests; what this proves is that a session asked in the order a client asks produces the answers in
-// the order a client expects them.
+// TestAListenerSessionOnAnOpenServerFollowsTheCapturedSession replays the captured
+// legacy session in capture order and compares this server's answers with the frames
+// the legacy server sent.
 func TestAListenerSessionOnAnOpenServerFollowsTheCapturedSession(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 
@@ -622,9 +607,8 @@ func wiredTo(t *testing.T, f *fixture) *wiring {
 		Trusted:  trustedLocalhostProxy(),
 	})
 
-	// A session on a whole server needs longer than the hub tests' window to get as far as its first
-	// configuration: these tests reach that configuration by asking for it over the connection, and the
-	// window a connection has to become a listener has to stay open while the asking happens.
+	// A session on a whole server needs a longer window than the hub tests': these tests
+	// reach the first configuration by asking for it over the connection.
 	f.hub.handshakeWait = 10 * time.Second
 
 	f.endpoint = handler.ServeHTTP
@@ -632,9 +616,9 @@ func wiredTo(t *testing.T, f *fixture) *wiring {
 	return w
 }
 
-// restrict gives the server the access list that makes it require an access code. A server with no
-// access list does not ask for one at all, whatever its other settings say: the access list is what
-// makes a server restricted, and the settings the hub is given have to agree with it.
+// restrict gives the server the access list that makes it require an access code: a
+// server with no access list does not ask for one, and the settings the hub is given
+// have to agree with it.
 func (w *wiring) restrict(accesses ...domain.Access) {
 	w.accesses.Stored = accesses
 }
@@ -702,12 +686,10 @@ func capturedSessionCommands(t *testing.T) []string {
 	return commands[:8]
 }
 
-// TestTheListenerSocketRefusesAWebPageFromAnotherOrigin: a
-// browser names the page it came from when it opens a WebSocket, and a page from anywhere
-// else opening this socket is a cross-site request that would read every live call and every
-// answer the listener socket carries. A connection with no Origin at all — a native
-// application, which is not a browser and sends no such header — passes, as the native apps
-// depend, and so does the hosted scanner webapp, whose origin is the server's own address.
+// TestTheListenerSocketRefusesAWebPageFromAnotherOrigin: a browser page from anywhere
+// other than the server's own address opening this socket is a cross-site request that
+// would read every live call; a connection with no Origin (a native application)
+// passes, and so does the hosted scanner webapp.
 func TestTheListenerSocketRefusesAWebPageFromAnotherOrigin(t *testing.T) {
 	f := newBareFixture(t, openSettings)
 

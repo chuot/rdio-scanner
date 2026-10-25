@@ -19,9 +19,9 @@ import (
 	"encoding/json"
 )
 
-// The commands are wire values, not internal names. They are what the native applications send and
-// what they switch on, so they are frozen by the protocol contract and are not free to become
-// something more descriptive.
+// The commands are wire values the native applications send and switch on: they are
+// frozen by the protocol contract and are not free to become more descriptive; see
+// the scanner-wire-format-and-completeness maintainer note.
 const (
 	// CommandCall fetches one recorded call, and pushes one that has just been recorded.
 	CommandCall = "CAL"
@@ -60,26 +60,19 @@ const (
 	CommandVersion = "VER"
 )
 
-// Message is one frame on the listener WebSocket: a JSON array of at most three elements — a
-// command, an optional payload, and an optional flag.
-//
-// All three are `any` because the frame is a positional array and not an object. A client may put
-// anything in any of the three places, and the server's job is to read what is there and match it
-// against the commands it knows: a frame whose command is the number 7 matches none of them, and the
-// legacy server answers it with nothing and keeps the connection open. Refusing to read such a frame
-// would close a connection that today stays connected, which is a different server.
+// Message is one frame on the listener WebSocket: a JSON array of at most three
+// elements - a command, an optional payload, and an optional flag. All three are
+// `any` because the frame is positional: a frame matching no known command is
+// answered with nothing and the connection stays open.
 type Message struct {
 	Command any
 	Payload any
 	Flag    any
 }
 
-// ReadMessage reads one frame exactly as the legacy server reads it: the array is taken apart by
-// position, and whatever is not there is left unset.
-//
-// The only thing that makes this fail is a frame that is not an array. The legacy server writes one
-// line to its console and reads the next frame, so the caller does the same — see the connection
-// loop, which writes it as `client.message.fromjson: <cause>`.
+// ReadMessage reads one frame by position, leaving whatever is not there unset. Only
+// a frame that is not an array fails, and the caller writes `client.message.fromjson:
+// <cause>` and reads the next frame.
 func ReadMessage(b []byte) (Message, error) {
 	var values []any
 
@@ -104,15 +97,11 @@ func ReadMessage(b []byte) (Message, error) {
 	return message, nil
 }
 
-// MarshalJSON writes the frame.
-//
-// A payload or flag that is absent is left out, and so is one that is the empty string: that is what
-// makes `["PIN"]` two characters rather than six. A payload that is present and says no is kept — the
-// livefeed ack is `["LFM",false]`, and a client that is waiting for an ack cannot tell the difference
-// between "no" and "nothing yet".
-//
-// The flag is appended on its own, without looking at whether a payload was there, because a client
-// reads the array by position and expects a flag in the third place.
+// MarshalJSON writes the frame: an absent or empty-string payload or flag is left out
+// (that is what keeps `["PIN"]` two characters), a present false payload is kept (the
+// livefeed ack is `["LFM",false]`), and the flag is appended on its own because the
+// client reads the array by position; see the frame-marshalling-rules maintainer
+// note.
 func (message Message) MarshalJSON() ([]byte, error) {
 	frame := []any{message.Command}
 

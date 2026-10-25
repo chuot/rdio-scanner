@@ -54,9 +54,8 @@ type Deps struct {
 	// Livefeed stores a listener's live-watch selection and answers it.
 	Livefeed *application.SetLivefeedHandler
 
-	// Logs is where the endpoint files what it decided about a connection, including the connections it
-	// would not take over. The operator's copy of the entry — the terminal, or the service manager's log —
-	// is the composition root's doing, and not something this package writes by hand.
+	// Logs is where the endpoint files what it decided about a connection, including
+	// the connections it would not take over.
 	Logs ports.LogRepository
 
 	// Clock is the server's one clock, which is what every entry this endpoint writes is stamped with.
@@ -77,12 +76,10 @@ type Deps struct {
 	Trusted *httpaddr.Trusted
 }
 
-// Handler is the listener endpoint: it takes over an upgraded connection, hands each frame that arrives
-// on it to the use case that answers that command, and has nothing to do with the connection afterwards.
-//
-// It is the only place that knows both the wire and the use cases, which is why the rules it applies are
-// the protocol's own and not the application's: which command is answered before the access gate, what
-// a refused command is answered with, and what a frame the server cannot act on costs the connection.
+// Handler is the listener endpoint: it takes over an upgraded connection, hands each
+// arriving frame to the use case that answers that command, and has nothing to do
+// with the connection afterwards; see the handler-seam-with-the-use-cases maintainer
+// note.
 type Handler struct {
 	access   *application.AuthenticateAccessHandler
 	call     *application.GetCallQueryHandler
@@ -118,19 +115,11 @@ func NewHandler(deps Deps) *Handler {
 	}
 }
 
-// ServeHTTP takes over one listener connection.
-//
-// Any path answers a websocket request, because that is what today's clients ask for: they open a
-// connection on the page they are on, and a server that only answers one path loses them.
-//
-// The origin is checked the way the socket library checks it: a connection that names no
-// origin — a native application, which is not a browser and sends no such header — passes, as the
-// native applications on phones depend; a browser connection passes only from the very address the page
-// was served from, because a page from anywhere else opening this socket is a cross-site request that
-// would read every live call and every answer the listener socket carries.
-//
-// The connection is not answered here. The hub holds it from here on, and this handler is called back
-// for each frame that arrives.
+// ServeHTTP takes over one listener connection. Any path answers a websocket request,
+// and the origin check lets through a connection that names no origin and a browser
+// only from the address the page was served from; see the any-path-upgrade-and-origin
+// maintainer note. The hub holds the connection from here on, and this handler is
+// called back for each frame that arrives.
 func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -147,9 +136,8 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	handler.hub.Attach(conn, httpaddr.Address(r, handler.trusted), handler.dispatch)
 }
 
-// logf files one decision this endpoint made about a connection. It is the endpoint's own log and not a line
-// it prints: an entry reaches the log view the administrator filters, and the composition root says the same
-// entry out loud, so a connection that never became a listener leaves the same kind of trace as one that did.
+// logf files one decision this endpoint made about a connection, so a connection that
+// never became a listener leaves the same kind of trace as one that did.
 func (handler *Handler) logf(level string, format string, args ...any) {
 	if handler.logs == nil {
 		return
@@ -165,14 +153,10 @@ func (handler *Handler) logf(level string, format string, args ...any) {
 	})
 }
 
-// dispatch decides which use case answers one frame, and hands a failure back to the hub, which files it and
-// carries on.
-//
-// The order is the legacy order and it is what the clients see. The version report is answered before
-// the access gate, because a client working out what server it has reached has not been asked for a code
-// yet. Everything else is gated: on a server that requires access codes, a session that has not
-// presented one is asked for it instead of having its command processed — including a command this
-// server does not know, because the server has not gotten as far as deciding what to do with it.
+// dispatch decides which use case answers one frame, and hands a failure back to the
+// hub, which files it and carries on. The version report is answered before the
+// access gate and everything else is gated, including an unknown command; see the
+// gate-order-before-the-use-cases maintainer note.
 func (handler *Handler) dispatch(ctx context.Context, clientID string, frame Message) error {
 	if frame.Command == CommandVersion {
 		handler.hub.SendVersion(clientID, handler.version)
@@ -208,18 +192,15 @@ func (handler *Handler) dispatch(ctx context.Context, clientID string, frame Mes
 		return handler.setLivefeed(ctx, clientID, frame)
 	}
 
-	// A command the server has no use for is answered with nothing, and is not a failure. The native
-	// applications send commands this server does not act on, and a server that reports them as errors
-	// is a server its own clients have to work around.
+	// A command the server has no use for is answered with nothing, and is not a
+	// failure: the native applications send commands this server does not act on.
 	return nil
 }
 
-// authenticate hands the access code a listener presented to the use case that decides about it.
-//
-// The code arrives base64-encoded, and a code that cannot be decoded never became a code: it is reported
-// to the console and it spends none of the attempts this session is allowed, exactly as it does today.
-// Every reply the listener gets — another request for the code, the expiry notice, the limit notice, the
-// configuration — is the use case's own.
+// authenticate hands the access code a listener presented to the use case that decides
+// about it. An undecodable code is reported to the console and spends none of the
+// attempts this session is allowed; see the undecodable-access-codes-cost-nothing
+// maintainer note. Every reply the listener gets is the use case's own.
 func (handler *Handler) authenticate(ctx context.Context, clientID string, frame Message) error {
 	code, ok := frame.Payload.(string)
 	if !ok {
@@ -239,15 +220,11 @@ func (handler *Handler) authenticate(ctx context.Context, clientID string, frame
 	return err
 }
 
-// fetchCall answers a listener's request for one recorded call.
-//
-// The identifier arrives as a number or as a piece of text, and a piece of text that is not a number is
-// an error the server says something about rather than a call it cannot find. The flag the listener
-// asked with is handed back unchanged whatever it was, because the server does not decide what a flag
-// means — the client on the other end does.
-//
-// A call this listener's access does not name is answered with nothing at all: the listener is not told
-// that the call exists.
+// fetchCall answers a listener's request for one recorded call: the identifier arrives
+// as a number or as text, a non-number is reported rather than treated as a missing
+// call, the flag is echoed unchanged, and a call the listener's access does not name
+// is answered with nothing at all; see the uniform-not-there-refusals maintainer
+// note.
 func (handler *Handler) fetchCall(ctx context.Context, clientID string, frame Message) error {
 	var id uint64
 
@@ -285,12 +262,9 @@ func (handler *Handler) fetchCall(ctx context.Context, clientID string, frame Me
 	return nil
 }
 
-// searchCalls answers a listener's history request with the page and with the criteria the listener
-// asked with.
-//
-// The criteria are echoed from the frame as it arrived and not from the search the query ran, because
-// the echo says what this server did: a criterion it could not read is not echoed, the paging is echoed
-// as it was asked for and not as it was used, and a criterion that was not asked for does not appear.
+// searchCalls answers a listener's history request with the page and with the criteria
+// echoed from the frame as it arrived, not from the search the query ran; see the
+// search-criteria-echoed-from-the-frame maintainer note.
 func (handler *Handler) searchCalls(ctx context.Context, clientID string, frame Message) error {
 	criteria, ok := frame.Payload.(map[string]any)
 	if !ok {
