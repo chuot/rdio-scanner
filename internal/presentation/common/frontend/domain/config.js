@@ -1,8 +1,7 @@
 // Listener config normalization and admin config round-trip.
-// Mirrors the CFG handler and transformCall of legacy rdio-scanner.service.ts,
-// and the admin config read/save semantics of admin.service.ts.
-// The retired options — 12-hour time format, dimmer delay,
-// playback-goes-live — are not part of the listener state any more.
+// Mirrors the CFG handler and transformCall of the legacy service, and
+// the admin config read/save semantics. The retired options are not part
+// of the listener state any more.
 
 export function normalizeListenerConfig(raw) {
   const config = raw ?? {};
@@ -42,9 +41,9 @@ export function transformCall(config, call) {
 }
 
 // Admin round-trip.
-// Server drift (server/talkgroup.go): MarshalJSON emits the talkgroup order
-// under key "talkgroup"; UnmarshalJSON reads key "order". The working copy
-// normalizes "talkgroup" → order on read; serialization writes order.
+// The server writes the talkgroup order under key talkgroup and reads key
+// order; the working copy normalizes on read:
+// see the talkgroup-order-key-drift maintainer note.
 
 export function createAdminWorkingCopy(config) {
   const working = structuredClone(config);
@@ -61,9 +60,8 @@ export function createAdminWorkingCopy(config) {
   return working;
 }
 
-// Merges a (possibly partial) working copy back onto the baseline so keys the
-// admin form never touched (secret, adminPassword, unknown server fields) are
-// re-emitted on save.
+// Merges a possibly partial working copy back onto the baseline so keys
+// the admin form never touched are re-emitted on save.
 export function mergeAdminConfig(baseline, working) {
   return deepMerge(structuredClone(baseline), structuredClone(working));
 }
@@ -83,8 +81,8 @@ export function serializeAdminConfig(config) {
   return saved;
 }
 
-// Admin config sections exposed as individual REST endpoints: each section is
-// read and saved on its own, not as the legacy whole-form swap.
+// Admin config sections exposed as individual REST endpoints: each section
+// is read and saved on its own, not as the legacy whole-form swap.
 export const ADMIN_CONFIG_SECTIONS = [
   'access',
   'apikeys',
@@ -96,8 +94,8 @@ export const ADMIN_CONFIG_SECTIONS = [
   'tags',
 ];
 
-// Per-section working copy: deep clone with the same talkgroup order
-// normalization as createAdminWorkingCopy (systems section only).
+// Per-section working copy: the systems section carries the talkgroup
+// order-key normalization.
 export function createSectionWorkingCopy(section, baseline) {
   if (section === 'systems') return createAdminWorkingCopy({ systems: baseline }).systems;
 
@@ -108,8 +106,8 @@ export function createSectionWorkingCopy(section, baseline) {
 // sites, talkgroups, units.
 export const SYSTEM_SUB_LEVELS = ['sites', 'talkgroups', 'units'];
 
-// Per-level working copy: the talkgroups level carries the same order-key
-// normalization as the systems section; the other levels are plain clones.
+// Per-level working copy: the talkgroups level carries the order-key
+// normalization, the other levels are plain clones.
 export function createSubSectionWorkingCopy(level, baseline) {
   if (level === 'talkgroups') {
     if (baseline === null || baseline === undefined) return null;
@@ -131,14 +129,10 @@ export function serializeSubSection(level, working) {
   return structuredClone(working);
 }
 
-// Per-section save payload: the fields of the system row, with the serialization-side
-// normalization (systems section only).
-//
-// The sites, talkgroups, and units under a system are saved by the section that shows them, for the
-// system it shows. The systems section carries the rows its screen is holding, and sending them
-// would make it answer for levels it does not edit: the rows it loaded are older than a level the
-// operator saved somewhere else, so the save would store back rows that section deleted, and refuse
-// talkgroups the system's blacklist has just taken.
+// Per-section save payload: the fields of the system row, with the
+// serialization-side normalization (systems section only), and no sites,
+// talkgroups, or units:
+// see the section-save-scoping maintainer note.
 export function serializeSection(section, working) {
   if (section !== 'systems') return structuredClone(working);
 

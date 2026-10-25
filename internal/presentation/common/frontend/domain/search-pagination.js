@@ -1,5 +1,5 @@
-// Search pagination: server pages of 200 vs client pages of 10
-// (legacy search.component.ts refreshResults/searchCalls).
+// Search pagination: server pages of 200, client pages of 10, as the
+// legacy search component did.
 
 export function serverOffset(pageIndex, clientPage, serverPage) {
   return Math.floor((pageIndex * clientPage) / serverPage) * serverPage;
@@ -9,9 +9,8 @@ export function needsRefetch(windowStart, currentServerOffset, serverPage) {
   return windowStart >= currentServerOffset + serverPage || windowStart < currentServerOffset;
 }
 
-// Legacy quirk fixed: results.slice(from % limit, to % limit + 1) returns an
-// empty window when the client window wraps the server page boundary; the
-// intended wrap-around concatenation is implemented here.
+// The client window that wraps the server page boundary is built by the
+// wrap-around concatenation, not the legacy modulo slice.
 export function clientSlice(results, windowStart, windowEnd, serverPage, clientPage) {
   const from = windowStart % serverPage;
   const to = windowEnd % serverPage + 1;

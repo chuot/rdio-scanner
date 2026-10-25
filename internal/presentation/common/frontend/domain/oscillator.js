@@ -1,7 +1,6 @@
-// Keypad beep / alert oscillator sequence scheduling
-// (legacy rdio-scanner.service.ts playOscillatorSequence).
-// Deviation: an empty sequence resolves immediately; the legacy promise never
-// resolved for an empty array because no oscillator ever fired onended.
+// Schedules the keypad beep and alert oscillator sequences.
+// An empty sequence resolves immediately; the legacy promise never
+// resolved for an empty array.
 
 export function scheduleOscillators(context, sequence) {
   return new Promise((resolve) => {
