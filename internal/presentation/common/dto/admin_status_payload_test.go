@@ -26,8 +26,8 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The status read is answered to a page that is not this repository's Go code, so the names it is answered
-// under are the contract and not the read model's own. This is where the two are held apart.
+// AdminStatusPayload tests: the JSON names are the contract,
+// not the read model's own. see the call-payload-field-order maintainer note.
 
 var statusNow = time.Date(2026, 10, 17, 8, 45, 11, 0, time.UTC)
 
@@ -78,9 +78,9 @@ func aStatusRead() application.RuntimeStatus {
 	}
 }
 
-// TestAdminStatusPayloadNamesTheDeploymentBesideTheSnapshot: the version, the container answer, and the
-// folder the server serves are already held by the administrator surface, and the status read names them
-// the way the configuration read does.
+// TestAdminStatusPayloadNamesTheDeploymentBesideTheSnapshot proves
+// the version, container flag, and served folder are named
+// beside the snapshot, as the configuration read names them.
 func TestAdminStatusPayloadNamesTheDeploymentBesideTheSnapshot(t *testing.T) {
 	body := statusBody(t, AdminStatus(aStatusRead(), "8.0.0", true, "/data/rdio"))
 
@@ -98,8 +98,8 @@ func TestAdminStatusPayloadNamesTheDeploymentBesideTheSnapshot(t *testing.T) {
 		t.Errorf("the server block names %v as the folder it serves, want the folder the operator named", server["baseDir"])
 	}
 
-	// The uptime is whole seconds: the page decides how to say it, and a payload that chose the words
-	// would be a payload the page cannot re-format.
+	// UptimeSeconds is asserted as whole seconds, the page
+	// choosing the words. see the administrator-status-payload-shape maintainer note.
 	if server["uptimeSeconds"] != float64(8048) {
 		t.Errorf("the server block reports uptimeSeconds=%v, want 8048: 2h 14m 8s, whole seconds", server["uptimeSeconds"])
 	}
@@ -118,8 +118,8 @@ func TestAdminStatusPayloadNamesTheDeploymentBesideTheSnapshot(t *testing.T) {
 	}
 }
 
-// TestAdminStatusPayloadReportsTheLiveStateUnderTheNamesThePageReads. The names are the contract's, and a
-// read model renaming one would be a page showing nothing where the server has an answer.
+// TestAdminStatusPayloadReportsTheLiveStateUnderTheNamesThePageReads proves
+// the live state under the contract names the page reads.
 func TestAdminStatusPayloadReportsTheLiveStateUnderTheNamesThePageReads(t *testing.T) {
 	body := statusBody(t, AdminStatus(aStatusRead(), "8.0.0", false, ""))
 
@@ -145,8 +145,8 @@ func TestAdminStatusPayloadReportsTheLiveStateUnderTheNamesThePageReads(t *testi
 	}
 }
 
-// TestAdminStatusPayloadAnswersEmptyListsRatherThanNullsWhenNothingWasRecorded is the shape a page can
-// count without guarding each list first.
+// TestAdminStatusPayloadAnswersEmptyListsRatherThanNullsWhenNothingWasRecorded proves
+// empty lists answer, never nulls, when nothing was recorded.
 func TestAdminStatusPayloadAnswersEmptyListsRatherThanNullsWhenNothingWasRecorded(t *testing.T) {
 	status := aStatusRead()
 	status.Activity.Hours = nil
@@ -183,16 +183,16 @@ func TestAdminStatusPayloadAnswersEmptyListsRatherThanNullsWhenNothingWasRecorde
 	}
 }
 
-// TestAdminStatusPayloadCarriesNoAudioAndNoConfiguration: the recording itself is the heaviest thing this
-// server keeps and this read is asked every few seconds, and the page already holds the whole
-// configuration, so the counts that come out of it are derived there.
+// TestAdminStatusPayloadCarriesNoAudioAndNoConfiguration proves the
+// payload omits the recording, the heaviest thing the
+// server keeps, and the configuration the page already
 func TestAdminStatusPayloadCarriesNoAudioAndNoConfiguration(t *testing.T) {
 	body := statusBody(t, AdminStatus(aStatusRead(), "8.0.0", false, ""))
 
 	raw := string(mustMarshal(t, AdminStatus(aStatusRead(), "8.0.0", false, "")))
 
-	// The log source names are not configuration section names, and `dirwatch` is both: what is forbidden
-	// here is a configuration block, which the page already holds and derives its own counts from.
+	// Log source names are not configuration sections, and
+	// dirwatch is both: a configuration block is the page's own.
 	for _, forbidden := range []string{"\"audio\"", "\"config\"", "\"options\"", "\"systems\"", "\"alerts\"", "\"apikeys\"", "\"downstreams\""} {
 		if strings.Contains(raw, forbidden) {
 			t.Errorf("the status answer carries %s, which does not belong in a status read", forbidden)
@@ -207,8 +207,8 @@ func TestAdminStatusPayloadCarriesNoAudioAndNoConfiguration(t *testing.T) {
 
 	call := recent[0].(map[string]any)
 
-	// The length is seconds, because the page shows a length as a length and not as a duration string it
-	// would have to parse.
+	// audioLengthSeconds is asserted as a number of seconds,
+	// not a duration string. see the administrator-status-payload-shape maintainer note.
 	if call["audioLengthSeconds"] != 12.4 {
 		t.Errorf("the recent row carries audioLengthSeconds=%v, want 12.4", call["audioLengthSeconds"])
 	}
