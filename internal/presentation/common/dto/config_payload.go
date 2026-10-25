@@ -23,13 +23,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// ConfigPayload is the configuration one listener is allowed to see: the systems and talkgroups its
-// access reaches, the groups and tags those talkgroups use, and the options that change what the
-// listener shows.
-//
-// It is not the server's configuration. Two listeners on the same server are told different things,
-// and the four listings — systems, groups, tags, and the groupsData and tagsData behind them — are
-// built from what this listener was shown rather than from what the server has.
+// ConfigPayload is the configuration one listener is allowed to see, built from
+// what that listener's access reaches rather than from the whole server.
+// see the configuration-payload-field-order maintainer note.
 type ConfigPayload struct {
 	Snapshot ports.ConfigSnapshot
 	Scope    domain.AccessScope
@@ -37,8 +33,8 @@ type ConfigPayload struct {
 
 // MarshalJSON writes the configuration.
 //
-// Every key here is a map key, so they come out sorted, which is what the legacy server produced and
-// what the captures compare against.
+// All keys are map keys, so they come out sorted, as the captures compare them,
+// see the configuration-payload-field-order maintainer note.
 func (payload ConfigPayload) MarshalJSON() ([]byte, error) {
 	options := payload.Snapshot.Options
 
@@ -62,9 +58,9 @@ func (payload ConfigPayload) MarshalJSON() ([]byte, error) {
 	return json.Marshal(body)
 }
 
-// visibleSystem is one system as a listener sees it: the entry the listener receives, plus the two
-// things the group and tag listings need and the entry itself does not carry — which system this is,
-// and what each talkgroup under it belongs to.
+// visibleSystem is one system as a listener sees it, plus what the group and
+// tag listings need and the entry itself does not carry.
+// see the configuration-payload-field-order maintainer note.
 type visibleSystem struct {
 	Entry      map[string]any
 	SystemRef  uint
@@ -76,10 +72,10 @@ type visibleTalkgroup struct {
 
 	Ref uint
 
-	// Group is the first group label the talkgroup has, which is what the listener's talkgroup entry
-	// names and what the group listing is built from. Groups is every label it has, and is what the
-	// group map is built from. The two are not the same set: a talkgroup in three groups puts all
-	// three in the map and only the first in the listing.
+	// Group is the talkgroup's first label, the one its entry names and the
+	// group listing is built from. Groups is every label it has, and the group
+	// map is built from. A talkgroup in three groups puts all three in the map
+	// and only the first in the listing.
 	Group  string
 	Groups []string
 
@@ -154,16 +150,9 @@ func visibleSystems(view domain.Systems, groups domain.Groups, tags domain.Tags)
 	return out
 }
 
-// ordered puts systems in their display order, and their talkgroups in theirs.
-//
-// With the talkgroups option on, a system's talkgroups are put in label order and then numbered from
-// one, so the numbers a listener is given are the positions it was shown them in and not the numbers
-// the server stores. With it off they keep the number the server stores, and a talkgroup that was
-// never given one is given zero.
-//
-// The lists are copied before they are sorted or numbered. The legacy server sorts the list it holds
-// and rewrites the numbers on it, which changes what the next listener is told; doing that here would
-// mean a snapshot handed to one listener changing what another one sees.
+// ordered puts systems in their display order and their talkgroups in theirs,
+// numbering them by the talkgroups option. Lists are copied first.
+// see the configuration-payload-field-order maintainer note.
 func ordered(systems domain.Systems, sortTalkgroups bool) domain.Systems {
 	out := append(domain.Systems{}, systems...)
 
@@ -208,9 +197,9 @@ func talkgroupEntries(talkgroups []visibleTalkgroup) []map[string]any {
 	return out
 }
 
-// unitEntries writes the units a system declares. A unit's identifier on the wire is its unit
-// reference and not the number the server stores it under, and it is written twice: once as id and
-// again as unitRef.
+// unitEntries writes the units a system declares. The identifier on the wire
+// is the unit reference, written twice, not the server's number.
+// see the configuration-payload-field-order maintainer note.
 func unitEntries(units domain.Units) []map[string]any {
 	out := []map[string]any{}
 
@@ -242,12 +231,9 @@ func unitEntries(units domain.Units) []map[string]any {
 	return out
 }
 
-// groupList is the groups this listener's talkgroups actually use, in the order the listener was shown
-// them, each one named once. Every group a visible talkgroup belongs to is in this list, in the position
-// the listener first saw it, so a group that is only ever the second group of a talkgroup is in it too:
-// the alert tone and the colour a call is measured against are picked from this listing, and a group
-// missing from it can never win. The group map below carries the same labels with the talkgroups that
-// use them.
+// groupList is the groups this listener's talkgroups use, in first-seen
+// order, each named once, including groups that are only ever a talkgroup's
+// second group. see the configuration-payload-field-order maintainer note.
 func groupList(systems []visibleSystem, groups domain.Groups) []map[string]any {
 	out := []domain.Group{}
 
