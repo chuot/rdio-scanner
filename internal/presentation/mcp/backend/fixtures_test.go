@@ -33,32 +33,31 @@ var fixtureTime = time.Date(2026, 5, 11, 9, 0, 0, 0, time.UTC)
 const (
 	testVersion = "8.0.0-test"
 
-	// testAddress is the address a caller reaches the listener from. It is the documentation
-	// address for tests, so a budget keyed on it cannot collide with a real host.
+	// testAddress is the documentation address a caller reaches the listener from,
+	// so a guess budget keyed on it cannot collide with a real host.
 	testAddress = "192.0.2.1"
 
-	// adminToken is an open administrator session. The gate recognises the same credential the
-	// administrator's own page presents, so the fixture opens one the way the administrator's
-	// tests do: by putting the token in the server's accepted window.
+	// adminToken is an open administrator session: the server's accepted window
+	// holds the token, the way the administrator's own tests open one.
 	adminToken = "capture-admin-token"
 
-	// listenerCode is a listener access code, and listenerIdent is the identity it is configured
-	// under. A restricted server is a server with a non-empty access list, so the restricted
-	// fixture seeds exactly this one access.
+	// listenerCode is a listener access code and listenerIdent the identity it is
+	// configured under: a restricted server has a non-empty access list, so the
+	// restricted fixture seeds this one access.
 	listenerCode  = "753159"
 	listenerIdent = "dispatch-desk"
 
-	// fixtureApikey is the upload credential the fixture's configuration holds, so a test that
-	// checks a credential inventory is masked has a value to check is absent.
+	// fixtureApikey is the upload credential the fixture's configuration holds,
+	// the value a masking test checks is absent.
 	fixtureApikey = "0123456789abcdef-secr3t"
 
 	// The two systems the fixture's history is spread over.
 	systemOneRef = uint(10001)
 	systemTwoRef = uint(10002)
 
-	// accessAttemptsMax is the number of access-code attempts one address is allowed before the
-	// server stops looking at what that address presents. It is the administrator login's bound,
-	// restated here so the test that protects it names it.
+	// accessAttemptsMax is the access-code attempts one address may make before
+	// the server stops looking at what it presents: the administrator login's
+	// bound, restated so the test that protects it names it.
 	accessAttemptsMax = 3
 )
 
@@ -73,8 +72,8 @@ type serverBundle struct {
 	tokens   *fakes.Tokens
 	clock    *fakes.Clock
 
-	// resolve is the access-code resolver the surface gates with. Its guess budget lives in the
-	// handler, so a test that wants one budget shared between two surfaces hands them one handler.
+	// resolve is the access-code resolver the surface gates with: its guess budget
+	// lives in the handler, so two surfaces sharing a handler share one budget.
 	resolve *application.ResolveAccessQueryHandler
 
 	// The recorded history the two surfaces read, and the configuration the search answers from.
@@ -90,10 +89,9 @@ type serverBundle struct {
 	downstreams *fakes.Downstreams
 	options     *fakes.Options
 
-	// The things a configuration save needs beside the stores: the listener connections a saved
-	// configuration is announced to, the directory watchers a save brackets, the administrator
-	// connections an access change is announced to, and the credential machinery the password
-	// change compares and hashes with.
+	// What a configuration save needs beside the stores: the listener hub, the
+	// administrator hub, the directory watchers a save brackets, and the
+	// credential machinery a password change compares and hashes with.
 	hub      *fakes.Hub
 	sessions *fakes.AdministratorSessions
 	watches  *fakes.Dirwatchers
@@ -130,9 +128,9 @@ func newServer(t *testing.T, restricted bool) *serverBundle {
 
 	bundle.resolve = application.NewResolveAccessQueryHandler(bundle.accesses, bundle.logs, bundle.clock)
 
-	// The recorded history the capabilities answer from, spread over two systems so a scoped
-	// caller and an unscoped caller can be told apart by what they get back, and over two days so
-	// a slice narrowed to one day can be told apart from a slice that was not narrowed at all.
+	// The recorded history the capabilities answer from, over two systems so scoped
+	// and unscoped callers differ, and two days so a narrowed slice differs from
+	// a slice that was not narrowed.
 	bundle.calls = fakes.NewCalls()
 	bundle.calls.Stored = map[uint64]domain.Call{
 		1: fixtureCall(1, systemOneRef, fixtureTime.Add(-3*time.Hour)),
@@ -143,8 +141,8 @@ func newServer(t *testing.T, restricted bool) *serverBundle {
 	bundle.groups = &fakes.Groups{Stored: domain.Groups{{ID: 1, Label: "Fire"}}}
 	bundle.tags = &fakes.Tags{Stored: domain.Tags{{ID: 3, Label: "Fire Dispatch"}}}
 
-	// The systems carry the parts under them, so the deployment summary counts talkgroups, sites,
-	// and units as real things and not as none.
+	// The systems carry talkgroups, sites, and units, so the deployment summary
+	// counts them as real things and not as none.
 	bundle.systems = &fakes.Systems{Stored: domain.Systems{
 		{
 			ID: 1, Label: "System", SystemRef: systemOneRef, AutoPopulate: true, Delay: 5000,
@@ -163,9 +161,9 @@ func newServer(t *testing.T, restricted bool) *serverBundle {
 		},
 	}}
 
-	// The options the summary reports: a prune horizon, a listener ceiling, recordings converted,
-	// duplicates detected, auto-populate on, and the server's own notice that the default
-	// credential is still in place.
+	// The options the summary reports: prune horizon, listener ceiling, recordings
+	// converted, duplicates detected, auto-populate on, and the notice that the
+	// default credential is still in place.
 	bundle.options = &fakes.Options{Stored: domain.Options{
 		AudioConversion:         domain.AudioConversionEnabled,
 		AutoPopulate:            true,
@@ -192,8 +190,8 @@ func newServer(t *testing.T, restricted bool) *serverBundle {
 		}},
 	}}
 
-	// The log view, spread over four subsystems so a search by subsystem, a search by severity, and
-	// an explanation that reads a subsystem's neighbourhood all have something to read.
+	// The log view, over four subsystems so a subsystem search, a severity search,
+	// and a neighbourhood explanation all have something to read.
 	bundle.logs.Stored = fixtureLogEntries()
 
 	bundle.server = New(bundle.Deps())
@@ -228,8 +226,8 @@ func fixtureLogEntries() []domain.LogEntry {
 		{ID: 4, DateTime: fixtureTime.Add(-2 * time.Hour), Level: domain.LogLevelWarn, Source: domain.LogSourceAccess, Message: "the access code of dispatch-desk expired"},
 		{ID: 5, DateTime: fixtureTime.Add(-1 * time.Hour), Level: domain.LogLevelInfo, Source: domain.LogSourcePrune, Message: "pruned 3 calls"},
 
-		// The server's own startup line, which is what a restart leaves in the log view, and a
-		// feed line naming the talkgroup the feed diagnosis is asked about.
+		// The server's own startup line, which is what a restart leaves in the log
+		// view, and a feed line naming the talkgroup the diagnosis is asked about.
 		{ID: 6, DateTime: fixtureTime.Add(-5 * time.Hour), Level: domain.LogLevelWarn, Source: domain.LogSourceServer, Message: "server started"},
 		{ID: 7, DateTime: fixtureTime.Add(-90 * time.Minute), Level: domain.LogLevelWarn, Source: domain.LogSourceLivefeed, Message: "the livefeed for talkgroup 1514000 on system 10001 stopped"},
 	}
@@ -281,9 +279,9 @@ func (bundle *serverBundle) repositories() application.ConfigurationRepositories
 	}
 }
 
-// configurationPorts is everything a configuration save needs: the stores, the log view it reports
-// a failure to, the listener connections a saved configuration is announced to, the administrator
-// connections an access change is announced to, the directory watchers it brackets, and the clock.
+// configurationPorts is everything a configuration save needs: the stores, the
+// log view for reporting a failure, the listener and administrator hubs, the
+// watchers a save brackets, and the clock.
 func (bundle *serverBundle) configurationPorts() application.ConfigurationPorts {
 	return application.ConfigurationPorts{
 		ConfigurationRepositories: bundle.repositories(),
@@ -305,9 +303,9 @@ func (bundle *serverBundle) accessUserPorts() application.AccessUserPorts {
 	}
 }
 
-// rebuild hangs the surface back up with a proxy configuration, the way the composition root hands
-// the listener the operator's trusted-proxy list. The stores are the same ones, so the attempts a
-// caller has already spent are still spent.
+// rebuild hangs the surface back up with a proxy configuration, the way the
+// composition root hands the listener the trusted-proxy list, over the same
+// stores, so spent attempts stay spent.
 func (bundle *serverBundle) rebuild(t *testing.T, trusted *httpaddr.Trusted) {
 	t.Helper()
 
