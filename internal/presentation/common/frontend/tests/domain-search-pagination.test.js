@@ -1,3 +1,4 @@
+// Server and client page math for the search pagination.
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

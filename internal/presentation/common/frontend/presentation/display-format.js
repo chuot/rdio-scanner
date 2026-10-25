@@ -1,4 +1,4 @@
-// Display formatting helpers ported from legacy main.component.ts.
+// Display formatting helpers for the listener's call views.
 
 export function formatAfs(n) {
   return `${(n >> 7 & 15).toString().padStart(2, '0')}-${(n >> 3 & 15).toString().padStart(2, '0')}${n & 7}`;
