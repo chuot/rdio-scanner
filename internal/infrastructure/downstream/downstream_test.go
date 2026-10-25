@@ -293,7 +293,7 @@ func TestForwardAppendsTheUploadPathToTheConfiguredAddress(t *testing.T) {
 
 // TestForwardAppendsTheUploadPathEvenWhenTheAddressAlreadyNamesIt pins
 // a legacy quirk an administrator can actually hit: the full endpoint
-// address gets the path appended a second time, and the server 404s.
+// address gets the path appended a second time, and the server answers 404.
 func TestForwardAppendsTheUploadPathEvenWhenTheAddressAlreadyNamesIt(t *testing.T) {
 	received := &receivedUpload{}
 	server := newUploadServer(t, received)

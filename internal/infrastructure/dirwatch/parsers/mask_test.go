@@ -267,8 +267,9 @@ func TestExtractDefaultReadsTheTalkgroupFromEachShapeTheMaskNames(t *testing.T) 
 		{name: "an Alpha-Net talkgroup", mask: "#SYS-#TGAFS", filename: "10001-12-345.wav", wantRef: 12<<7 | 34<<3 | 5},
 		{name: "a carrier in hertz", mask: "#SYS-#TGHZ", filename: "10001-1514000.wav", wantRef: 1514, wantFreq: 1514000},
 		{name: "a carrier in kilohertz", mask: "#SYS-#TGKHZ", filename: "10001-1514.000.wav", wantRef: 1514, wantFreq: 1514000},
-		// a megahertz carrier is a 32-bit number and then scaled, as the legacy
-		// reads it: 151.4000 MHz is 151399993 Hz, and the talkgroup reference is 151399.
+		// A megahertz carrier is read as a 32-bit number and then scaled,
+		// as the legacy reads it: 151.4000 megahertz is 151399993 hertz,
+		// and the talkgroup reference derived from it is 151399.
 		{name: "a carrier in megahertz", mask: "#SYS-#TGMHZ", filename: "10001-151.4000.wav", wantRef: 151399, wantFreq: 151399993},
 	}
 
