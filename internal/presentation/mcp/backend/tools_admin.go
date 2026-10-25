@@ -253,9 +253,8 @@ func summarize(deps Deps, configuration domain.Configuration) deploymentView {
 		counts.Units += uint(len(system.Units))
 	}
 
-	// A disabled watcher is not reading its directory, and a disabled
-	// forwarder is not forwarding: the two counts an operator looks for when
-	// the history has stopped growing.
+	// A disabled watcher is not reading its directory, and a disabled forwarder is not
+	// forwarding: those are the two counts an operator looks for when history stops.
 	disabledDirwatches, disabledDownstreams := uint(0), uint(0)
 
 	for _, dirwatch := range configuration.Dirwatches {
@@ -379,9 +378,8 @@ type sourceCount struct {
 	Count  uint64 `json:"count"`
 }
 
-// logCriteria is the filter set as the server used it: a request past the
-// ceiling echoes the ceiling, and a request naming no page echoes the
-// default.
+// logCriteria is the filter set as the server used it: a request past the ceiling echoes the
+// ceiling, and a request naming no page echoes the default.
 type logCriteria struct {
 	Level  string `json:"level,omitempty"`
 	Source string `json:"source,omitempty"`
@@ -518,9 +516,8 @@ func logRowOf(entry domain.LogEntry) logRow {
 	}
 }
 
-// parseDay is the day a capability was given, as the instant the log's own
-// criterion reads. The day arrives normalized by dayOf, so an unparseable
-// value is no day at all.
+// parseDay is the day a capability was given, as the instant the log's own criterion reads.
+// The day arrives normalized by dayOf, so an unparseable value is no day at all.
 func parseDay(day string) time.Time {
 	at, err := time.Parse(time.RFC3339, day)
 	if err != nil {
