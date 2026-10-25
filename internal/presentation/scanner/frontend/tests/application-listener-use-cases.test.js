@@ -1,3 +1,4 @@
+// tests for application/listener-use-cases: the CFG boot sequence
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

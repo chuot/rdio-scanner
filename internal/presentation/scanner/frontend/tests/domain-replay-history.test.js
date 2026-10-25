@@ -1,3 +1,4 @@
+// tests for domain/replay-history: the last five calls kept for replay
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

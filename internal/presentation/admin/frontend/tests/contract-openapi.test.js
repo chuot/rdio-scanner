@@ -256,7 +256,7 @@ test('section responses reference the config entity schemas', () => {
 });
 
 // the ingestion endpoints are apikey form uploads, and UPLOAD_FIELDS mirrors
-// multipart.go's catalogue plus the trunk-recorder JSON sidecar field
+// internal/infrastructure/dirwatch/parsers/multipart.go's catalogue
 // see the upload-field-catalogue maintainer note.
 const UPLOAD_FIELDS = [
   'audio', 'audioFilename', 'audioName', 'audioMime', 'audioType', 'channelType',
@@ -288,7 +288,7 @@ test('both ingestion endpoints are documented with the parser field catalogue', 
 });
 
 // the listener protocol and the admin configuration socket are x-websocket components;
-// the LISTENER_COMMANDS set mirrors the scanner backend's message.go
+// the LISTENER_COMMANDS set mirrors internal/presentation/scanner/backend/message.go
 const LISTENER_COMMANDS = ['CAL', 'CFG', 'IOS', 'LCL', 'LFM', 'LSC', 'MAX', 'PID', 'PIN', 'SRV', 'VER', 'XPR'];
 
 test('the listener WebSocket protocol is documented with its full command set', () => {

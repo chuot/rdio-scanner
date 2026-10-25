@@ -1,3 +1,4 @@
+// tests for the admin application context: it carries the admin slice and nothing else
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

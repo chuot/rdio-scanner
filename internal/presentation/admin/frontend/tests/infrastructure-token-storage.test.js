@@ -1,3 +1,4 @@
+// tests for infrastructure/token-storage: where the admin token lives
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

@@ -1,3 +1,4 @@
+// tests for domain/pin: pin storage
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

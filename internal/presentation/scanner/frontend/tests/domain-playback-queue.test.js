@@ -1,3 +1,4 @@
+// tests for domain/playback-queue: calls entering, waiting, and leaving
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

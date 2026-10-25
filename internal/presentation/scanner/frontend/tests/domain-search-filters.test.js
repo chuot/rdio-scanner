@@ -1,3 +1,4 @@
+// tests for domain/search-filters: cascading recomputation
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

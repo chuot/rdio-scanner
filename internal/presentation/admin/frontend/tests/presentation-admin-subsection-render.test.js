@@ -277,7 +277,7 @@ test('the section falls back to another system when the one it shows is deleted'
     'after falling back, the add control renders its row on the system now showing');
 });
 
-// CA-002, the other two levels: the section follows its own slice, whatever the level is.
+// the other two levels: the section follows its own slice, whatever the level is.
 test('the talkgroup section shows the rows the server pushes for the system it is showing', () => {
   const store = seed();
   const el = attach('rdio-admin-talkgroups');

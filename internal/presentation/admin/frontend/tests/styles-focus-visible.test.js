@@ -1,3 +1,4 @@
+// tests for focus visibility: the cascade the keyboard gets
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';

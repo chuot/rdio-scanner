@@ -1,3 +1,4 @@
+// tests for domain/livefeed-map: encoding the livefeed map
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

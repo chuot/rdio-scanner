@@ -1,3 +1,4 @@
+// tests for infrastructure/listener-socket: the open sequence
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

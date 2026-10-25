@@ -1,3 +1,5 @@
+// tests for domain/dirwatch: validateDirwatchRow accepts or rejects each row
+
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

@@ -1,3 +1,4 @@
+// tests for the scope dialog: the tree scrolls inside a box that cannot
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';

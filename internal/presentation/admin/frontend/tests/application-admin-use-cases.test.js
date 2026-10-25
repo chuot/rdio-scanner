@@ -48,7 +48,7 @@ function fakeApi({ loginResult = { token: 'jwt-1', passwordNeedChange: true }, c
 
       if (loginResult instanceof Error) throw loginResult;
 
-      // mirrors infrastructure/admin-api.js: the adapter owns token storage.
+      // mirrors the ../infrastructure admin-api adapter: it owns token storage.
       storage.setAdminToken(loginResult.token);
 
       return loginResult;

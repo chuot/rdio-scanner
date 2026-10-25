@@ -1,3 +1,4 @@
+// tests for infrastructure/storage: the livefeed map kept between sessions
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

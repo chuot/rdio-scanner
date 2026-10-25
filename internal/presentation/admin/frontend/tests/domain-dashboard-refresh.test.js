@@ -1,4 +1,4 @@
-// tests for the dashboard auto-refresh interval in domain/dashboard-status.js:
+// tests for the dashboard auto-refresh interval in domain/dashboard-status:
 // a test-controlled timer runs every poll, and the interval is read off the timer
 
 import test from 'node:test';

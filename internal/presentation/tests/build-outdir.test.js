@@ -1,3 +1,4 @@
+// tests for the build outdir: each bundle lands beside the package that embeds it
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { dirname, join, resolve } from 'node:path';

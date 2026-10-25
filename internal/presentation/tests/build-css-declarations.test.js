@@ -1,3 +1,4 @@
+// tests for the build tool's stylesheet banners: the declarations they must carry
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';

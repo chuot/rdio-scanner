@@ -1,3 +1,4 @@
+// tests for the scanner service worker: the paths the worker leaves alone
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';

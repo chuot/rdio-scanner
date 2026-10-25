@@ -1,3 +1,4 @@
+// tests for infrastructure/admin-socket: opening the admin configuration socket
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 

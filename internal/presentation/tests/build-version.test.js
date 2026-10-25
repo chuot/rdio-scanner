@@ -1,3 +1,4 @@
+// tests for the build version: the version string travels through unchanged
 import assert from 'node:assert/strict';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { after, describe, it } from 'node:test';
