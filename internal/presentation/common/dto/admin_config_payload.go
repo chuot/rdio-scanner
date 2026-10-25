@@ -23,13 +23,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// AdminConfigPayload is the whole configuration an administrator is shown: every section of it, and
-// the version of the server that is answering.
-//
-// It is a different payload from the one a listener is given. A listener is shown what its access
-// reaches, with the technical numbers replaced by the names a display uses; an administrator is shown
-// what the server stores, including the identifiers the server hands out and the settings a listener
-// has no business knowing.
+// AdminConfigPayload is the whole configuration an administrator is
+// shown: every section of it and the version of the answering server.
+// see the two-configuration-payload-shapes maintainer note.
 type AdminConfigPayload struct {
 	Accesses    []domain.Access
 	Apikeys     []domain.Apikey
@@ -56,9 +52,9 @@ func (payload AdminConfigPayload) MarshalJSON() ([]byte, error) {
 	return json.Marshal(body)
 }
 
-// AdminConfigReply is what the configuration endpoint answers with: the configuration, whether the
-// stored administrator password is still the one the server ships with, and — only when the server was
-// started with DOCKER in its environment — the fact that it thinks it is running in a container.
+// AdminConfigReply is the configuration endpoint's answer: the config,
+// the needs-changing flag, and container status, set only with DOCKER.
+// see the two-configuration-payload-shapes maintainer note.
 type AdminConfigReply struct {
 	Config             AdminConfigPayload
 	PasswordNeedChange bool
@@ -79,14 +75,13 @@ func (reply AdminConfigReply) MarshalJSON() ([]byte, error) {
 	return json.Marshal(body)
 }
 
-// AccessListPayload is the access codes an administrator is shown. Each section of the configuration
-// is also answered on its own, as this list with nothing around it.
+// AccessListPayload is the admin access codes; each section is also answered bare.
+// see the two-configuration-payload-shapes maintainer note.
 type AccessListPayload []domain.Access
 
-// MarshalJSON writes the access codes.
-//
-// An expiry is written as the moment it is, and not as the number of seconds the server counts it in.
-// An access that never expires is written without an expiry at all.
+// MarshalJSON writes the access codes. An expiry is written as an
+// instant, not the stored seconds count, and a never-expiring access
+// is written with no expiry at all.
 func (payload AccessListPayload) MarshalJSON() ([]byte, error) {
 	out := []map[string]any{}
 
@@ -284,12 +279,9 @@ func (payload SystemListPayload) MarshalJSON() ([]byte, error) {
 	return json.Marshal(out)
 }
 
-// talkgroupEntriesForAdmin writes the talkgroups stored under a system.
-//
-// A talkgroup's display order is written under the key `talkgroup`. That is not a name this server
-// would choose — the key says talkgroup and holds a number — but it is the key the legacy server
-// writes it under, and the administration interface has had to correct for it before it can show a talkgroup
-// list in order. Recorded as a preserved quirk.
+// talkgroupEntriesForAdmin writes the talkgroups stored under a system,
+// with display order under the key 'talkgroup'.
+// see the two-configuration-payload-shapes maintainer note.
 func talkgroupEntriesForAdmin(talkgroups domain.Talkgroups) []map[string]any {
 	out := []map[string]any{}
 
@@ -336,11 +328,9 @@ func talkgroupEntriesForAdmin(talkgroups domain.Talkgroups) []map[string]any {
 	return out
 }
 
-// siteEntries writes the sites stored under a system.
-//
-// A site is written as belonging to the system it is stored under. The legacy server writes every site
-// as belonging to no system at all, because the query that reads sites never asks for that column —
-// an approved divergence.
+// siteEntries writes the sites stored under a system, each reported as
+// belonging to that system.
+// see the two-configuration-payload-shapes maintainer note.
 func siteEntries(sites domain.Sites) []map[string]any {
 	out := []map[string]any{}
 
@@ -362,8 +352,8 @@ func siteEntries(sites domain.Sites) []map[string]any {
 	return out
 }
 
-// SiteListPayload is the sites of one system, in the shape an administrator is shown
-// them. It is the same shape the systems section writes under each system.
+// SiteListPayload is one system's sites in the shape an administrator
+// is shown them, the same shape the systems section writes per system.
 func SiteListPayload(sites domain.Sites) []map[string]any {
 	return siteEntries(sites)
 }
@@ -380,10 +370,10 @@ func UnitListPayload(units domain.Units) []map[string]any {
 	return unitEntries(units)
 }
 
-// OptionsPayload is the settings an administrator is shown.
-//
-// It is not everything the server holds about its settings: the stored password, whether that password
-// still needs changing, and the secret that signs administrator sessions are never in this payload.
+// OptionsPayload is the settings an administrator is shown. It never
+// carries the stored password, the needs-changing flag, or the
+// session-signing secret.
+// see the two-configuration-payload-shapes maintainer note.
 type OptionsPayload domain.Options
 
 // optionsBody is the settings an administrator is shown, in the order they are written.
