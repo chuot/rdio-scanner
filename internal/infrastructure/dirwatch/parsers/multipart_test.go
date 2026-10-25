@@ -27,10 +27,10 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The call-upload endpoints declare the reading they need themselves, because they may not import this
-// package, by the server's contract, and the composition root is what wires it to them. The shape is
-// asserted here so that a change to this parser is caught by this suite rather than by a build of the
-// composition root.
+// The call-upload endpoints declare the reading they need themselves,
+// because they may not import this package, and the shape is asserted
+// here so a parser change is caught by this suite, not by a build of
+// the composition root.
 var _ interface {
 	ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string)
 	ApplyTrunkRecorderSidecar(call *domain.Call, sidecar []byte) error
@@ -103,9 +103,9 @@ func applyUploadFields(t *testing.T, call domain.Call, fields ...[2]string) doma
 	return call
 }
 
-// TestApplyMultipartUnitsPairEachSourceWithItsLabel is the suite the legacy server's own
-// tests cover, ported: the units heard during a call are the call's own history, and the
-// labels are metadata paired with the references they describe.
+// TestApplyMultipartUnitsPairEachSourceWithItsLabel: the units heard
+// during a call are the call's own history, and the labels pair with
+// the references they describe.
 func TestApplyMultipartUnitsPairEachSourceWithItsLabel(t *testing.T) {
 	call := applyUploadFields(t, domain.NewCall(),
 		[2]string{"units", `[{"id":710618,"label":"Gastonia PD Dispatch","offset":0.03}]`},
@@ -141,9 +141,8 @@ func TestApplyMultipartUnlabeledUnitDoesNotInventMetadata(t *testing.T) {
 	}
 }
 
-// TestApplyMultipartUnitsPairEachLabelOnce keeps a label from being claimed twice for the
-// same radio, which is what an application that reports the same unit for every chunk of one
-// call would otherwise produce.
+// TestApplyMultipartUnitsPairEachLabelOnce: a label is claimed once for
+// one radio, not once per chunk an application reports it in.
 func TestApplyMultipartUnitsPairEachLabelOnce(t *testing.T) {
 	call := applyUploadFields(t, domain.NewCall(),
 		[2]string{"units", `[
@@ -204,9 +203,9 @@ func TestApplyMultipartUnitsMixLabeledAndUnlabeled(t *testing.T) {
 	}
 }
 
-// TestApplyMultipartMalformedUnitLabelsDoNotBreakHistory is the reason the pairing is a
-// pairing and not a position: a label that is not a label at all costs the call its name for
-// that radio, and nothing else about the call.
+// TestApplyMultipartMalformedUnitLabelsDoNotBreakHistory: the pairing
+// is a pairing, not a position - a label that is not a label costs the
+// call its name for that radio and nothing else.
 func TestApplyMultipartMalformedUnitLabelsDoNotBreakHistory(t *testing.T) {
 	call := applyUploadFields(t, domain.NewCall(),
 		[2]string{"units", `[
@@ -230,9 +229,9 @@ func TestApplyMultipartMalformedUnitLabelsDoNotBreakHistory(t *testing.T) {
 	}
 }
 
-// TestApplyMultipartLegacySourceAndSourcesRemainCompatible is the pre-v7 vocabulary: an
-// application that still sends `source` and `sources` is read, and the units it names are
-// recorded the same way the current vocabulary records them.
+// TestApplyMultipartLegacySourceAndSourcesRemainCompatible: the pre-v7
+// source and sources fields are still read, and record their units the
+// way the current fields do.
 func TestApplyMultipartLegacySourceAndSourcesRemainCompatible(t *testing.T) {
 	call := applyUploadFields(t, domain.NewCall(),
 		[2]string{"source", "42"},
@@ -298,9 +297,9 @@ func TestApplyMultipartAudioPartCarriesTheRecordingAndItsFilename(t *testing.T) 
 	}
 }
 
-// TestApplyMultipartAudioFilenameDerivesTheMediaTypeFromIt is how a call gets a media type
-// when the upload only names a filename — and why an upload naming both says what the last
-// one said.
+// TestApplyMultipartAudioFilenameDerivesTheMediaTypeFromIt: a filename
+// names the media type, and an upload naming both fields keeps what the
+// last one said.
 func TestApplyMultipartAudioFilenameDerivesTheMediaTypeFromIt(t *testing.T) {
 	call := applyUploadFields(t, domain.NewCall(),
 		[2]string{"audioName", "call.mp3"},
@@ -323,9 +322,9 @@ func TestApplyMultipartAudioFilenameDerivesTheMediaTypeFromIt(t *testing.T) {
 	}
 }
 
-// TestApplyMultipartAudioLengthReadsTheUploadersOwnCount: a recorder that knows how long its
-// recording is says so in seconds, and the server takes its word — the length lands on the
-// call, at the millisecond the count names.
+// TestApplyMultipartAudioLengthReadsTheUploadersOwnCount: a recorder
+// that says its recording is N seconds gets that length onto the call,
+// at the millisecond the count names.
 func TestApplyMultipartAudioLengthReadsTheUploadersOwnCount(t *testing.T) {
 	call := applyUploadFields(t, domain.NewCall(), [2]string{"audioLength", "2.5"})
 
@@ -404,9 +403,9 @@ func TestApplyMultipartFrequenciesReadEveryQualityMeasurementAndReplaceTheList(t
 
 	first := call.Frequencies[0]
 
-	// The signal level is the one measurement the parser refuses to store as the upload
-	// named it: a level is negative in the unit the recording tools report it in, and the
-	// parser only stores a level that is not.
+	// The signal level is the one measurement the parser refuses to store
+	// as the upload named it: levels are negative in the unit the recording
+	// tools report, and only a non-negative one is stored.
 	if first.Dbm != 0 {
 		t.Errorf("the first frequency's signal level is %d, want the negative level the upload named to be left at zero", first.Dbm)
 	}
@@ -499,9 +498,9 @@ func TestApplyMultipartSiteNamesTheSiteTheUploadHeardAt(t *testing.T) {
 	}
 }
 
-// TestApplyMultipartUnknownFieldIsReadAsNothing is what lets the endpoint grow: an application
-// sending a field this server has never heard of is not refused, and the fields it knows still
-// land.
+// TestApplyMultipartUnknownFieldIsReadAsNothing: an upload naming a
+// field the server has never heard of is not refused, and its known
+// fields still land - what lets the endpoint grow.
 func TestApplyMultipartUnknownFieldIsReadAsNothing(t *testing.T) {
 	call := applyUploadFields(t, domain.NewCall(),
 		[2]string{"talkgroupLabel", "Dispatch 1"},
@@ -515,13 +514,10 @@ func TestApplyMultipartUnknownFieldIsReadAsNothing(t *testing.T) {
 	}
 }
 
-// The order the fields arrive in decides which of two fields naming the same thing wins, because each one
-// writes over what an earlier one wrote.
-//
-// This is the legacy server's own behaviour for its call-upload endpoint. Its trunk-recorder endpoint
-// collects the fields into a map and applies them in whatever order Go walks that map in, so the same upload
-// is read differently on different runs — a preserved quirk, and not reproduced: both endpoints apply the fields as
-// they arrived.
+// Field arrival order decides which of two fields naming the same thing
+// wins: each writes over what an earlier one wrote. The legacy trunk-
+// recorder endpoint applied them in Go map order, a preserved quirk
+// and not reproduced: both endpoints now apply fields as they arrive.
 func TestApplyMultipartAppliesFieldsInTheOrderTheyArrived(t *testing.T) {
 	call := domain.NewCall()
 
@@ -548,10 +544,10 @@ func TestApplyMultipartAppliesFieldsInTheOrderTheyArrived(t *testing.T) {
 	}
 }
 
-// The dash some recording tools write in place of a name is a value for a system and not for a talkgroup.
-// The asymmetry is the legacy server's own, and it decides whether a call naming "-" is matched to a system
-// by label: a system label of "-" is looked up as a system actually named "-", and a talkgroup label of "-"
-// is read as no label at all.
+// The dash some recording tools write in place of a name is a value for
+// a system and not for a talkgroup: the legacy asymmetry is preserved -
+// a system label of "-" is looked up as a system actually named "-", a
+// talkgroup label of "-" reads as no label at all.
 func TestApplyMultipartSystemLabelTakesTheDashRecordingToolsWrite(t *testing.T) {
 	call := applyUploadFields(t, domain.NewCall(),
 		[2]string{"systemLabel", "-"},
@@ -569,9 +565,9 @@ func TestApplyMultipartSystemLabelTakesTheDashRecordingToolsWrite(t *testing.T) 
 	}
 }
 
-// A timestamp of zero is the one moment this guard refuses. A submission that names no moment at all is
-// accepted and recorded at the year 1, which is a preserved quirk and is preserved; an upload that explicitly says
-// the epoch is the case the guard was written for, and it does catch it.
+// A timestamp of zero is the one moment this guard refuses: a submission
+// naming no moment at all is recorded at the year 1, the legacy quirk
+// preserved, and an upload explicitly naming the epoch is what it catches.
 func TestApplyMultipartTimestampOfZeroIsTheMomentTheServerRefuses(t *testing.T) {
 	const recording = "a recording long enough to be a recording, and then some more of it"
 
@@ -628,10 +624,10 @@ func postListField(t *testing.T, name string, list []any) (domain.Call, string) 
 	return ApplyMultipart(part, data, domain.NewCall())
 }
 
-// TestApplyMultipartTruncatesOversizedLists: the list fields are read into
-// server memory and stored with the call, so a five-thousand-entry list is not a recording — it
-// is a way to spend the server's memory from an upload. The decode keeps the first
-// maxListEntries entries and says out loud, in a warning the endpoint files, that it truncated.
+// TestApplyMultipartTruncatesOversizedFrequencyList: the list fields are
+// read into server memory and stored with the call, so a five-thousand-
+// entry list is not a recording; the decode keeps the first
+// maxListEntries entries and warns that it truncated.
 func TestApplyMultipartTruncatesOversizedFrequencyList(t *testing.T) {
 	call, warning := postListField(t, "frequencies", oversizedList(t, 5000))
 

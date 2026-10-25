@@ -30,16 +30,16 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// maxListEntries is the ceiling on a posted list field — frequencies, units, patches. These
-// lists are read into memory and stored with the call, so an unbounded one is a way for an
-// upload to spend the server's memory and storage at will.
-// A real call carries tens of entries; a list over the cap is truncated, and the truncation is
-// reported to the operator's log by the endpoint that files the upload.
+// maxListEntries is the ceiling on a posted list field - frequencies,
+// units, patches - because the lists land in server memory and are
+// stored with the call: an over-cap list is truncated at it, and the
+// endpoint files the truncation warning; see the multipart-upload-fields
+// maintainer note.
 const maxListEntries = 4096
 
-// unixSeconds is the shape of a Unix second count, which the pre-v7 `dateTime` field may carry.
-// Compiled once: the endpoint reads a field per upload, and compiling a pattern per field is
-// work the server does for no reason.
+// unixSeconds is the shape of a Unix second count, which the pre-v7
+// dateTime field may carry; compiled once, because the endpoint reads a
+// field per upload; see the multipart-upload-fields maintainer note.
 var unixSeconds = regexp.MustCompile(`^[0-9]+$`)
 
 // truncatedList is the warning one oversized list earns.
@@ -47,17 +47,12 @@ func truncatedList(field string) string {
 	return fmt.Sprintf("the %s list was truncated to %d entries", field, maxListEntries)
 }
 
-// ApplyMultipart reads one form field of a call upload into the call.
-//
-// Every field is optional and every field is read on its own, so an upload that names a field
-// this server does not know is read as nothing and the rest of the upload still lands. The
-// field order is what decides which of two fields naming the same thing wins, because each one
-// writes over what an earlier one wrote — which is why an upload naming both `frequency` and
-// `frequencies` keeps whichever came last.
-//
-// The second result is what the reading had to say about the field: a list over the cap is
-// truncated, and the endpoint files that warning where an administrator reads it. A field read
-// whole says nothing.
+// ApplyMultipart reads one form field of a call upload into the call:
+// every field is optional, an unknown field reads as nothing, and the
+// fields apply in arrival order so a later one writing the same thing
+// wins; the second result is a truncation warning the endpoint files,
+// and a field read whole says nothing; see the multipart-upload-fields
+// maintainer note.
 func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string) {
 	warning := ""
 
@@ -74,9 +69,10 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain
 		call.AudioMime = string(data)
 
 	case "audioLength":
-		// The recorder's own count of its recording, in seconds. The server takes its word
-		// and measures nothing; a count it cannot read is no count, and the length stays
-		// unmeasured rather than invented.
+		// The recorder's own count of its recording, in seconds. The server
+		// takes its word and measures nothing; a count it cannot read leaves
+		// the length unmeasured rather than invented; see the multipart-upload-
+		// fields maintainer note.
 		if seconds, err := strconv.ParseFloat(string(data), 64); err == nil && seconds > 0 && !math.IsNaN(seconds) && !math.IsInf(seconds, 0) {
 			call.AudioLength = time.Duration(math.Round(seconds*1000)) * time.Millisecond
 		}
@@ -290,10 +286,10 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain
 	return call, warning
 }
 
-// appendUnitMetadata pairs a unit's label with the reference it describes, once.
-//
-// A unit with no reference, or with no label, is not a pair: the call records the radio that
-// spoke without a name for it, rather than a name attached to nothing.
+// appendUnitMetadata pairs a unit's label with the reference it
+// describes, once: a reference with no label or a label with no
+// reference is not a pair; see the multipart-upload-fields maintainer
+// note.
 func appendUnitMetadata(call *domain.Call, unitRef uint, label string) {
 	if unitRef == 0 || len(label) == 0 {
 		return
@@ -309,9 +305,9 @@ func appendUnitMetadata(call *domain.Call, unitRef uint, label string) {
 	call.Meta.UnitLabels = append(call.Meta.UnitLabels, label)
 }
 
-// decodeList reads a form field whose value is a JSON array, and reports nothing when the
-// field is not one. A list over the cap is cut at it, and the second result says that it was:
-// the reading bounds the memory a posted list can spend, and the caller says so out loud.
+// decodeList reads a form field whose value is a JSON array, says
+// nothing when the field is not one, and cuts an over-cap list at the
+// cap and says so; see the multipart-upload-fields maintainer note.
 func decodeList(data []byte) ([]any, bool) {
 	var decoded any
 
@@ -331,13 +327,10 @@ func decodeList(data []byte) ([]any, bool) {
 	return list, false
 }
 
-// ApplyMultipart reads one posted field of a call upload into the call, for the value the call-upload
-// endpoints are wired with.
-//
-// It is this package's ApplyMultipart reading and nothing new: the same knowledge is what the directory
-// watchers use for the files they read. The method exists because the endpoints are wired with a parser and
-// may not import this package directly, by the server's contract, so the composition root hands them this
-// value and the endpoints reach the reading through the seam they declare themselves.
+// ApplyMultipart is this package's reading handed to the call-upload
+// endpoints as a value, because by the server's contract they declare
+// this parsing themselves and may not import the package; see the
+// recording-parsers maintainer note.
 func (parsers *Parsers) ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string) {
 	return ApplyMultipart(part, data, call)
 }
