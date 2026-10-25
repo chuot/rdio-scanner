@@ -20,8 +20,8 @@ import (
 	"testing"
 )
 
-// The server tells a request that wants a websocket connection from one that wants an answer by looking at
-// one header, and the legacy server does not care how that header is spelled.
+// TestWantedReadsTheUpgradeHeaderWhateverItsCase: one header decides,
+// spelled any way. see the upgrade-required-is-decided-elsewhere maintainer note.
 func TestWantedReadsTheUpgradeHeaderWhateverItsCase(t *testing.T) {
 	for _, spelling := range []string{"websocket", "WebSocket", "WEBSOCKET", "webSocket"} {
 		req := request()
@@ -33,9 +33,9 @@ func TestWantedReadsTheUpgradeHeaderWhateverItsCase(t *testing.T) {
 	}
 }
 
-// A request that says nothing about an upgrade is answered as an ordinary request. This is the test the
-// legacy server applies at the two endpoints that can be either a socket or an endpoint: the
-// administrator's configuration path, and the path the scanner webapp is served from.
+// TestWantedIsNotAskedForByAnythingElse: a request silent about an
+// upgrade is an ordinary request, the legacy test at the endpoints
+// that can be either a socket or an endpoint.
 func TestWantedIsNotAskedForByAnythingElse(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -60,9 +60,9 @@ func TestWantedIsNotAskedForByAnythingElse(t *testing.T) {
 	}
 }
 
-// A request that carries the connection half of an upgrade and not the protocol half is not an upgrade. The
-// legacy server never looks at the Connection header, and a proxy that adds one to an ordinary request must
-// not turn an endpoint into a socket.
+// TestWantedIgnoresAConnectionHeaderThatClaimsAnUpgrade: the connection
+// half of an upgrade without the protocol half is not an upgrade; the
+// legacy server never looks at that header.
 func TestWantedIgnoresAConnectionHeaderThatClaimsAnUpgrade(t *testing.T) {
 	req := request()
 
