@@ -29,9 +29,9 @@ import (
 	"rdio-scanner/internal/presentation/common/upgrade"
 )
 
-// AdminDeps are the use cases the administrator endpoints answer with, and the things these endpoints report
-// that no use case decided: which version is answering, whether the server thinks it is running in a
-// container, and what happened to a request that never reached a use case at all.
+// AdminDeps are the use cases the administrator endpoints answer with, plus what these
+// endpoints report that no use case decided: the version that answers, the container
+// answer, and what happened to a request that never reached a use case at all.
 type AdminDeps struct {
 	AddUser  *application.AddAccessUserHandler
 	Config   *application.GetConfigHandler
@@ -42,10 +42,9 @@ type AdminDeps struct {
 	// SearchLogs reads the server's own log view, which is what the administrator's log page asks for.
 	SearchLogs *application.SearchLogsHandler
 
-	// Logs is where this surface files what it did. The administrator's endpoints are the only place a
-	// request from the administrator is seen at all, and until now a request they could not read left no
-	// trace: an operator could not tell a server that refused a change from a request that never made
-	// sense on its way in.
+	// Logs is where this surface files what it did with a request: a request it could not
+	// read used to leave no trace at all, and an operator could not tell a refused change
+	// from a request that made no sense on its way in.
 	Logs  ports.LogRepository
 	Clock ports.Clock
 
@@ -56,27 +55,28 @@ type AdminDeps struct {
 	// ConfigurationSection saves one section, which is what the administrator's page does.
 	ConfigurationSection *application.UpdateConfigurationSectionHandler
 
-	// SystemSubSection saves one level of one system — its sites, talkgroups or units —
+	// SystemSubSection saves one level of one system - its sites, talkgroups or units -
 	// which is what the administrator's page does since each level is saved on its own.
 	SystemSubSection *application.UpdateSystemSubSectionHandler
 
-	// ConfigSocket is the administrator's configuration socket: the thing the whole-configuration path hands
-	// a request that asks to become a websocket connection. It is an http.Handler rather than a socket type
-	// because this package has no business knowing what a socket is, and the composition root wires the real
-	// one. Left unset, the path answers only as an endpoint.
+	// ConfigSocket is the administrator's configuration socket: the whole-configuration
+	// path hands it a request that asks to become a websocket connection. It is an
+	// http.Handler because this package has no business knowing what a socket is, and the
+	// composition root wires the real one; left unset, the path answers only as an endpoint.
 	ConfigSocket http.Handler
 
 	RemoveUser *application.RemoveAccessUserHandler
 	Session    *application.CheckAdminSessionHandler
 
-	// Trusted is the proxy list the operator named: the connections whose forwarding header this surface
-	// honors when it names a request — the same list the login budget is keyed on, so the address an
-	// operator reads and the address the limiter counts are one address.
+	// Trusted is the proxy list the operator named: the connections whose forwarding
+	// header this surface honors when it names a request, the same list the login budget
+	// is keyed on, so the address an operator reads and the address the limiter counts are
+	// one address.
 	Trusted *httpaddr.Trusted
 
-	// Docker is whether the server thinks it is running in a container. The legacy server asks the
-	// environment each time it answers; the answer cannot change while the server is running, so the
-	// composition root asks once and hands the answer here.
+	// Docker is whether the server thinks it is running in a container. The answer cannot
+	// change while the server runs, so the composition root asks once and hands the answer
+	// here; the legacy server asked the environment each time it answered.
 	Docker bool
 
 	// BaseDir is the folder the server was told to serve, which the status read names beside the version
@@ -90,14 +90,12 @@ type AdminDeps struct {
 	Version string
 }
 
-// Admin is the administrator's own surface: the endpoints an administrator's page, and the command-line
-// tooling, talk to.
-//
-// It decides nothing. Every endpoint here reads a credential, hands what was submitted to the use case
-// that owns the decision, and turns the outcome into the status code and body the frozen contract fixes.
-// The order of those three steps is not incidental — several of these endpoints answer differently
-// depending on whether they looked at the section, the method, or the credential first — and so the order
-// is written down at each endpoint rather than left to a shared helper.
+// Admin is the administrator's own surface: the endpoints an administrator's page and
+// the command-line tooling talk to. It decides nothing: every endpoint reads a
+// credential, hands what was submitted to the use case that owns the decision, and
+// turns the outcome into the status code and body the frozen contract fixes. Each
+// endpoint writes down its own order of those steps rather than sharing a helper; see
+// the administrator-endpoint-gate-order maintainer note.
 type Admin struct {
 	addUser              *application.AddAccessUserHandler
 	config               *application.GetConfigHandler
@@ -116,9 +114,9 @@ type Admin struct {
 	session              *application.CheckAdminSessionHandler
 	version              string
 
-	// logs and clock are how this surface reports what it did with a request. They are separate from
-	// searchLogs because reading the log view and writing to it are different jobs, and the administrator's
-	// page does both.
+	// logs and clock are how this surface reports what it did with a request: reading the
+	// log view and writing to it are different jobs, kept separate from searchLogs, and
+	// the administrator's page does both.
 	logs  ports.LogRepository
 	clock ports.Clock
 
@@ -151,23 +149,20 @@ func NewAdmin(deps AdminDeps) *Admin {
 	}
 }
 
-// Register installs the administrator routes.
-//
-// The paths and the methods they answer are part of the frozen contract: an administrator's page and the
-// command-line tooling ask these paths directly, and the whole-configuration path and the section subtree
-// hanging off it are two different handlers, exactly as they are in the legacy server.
-//
-// The whole-configuration path is also where an administrator's configuration socket is opened: a request
-// that asks to become a websocket connection is handed to the socket the composition root wired, and it is
-// handed over before any credential is asked for, which is the order the legacy server's one handler uses.
+// Register installs the administrator routes. The paths and the methods they answer
+// are part of the frozen contract, and the whole-configuration path and the section
+// subtree hanging off it are two different handlers, exactly as in the legacy server.
+// The whole-configuration path is also where the administrator's configuration socket
+// is opened: an upgrade request is handed over before any credential is asked for; see
+// the administrator-endpoint-gate-order maintainer note.
 func (admin *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/admin/alerts", admin.Alerts)
 	mux.HandleFunc("/api/admin/config", admin.Config)
 	mux.HandleFunc("/api/admin/config/", admin.Section)
 
-	// The per-level endpoints hang off the systems path. They are registered as six
-	// specific patterns rather than a subtree, so that the systems section path itself
-	// keeps answering as a section: a subtree pattern would redirect it.
+	// The per-level endpoints hang off the systems path, registered as six specific
+	// patterns rather than a subtree: a subtree pattern would redirect the systems
+	// section path itself, and it keeps answering as a section.
 	for _, level := range []string{"sites", "talkgroups", "units"} {
 		mux.HandleFunc("GET /api/admin/config/systems/{systemId}/"+level, admin.SubSection)
 		mux.HandleFunc("PUT /api/admin/config/systems/{systemId}/"+level, admin.SubSection)
@@ -181,11 +176,10 @@ func (admin *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/admin/user-remove", admin.UserRemove)
 }
 
-// Login starts an administrator session.
-//
-// The credential is counted before it is looked at, which is the use case's decision and not this
-// endpoint's; what matters here is that the address handed to it is the address the server names, so that
-// the attempts counted here and the warning written about a guessed access code on a listener connection
+// Login starts an administrator session. The credential is counted before it is looked
+// at, which is the use case's decision and not this endpoint's; what matters here is
+// that the address handed to it is the address the server names, so the attempts
+// counted here and the warning about a guessed access code on a listener connection
 // are about the same machine.
 func (admin *Admin) Login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -228,10 +222,9 @@ func (admin *Admin) Login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Logout ends the administrator session the presented credential stands for.
-//
-// The use case is asked directly, because ending a session and checking one are different questions: the
-// legacy server checks the credential and then removes it, and a session that is refused is not ended.
+// Logout ends the administrator session the presented credential stands for. The use
+// case is asked directly: the legacy server checked the credential and then removed
+// it, and a session that is refused is not ended.
 func (admin *Admin) Logout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -260,16 +253,13 @@ func (admin *Admin) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Config reads or saves the whole configuration, or hands the request to the configuration socket.
-//
-// The upgrade header is looked at first, and before anything is asked for. A request that asks to become a
-// websocket connection is given to the socket, which authenticates by the frames it sends and not by a
-// credential in a header; the legacy server's one handler does the same, and only its endpoint half looks at
-// a token.
-//
-// For an ordinary request, the session is asked before the method: the legacy server checks the credential
-// at the top of the handler, so a request that asks something this endpoint does not answer is told the
-// session is gone rather than that the question is wrong.
+// Config reads or saves the whole configuration, or hands the request to the
+// configuration socket. The upgrade header is looked at first, before anything is
+// asked for, and the socket authenticates by the frames it sends rather than by a
+// credential in a header; see the administrator-socket-trust maintainer note. For an
+// ordinary request the session is asked before the method, so a request asking
+// something this endpoint does not answer is told the session is gone rather than that
+// the question is wrong.
 func (admin *Admin) Config(w http.ResponseWriter, r *http.Request) {
 	if admin.configSocket != nil && upgrade.Wanted(r) {
 		admin.configSocket.ServeHTTP(w, r)
@@ -313,10 +303,10 @@ func (admin *Admin) Config(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// A whole-configuration save answers with the configuration either way. A section the server
-		// could not store is already in the log view, which is how the legacy server has always reported
-		// it: an administrator is shown what the server is running with, and not a failure that would
-		// throw away the sections that did save.
+		// A whole-configuration save answers with the configuration either way: a section
+		// the server could not store is already in the log view, so the administrator is
+		// shown what the server is running with rather than a failure that would throw away
+		// the sections that did save.
 		admin.sendConfig(r.Context(), w)
 
 	default:
@@ -324,10 +314,10 @@ func (admin *Admin) Config(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Alerts answers with the nine alert sequences the server carries.
-//
-// The method is decided before the session, which is the opposite of the log view and is what the legacy
-// server does: a method this endpoint does not answer is refused without ever looking at the credential.
+// Alerts answers with the nine alert sequences the server carries. The method is
+// decided before the session, the reverse of the log view and what the legacy server
+// does: a method this endpoint does not answer is refused without ever looking at the
+// credential.
 func (admin *Admin) Alerts(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -344,9 +334,8 @@ func (admin *Admin) Alerts(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Logs reads the server's own log view.
-//
-// The session is asked before the method, as the legacy server asks it.
+// Logs reads the server's own log view. The session is asked before the method, as the
+// legacy server asks it.
 func (admin *Admin) Logs(w http.ResponseWriter, r *http.Request) {
 	if !admin.sessionIsOpen(r) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -367,10 +356,10 @@ func (admin *Admin) Logs(w http.ResponseWriter, r *http.Request) {
 
 		search := domain.ParseLogSearch(submitted)
 
-		// The one criterion this endpoint refuses instead of ignoring. A subsystem the server does not have
-		// is not a filter that matches nothing: it is a caller asking about a part of the server that does
-		// not exist, and answering them with an empty log view is how a typo becomes an operator concluding
-		// that nothing happened.
+		// The one criterion this endpoint refuses instead of ignoring: a subsystem the
+		// server does not have is a caller asking about a part of the server that does not
+		// exist, and an empty log view turns a typo into an operator concluding that
+		// nothing happened.
 		if search.SourceWasRejected() {
 			w.WriteHeader(http.StatusBadRequest)
 
@@ -393,21 +382,12 @@ func (admin *Admin) Logs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Status reads what this server is doing right now, which is the whole of what the administrator's
-// landing page is built from.
-//
-// The credential is settled before the method, and the method before anything is read. The status read is
-// several statements over a database that can hold years of recorded calls, and an anonymous request that
-// cost them would be a way for anyone to make this server work.
-//
-// This path is not a websocket path. The whole-configuration path hands a request that asks to become a
-// connection to the administrator's socket; this one answers such a request as the ordinary read it is,
-// because a status read that quietly became a connection would leave the page polling a socket it never
-// asked for.
-//
-// A read that failed is answered with 417 and nothing in the body. A zeroed snapshot would be read as a
-// server that is healthy and idle, which is the one thing this view must never say about a server it could
-// not read.
+// Status reads what this server is doing right now, the whole of what the
+// administrator's landing page is built from. The credential is settled before the
+// method, and the method before anything is read; a failed read is answered with 417
+// and nothing in the body rather than a zeroed snapshot that would read as healthy and
+// idle. This path is not an upgrade path. See the status-read-protection maintainer
+// note.
 func (admin *Admin) Status(w http.ResponseWriter, r *http.Request) {
 	if !admin.sessionIsOpen(r) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -459,9 +439,9 @@ func (admin *Admin) Password(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// A current credential that was not offered at all is a different submission from one that was
-		// offered empty, and the use case decides what each one means. The endpoint's job is to
-		// report which one was submitted.
+		// A current credential that was not offered at all is a different submission from
+		// one that was offered empty, and the use case decides what each means; the
+		// endpoint's job is to report which one was submitted.
 		currentCredential, offered := submitted["currentPassword"].(string)
 
 		result, err := admin.password.Handle(r.Context(), application.ChangeAdminPasswordCommand{
@@ -529,11 +509,10 @@ func (admin *Admin) UserAdd(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// UserRemove removes every access code sharing the name the administrator gave.
-//
-// A name that matches nothing is answered with success, which is what the legacy server has always
-// answered: the administrator's page reloads the list either way, and a failure would show an error for a
-// list that is already correct.
+// UserRemove removes every access code sharing the name the administrator gave. A
+// name that matches nothing is answered with success, as the legacy server has always
+// answered it: the page reloads the list either way, and a failure would show an error
+// for a list that is already correct.
 func (admin *Admin) UserRemove(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
@@ -599,16 +578,8 @@ func (admin *Admin) sendConfig(ctx context.Context, w http.ResponseWriter) {
 	})
 }
 
-// submittedConfiguration turns what was submitted into the sections a save replaces.
-//
-// A section is named only when the submission carries it as a list, which is how the legacy server reads
-// a whole-configuration submission: it looks at each section's name, and a value it does not recognize as
-// a list is not a submission for that section and leaves it alone. An empty list is a submission, and it
-// replaces the section with nothing.
-//
-// The settings are the exception, because they are not a list: they are merged into the settings in
-// effect, which is what the legacy server does with them and what an administrator's page depends on when
-// it submits only the settings that page shows.
+// submittedConfiguration turns what was submitted into the sections a save replaces;
+// see the configuration-save-semantics maintainer note.
 func (admin *Admin) submittedConfiguration(ctx context.Context, submitted map[string]any) (application.ConfigurationChanges, error) {
 	changes := application.ConfigurationChanges{}
 
@@ -668,13 +639,9 @@ func (admin *Admin) submittedConfiguration(ctx context.Context, submitted map[st
 	return changes, nil
 }
 
-// currentOptions reads the settings the server is running with, which is what a submitted set of settings
-// is merged into.
-//
-// The legacy server already holds them and does not read anything here. This server's settings are the
-// ones its options store holds, and the sanctioned way to ask for them is the configuration read, which
-// reads the other sections as well. That is an extra read the legacy server does not do, and it is the
-// price of not reaching into a store this package has no business reaching into.
+// currentOptions reads the settings the server is running with, which is what a
+// submitted set of settings is merged into; see the configuration-save-semantics
+// maintainer note.
 func (admin *Admin) currentOptions(ctx context.Context) (domain.Options, error) {
 	configuration, err := admin.config.Handle(ctx, application.GetConfigQuery{})
 	if err != nil {
@@ -707,11 +674,9 @@ func credential(r *http.Request) string {
 	return r.Header.Get("Authorization")
 }
 
-// decodeObject reads a submitted body as a set of fields.
-//
-// A body that is not a set of fields is an error, which the endpoint answers with 400. A body of null is
-// not an error and is a submission that names nothing, which is what the legacy server's decoder does
-// with it as well.
+// decodeObject reads a submitted body as a set of fields. A body that is not a set of
+// fields is answered with 400; a body of null is a submission that names nothing, as
+// the legacy server's decoder reads it.
 func decodeObject(r *http.Request) (map[string]any, error) {
 	var submitted map[string]any
 
@@ -722,18 +687,13 @@ func decodeObject(r *http.Request) (map[string]any, error) {
 	return submitted, nil
 }
 
-// reportUnreadableRequest files a request from an administrator that this server could not read.
-//
-// It is called only from endpoints that have already accepted the credential, which is what makes these
-// requests requests *from the administrator* — and what keeps the log safe to write: an entry per unreadable
-// body is only safe when only somebody holding a live session credential can cause one. The login endpoint
-// is the administrator path that reads a body before it has accepted anything, and it files nothing here;
-// its own failures are filed by the use case that looks at the credential, which counts attempts per
-// address.
-//
-// The reason is the decoder's own, because it is the thing an operator acts on: a body that was not JSON at
-// all, and a body that was the wrong shape for the endpoint, are different problems with different fixes,
-// and the endpoint answers both with the same 400.
+// reportUnreadableRequest files a request from an administrator that this server could
+// not read. It is called only from endpoints that have already accepted the
+// credential, which is what keeps one entry per unreadable body safe to write; the
+// login endpoint reads a body before it has accepted anything and files nothing here,
+// its failures being filed by the credential use case that counts attempts per
+// address. The reason filed is the decoder's own, because that is the thing an
+// operator acts on when the endpoint answers both shapes with the same 400.
 func (admin *Admin) reportUnreadableRequest(r *http.Request, reason error) {
 	if admin.logs == nil {
 		return
@@ -751,12 +711,10 @@ func (admin *Admin) reportUnreadableRequest(r *http.Request, reason error) {
 	}
 }
 
-// writeJSON answers with a payload, and with the failure status the frozen contract fixes when the payload
-// cannot be written at all.
-//
-// No Content-Type is set, because the legacy server does not set one and Go works out the answer the same
-// way from the bytes it is given. Setting one here would make this server's answers differ from the ones
-// its clients have always been given.
+// writeJSON answers with a payload, and with the failure status the frozen contract
+// fixes when the payload cannot be written at all; no Content-Type is named, as the
+// legacy server never named one; see the administrator-answers-carry-no-content-type
+// maintainer note.
 func writeJSON(w http.ResponseWriter, payload any) {
 	body, err := json.Marshal(payload)
 	if err != nil {
