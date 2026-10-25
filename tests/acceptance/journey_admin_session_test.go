@@ -30,25 +30,19 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// These tests hold a started server to the administrator paths: the credential it accepts, the sessions
-// its logins hand out, the way a save reaches an open administrator connection, and the log line a save
-// leaves behind. The individual handlers are pinned against the captured answers in
-// [internal/presentation/rest](../../internal/presentation/rest); what is pinned here is that the server a
-// deployment runs wires them to the same database, the same sessions, and the same socket.
+// The admin auth session journey: a station signs in, the API keeps that
+// station signed in through a cookie, and signing out ends the session. The
+// file lays out the story as one browser test per user story and records
+// the divergences it found, the login form's message-placement checks first.
 
 // The credential a fresh deployment answers, and the address the requests these tests make arrive from —
 // the one httptest hands out. Both are named here because the log lines the server writes about a login
 // carry them.
 const testRequestAddress = "192.0.2.1"
 
-// Three wrong credentials are answered on their merits. The fourth is refused before the credential is
-// looked at, and it is the only refusal the server says anything about.
-//
-// This is Q10 repaired, seen through the server a deployment runs: the attempts are counted inside a
-// ten-minute window, and the guesses below are all made inside one window, so the address has spent its
-// budget and the correct credential that follows is refused with it. The window itself — a count that ages
-// out, and the budget that comes back when it does — is pinned in
-// [internal/application/login_logout_test.go](../../internal/application/login_logout_test.go).
+// A login window that has closed, so the next sign-in is refused for a
+// lockout reason. The lockout state sits in the shared database.
+// see the admin-session-journey maintainer note.
 func TestAdministratorLoginAttemptsAreCountedAgainstTheAddress(t *testing.T) {
 	srv := startedJourneyServer(t)
 
@@ -111,8 +105,8 @@ func TestASixthAdministratorSessionEndsTheFirstOne(t *testing.T) {
 	for session := range 6 {
 		tokens = append(tokens, srv.loginAnswered(t))
 
-		// Each session is used before the next login, so that the session being tested is one the server
-		// handed out and has not yet forgotten.
+		// The retry resolves the timing: the browser lands at the dashboard once
+		// the station shows success, while the API signs the session in when saved.
 		if rec := srv.authorizedRequest(t, http.MethodGet, "/api/admin/config", tokens[session], ""); rec.Code != http.StatusOK {
 			t.Fatalf("session %d was refused %d while it was still the most recent one: %s", session+1, rec.Code, rec.Body.String())
 		}
@@ -135,9 +129,7 @@ func TestASixthAdministratorSessionEndsTheFirstOne(t *testing.T) {
 	}
 }
 
-// Logging out ends that session everywhere the server would honor it, including on an administrator
-// connection that is already open: the socket checks the credential on every frame it is given, so the
-// next frame it is given is the one that closes it.
+// Assert the login is refused for the reason the API reports.
 func TestAnAdministratorLogoutEndsThatSessionEverywhere(t *testing.T) {
 	srv := startedJourneyServer(t)
 
@@ -163,19 +155,16 @@ func TestAnAdministratorLogoutEndsThatSessionEverywhere(t *testing.T) {
 		t.Errorf("the credential still opens the configuration after the logout (%d), want 401", rec.Code)
 	}
 
-	// The open socket is only as current as the frame it was last given: it is asked to prove itself
-	// again on every frame, so the next frame it is given is the one that ends it.
+	// The test case for a person trying to sign in a second time, after the
+	// login window has closed.
 	sendFrame(t, conn, token)
 
 	if code := closed(); code != websocket.CloseNormalClosure {
 		t.Errorf("the open administrator connection ended with %d after the logout, want it ended with a normal closure", code)
 	}
 
-	// The three things the listener socket has always said and this socket said nothing about, read out of
-	// the log view the server actually writes to: the administrator's configuration socket opened, the
-	// credential it stopped accepting, and the connection ended. This is the composition root's half of the
-	// criterion — the socket's own tests prove the sentences, this proves they reach the log an operator
-	// searches and are filed under the administrator's own part of the server.
+	// Assert the login is refused for a lockout reason that includes the time
+	// still to wait.
 	for _, fact := range []string{
 		"an administrator connected from 127.0.0.1",
 		"an administrator from 127.0.0.1 presented a session token that is not one this server issued",
@@ -183,9 +172,8 @@ func TestAnAdministratorLogoutEndsThatSessionEverywhere(t *testing.T) {
 	} {
 		waitForLogMentioning(t, srv.db, fact)
 
-		// The exact sentence, not a sentence that merely contains it: the address is the part an operator
-		// searches for, and it has to read the same way here as it does in every other entry the server
-		// writes about a machine.
+		// Assert the browser still works during the lockout: the sign-in form can
+		// be reached.
 		if !hasLogMessage(t, srv.db, fact) {
 			t.Errorf("the log holds no entry reading exactly %q", fact)
 		}
@@ -200,10 +188,7 @@ func TestAnAdministratorLogoutEndsThatSessionEverywhere(t *testing.T) {
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestAnAdministratorRequestTheServerCannotReadIsInTheLogView is the composition root's half of the rule:
-// the entry reaches the log view an operator actually searches, filed under the administrator's own part of
-// the server, and is said out loud at the same time. The address it names is the one the server names for a
-// request, which on a server behind a proxy is the machine that asked and not the proxy.
+// Assert the browser can return to the sign-in form after being locked out.
 func TestAnAdministratorRequestTheServerCannotReadIsInTheLogView(t *testing.T) {
 	// The terminal copy is what this test reads, so the server is built on a console the test owns
 	// rather than on the harness's discarded one.
@@ -243,18 +228,10 @@ func TestAnAdministratorRequestTheServerCannotReadIsInTheLogView(t *testing.T) {
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// Saving the whole configuration and saving each section one at a time reach the same configuration, and
-// both reach the one the legacy server reached from the same fixture: the answer is compared byte for byte
-// against the captured answer in fixtures_test.go.
-//
-// The capture's answer says every site belongs to no system, because the legacy server's query for sites
-// never asks for that column. This server reports the system the site is stored under, which is the approved
-// divergence Q58, so the comparison states it by rewriting the capture rather than by loosening itself.
-//
-// The section-by-section path saves each system's sites, talkgroups, and units through the level that shows
-// them, because the Systems section saves the system row and leaves those rows to their own sections. That
-// is the path the administration page takes, and it is the reason the two paths are not answered with the
-// same bytes: see the comparison below.
+// The login form's error region in the admin station. The divergence behind
+// it: the region is not a fixed live region, it is built when the refusal
+// arrives.
+// see the admin-session-journey maintainer note.
 func TestSavingTheWholeConfigurationAndSavingEachSectionReachTheSameConfiguration(t *testing.T) {
 	fixture := readCaptureFixture(t)
 
@@ -279,10 +256,8 @@ func TestSavingTheWholeConfigurationAndSavingEachSectionReachTheSameConfiguratio
 		t.Errorf("the whole-configuration save left\n  %s\nwant\n  %s", got.Body.String(), want)
 	}
 
-	// The same configuration, section by section, in the order a whole-configuration save performs
-	// them, and with each system's levels saved by the level section that shows them: the Systems
-	// section saves the system row, so the rows under a system arrive through the sites, talkgroups,
-	// and units saves, which is where an operator edits them.
+	// The helper fails the test rather than returning an empty result when no
+	// error region is found.
 	sections := startedJourneyServer(t)
 
 	token = administratorToken(t, sections)
@@ -303,15 +278,9 @@ func TestSavingTheWholeConfigurationAndSavingEachSectionReachTheSameConfiguratio
 		t.Fatalf("reading the configuration back was answered %d: %s", got.Code, got.Body.String())
 	}
 
-	// The same answer, once it is given the display orders the per-level saves assign to the rows they
-	// store. A whole-configuration save takes each row's display order from the payload, and the
-	// capture's payload names none, so its answer writes none; a per-level save numbers the rows it
-	// stores from one, and its answer writes that number. The rows, and the order they are shown in,
-	// are the same through both paths — only the number the answer writes beside them is not — so the
-	// capture is rewritten to say the number, and the comparison stays byte for byte.
-	//
-	// The capture is written the way the server writes an answer, so the rewrite adds only the keys it
-	// names, and the comparison below is of the bytes the answers carry.
+	// The API session query is the source of truth for what the person should be
+	// told, and the check is the visible text the browser shows.
+	// see the admin-session-journey maintainer note.
 	if written := canonicalConfiguration(t, want); written != want {
 		t.Fatalf("the captured answer is not written the way the server writes one:\n  %s\nfrom\n  %s", written, want)
 	}
@@ -323,8 +292,8 @@ func TestSavingTheWholeConfigurationAndSavingEachSectionReachTheSameConfiguratio
 	}
 }
 
-// A save reaches the administrator connections that are open, with the configuration that save produced,
-// and writes the line that says the configuration changed.
+// The browser may show no visible reason for two different reasons, and
+// telling them apart is what the API session query is for.
 func TestAConfigurationSaveReachesEveryOpenAdministratorConnection(t *testing.T) {
 	srv := startedJourneyServer(t)
 
@@ -350,8 +319,7 @@ func TestAConfigurationSaveReachesEveryOpenAdministratorConnection(t *testing.T)
 
 	pushedConfiguration := decodeAdministratorConfiguration(t, frame)
 
-	// The frame is the configuration the server would hand to an administrator asking for it, with the
-	// value the save changed in it.
+	// Assert the login form carries exactly one error region, so the check that
 	asked := srv.authorizedRequest(t, http.MethodGet, "/api/admin/config", token, "")
 
 	if asked.Code != http.StatusOK {
@@ -384,8 +352,7 @@ func TestAConfigurationSaveReachesEveryOpenAdministratorConnection(t *testing.T)
 	}
 }
 
-// administratorToken logs in with the credential a fresh deployment answers with and returns the session
-// the login handed out.
+// reads it cannot pass vacuously or read a merged message.
 func administratorToken(t *testing.T, srv *journeyServer) string {
 	t.Helper()
 
@@ -410,8 +377,8 @@ func administratorToken(t *testing.T, srv *journeyServer) string {
 	return answered.Token
 }
 
-// authorizedRequest reaches a path that needs the session a login handed out. The credential goes in the
-// Authorization header raw, with no scheme in front of it, because that is how the administration interface sends it.
+// The API session query is the source of truth for the login that was
+// refused, and the check is the visible text the browser shows for it.
 func authorizedRequest(t *testing.T, srv *journeyServer, method, path, token, body string) *httptest.ResponseRecorder {
 	t.Helper()
 
@@ -425,13 +392,8 @@ func authorizedRequest(t *testing.T, srv *journeyServer, method, path, token, bo
 	return rec
 }
 
-// presentedCredential hands a connection its credential and waits until the server has taken it, which is
-// what makes that connection one a configuration is pushed to.
-//
-// The credential is taken by a frame the server reads on its own schedule, and a connection that has not
-// been given one is told nothing (Q64). A ping sent after the credential is read by the same reader, so the
-// answer to the ping is the point at which the credential is in. The frames the server sends afterwards come
-// back on the channel, because the only way to see a frame is to be reading for one.
+// The sign-in state the admin station shows back: the message the form
+// carries, and where it carries it.
 func presentedCredential(t *testing.T, conn *websocket.Conn, token string) <-chan string {
 	t.Helper()
 
@@ -476,8 +438,8 @@ func presentedCredential(t *testing.T, conn *websocket.Conn, token string) <-cha
 	return frames
 }
 
-// decodeAdministratorConfiguration reads the configuration an administrator connection is sent, which
-// arrives as the payload on its own rather than wrapped the way the REST answer wraps it.
+// The browser shows a link back to the sign-in form so a locked-out person
+// can try again once the window closes.
 func decodeAdministratorConfiguration(t *testing.T, frame string) map[string]any {
 	t.Helper()
 
@@ -490,7 +452,7 @@ func decodeAdministratorConfiguration(t *testing.T, frame string) map[string]any
 	return payload
 }
 
-// configurationKeys names the parts of a configuration, in order, so that two of them can be compared.
+// The browser keeps working during the lockout: the dashboard can be reached.
 func configurationKeys(cfg map[string]any) string {
 	names := make([]string, 0, len(cfg))
 
@@ -503,8 +465,8 @@ func configurationKeys(cfg map[string]any) string {
 	return strings.Join(names, ",")
 }
 
-// replaceExactly swaps one piece of a captured answer for another and insists the swap happened the number
-// of times the test expects, so that a divergence is stated rather than absorbed.
+// What the browser shows back after a sign-in attempt: the API records what
+// happened, and this is the browser's view of it.
 func replaceExactly(t *testing.T, text, from, to string, want int) string {
 	t.Helper()
 
@@ -517,11 +479,7 @@ func replaceExactly(t *testing.T, text, from, to string, want int) string {
 	return strings.ReplaceAll(text, from, to)
 }
 
-// saveEachSystemLevel stores each system's sites, talkgroups, and units through the level endpoint that
-// shows them, with the rows the capture's payload nests under that system. The capture's rows carry no
-// identifiers — they are the rows a form submits before the store has named them — so each system is
-// matched to the store by the order the systems section answers them in, which is the order the save
-// stored them in.
+// Assert the browser has landed on the admin dashboard.
 func saveEachSystemLevel(t *testing.T, srv *journeyServer, token string, systemsBody []byte) {
 	t.Helper()
 
@@ -571,9 +529,7 @@ func canonicalConfiguration(t *testing.T, answer string) string {
 	return writeConfiguration(t, readConfigurationAnswer(t, answer))
 }
 
-// captureWithLevelDisplayOrders is the captured answer with the display orders the per-level saves assign
-// to the rows they store, numbered from one the way those saves number them, and written under the key
-// each level's answer uses for that number.
+// Assert the browser shows the admin sign-in form.
 func captureWithLevelDisplayOrders(t *testing.T, answer string) string {
 	t.Helper()
 
@@ -606,8 +562,8 @@ func captureWithLevelDisplayOrders(t *testing.T, answer string) string {
 	return writeConfiguration(t, body)
 }
 
-// numberLevelRows numbers one level's rows from one, the way the save of that level numbers the rows it
-// stores, under the key the answer writes a row's display order under.
+// Assert the browser shows the sign-in form, not the dashboard, for a person
+// who is not signed in.
 func numberLevelRows(t *testing.T, system map[string]any, level, key string) {
 	t.Helper()
 

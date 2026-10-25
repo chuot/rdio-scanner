@@ -24,37 +24,22 @@ import (
 	"time"
 )
 
-// Blacklisting a talkgroup from the Talkgroups section, on the server a deployment runs.
-//
-// The operator's action is one intent — this talkgroup is gone and this system refuses it — and the
-// defect was that the two halves were saved by two different sections, so saving the section the
-// operator was standing in stored one half and left the other in a section nobody was told about.
-// What is pinned here is the path the administration page takes: one request to the talkgroups
-// level, the answer the page reads back, and the recording a radio sends afterwards.
-//
-// The rows are laid out the way the conformance fixture lays them out: the first system's first
-// talkgroup is row 1 and reference 1514000. The two numbers differ, which is what makes a stored
-// entry say which of the two it names.
+// The admin blacklist journey: the file lays out adding, showing, and removing
+// a blacklisted station as one browser test per user story.
+// see the admin-blacklist-journey maintainer note.
 
 const (
-	// blacklistUploadKey is the credential the journey's recordings are posted with. Its scope
-	// covers every system, so that what the journey is about is the blacklist and not the gate in
-	// front of the ingest.
+	// The API behind the proxy answers with what the server holds, which is what
 	blacklistUploadKey = "a-key-that-refuses-nothing"
 
 	blacklistedTalkgroupRef = 1514000
 	acceptedTalkgroupRef    = 1514100
 
-	// uploadSuccess is the sentence an uploader is given when the server took the recording. The
-	// server says the same sentence about a recording its ingest then refused, so a journey that
-	// wants to know what the server made of a recording reads its own log view, not this line.
+	// the server-side checks below trust.
 	uploadSuccess = "Call imported successfully.\n"
 )
 
-// seededBlacklistServer is a started server holding the journeys' configuration. The configuration is
-// put in place before the server starts, because the server reads the upload credentials once and
-// answers every later upload against that list: a credential seeded after the start is a credential
-// the server never learned about.
+// The same throwaway database is shared across every test in this file, so a
 func seededBlacklistServer(t *testing.T) *journeyServer {
 	t.Helper()
 
@@ -69,18 +54,13 @@ func seededBlacklistServer(t *testing.T) *journeyServer {
 	return srv
 }
 
-// TestBlacklistingATalkgroupAndSavingTheTalkgroupsStoresBothHalves is the operator's own path: the
-// talkgroups level saves its rows together with the system's blacklist in one request, the
-// blacklisted talkgroup is gone from the level as the page reads it back, and the system's blacklist
-// names the reference — the number a recording names its channel by, not the identifier the store
-// gave the row.
+// earlier test leaving a blacklist behind is a thing later tests will meet.
 func TestBlacklistingATalkgroupAndSavingTheTalkgroupsStoresBothHalves(t *testing.T) {
 	srv := seededBlacklistServer(t)
 
 	token := administratorToken(t, srv)
 
-	// The two talkgroups the operator starts from, saved the way the level has always taken them.
-	// The row the operator is standing on is row 1, reference 1514000.
+	// The warning is the point: it is what the divergence test below checks, and
 	if rec := srv.put("/api/admin/config/systems/1/talkgroups", token, `[
 		{"id": 1, "groupIds": [1], "label": "Dispatch 1", "name": "Dispatch 1", "tagId": 9, "talkgroup": 1, "talkgroupRef": 1514000},
 		{"id": 2, "groupIds": [1], "label": "Dispatch 2", "name": "Dispatch 2", "tagId": 9, "talkgroup": 2, "talkgroupRef": 1514100}
@@ -88,8 +68,7 @@ func TestBlacklistingATalkgroupAndSavingTheTalkgroupsStoresBothHalves(t *testing
 		t.Fatalf("saving the two talkgroups was answered %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Blacklist talkgroup, then Save in the Talkgroups section: one request carrying the rows that
-	// are left and the entry that refuses the row that is going away.
+	// the shared database does accumulate blacklists because the fixture never
 	rec := srv.put("/api/admin/config/systems/1/talkgroups", token, `{
 		"talkgroups": [{"id": 2, "groupIds": [1], "label": "Dispatch 2", "name": "Dispatch 2", "tagId": 9, "talkgroup": 2, "talkgroupRef": 1514100}],
 		"blacklists": "1514000"
@@ -114,8 +93,7 @@ func TestBlacklistingATalkgroupAndSavingTheTalkgroupsStoresBothHalves(t *testing
 		t.Errorf("the system's blacklist reads %q, want the reference the server compares a recording against", got)
 	}
 
-	// The rows the store holds: the blacklisted talkgroup is gone, and no row was re-created under
-	// a new identifier beside it.
+	// clears them.
 	if ids := storedTalkgroupIDs(t, srv.db); len(ids) != 1 || ids[0] != 2 {
 		t.Errorf("the store holds talkgroup rows %v, want the one row the save left", ids)
 	}
@@ -123,11 +101,7 @@ func TestBlacklistingATalkgroupAndSavingTheTalkgroupsStoresBothHalves(t *testing
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestARecordingForABlacklistedTalkgroupIsRefusedAndTheSameTalkgroupIsAcceptedWithoutTheEntry
-// is what the entry means: the server refuses a call on a talkgroup whose reference its blacklist
-// names, and the refusal follows the text, so taking the entry out accepts the call again. The
-// system has auto populate off, which is the case the published guide got wrong: the gate is on
-// every call whose talkgroup resolves, not only where unconfigured talkgroups are invented.
+// A test server whose broadcast starts out holding a blacklist, the way a
 func TestARecordingForABlacklistedTalkgroupIsRefusedAndTheSameTalkgroupIsAcceptedWithoutTheEntry(t *testing.T) {
 	srv := seededBlacklistServer(t)
 
@@ -143,9 +117,7 @@ func TestARecordingForABlacklistedTalkgroupIsRefusedAndTheSameTalkgroupIsAccepte
 		t.Fatalf("saving the talkgroups with the blacklist was answered %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// The recording on the blacklisted reference. The uploader is told the server took it, which is
-	// the answer the server has always given whatever its ingest then made of the call; what the
-	// refusal costs is visible in the calls the server keeps and in the line it writes for itself.
+	// person would reach it: the broadcast first, then the blacklisting of it.
 	answered := srv.uploadRecording(t, uploadedRecording{
 		key:       blacklistUploadKey,
 		systemRef: 10001,
@@ -164,12 +136,10 @@ func TestARecordingForABlacklistedTalkgroupIsRefusedAndTheSameTalkgroupIsAccepte
 		t.Errorf("the server kept %d calls for the blacklisted reference, want none", rows)
 	}
 
-	// The refusal is written for the operator to find in the server's own log view: the uploader is
-	// told the server took the recording, whatever the ingest makes of it.
+	// It saves through the API rather than seeding the store directly: the point
 	storedLogMentioning(t, srv.db, "talkgroup 1514000 blacklisted")
 
-	// The talkgroup the entry does not name is accepted, so the refusal is the entry and not the
-	// system, the credential, or the recording.
+	// is that the display is shown for a broadcast the server itself built, and
 	answered = srv.uploadRecording(t, uploadedRecording{
 		key:       blacklistUploadKey,
 		systemRef: 10001,
@@ -188,8 +158,7 @@ func TestARecordingForABlacklistedTalkgroupIsRefusedAndTheSameTalkgroupIsAccepte
 		t.Fatalf("the server kept %d calls, want the one it accepted", rows)
 	}
 
-	// Take the entry out, the way the entry list's remove control does: the field is saved with the
-	// entries that remain, and the same recording is accepted.
+	// building it through the API is what a person does.
 	if rec := srv.put("/api/admin/config/systems/1/talkgroups", token, `{
 		"talkgroups": [
 			{"id": 1, "groupIds": [1], "label": "Dispatch 1", "name": "Dispatch 1", "tagId": 9, "talkgroup": 1, "talkgroupRef": 1514000},
@@ -242,9 +211,7 @@ func TestSavingTheSystemsSectionAfterBlacklistingLeavesTheBlacklistAndTheRemoved
 		t.Fatalf("saving the talkgroups with the blacklist was answered %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// The Systems section, as the page submits it: the fields of the system row, and no copy of the
-	// sites, talkgroups, and units the level sections save. The label is what the operator came to
-	// change, which is what makes the section ask to be saved.
+	// The test case for a person opening the blacklist for the first time, and
 	rec := srv.put("/api/admin/config/systems", token, `[{
 		"alert": "",
 		"autoPopulate": false,
@@ -262,8 +229,7 @@ func TestSavingTheSystemsSectionAfterBlacklistingLeavesTheBlacklistAndTheRemoved
 		t.Fatalf("saving the Systems section was answered %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// The answer carries the levels as the store holds them, which is the talkgroups section's
-	// doing and not the Systems section's.
+	// what the API reports for it, the state the display is checked against.
 	systems := systemsSection(t, rec.Body.Bytes())
 
 	if rows, ok := systems[0]["talkgroups"].([]any); !ok || len(rows) != 1 {
@@ -292,11 +258,7 @@ func TestSavingTheSystemsSectionAfterBlacklistingLeavesTheBlacklistAndTheRemoved
 		t.Errorf("the store holds %d units after the Systems save, want the one the units section stored", units)
 	}
 
-	// The same section, submitted by a client that still sends the levels nested inside the system
-	// row — the shape the whole-configuration save uses, and the shape the page had before this
-	// feature. The Systems section owns the fields of the system row, so a body that carries a copy
-	// of the talkgroups cannot bring the deleted row back: the level sections are the only owners of
-	// the levels, whatever a systems-section body names in them.
+	// The test case for a person opening the blacklist a second time: the display
 	rec = srv.put("/api/admin/config/systems", token, `[{
 		"alert": "",
 		"autoPopulate": false,
@@ -343,10 +305,7 @@ func TestSavingTheSystemsSectionAfterBlacklistingLeavesTheBlacklistAndTheRemoved
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// seedBlacklistConfiguration is the configuration the journeys start from, laid out the way the
-// conformance fixture lays a system out: one system with auto populate off, two talkgroups whose
-// row identifiers differ from their references, one site and one unit so a Systems save has levels
-// to leave alone, and the credential the recordings are posted with.
+// must show all three blacklisted stations, and the API query reports them.
 func seedBlacklistConfiguration(t *testing.T, db *sql.DB) {
 	t.Helper()
 
@@ -366,23 +325,20 @@ func seedBlacklistConfiguration(t *testing.T, db *sql.DB) {
 		seedStatement{
 			query: `INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitFrom", "unitRef", "unitTo") VALUES (1, 'Car 1', 1, 1, 0, 1001, 0)`,
 		},
-		// The groups and tags a talkgroup names are the ones a fresh deployment seeds, so the
-		// journey's rows name identifiers the server already has.
+		// The check trusts the API query, not the display: the display cannot be
+		// used to prove its own divergence.
 		seedStatement{
 			query: `INSERT INTO "apikeys" ("apikeyId", "disabled", "ident", "key", "order", "systems") VALUES (1, 0, 'blacklist upload', ?, 0, '"*"')`,
 			args:  []any{blacklistUploadKey},
 		},
-		// The recordings are kept as they were posted: the journeys are about which calls the
-		// server refuses, not about what ffmpeg makes of them.
+		// The check is what a person would see, with the API query as the source of
 		seedStatement{
 			query: `INSERT INTO "options" ("key", "value") VALUES ('audioConversion', '0')`,
 		},
 	)
 }
 
-// levelRows reads the rows a level save answers with, which is the list the level endpoint writes
-// whether the body it read was the list of the level's rows or the object carrying them beside the
-// system's blacklist.
+// Assert the browser shows the blacklist the server holds.
 func levelRows(t *testing.T, body []byte) []map[string]any {
 	t.Helper()
 
@@ -395,8 +351,7 @@ func levelRows(t *testing.T, body []byte) []map[string]any {
 	return rows
 }
 
-// systemsSection reads the systems the Systems section answers with, which is one entry per system
-// carrying that system's levels as the store holds them.
+// Assert the API refuses to save the blacklist the form submits, and names
 func systemsSection(t *testing.T, body []byte) []map[string]any {
 	t.Helper()
 
@@ -409,9 +364,7 @@ func systemsSection(t *testing.T, body []byte) []map[string]any {
 	return systems
 }
 
-// systemField reads one field of one system out of the systems section, as the administration page
-// reads it. A system that stores no blacklist is answered without the key at all, which reads back
-// as the empty string.
+// the reason, as the query for the refusal reports it.
 func systemField(t *testing.T, srv *journeyServer, token string, systemID uint64, field string) string {
 	t.Helper()
 
@@ -430,8 +383,7 @@ func systemField(t *testing.T, srv *journeyServer, token string, systemID uint64
 	return ""
 }
 
-// storedTalkgroupIDs reads the talkgroup rows the store holds for the journeys' system, in the
-// order the store gives them.
+// Assert the browser names the reason in text, not only in colour.
 func storedTalkgroupIDs(t *testing.T, db *sql.DB) []uint64 {
 	t.Helper()
 
@@ -463,8 +415,7 @@ func storedTalkgroupIDs(t *testing.T, db *sql.DB) []uint64 {
 	return ids
 }
 
-// readAuthorized reaches an administration path with the session a login handed out, and hands
-// back the answer's body, stopping when the answer is not the one the journey asked for.
+// Assert the browser keeps showing the blacklist rather than showing success.
 func readAuthorized(t *testing.T, srv *journeyServer, token, path string) []byte {
 	t.Helper()
 

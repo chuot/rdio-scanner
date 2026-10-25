@@ -45,13 +45,10 @@ import (
 	"rdio-scanner/internal/infrastructure/persistence"
 )
 
-// This is the harness the journeys in this package run against. Everything a journey needs is reached
-// through the composition root's exported API — `app.New`, `Start`, `ServeHTTP`, `Close` — and through the
-// database the server opened, which a journey opens a second connection to so that it can seed a
-// configuration and read back what the server wrote. Nothing here reaches inside the server.
-//
-// The server is configured the way a deployment configures one: a base folder the test owns, a sqlite
-// database inside it, and the version the recorded runs were captured against.
+// This is the harness the journeys in this package run against: a whole
+// server reached only through the composition root's exported API, and a
+// second database connection, configured the way a deployment configures one.
+// see the harness-boot maintainer note.
 
 // journeyServer is a server a journey is running against, together with the two things a journey reads
 // and writes beside it: the folder the server was built in, and the database the server opened.
@@ -61,8 +58,8 @@ type journeyServer struct {
 	db     *sql.DB
 }
 
-// startedJourneyServer is a server that has been through the start sequence the legacy server goes
-// through, on a folder the test owns.
+// startedJourneyServer is a server that has been through the full start
+// sequence, on a folder the test owns.
 func startedJourneyServer(t *testing.T) *journeyServer {
 	t.Helper()
 
@@ -143,11 +140,10 @@ func journeyConfigIn(base string) app.Config {
 		// discarded.
 		Out: io.Discard,
 
-		// The converter a journey's server is given is the ffmpeg the host installs. Every journey that
-		// reaches the converter turns conversion off, so that what a journey proves is the server and not
-		// what one version of ffmpeg makes of a recording; conversion is compared where ffmpeg is the
-		// subject. The prober a journey's server is given measures nothing and says nothing: a journey's
-		// recordings are fixtures, not audio, and the length is proven where ffprobe is the subject.
+		// the converter a journey's server is given is the ffmpeg the host installs,
+		// and the prober measures nothing: every journey reaching conversion turns
+		// it off, and conversion and probing are proven where ffmpeg and ffprobe
+		// are the subject.
 		Converter: func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string) {
 			return ffmpeg.New(), &fakes.Prober{}, ""
 		},
@@ -753,16 +749,10 @@ func waitForLog(t *testing.T, db *sql.DB, what string, matches func(string) bool
 	}
 }
 
-// assertEveryServerLogEntry is the guard over a real server's log view: every row names the part of the
-// server that wrote it, and no row begins with the internal name of the code that wrote it.
-//
-// The application layer's writers are guarded in internal/application/logs_wording_test.go. This is the same
-// two rules at the level where the watched directories, the livefeed hub, the upload endpoint and the
-// retention pass actually write, read back out of the store every entry is written through — which is also
-// the only place a row the *other* server wrote can be told apart from one this server wrote.
-//
-// It is called at the end of the journeys that already reach each subsystem, rather than from one test that
-// tries to reach all of them, so a failure names the journey that produced the entry.
+// assertEveryServerLogEntry is the guard over a real server's log view: every
+// row names the subsystem that wrote it and no row begins with the internal
+// name of the code that wrote it, read back out of the writing store.
+// see the harness-log-guard maintainer note.
 func assertEveryServerLogEntry(t *testing.T, db *sql.DB) {
 	t.Helper()
 
@@ -816,12 +806,10 @@ func assertEveryServerLogEntry(t *testing.T, db *sql.DB) {
 	}
 }
 
-// internalPrefixAt is the front-of-message shape the wording rule forbids: a token naming a section and an
-// operation, or a bare section name, ending in a colon.
-//
-// Only the front counts. The failure's own text is kept verbatim after the sentence this feature puts in
-// front of it, because that text names the statement or the syscall that failed, so `the log search failed:
-// logs.search: no such table: logs` is the rule being followed and not broken.
+// internalPrefixAt is the front-of-message shape the wording rule forbids:
+// a token naming a subsystem and an operation, or a bare subsystem name,
+// ending in a colon; only the front counts, the failure's own text after it
+// names the statement or syscall that failed and is kept verbatim.
 func internalPrefixAt(message string) string {
 	first := message
 
@@ -863,20 +851,18 @@ func compareCanonical(t *testing.T, what string, want json.RawMessage, got any) 
 	}
 }
 
-// rowsOf reads back one of the tables a run is expected to have left behind.
-//
-// The log view's entries name the directories the server is watching, and those live under the temporary
-// folder the test built the server in. They are rewritten to <base> here and in the capture, because the
-// capture is of what the run did and not of which folder this test happened to use.
+// rowsOf reads back one of the tables a run is expected to have left
+// behind; the log entries name watched directories under the temporary
+// folder, rewritten to <base> here and in the capture, because the capture
+// is of what the run did and not of which folder this test used.
 func rowsOf(t *testing.T, db *sql.DB, base, table string) []map[string]any {
 	t.Helper()
 
 	queries := map[string]string{
 		"calls": `SELECT "callId", "audioFilename", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp", length("audio") AS "audioBytes" FROM "calls" ORDER BY "callId"`,
-		// The log view holds the entries this server writes that the legacy server never did — the startup
-		// notices, which name the server itself. They are outside a comparison against a capture of the other
-		// server's run, and each one is pinned by its own test instead. Everything the two servers are meant to
-		// agree about is what is left.
+		// the comparison query skips log entries whose source is the server itself:
+		// those have no counterpart in a recorded run, and each one is pinned by its
+		// own test instead.
 		"logs": `SELECT "level", "message" FROM "logs" WHERE "source" != 'server' ORDER BY "logid"`,
 	}
 

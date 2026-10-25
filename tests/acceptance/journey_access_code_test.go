@@ -21,19 +21,11 @@ import (
 	"testing"
 )
 
-// These tests put a restricted server together the way a deployment puts one together — a configuration
-// saved by an administrator, read back from the database at start — and then hold a real listener socket
-// against it. The frames are compared as the bytes the server wrote, against the bytes the legacy server
-// wrote in the same configuration, which is what makes them parity tests rather than a description of what
-// This server happens to do.
-//
-// The configuration is the one the golden captures were taken from, installed through the same administrator
-// endpoints in the same order, so that the two servers are answering in a configuration the legacy server's
-// answers were recorded in. It is the recorded configuration in fixtures_test.go: the harness that
-// originally installed it is retired, so the bytes it wrote are kept in the package that still installs them.
+// The access-code journey: the file lays out the story as one browser test per
+// user story, with the divergences it found recorded at the end.
+// see the access-code-journey maintainer note.
 
-// The access codes the capture configures for its restricted phase, and what each one is there to be
-// tested for: one that names systems, one whose date has passed, and one that allows one session.
+// The test server is configured here, with its own throwaway database, and the
 const restrictedAccesses = `[
   { "id": 0, "code": "capture-open", "ident": "Capture open", "systems": "*" },
   { "id": 0, "code": "capture-scoped", "ident": "Capture scoped", "systems": [{ "id": 10001, "talkgroups": "*" }] },
@@ -41,8 +33,7 @@ const restrictedAccesses = `[
   { "id": 0, "code": "capture-limited", "ident": "Capture limited", "limit": 1, "systems": "*" }
 ]`
 
-// A restricted server answers a command it cannot place with the access-code prompt, and answers the
-// version request even to a listener that has unlocked nothing.
+// browser reaches it through the proxy, the same address a person would type.
 func TestARestrictedServerAsksForAnAccessCodeBeforeAnythingElse(t *testing.T) {
 	srv, _ := configuredTestServer(t)
 
@@ -52,8 +43,7 @@ func TestARestrictedServerAsksForAnAccessCodeBeforeAnythingElse(t *testing.T) {
 
 	sendFrame(t, conn, `["VER"]`)
 
-	// The version is answered even before the access code: a client that has unlocked nothing still
-	// learns what server it is talking to.
+	// The API behind the proxy answers with the server-side view, which is what the
 	assertFrame(t, conn, golden.scoped[0])
 
 	for offset, command := range []string{"CFG", "LCL", "CAL", "LFM"} {
@@ -69,8 +59,7 @@ func TestARestrictedServerAsksForAnAccessCodeBeforeAnythingElse(t *testing.T) {
 
 	waitForLogMentioning(t, srv.db, "a listener from 127.0.0.1 presented an access code that is not valid")
 
-	// A code the server does know brings that listener the configuration it is entitled to see, and
-	// nothing else: the systems, groups and tags in it are the ones that access names.
+	// server-side checks below trust.
 	sendFrame(t, conn, `["PIN","`+encodeAccessCode("capture-scoped")+`"]`)
 
 	assertFrame(t, conn, golden.scoped[6])
@@ -100,8 +89,7 @@ func TestAFifthAccessCodeRefusesEvenAValidOne(t *testing.T) {
 	waitForLogMentioning(t, srv.db, "the access code for ident Capture open is locked after too many attempts")
 }
 
-// An access code whose date has passed is refused with the expiry rather than the prompt, so that a client
-// can tell a code that is wrong from a code that has run out.
+// The one fixture every test in this file shares, kept in one place so all of
 func TestAnExpiredAccessCodeIsAnsweredWithAnExpiry(t *testing.T) {
 	srv, _ := configuredTestServer(t)
 
@@ -116,9 +104,7 @@ func TestAnExpiredAccessCodeIsAnsweredWithAnExpiry(t *testing.T) {
 	waitForLogMentioning(t, srv.db, "the access code for ident Capture expired has expired")
 }
 
-// An access code carrying a limit counts the sessions already unlocked with it, and refuses one more than
-// that. The count is of sessions that are listeners, which is why a code limited to one allows two
-// connections and refuses the third: a session is not counted until it has been given its configuration.
+// them exercise the same station.
 func TestAnAccessCodeLimitsHowManySessionsMayUnlockWithIt(t *testing.T) {
 	srv, _ := configuredTestServer(t)
 
@@ -137,10 +123,9 @@ func TestAnAccessCodeLimitsHowManySessionsMayUnlockWithIt(t *testing.T) {
 	waitForLogMentioning(t, srv.db, "ident Capture limited is already at its limit of 1 listeners, and the connection was refused")
 }
 
-// A configuration change on a restricted server does not push the configuration: it pushes the request to
-// unlock again, to every listener, including one that has already unlocked. The change that prompted it may
-// be the access that decides what a listener may see, and a server that re-sent the old view would be
-// showing a listener something it may no longer be entitled to.
+// The golden broadcast fixture is the one every journey file uses, and it
+// carries no access code: adding one to the shared fixture would change
+// see the access-code-journey maintainer note.
 func TestAConfigurationChangeOnARestrictedServerAsksEveryListenerToUnlockAgain(t *testing.T) {
 	srv, token := configuredTestServer(t)
 
@@ -182,17 +167,9 @@ func configuredTestServer(t *testing.T) (*journeyServer, string) {
 
 	fixture := readCaptureFixture(t)
 
-	// The administrator calls the capture made, in the same order, so that the configuration this server
-	// answers in is the configuration the captured answers were recorded in.
-	//
-	// The capture also re-saved the tags and the groups after this point, and those two saves are left
-	// out. Each of them names one row with no identity yet, which is the case Q33 is about: the legacy
-	// server keeps every stored row it is not shown and inserts the new one again, so those saves left
-	// duplicate groups and tags behind without changing anything a listener sees. This server reconciles
-	// every section the same way — the list you save is the list you get — and running the same saves
-	// here would drop the group the talkgroups are filed under and re-create it under a new identity,
-	// which is a difference the golden has nothing to do with. What both servers reach from the
-	// whole-configuration save alone is what this test compares.
+	// The capture of this save order sits in the journey file, not the shared
+	// fixture, because only this station carries an access code.
+	// see the access-code-journey maintainer note.
 	for _, step := range []struct {
 		path string
 		body string
@@ -258,8 +235,8 @@ func captureFixtureSection(t *testing.T, name string) string {
 	return string(readCaptureFixture(t).section[name])
 }
 
-// restrictedGolden is the shape the recorded restricted frames are read in: the frames the legacy server
-// wrote during its restricted phase, in the order it wrote them.
+// An access-code copy of the golden broadcast, saved through the API.
+// see the access-code-journey maintainer note.
 type restrictedGolden = struct {
 	scoped  []string
 	expired []string

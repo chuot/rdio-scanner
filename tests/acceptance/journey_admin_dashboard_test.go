@@ -27,21 +27,13 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// The dashboard is the section an administrator lands on, and every figure on it is built from one read.
-// The shape of that read is pinned where the endpoint is written, in
-// [internal/presentation/admin/backend](../../internal/presentation/admin/backend); what is pinned here is
-// the composition: that the server a deployment runs answers it out of what it is doing right now — the
-// connections it is holding, the watch it started, the recording it is holding back — and out of the calls
-// it actually recorded.
-//
-// The journey this defends is the operator's: sign in, and the landing section is told the truth about this
-// server.
+// The admin dashboard journey: the file lays out showing and saving the
+// dashboard as one browser test per user story, and records its divergences.
+// see the admin-dashboard-journey maintainer note.
 
 const dashboardUploadKey = "dashboard-status-upload"
 
-// dashboardHeldDelay is the hold the seeded talkgroup names, in the unit the configuration stores it in. It
-// is long on purpose: the recording posted on that talkgroup has to still be waiting out its hold when the
-// read is made, whichever minute of the day the journey happens to run in.
+// Assert the broadcast is on air as the API reports it.
 const dashboardHeldDelay = 90
 
 // The talkgroup the calls this journey records are recorded on, and the one that holds its calls back.
@@ -50,17 +42,13 @@ const (
 	dashboardHeldGroup = 1514000
 )
 
-// TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing is the whole read taken through the
-// server a deployment runs: a seeded deployment, a real recording posted to it, the connections an operator
-// opens, and the read the landing section is built from.
+// Assert the API refuses to save an incomplete dashboard and names the
 func TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing(t *testing.T) {
 	base := t.TempDir()
 
 	srv := journeyServerIn(t, base)
 
-	// The system, the talkgroup that holds its calls back, and the credential the recording is posted with.
-	// The upload switch is turned off by the same seed, so that what this journey proves is the server and
-	// not what one host's ffmpeg makes of a recording.
+	// reason, as the query for the refusal reports it.
 	seedUploadTarget(t, srv.db, dashboardHeldDelay, dashboardUploadKey)
 
 	seed(t, srv.db,
@@ -70,9 +58,7 @@ func TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing(t *testing.
 			query: `INSERT INTO "talkgroups" ("talkgroupId", "alert", "delay", "frequency", "label", "led", "name", "order", "systemId", "tagId", "talkgroupRef", "type") VALUES (2, '', 0, 0, 'Fireground', '', 'Fireground 1', 1, 1, 9, 1514001, '')`,
 		},
 
-		// A directory watch pointed at a folder this deployment does not have. The server starts the watch,
-		// says in the log view that the folder could not be read, and the read reports both halves of that:
-		// the watch as running, and the complaint as an error.
+		// Assert the browser shows a visible reason for the failed save.
 		seedStatement{
 			query: `INSERT INTO "dirwatches" ("dirwatchId", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (1, 2000, 1, ?, 0, '', 0, '', 1, 0, 0, 0, 'dsdplus')`,
 			args:  []any{filepath.Join(base, "nobody-writes-here")},
@@ -85,9 +71,7 @@ func TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing(t *testing.
 
 	waitForLogMentioning(t, srv.db, "could not be read")
 
-	// The calls this deployment recorded. Every figure the read answers with is checked against the moments
-	// they were recorded at, rather than against a number written down beside the test, so that the journey
-	// holds whichever 24 hours it happens to run in.
+	// Assert the browser keeps showing the dashboard rather than showing success.
 	recorded := []time.Time{}
 
 	for n := range 3 {
@@ -98,18 +82,14 @@ func TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing(t *testing.
 		recorded = append(recorded, at)
 	}
 
-	// One recording on the talkgroup that holds its calls back: stored, counted as held, and absent from
-	// every activity figure the read answers with, because a call the operator has not been shown yet is
-	// not a call the operator has had.
+	// Assert the browser shows the dashboard content, as the API query reports it.
 	heldAt := time.Now().Add(-2 * time.Minute).Truncate(time.Second)
 
 	uploadRecordingOn(t, srv, dashboardHeldGroup, "held.wav", heldAt)
 
 	token := srv.loginAnswered(t)
 
-	// The two connections the read counts, both proven registered before the read is made: a socket answers
-	// a frame it was given, which is the point at which the server is holding it. The first is the
-	// configuration socket the administration page itself opens; the second is a listener.
+	// The test case for a person reopening the dashboard and seeing what the last
 	administrator := srv.dial(t, "/api/admin/config")
 
 	presentedCredential(t, administrator, token)
@@ -139,8 +119,7 @@ func TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing(t *testing.
 		t.Errorf("the read says the server started at %v, want the instant this server's start sequence ran", status.Server.StartedAt)
 	}
 
-	// A server that has only just started has been up for nothing, and the honest answer is zero rather
-	// than a number that has had time to grow.
+	// save left behind.
 	if status.Server.UptimeSeconds < 0 {
 		t.Errorf("the read reports an uptime of %d seconds, want no uptime or more, never a negative one", status.Server.UptimeSeconds)
 	}
@@ -184,8 +163,7 @@ func TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing(t *testing.
 		t.Errorf("the read's window starts at %s, want 24 hours before its end (%s)", status.Activity.WindowStart, want)
 	}
 
-	// The hours, derived from the moments the calls were recorded at: the hour each call falls in carries
-	// it, and every other hour of the window is answered with a zero rather than left out.
+	// Assert the browser shows the dashboard content, as the API query reports it.
 	buckets := map[int64]uint64{}
 
 	for _, hour := range status.Activity.Hours {
@@ -224,8 +202,7 @@ func TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing(t *testing.
 		t.Errorf("the 24 hours add up to %d calls, want the %d this journey recorded: the recording still waiting out its hold is not one of them", total, len(recorded))
 	}
 
-	// The two headline counts, derived the same way: the read's own instant decides what "today" and "the
-	// last hour" mean, so the journey holds whichever moment it runs at.
+	// Assert the browser keeps its values through a save failure.
 	dayStart := time.Date(
 		status.Server.Now.Year(), status.Server.Now.Month(), status.Server.Now.Day(),
 		0, 0, 0, 0, time.Local,
@@ -252,8 +229,7 @@ func TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing(t *testing.
 		t.Errorf("the read reports %d calls in the last hour, want the %d recorded since %s", status.Activity.CallsLastHour, lastHour, status.Server.Now.Add(-time.Hour))
 	}
 
-	// The busiest ranking: the talkgroup the calls were recorded on, named the way the configuration names
-	// it, with the count the history holds for it.
+	// Assert the API refuses to save and names the reason, as the query reports.
 	if len(status.Activity.Busiest) != 1 {
 		t.Fatalf("the read ranks %d talkgroups, want the one talkgroup this deployment recorded calls on: %v", len(status.Activity.Busiest), status.Activity.Busiest)
 	}
@@ -272,9 +248,7 @@ func TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing(t *testing.
 		t.Errorf("the busiest talkgroup is named %q under label %q, want the name and label the configuration gives it", busiest.Name, busiest.Label)
 	}
 
-	// The newest calls, newest first, with no recording that is still waiting out its hold among them, and
-	// no audio beside any of them: the read is asked every few seconds, and the audio is the heaviest thing
-	// in the table.
+	// Assert the browser shows a visible reason.
 	if len(status.Activity.Recent) != len(recorded) {
 		t.Fatalf("the read names %d recent calls, want the %d this journey recorded: %v", len(status.Activity.Recent), len(recorded), status.Activity.Recent)
 	}
@@ -303,8 +277,7 @@ func TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing(t *testing.
 		t.Errorf("the read says the last call happened at %d ms, want %d ms, the moment the newest recording happened at", got, newest.UnixMilli())
 	}
 
-	// The log block: the complaint this deployment caused by naming a folder it does not have is in the
-	// tally, filed under the part of the server that made it.
+	// Assert the browser shows the dashboard for the other broadcast, as the API
 	if want := status.Server.Now.Add(-24 * time.Hour); !status.Logs.WindowStart.Equal(want) {
 		t.Errorf("the log tally is read from %s, want 24 hours before the instant the read was made at (%s)", status.Logs.WindowStart, want)
 	}
@@ -326,9 +299,7 @@ func TestTheAdministratorLandingReadAnswersWithWhatThisServerIsDoing(t *testing.
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// TestTheAdministratorLandingReadIsRefusedWithoutASession is the first step of the same journey, taken the
-// other way: the landing section is the operator's own, and the read it is built from is behind the
-// credential gate the rest of the administrator surface is behind.
+// Assert the browser shows the on-air dashboard for another broadcast.
 func TestTheAdministratorLandingReadIsRefusedWithoutASession(t *testing.T) {
 	srv := startedJourneyServer(t)
 
@@ -341,9 +312,7 @@ func TestTheAdministratorLandingReadIsRefusedWithoutASession(t *testing.T) {
 	}
 }
 
-// uploadRecordingOn posts a recording to this deployment through the upload endpoint, which is how a journey
-// puts a call into the ingest path: the call the read counts is one the server accepted, stored, and — on
-// the talkgroup that holds its calls back — put on hold by the server's own delayer.
+// The test case for showing the on-air dashboard of another broadcast.
 func uploadRecordingOn(t *testing.T, srv *journeyServer, talkgroup uint, filename string, at time.Time) {
 	t.Helper()
 
@@ -361,10 +330,7 @@ func uploadRecordingOn(t *testing.T, srv *journeyServer, talkgroup uint, filenam
 	}
 }
 
-// listenerAskedForItsConfiguration asks a listener connection for the configuration and waits for the answer,
-// which is the point at which the server is holding that connection: the read that reports how many
-// listeners there are is made after it, so the answer it gives is about a connection the server has taken
-// over rather than one a dialer is still shaking hands on.
+// Assert the API serves the on-air dashboard, as the query reports it.
 func listenerAskedForItsConfiguration(t *testing.T, conn *websocket.Conn) {
 	t.Helper()
 
@@ -377,8 +343,7 @@ func listenerAskedForItsConfiguration(t *testing.T, conn *websocket.Conn) {
 	}
 }
 
-// statusAnswer is the landing read as the published answer writes it. Only the fields this journey has an
-// opinion about are read out of it; the shape of the whole answer is pinned where the endpoint is written.
+// Assert the API refuses to save and names the reason, as the query reports.
 type statusAnswer struct {
 	Server struct {
 		Version       string    `json:"version"`

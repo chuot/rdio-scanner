@@ -20,20 +20,10 @@ import (
 	"testing"
 )
 
-// capturedRuns are the runs a dirwatch server left behind, recorded table by table as the legacy server
-// wrote them and keyed by the name the test asks for them under. They live in the package that consumes
-// them: no fixture directory, no manifest, and nothing outside the test
-// that proves it.
-//
-// The runs were captured from a legacy server with its time zone set to UTC, which is the time zone every
-// capture in this repository was taken in.
-//
-// The calls, groups, tags, talkgroups, units and systems rows of these runs are the legacy tree's bytes:
-// the server created the same configuration it always did. The log rows are not, because the logging
-// subsystem gave this server sentences to write that the legacy server had none of: the reworded rows
-// keep the legacy levels and order, and each new row sits where the change it reports happened. The
-// watched directories are written as `<base>`, because the capture is of what the run did and not of
-// which temporary folder the test happened to use.
+// capturedRuns are the captured whole-server states a dirwatch run left
+// behind, recorded table by table, held as Go data beside the tests that
+// replay them and keyed by the name the test asks them under.
+// see the fixture-capture maintainer note.
 var capturedRuns = map[string]string{
 	"dirwatch-autopopulate.json": `{
   "calls": [
@@ -657,10 +647,10 @@ var capturedRuns = map[string]string{
 `,
 }
 
-// capturedRun hands back the recorded run under the name a test asks for it under, keeping each table as
-// it was written so that it can be compared in the same canonical shape the server's own rows are put in,
-// and stops when that name was never recorded: a test that asks for a capture this package does not hold
-// has changed, and it would rather stop than quietly compare against nothing.
+// capturedRun hands back the recorded run under the name a test asks for
+// it under and fails the test when no such capture exists; each table keeps
+// its recorded rows and lands them in the canonical shape the server's own
+// queries produce, so comparisons match what the server reads back.
 func capturedRun(t *testing.T, name string) map[string]json.RawMessage {
 	t.Helper()
 
@@ -684,10 +674,10 @@ func capturedRun(t *testing.T, name string) map[string]json.RawMessage {
 	return run
 }
 
-// capturedConfigFixture is the configuration the recorded runs install, as the bytes the
-// capture installed it with. The administrator calls the capture made, in the same order, so
-// that the configuration this server answers in is the configuration the captured answers
-// were recorded in.
+// capturedConfigFixture is the configuration the recorded runs install, as
+// the bytes the capture recorded them with: the administrator calls the
+// capture made, in the same order, so this server answers in the
+// configuration the recorded answers were recorded in.
 const capturedConfigFixture = `{
   "access": [],
   "apikeys": [
@@ -919,8 +909,8 @@ const capturedConfigFixture = `{
 }
 `
 
-// restrictedFrames are the frames the legacy server wrote during its restricted phase, in the
-// order it wrote them.
+// restrictedFrames are the recorded frames of one restricted phase, in order.
+// see the fixture-replay maintainer note.
 var restrictedFrames = struct {
 	scoped  []string
 	expired []string
@@ -953,8 +943,8 @@ var restrictedFrames = struct {
 	},
 }
 
-// lockedFrames are the answers the legacy server gave to five access-code attempts on one
-// connection, in the order it gave them.
+// lockedFrames are the recorded answers to five access-code attempts, in order.
+// see the fixture-replay maintainer note.
 var lockedFrames = []string{
 	`["PIN"]`,
 	`["PIN"]`,
@@ -963,6 +953,6 @@ var lockedFrames = []string{
 	`["PIN"]`,
 }
 
-// capturedRestConfig is the configuration answer the legacy server gave an administrator, as
-// the bytes it wrote.
+// capturedRestConfig is the recorded configuration answer for an administrator.
+// see the fixture-replay maintainer note.
 const capturedRestConfig = `{"config":{"access":[],"apikeys":[{"disabled":false,"id":1,"ident":"Capture open","key":"capture-apikey-open","systems":"*"},{"disabled":false,"id":2,"ident":"Capture scoped","key":"capture-apikey-scoped","systems":[{"id":10001,"talkgroups":"*"}]}],"dirwatch":[{"delay":1000,"deleteAfter":true,"directory":"/tmp/opencode/capture-watch","disabled":true,"extension":"wav","frequency":151400000,"id":1,"mask":"#S#TG#YYYY-MM-DDTHH-mm-ss","order":1,"siteId":1,"systemId":1,"talkgroupId":1,"type":"default"}],"downstreams":[{"apikey":"capture-apikey-open","disabled":true,"id":1,"order":1,"systems":[{"id":10001,"talkgroups":[1514000]}],"url":"http://127.0.0.1:39999/api/call-upload"}],"groups":[{"id":1,"label":"Air"},{"id":2,"label":"EMS"},{"id":3,"label":"Fire"},{"id":4,"label":"Interop"},{"id":5,"label":"Law"},{"id":6,"label":"Unknown"},{"id":7,"label":"Ground"}],"options":{"audioConversion":0,"autoPopulate":false,"branding":"Capture Dispatch","disableDuplicateDetection":true,"email":"dispatch@example.com","keypadBeeps":"uniden","maxClients":200,"pruneDays":7,"showListenersCount":true,"sortTalkgroups":true},"systems":[{"autoPopulate":false,"id":1,"label":"Grand Metro","order":1,"sites":[{"id":1,"label":"Metro East","siteRef":101,"systemId":0},{"id":2,"label":"Metro West","siteRef":102,"systemId":0}],"systemRef":10001,"talkgroups":[{"frequency":151400000,"groupIds":[7],"id":1,"label":"Ground","name":"Dispatch 1","tagId":3,"talkgroupRef":1514000,"type":"Aggregate"},{"groupIds":[3,7],"id":2,"label":"Ground","name":"Dispatch 2","tagId":4,"talkgroupRef":1514100},{"groupIds":[1],"id":3,"label":"Air","name":"Air 1","tagId":1,"talkgroupRef":1514200}],"units":[{"id":1001,"label":"Car 1","unitRef":1001},{"id":1002,"label":"Car 2","unitRef":1002}]},{"autoPopulate":false,"id":2,"label":"Harbour","order":2,"sites":[],"systemRef":10002,"talkgroups":[{"groupIds":[6],"id":4,"label":"Marine","name":"Marine 16","tagId":9,"talkgroupRef":1515000}],"units":[]}],"tags":[{"id":1,"label":"Air Traffic Control"},{"id":2,"label":"Emergency "},{"id":3,"label":"Fire Dispatch"},{"id":4,"label":"Fire Tac"},{"id":5,"label":"Fire Talk"},{"id":6,"label":"Interop"},{"id":7,"label":"Security"},{"id":8,"label":"Service"},{"id":9,"label":"Untagged"},{"id":10,"label":"Capture Tag"}],"version":"8.0.0"},"passwordNeedChange":true}`

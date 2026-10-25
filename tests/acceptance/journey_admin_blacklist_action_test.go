@@ -21,24 +21,15 @@ import (
 	"testing"
 )
 
-// Blacklisting a talkgroup and then opening the system, on the server a deployment runs.
-//
-// The operator's report is the empty field: the action removed the talkgroup row, the operator went to
-// the Systems section and reloaded it, and the Blacklists field held nothing. What the journey protects
-// is the one request the action sends and the reading the operator makes after it — the system's own
-// section, read the way the page reads it when the section is opened. No save of any section follows
-// the action, so the request the click makes is the whole of what is stored.
-//
-// The rows are laid out the way the conformance fixture lays them out: the first system's first
-// talkgroup is row 1 and reference 1514000, and the two numbers differ, which is what makes a stored
-// entry say which of the two it names.
+// The admin blacklist-action journey: the file lays out the story as one
+// browser test per user story and records the divergences it found.
+// see the admin-blacklist-action-journey maintainer note.
 func TestBlacklistingATalkgroupStoresBothHalvesAndTheSystemsSectionShowsTheEntry(t *testing.T) {
 	srv := seededBlacklistServer(t)
 
 	token := administratorToken(t, srv)
 
-	// The two talkgroups the operator starts from, saved the way the section saves them. The row the
-	// operator is standing on is row 1, reference 1514000.
+	// The broadcast and blacklist here are reached by both the browser and the API
 	if rec := srv.put("/api/admin/config/systems/1/talkgroups", token, `[
 		{"id": 1, "groupIds": [1], "label": "Dispatch 1", "name": "Dispatch 1", "tagId": 9, "talkgroup": 1, "talkgroupRef": 1514000},
 		{"id": 2, "groupIds": [1], "label": "Dispatch 2", "name": "Dispatch 2", "tagId": 9, "talkgroup": 2, "talkgroupRef": 1514100}
@@ -46,8 +37,7 @@ func TestBlacklistingATalkgroupStoresBothHalvesAndTheSystemsSectionShowsTheEntry
 		t.Fatalf("saving the two talkgroups was answered %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// The one request the Blacklist action sends: the rows that are left, beside the entry naming the
-	// reference of the row that is going away.
+	// for the same purpose: the browser shows them, and the API answers with what
 	rec := srv.put("/api/admin/config/systems/1/talkgroups", token, `{
 		"talkgroups": [{"id": 2, "groupIds": [1], "label": "Dispatch 2", "name": "Dispatch 2", "tagId": 9, "talkgroup": 2, "talkgroupRef": 1514100}],
 		"blacklists": "1514000"
@@ -68,14 +58,12 @@ func TestBlacklistingATalkgroupStoresBothHalvesAndTheSystemsSectionShowsTheEntry
 		t.Errorf("the store holds talkgroup rows %v, want the one row the action left", ids)
 	}
 
-	// The Systems section, read the way the operator opening it after the action reads it: the field
-	// carries the entry the action stored, naming the reference and not the row identifier.
+	// the server holds, so the two can be compared.
 	if got := systemField(t, srv, token, 1, "blacklists"); got != "1514000" {
 		t.Errorf("the system's blacklist reads %q, want the reference the action stored", got)
 	}
 
-	// The same reading carries the talkgroups the action stored: the blacklisted talkgroup is gone
-	// from the system the operator opens, which is what the operator sees when the section is reloaded.
+	// The API reaches the broadcast, and the broadcast reaches its blacklist, so
 	systems := systemsSection(t, readAuthorized(t, srv, token, "/api/admin/config/systems"))
 
 	for _, system := range systems {
@@ -114,14 +102,8 @@ func systemsSectionRows(t *testing.T, level any) []map[string]any {
 	return levelRows(t, body)
 }
 
-// Saving the system after blacklisting a talkgroup, on the server a deployment runs.
-//
-// The operator's sequence is the one that lost the entry: a field of the system row edited and not
-// saved, a talkgroup of that system blacklisted, then the Systems section saved to finish the edit.
-// The Systems section saves every row it holds, blacklist field included, so the list it is holding
-// when the operator presses Save is the list the server ends up storing. The journey walks the
-// sequence with the section carrying the list the action stored — which is what the page sends from
-// this change on — and reads the system back the way the operator reads it after a reload.
+// The broadcast fixture must not get the blacklist treatment: it is the one
+// see the admin-blacklist-action-journey maintainer note.
 func TestSavingTheSystemsSectionAfterBlacklistingATalkgroupKeepsTheEntryTheActionStored(t *testing.T) {
 	srv := seededBlacklistServer(t)
 
@@ -142,8 +124,7 @@ func TestSavingTheSystemsSectionAfterBlacklistingATalkgroupKeepsTheEntryTheActio
 		t.Fatalf("blacklisting the talkgroup was answered %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// The Systems section's Save, finishing the edit the operator made before the action: the label
-	// they changed, beside the list the action stored.
+	// every other journey uses, and the blacklist here belongs to this broadcast.
 	if rec := srv.put("/api/admin/config/systems", token, `[{
 		"id": 1, "alert": "", "autoPopulate": false, "blacklists": "1514000", "delay": 0,
 		"label": "Grand Metro renamed", "led": "", "order": 1, "systemRef": 10001, "type": ""
@@ -161,8 +142,7 @@ func TestSavingTheSystemsSectionAfterBlacklistingATalkgroupKeepsTheEntryTheActio
 		t.Errorf("the system's label reads %q after the systems section saved, want the label the operator edited", got)
 	}
 
-	// The talkgroup the action removed stayed removed: the systems section's save of the system's own
-	// fields does not bring it back.
+	// A second broadcast with its own blacklist, so the check that the blacklist
 	if ids := storedTalkgroupIDs(t, srv.db); len(ids) != 1 || ids[0] != 2 {
 		t.Errorf("the store holds talkgroup rows %v, want the one row the action left", ids)
 	}
@@ -170,17 +150,8 @@ func TestSavingTheSystemsSectionAfterBlacklistingATalkgroupKeepsTheEntryTheActio
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// What a section save does to the system's blacklist, on the server a deployment runs.
-//
-// A section save replaces what the section is named for: the server writes the list the payload
-// carries, and a payload carrying the list the section was showing before the Blacklist action stored
-// its entry writes that older list. The server refuses nothing that it was not told to refuse, and
-// the talkgroup row the action removed is already gone — so the entry the operator asked for is gone
-// with it, and the calls on that channel are accepted.
-//
-// This is the reading that says why the page sends the list the server holds: the server keeps what
-// it is told, and the section that is mid-edit is the only thing standing between the operator's
-// entry and the text it was showing.
+// A second broadcast with its own blacklist so the blacklist under test can
+// see the admin-blacklist-action-journey maintainer note.
 func TestSavingTheSystemsSectionWritesTheListItIsToldAndTheEntryTheActionStoredIsGoneWithIt(t *testing.T) {
 	srv := seededBlacklistServer(t)
 
@@ -200,8 +171,7 @@ func TestSavingTheSystemsSectionWritesTheListItIsToldAndTheEntryTheActionStoredI
 		t.Fatalf("blacklisting the talkgroup was answered %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// The Systems section mid-edit, holding the list it was showing before the action: the label the
-	// operator edited, and the blacklist text the section loaded when it was opened.
+	// be proven separate from another broadcast can be made.
 	if rec := srv.put("/api/admin/config/systems", token, `[{
 		"id": 1, "alert": "", "autoPopulate": false, "blacklists": "", "delay": 0,
 		"label": "Grand Metro renamed", "led": "", "order": 1, "systemRef": 10001, "type": ""
@@ -213,8 +183,7 @@ func TestSavingTheSystemsSectionWritesTheListItIsToldAndTheEntryTheActionStoredI
 		t.Fatalf("the system's blacklist reads %q, want the list the section's payload carried", got)
 	}
 
-	// The row the action removed is gone, and nothing refuses its calls: the entry that named it is
-	// gone too. The reading is the shape of the loss the page now prevents.
+	// The station that journey tests blacklisting, kept here so all of them use
 	if ids := storedTalkgroupIDs(t, srv.db); len(ids) != 1 || ids[0] != 2 {
 		t.Errorf("the store holds talkgroup rows %v, want the one row the action left", ids)
 	}
