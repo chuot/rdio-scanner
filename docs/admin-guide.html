@@ -531,7 +531,7 @@ footer.site .signoff {
       <tr><td>The database</td><td>A new schema, and four dialects: SQLite, MariaDB, MySQL, and PostgreSQL. The first start on a version 6.6.3 database migrates it in place, announces each table, and copies what it cannot carry into the migration archive instead of throwing it away.</td><td><a href="#ch-07-database">7</a>, <a href="#ch-24-upgrading-and-migrating">24</a></td></tr>
       <tr><td>The administration interface</td><td>Rebuilt. Sections are edited as a working copy and written with the save bar; the conflict banner appears when another session saved the same section; the systems-and-talkgroups dialog scopes a credential; the OpenAPI section reads the contract the server publishes; the Tools section exports and imports the configuration, and imports a talkgroup or unit list per system.</td><td><a href="#ch-08-administration-interface">8</a>, <a href="#ch-15-tools">15</a></td></tr>
       <tr><td>Talkgroups, groups, and tags</td><td>A talkgroup belongs to many groups, which is why the tag toggle is gone. System and talkgroup types name the radio standard, and the AFS systems option is gone, replaced by the Provoice type. Alert tones and LED colours are set at group, tag, system, and talkgroup level, with the group winning. Calls are delayed per system and per talkgroup.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a>, <a href="#ch-12-groups-and-tags">12</a></td></tr>
-      <tr><td>Duplicate detection</td><td>Detection is built on the new schema, and the window is fixed: two calls on the same system, talkgroup, and site within half a second are one call.</td><td><a href="#ch-13-options">13</a></td></tr>
+      <tr><td>Duplicate detection</td><td>Detection is built on the new schema, and the window is fixed: a second call landing on one system, talkgroup, and site within the fixed window counts as the first call.</td><td><a href="#ch-13-options">13</a></td></tr>
       <tr><td>Getting audio in</td><td>The mask gained the unit label token, so a recorder that names the radio that transmitted names the unit the listener sees.</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
       <tr><td>Interfaces and APIs</td><td>The API was renewed with the older calls clients use kept working. The call history endpoints accept a listener's access code beside an administrator's session. The Model Context Protocol endpoint lets an assistant read a deployment, and write to it when it presents the administrator's credential.</td><td><a href="#ch-16-rest-api">16</a>, <a href="#ch-17-mcp-server">17</a></td></tr>
       <tr><td>The release</td><td>The archive carries this guide as its operating documentation, with the ffmpeg licence as plain text beside the program.</td><td><a href="#ch-04-installation">4</a></td></tr>
@@ -808,19 +808,18 @@ OpenRC rather than systemd, stop here and read
 <a href="#ch-21-running-as-a-service">Running as a Service</a> before installing.</p>
 <h3>Download a prebuilt binary</h3>
 <p>The latest GitHub release carries an archive per platform, named with the
-pattern <code>rdio-scanner-&lt;version&gt;-&lt;platform&gt;.tar.xz</code>, where the
-platform part reads like <code>linux-amd64</code>. The naming and the contents
-follow the compatibility rules from
-<a href="#ch-03-requirements">Requirements</a>. Pick the archive whose platform
+pattern <code>rdio-scanner-&lt;platform&gt;-v&lt;version&gt;.zip</code>, where the
+platform part reads like <code>linux-amd64</code>; the release matrix in
+<a href="#ch-03-requirements">Requirements</a> lists every published name.
+Pick the archive whose platform
 matches the machine that imports audio — for a Raspberry Pi 3 or 4, that is
 <code>linux-arm</code>, and on a modern 64-bit Raspberry Pi OS use
-<code>linux-arm64</code>. Extract the chosen archive into its own directory;
-the commands below unpack a release archive into the current directory, which
-then holds <code>rdio-scanner</code>, the database file, and the directories
-named in <a href="#ch-03-requirements">Requirements</a>:</p>
+<code>linux-arm64</code>. Each archive unpacks flat, and the commands
+below unpack one into the current directory, which then holds
+<code>rdio-scanner</code>, the guides <code>docs/admin-guide.html</code>
+and <code>docs/user-guide.html</code>, and <code>FFMPEG.txt</code>:</p>
 <pre><code>cd /opt
 unzip ~/Downloads/rdio-scanner-linux-amd64-v8.0.0.zip
-cd rdio-scanner-linux-amd64-v8.0.0
 ./rdio-scanner</code></pre>
 <p>The release for your platform runs immediately; there is no installer and
 nothing to configure first. Start it as described in
@@ -835,8 +834,10 @@ entitlements for network access, which means one local command is enough to
 make a copy usable; the same command suits <code>ffprobe</code>. Apple also
 requires a different binary per CPU family, so the project publishes the two
 macOS targets separately — pick the one matching your Mac.</p>
-<p>The Linux compatibility tiers from <a href="#ch-03-requirements">Requirements</a>
-also govern the macOS binaries: the server <strong>refuses binaries that
+<p>On every platform, what a machine can run is what its CPU family and
+operating system release say, read against the release matrix in
+<a href="#ch-03-requirements">Requirements</a>. One further rule applies to
+every downloaded binary: the server <strong>refuses binaries that
 register a video codec</strong>, and
 <a href="#ch-25-troubleshooting">Troubleshooting</a> names the log line it
 writes when it refuses one.</p>
@@ -845,12 +846,11 @@ and the importing rules in <a href="#ch-10-getting-audio-in">Getting Audio
 In</a> apply unchanged.</p>
 <h3>Run the container image</h3>
 <p>The project publishes an official image under the name
-<code>rdioscanner/rdio-scanner</code>. The container's own root filesystem is
+<code>chuot/rdio-scanner</code>. The container's own root filesystem is
 read-only by design; everything the server writes must live on volumes you
-provide. If you ran the Docker examples in
-<a href="#ch-03-requirements">Requirements</a>, the same volumes carry over
-unchanged: two named volumes mounted at <code>/data</code> and
-<code>/config</code>, and the host port bound to the container's port 8080:</p>
+provide. The server writes only inside <code>/app/data</code>, so the
+example below publishes the container's port 3000 on the host's port 3000
+and mounts a directory of your own at that path:</p>
 <pre><code>mkdir -p ~/.rdio-scanner
 
 docker run --detach --name rdio-scanner \
@@ -895,9 +895,9 @@ tool is written in Go, so the commands below assume you run them from inside
 that checkout.</p>
 <p><strong>FFmpeg first.</strong> The build carries its own FFmpeg toolchain,
 so the FFmpeg your distribution installed is not used by the server: the
-program and the two executables the build produces take its place, and the
-server finds those through the same rules described above for downloaded
-binaries. Building the media layer by hand is optional but useful, because it
+program the build produces travels embedded inside the server's own
+executable, and a pair of executables you drop into a bundle directory
+takes its place only where such a drop was made. Building the media layer by hand is optional but useful, because it
 proves the C toolchain works before anything of the server's is involved.
 Choose a version from the project's pinned set rather than the newest
 upstream release; the build fails with the error <code>ffversion.h missing</code>
@@ -1117,9 +1117,9 @@ disagree.</p>
   </div>
 
   <p>Three defaults deserve a look before you override anything. The listening
-  port is <code>8080</code> and the web-root is <code>/</code>, which together
-  make a bare server answer on every interface at
-  <code>http://HOST:8080/</code> — plain HTTP, no access code, until you
+  port is <code>3000</code>, which makes a bare server answer on every
+  interface at
+  <code>http://HOST:3000/</code> — plain HTTP, no access code, until you
   change them; chapters 19, 20, and 9 cover the three ways to close that gap.
   The log level is <code>info</code>: the right choice to start with, and the
   server tells you in its own startup output when a live setting would change
@@ -1152,14 +1152,14 @@ disagree.</p>
   on the command line therefore beats the same setting in the ini file, and
   the ini file beats the default.</p>
 
-  <p>The ini file lives beside the executable and is named <code>config.ini</code>
-  unless <code>-config</code> names another. The server reads it at startup; it
-  writes it back only when you use <code>-config_save</code> or press
-  <strong>Save</strong> in the admin interface, and a write preserves your
-  comments — as chapter 7 shows, what you write down survives. There is no
-  watching, polling, or automatic reload of the file: it is read once, at
-  startup, and a file changed while the server runs has no effect until the
-  next start.</p>
+  <p>The ini file lives beside the executable and is named
+  <code>rdio-scanner.ini</code>
+  unless <code>-config</code> names another. The server reads it once, at
+  startup; it writes the file back only when you use
+  <code>-config_save</code>, and pressing <strong>Save</strong> in the admin
+  interface writes the configuration to the database, not to the file. There is
+  no watching, polling, or automatic reload of the file: a file changed while
+  the server runs has no effect until the next start.</p>
 
   <p>Because the admin interface and the ini file describe the same settings,
   they cannot both be authoritative at once: chapter 13 spells out what each
@@ -1181,10 +1181,12 @@ trusted_proxies = 127.0.0.1, 10.0.0.0/8
 mcp_server = true
 bcrypt_cost = 12</code></pre>
   <p><code>-config_save</code> rewrites the whole file from what the server
-  currently holds: comments and blank lines survive, the <code>[DEFAULT]</code>
+  currently holds: the <code>[DEFAULT]</code>
   section and any per-system sections keep the settings they hold, and
   everything else is laid out fresh in the server's own order with current
-  values. If the target file does not exist yet, <code>-config_save</code>
+  values. A save rebuilds the file, so your comments and blank lines do not
+  survive it — keep notes outside the ini, or re-add them after each save. If
+  the target file does not exist yet, <code>-config_save</code>
   creates it.</p>
   <p><code>-config_validate</code> changes nothing. It parses the named file
   the way a startup parse would and reports what it finds. That makes it the
@@ -1638,7 +1640,8 @@ bcrypt_cost = 12</code></pre>
   </p>
 
   <p>
-    A refused upload is answered <code>401</code> with the plain text <code>Access denied</code>, and the
+    A refused upload is answered <code>401</code> with the plain text
+    <code>Invalid API key for system &lt;nil&gt; talkgroup &lt;nil&gt;.</code>, and the
     refusal is filed in the log as <em>the apikey is not valid</em>. The recorder receives the same text it
     has always received; you gain a record of a box that reached the server and was turned away.
   </p>
@@ -1851,7 +1854,7 @@ bcrypt_cost = 12</code></pre>
       lands as an ordinary extra form field, and the call arrives stripped of everything the sidecar held.
     </p>
     <p>
-      The rest of the upload is untouched by the move: same key, same plain-text answers, same ingest. Draw
+      Draw
       up the plan while the old endpoint is still answering, and make sure it is not some recorder nobody
       runs any more that discovers, one day, that the endpoint is gone.
     </p>
@@ -2891,8 +2894,8 @@ rm -f ${basename}.*</code></pre>
   <aside class="note">
     <p>
       The writing endpoints are precisely the endpoints the interface drives, and they write into the
-      running server: a configuration pushed through the API takes effect immediately, reaches every open
-      administration session through the broadcast, and is filed in the log as a configuration change. The
+      running server: a configuration pushed through the API takes effect immediately, and is filed in
+      the log as a configuration change. The
       flags sit outside this list entirely — <a href="#ch-06-flags-and-ini">the flags chapter</a> is where
       those are set.
     </p>
@@ -3233,9 +3236,10 @@ admin interface at https://radio.example.org/admin</code></pre>
 
   <aside class="caution">
     <p>
-      The server will not issue a certificate for you. The flag that once produced a self-signed one has
-      been removed, so a deployment still naming it is told the flag is not recognized. Supply your own
-      certificate, use Let's Encrypt, or terminate TLS in a proxy.
+      Apart from the automatic certificate above, the server obtains nothing for you. Supply your own
+      certificate and key, or terminate TLS in a proxy. A deployment naming a flag the server does not
+      have is stopped at the start: the flag set ends the run with an error naming the flag, and nothing
+      listens until the command line is corrected.
     </p>
   </aside>
 </section>
@@ -3850,6 +3854,14 @@ $ cp rdio-scanner.ini /backup/rdio-scanner-$(date +%F).ini</code></pre>
     a scheduled copy tells you about early.
   </p>
 
+  <p>
+    A deployment on a server database rather than the default file takes the copy with the database's own
+    tool, using the same settings the server connects with:
+  </p>
+
+  <pre><code>$ mysqldump --single-transaction -h 10.0.0.5 -u rdio -p rdio_scanner &gt; /backup/rdio-scanner-$(date +%F).sql
+$ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F).sql</code></pre>
+
   <aside class="note">
     <div>
       <p>
@@ -3865,11 +3877,8 @@ $ cp rdio-scanner.ini /backup/rdio-scanner-$(date +%F).ini</code></pre>
 
   <p>
     Restoring is the same ceremony in reverse. A cold restore stops the server, replaces the file, and
-    starts it again:
+    starts it again.
   </p>
-
-  <pre><code>$ mysqldump --single-transaction -h 10.0.0.5 -u rdio -p rdio_scanner &gt; /backup/rdio-scanner-$(date +%F).sql
-$ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F).sql</code></pre>
 
   <ol>
     <li>
@@ -3891,6 +3900,15 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
       are still searchable before declaring the work finished.
     </li>
   </ol>
+
+  <p>
+    A deployment on a server database follows the same order with the database's own tool, and the same
+    settings the server connects with. The dump of <em>Taking the copy</em> is loaded back in the other
+    direction:
+  </p>
+
+  <pre><code>$ mysql -h 10.0.0.5 -u rdio -p rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
+$ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql</code></pre>
 
   <p>
     Everything that was in the copy comes back with it, including the administrator's password and the
