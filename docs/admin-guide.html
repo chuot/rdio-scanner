@@ -4253,35 +4253,37 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   <h2 id="ch-26-faq">26 · Frequently asked questions</h2>
 
   <p class="lead">
-    The questions an administrator asks, answered with the control that does the thing. Each answer points
-    at the chapter that operates it.
+    The questions administrators actually ask, each answered with the control that does the thing and a
+    pointer to the chapter that operates it.
   </p>
 
   <h3>How do I update from the version 5 program?</h3>
 
   <p>
-    There is no upgrade from it: the version 6 server replaced the version 5 program, and what carries over
-    is the database. Stop the old server, copy its <code>database.sqlite</code> into the new deployment's
-    folder, rename the copy to <code>rdio-scanner.db</code>, and start the new program. On MySQL or
-    MariaDB, back the database up and start the new program pointed at it with the <code>-db_*</code>
-    flags. <a href="#ch-24-upgrading-and-migrating">Chapter 24</a> is the path, with the migration it
-    triggers and the archive that holds what cannot be carried.
+    There is no upgrade path from it: the version 6 server replaced the version 5 program, and the only
+    thing that carries over is the database. Stop the old server, copy its
+    <code>database.sqlite</code> into the new deployment's folder, rename the copy to
+    <code>rdio-scanner.db</code>, and start the new program; on MySQL or MariaDB, back the database up
+    and point the new program at it with the <code>-db_*</code> flags instead.
+    <a href="#ch-24-upgrading-and-migrating">Chapter 24</a> walks the path, the migration it triggers,
+    and the archive that holds whatever cannot be carried.
   </p>
 
   <h3>I tried the automatic certificate and get strange errors</h3>
 
   <p>
-    The authority verifies the name by reaching back to the machine it was asked for. The port the https
-    listener answers on must be reachable from the internet, the domain must point at this machine, and the
-    name you gave is the only name the server asks for. <a href="#ch-19-tls">Chapter 19</a> is the
-    certificate chapter, and its failure table is where the causes are listed.
+    The certificate authority verifies a name by reaching back to the machine it was asked about. The
+    port your https listener answers on must be reachable from the internet, the domain must point at
+    this machine, and the name you configured is the only name the server asks for.
+    <a href="#ch-19-tls">Chapter 19</a> is the certificate chapter, and its failure table lists the
+    causes in the order they bite.
   </p>
 
   <h3>The listener page keeps saying a new version is available</h3>
 
   <p>
-    The page is a cached copy of the page the browser loaded before the update. Force a refresh
-    (usually <code>ctrl-shift-r</code>), and if it keeps saying it, clear the site's stored data from the
+    The page is a cached copy from before the update. Force a refresh (usually
+    <code>ctrl-shift-r</code>), and if the notice persists, clear the site's stored data in the
     browser's site settings. It is the browser holding the old page, not the server holding a version
     notice.
   </p>
@@ -4289,129 +4291,129 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   <h3>How do I install ffmpeg on Windows?</h3>
 
   <p>
-    You do not, for the deployment. Every release build carries its own <code>ffmpeg</code> and
-    <code>ffprobe</code> inside the program, compiled for audio: the Windows amd64 build, the Linux builds
-    for 386, ARM, ARM64 and amd64, the FreeBSD build, and the two macOS builds — this project's build
-    compiles the ffmpeg of every one of them in a container, from the source release its manifest pins, and
-    a Mac asked for its own pair compiles it with the Mac's toolchain instead.
-    The container image is built from the linux-amd64 bundle. Install ffmpeg on the host only
-    for a program you built yourself with plain <code>go build</code>, which carries none, and read the
-    notice the server prints at startup, which is the program telling you which converter it found.
-    <a href="#ch-03-requirements">Chapter 3</a> is the requirements chapter.
+    You do not, not for the deployment. Every release build carries its own <code>ffmpeg</code> and
+    <code>ffprobe</code> inside the program, compiled for audio: the Windows amd64 build, the Linux
+    builds for 386, ARM, ARM64 and amd64, the FreeBSD build, and the two macOS builds all embed the
+    pair this project's build compiles in a container from the source release its manifest pins. A Mac
+    asked for its own pair compiles it with the Mac's toolchain instead, and the container image that
+    does the rest is built from the linux-amd64 bundle. Install ffmpeg on the host only for a program
+    you built yourself with plain <code>go build</code>, which carries none — and read the notice the
+    server prints at startup either way, because it is the program telling you which converter it
+    found. <a href="#ch-03-requirements">Chapter 3</a> is the requirements chapter.
   </p>
 
   <h3>Which Mac do I build the macOS archives on?</h3>
 
   <p>
-    Either one: the two macOS architectures compile each other's ffmpeg binaries, so one Apple Silicon Mac
-    compiles both macOS archives. <code>go run ./cmd/build ffmpeg</code> there builds the ffmpeg of the
-    machine it stands on, and <code>go run ./cmd/build ffmpeg macos-amd64</code> compiles the Intel binaries
-    on that same Apple Silicon Mac, where Rosetta 2 is what lets the build run the binaries it compiled. An
-    arm64 set compiled on an Intel Mac is run on an Apple Silicon Mac — the compile says so, and leaves the
-    binaries in the target's bundle directory for the other Mac. The target word is the one the release
-    matrix spells, and the build also accepts the words go names a macOS machine by: <code>darwin-amd64</code>
-    is <code>macos-amd64</code>, and <code>darwin-arm64</code> is <code>macos-arm64</code>. The release does
-    not need either Mac: its build compiles both macOS pairs in a container, against an Apple SDK its
-    maintainer prepares, and <a href="#ch-04-installation">chapter 4</a> names where that SDK lives and what the
-    run says when it is not there.
-    <a href="#ch-21-running-as-a-service">Chapter 21</a> is the chapter for each platform's service.
+    Either one: the two macOS architectures compile each other's ffmpeg binaries, so one Apple Silicon
+    Mac compiles both macOS archives. <code>go run ./cmd/build ffmpeg</code> there builds the ffmpeg
+    for the machine it stands on, and <code>go run ./cmd/build ffmpeg macos-amd64</code> compiles the
+    Intel binaries on that same Apple Silicon Mac, where Rosetta 2 is what lets the build run the
+    binaries it just compiled. An arm64 set compiled on an Intel Mac is run on an Apple Silicon Mac the
+    same way; the compile says so and leaves the binaries in the target's bundle directory. The target
+    words are the ones the release matrix spells, and the build also accepts the words Go names a
+    macOS machine by: <code>darwin-amd64</code> means <code>macos-amd64</code>, and
+    <code>darwin-arm64</code> means <code>macos-arm64</code>. The published release needs neither Mac:
+    its build compiles both macOS pairs in a container against an Apple SDK its maintainer prepares,
+    and <a href="#ch-04-installation">chapter 4</a> names where that SDK lives and what the run says
+    when it is missing. <a href="#ch-21-running-as-a-service">Chapter 21</a> covers each platform's
+    service once the archive is running.
   </p>
 
   <h3>How do I put a reverse proxy in front of the server?</h3>
 
   <p>
-    The proxy must carry the connection upgrade, because the listener's connection is a connection the
-    browser opens through the same address as the page. HTTP/1.1, the <code>Upgrade</code> header, and a
-    <code>Connection</code> header that follows the request: those are the requirement, and buffering and
-    short timeouts are the two settings that break a deployment that otherwise works.
+    The proxy must carry the connection upgrade, because the listener's live connection is one the
+    browser opens through the same address as the page. HTTP/1.1, the <code>Upgrade</code> header, and
+    a <code>Connection</code> header that follows each request are the requirement, and buffering plus
+    short timeouts are the two settings that break an otherwise working deployment.
     <a href="#ch-20-reverse-proxies">Chapter 20</a> carries the nginx configuration, the Apache
-    directives, and the trusted-proxy setting the proxy forces you to make.
+    directives, and the trusted-proxy setting a proxy forces you to make.
   </p>
 
   <h3>How do I hear about a new release?</h3>
 
   <p>
-    The project's repository watches its releases: the watch control on the repository tells you when a
-    release is published, and the release is where the archive is. The release notes on the release, and the
-    change log the repository publishes, are the release-by-release history; an archive carries the program,
-    this guide, and the licence of the ffmpeg it embeds.
-    <a href="#ch-01-overview">Chapter 1</a> is the short list of what changed
-    since the last published release.
+    The project's repository publishes the releases, and the repository's watch control tells you when
+    one appears. The release notes and the published change log are the release-by-release history, and
+    each archive carries the program, this guide, and the licence of the ffmpeg it embeds.
+    <a href="#ch-01-overview">Chapter 1</a> keeps the short list of what changed since the last
+    published release.
   </p>
 
   <h3>How do I listen to several deployments from one browser?</h3>
 
   <p>
-    Open each one with an <code>id</code> parameter that distinguishes it:
+    Open each one with an <code>id</code> parameter that tells them apart, for example
     <code>http://localhost:3000/?id=dispatch</code>. The talkgroup selections a listener makes are
-    remembered per identifier; without it, every deployment shares one remembered selection, and the last
-    one wins.
+    remembered per identifier; without one, every deployment shares a single remembered selection and
+    the last deployment visited wins.
   </p>
 
   <h3>How do I change the access code a listener entered?</h3>
 
   <p>
-    The code is stored in the browser's own storage. Append <code>/reset</code> to the address —
-    <code>http://localhost:3000/reset</code> — and the page clears what it stored and returns to the main
-    address. The code itself is issued, scoped, and expired in the Access section,
+    The code lives in the browser's own storage. Append <code>/reset</code> to the address —
+    <code>http://localhost:3000/reset</code> — and the page clears what it stored and returns to the
+    main address. The code itself is issued, scoped, and expired in the Access section described in
     <a href="#ch-09-access-and-api-keys">chapter 9</a>.
   </p>
 
   <h3>Where are the recordings stored?</h3>
 
   <p>
-    In the database, in the call's own row. There is no recordings folder to keep in step with the
+    In the database, in each call's own row. There is no recordings folder to keep in step with the
     database: the file that is the deployment is the file that holds the audio.
-    <a href="#ch-23-backup-and-restore">Chapter 23</a> is the backup chapter, and it is short because of
-    this.
+    <a href="#ch-23-backup-and-restore">Chapter 23</a> is the backup chapter, and it is short precisely
+    because of this.
   </p>
 
   <h3>Can I give a second person their own administrator login?</h3>
 
   <p>
-    No. The deployment has one administrator credential, and it opens everything. The people who need to
-    listen get access codes with a scope, an expiry, and a limit; the people who need to change the
-    deployment share the administrator password, and the log is where you see what was changed.
-    <a href="#ch-22-security-hardening">Chapter 22</a> is the credential model.
+    No. The deployment has one administrator credential, and it opens everything. People who need to
+    listen get access codes with a scope, an expiry, and a limit; people who need to change the
+    deployment share the administrator password, and the log is where you can see what was changed.
+    <a href="#ch-22-security-hardening">Chapter 22</a> lays out the credential model.
   </p>
 
-  <h3>Why did my administrator sessions all end?</h3>
+  <h3>Why did all my administrator sessions end at once?</h3>
 
   <p>
-    The signing secret changed. A start that made a secret, replaced one that was too short to be safe, or
-    opened a database with a different secret ends every session signed with the old one, and says so on
-    the console and in the log. Restoring a database is the same event.
-    <a href="#ch-22-security-hardening">Chapter 22</a> is the credential chapter.
+    The signing secret changed. A start that made a secret, replaced one too short to be safe, or
+    opened a database carrying a different secret ends every session signed with the old one, and says
+    so on the console and in the log. Restoring an older database is the same event wearing a
+    different hat. <a href="#ch-22-security-hardening">Chapter 22</a> is the credential chapter.
   </p>
 
   <h3>Can I move a deployment to another machine?</h3>
 
   <p>
-    Install the program, copy the base directory, and start it. The ini file, the database with its
-    recordings, and the autocert folder are the deployment. Expect the sessions to end, and expect the
-    first start on a server database to apply the schema.
+    Install the program, copy the base directory, and start it. The configuration file, the database
+    with its recordings, and the autocert folder are the whole deployment. Expect every session to end,
+    and expect the first start against an older database to apply the new schema.
     <a href="#ch-23-backup-and-restore">Chapter 23</a> is the restore.
   </p>
 
   <h3>Does this guide cover the scanner webapp and the phone apps?</h3>
 
   <p>
-    No. This guide is the server and its administration interface. The guide for the listener who hears
-    calls on the web application is the file <code>docs/user-guide.html</code> in the repository and in
-    every release archive, beside this one and built the same way — one HTML file carrying its own
-    stylesheet and pictures inside itself — and the native applications are the project's own apps. The
-    webapp's behaviour is named here only where the server's settings change it — the access codes, the
-    scope, the listener cap, the delay, and the alert tones are the server's decisions that the listener
+    No. This guide is the server and its administration interface. The guide for the listener hearing
+    calls in the web application is the file <code>user-guide.html</code>, in the repository and in
+    every release archive beside this one, built the same way — a single HTML file carrying its own
+    stylesheet and pictures inside itself. The native applications are the project's own apps. The
+    webapp's behaviour appears here only where a server setting changes it: the access codes, the
+    scope, the listener cap, the delays, and the alert tones are the server's decisions that a listener
     feels.
   </p>
 
   <h3>My question is not here</h3>
 
   <p>
-    Ask it. The project takes questions on the repository's discussions, and the support address is in
-    <a href="#ch-27-reference">chapter 27</a>. Before you ask, the log view is the deployment telling you
-    what it saw, filtered by subsystem and by text, and it is the fastest way to turn a question into a
-    report: what you expected, what the log says, and which subsystem said it.
+    Ask it. The project takes questions in the repository's discussions, and the support address is in
+    <a href="#ch-27-reference">chapter 27</a>. Before you do, the log view is the deployment telling
+    you what it saw, filtered by subsystem and by text, and it is the quickest way to turn a question
+    into a useful report: what you expected, what the log says, and which subsystem said it.
   </p>
 </section>
 
