@@ -4085,8 +4085,8 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   <h2 id="ch-25-troubleshooting">25 · Troubleshooting</h2>
 
   <p class="lead">
-    Start from what you see, not from what you suspect. Every symptom below has a place to look first, a
-    log subsystem that names it, and a control that fixes it.
+    When something is wrong, start from what you can see rather than what you suspect. Every symptom with
+    a name below has a place to look first, a log subsystem that records it, and a control that fixes it.
   </p>
 
   <table>
@@ -4105,56 +4105,60 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
     </tbody>
   </table>
 
-  <h3>A talkgroup that used to report is silent</h3>
+  <h3>A talkgroup that used to report has gone silent</h3>
 
   <ol>
     <li>
-      <strong>Open the log, filtered to the receiving subsystem, on the day it went quiet.</strong> A
-      watched directory that stopped finding files says so; a recorder posting to the upload endpoints says
-      so when its key stops working. The subsystem filter is the control that makes this one question, not
-      a scroll.
+      <strong>Open the log of <a href="#ch-14-logs">chapter 14</a>, filtered to the receiving subsystem,
+      for the day it went quiet.</strong> A watched directory that stopped finding files says so there,
+      and a recorder posting to the upload endpoints says so the moment its ingest key stops working.
+      The subsystem filter turns this into one question instead of a scroll.
     </li>
     <li>
-      <strong>Is the recorder still writing?</strong> A recorder that stopped writing writes nothing to
-      the server, and the server cannot report a file that never arrived. Look at the recorder's own
-      output.
+      <strong>Check whether the recorder is still writing.</strong> A recorder that stopped writing sends
+      the server nothing, and the server cannot report a file that never arrived. Look at the
+      recorder's own output before blaming anything downstream.
     </li>
     <li>
-      <strong>Did the identifiers change?</strong> A watched directory names a talkgroup by the
-      identifiers in the file name, resolved against the system. A recorder that changes its talkgroup
-      numbering creates talkgroups you did not ask for when auto populate is on, and drops calls when it is
-      off. The log names the system and talkgroup each call resolved to.
+      <strong>Ask whether the identifiers changed.</strong> A watched directory names a talkgroup from
+      the identifiers in the file name, resolved against the system, and a recorder that changes its
+      talkgroup numbering creates talkgroups you never asked for when auto populate is on — or drops
+      calls when it is off. The log names the system and talkgroup each call resolved to.
+      <a href="#ch-10-getting-audio-in">Chapter 10</a> explains the resolution.
     </li>
     <li>
-      <strong>Is the talkgroup in your scope?</strong> An access code scoped to some systems shows you
-      those systems. Silence on a talkgroup you cannot see is a scope, not a fault.
+      <strong>Check whether the talkgroup is in your scope.</strong> An access code scoped to certain
+      systems shows you exactly those systems, and silence on a talkgroup you cannot see is a scope
+      question, not a fault. <a href="#ch-09-access-and-api-keys">Chapter 9</a> is the scope model.
     </li>
     <li>
-      <strong>Is the call delayed?</strong> A system delay or a talkgroup delay holds a call out of the
-      live stream for that long. It arrives in the history, and it arrives late.
+      <strong>Check the delay settings.</strong> A system delay or a talkgroup delay holds a call out of
+      the live stream for exactly that long: it still arrives in the history, just late.
     </li>
   </ol>
 
-  <h3>Calls arrive and play nothing</h3>
+  <h3>Calls arrive but play nothing</h3>
 
   <ul>
     <li>
-      <strong>The conversion mode.</strong> The four modes decide what the server does to an incoming
-      recording. A mode that converts with ffmpeg needs ffmpeg: every release build carries it inside the
-      program, compiled for audio, and this project's build compiles the ffmpeg of every release target in a
-      container, from the source release its manifest pins, with the one command chapter 4 lists. A program
-      built with plain <code>go build</code> carries none. A deployment whose converter is missing says so on
-      the console at startup, and the notice is worth reading on every new release.
+      <strong>The conversion mode.</strong> The options of
+      <a href="#ch-13-options">chapter 13</a> decide what the server does to an incoming recording, and a
+      mode that converts with ffmpeg needs an ffmpeg. Every release build carries one inside the program,
+      compiled for audio only, and a program built with plain <code>go build</code> carries none — a
+      deployment whose converter is missing says so on the console at startup, which is a notice worth
+      reading on every new release. When a deployment you compiled yourself on a Mac plays nothing from
+      the other macOS architecture, the compile leaves the binaries in the target's bundle directory and
+      names the Mac that runs them: look there before suspecting the player.
     </li>
     <li>
-      <strong>The format the recorder writes.</strong> The server converts what it can; a recorder writing
-      a format the converter refuses produces a call with a row and no playable audio. Play one on the
-      server's own interface before you chase the network.
+      <strong>The format the recorder writes.</strong> The server converts what it can, and a recorder
+      writing a format the converter refuses produces a call with a database row and no playable audio.
+      Play one on the server's own interface before chasing the network.
     </li>
     <li>
       <strong>The recording length.</strong> Rows migrated from an older database carry no measured
-      length, and a call whose length was never measured is a call the interface shows without a duration.
-      The recording plays; the number is what is missing.
+      length, so the interface shows the call without a duration. The recording plays; only the number
+      is missing.
     </li>
   </ul>
 
@@ -4162,27 +4166,29 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
 
   <ul>
     <li>
-      <strong>Three guesses in ten minutes lock the address out</strong>, and the refusal is an empty
-      <code>401</code> that says nothing about the window. The log under <em>Logins</em> carries one warning
-      per lockout, naming the address. Behind a proxy, the address is the proxy's — name the proxy in
-      <code>-trusted_proxies</code> and the lockout counts the machine that guessed.
+      <strong>Three wrong guesses in ten minutes lock the address out</strong>, and the refusal is an
+      empty <code>401</code> that says nothing about the window. The log under <em>Logins</em> carries
+      one warning per lockout, naming the address. Behind a proxy the address is the proxy's, so name
+      the proxy in <code>-trusted_proxies</code> and the lockout starts counting the machine that
+      guessed — <a href="#ch-20-reverse-proxies">chapter 20</a> and
+      <a href="#ch-22-security-hardening">chapter 22</a> cover both halves of that.
     </li>
     <li>
-      <strong>A token that stopped working is a secret that changed.</strong> The server keeps the last
-      five tokens it issued, and a start that made or replaced the signing secret ends every session opened
-      before it. The console says it, and the log files it.
+      <strong>A token that stopped working means a secret that changed.</strong> The server keeps the
+      last five tokens it issued, and a start that made or replaced the signing secret ends every
+      session opened before it. The console says it and the log files it.
     </li>
     <li>
-      <strong>A password you no longer have is changed with the program, on the machine</strong>, with
-      <code>-admin_password</code>. It writes the credential into the deployment's database and stops
-      without starting a server.
+      <strong>A password you no longer have is changed with the program itself</strong>, on the machine
+      it runs on, with <code>-admin_password</code>: it writes the new credential into the deployment's
+      database and stops, without starting a server.
     </li>
   </ul>
 
   <h3>A recorder's upload is refused</h3>
 
   <p>
-    The upload endpoints answer in plain text, and the line they answer with is the diagnosis:
+    The upload endpoints answer in plain text, and the line they answer with is the whole diagnosis:
   </p>
 
   <table>
@@ -4196,28 +4202,29 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   </table>
 
   <p>
-    A call that arrives and vanishes is usually the duplicate window: two calls on the same system,
-    talkgroup, and site within half a second are one call, and the second is dropped. A recorder posting
-    the same transmission twice posts it once.
+    A call that arrives and then vanishes is usually the duplicate window: two calls on the same system,
+    talkgroup, and site within half a second count as one call, and the second is dropped. A recorder
+    posting the same transmission twice gets it posted once.
   </p>
 
   <h3>The webapp connects and hears nothing</h3>
 
   <ol>
     <li>
-      <strong>The proxy.</strong> A proxy that drops the upgrade headers answers the page and refuses the
-      connection, and the page sits quiet. The four proxy lines in
-      <a href="#ch-20-reverse-proxies">chapter 20</a> are the requirement.
+      <strong>The proxy.</strong> A proxy that drops the upgrade headers answers the page and refuses
+      the live connection, and the page sits quiet. The four proxy lines of
+      <a href="#ch-20-reverse-proxies">chapter 20</a> are the requirement, not a preference.
     </li>
     <li>
-      <strong>The access code.</strong> A server with an access list asks for a code, and a listener
-      without one, or with one whose scope does not cover the talkgroup, sees nothing. Five attempts per
-      session and per address, and the fifth is refused as locked out — a valid code included.
+      <strong>The access code.</strong> A server with an access list asks every listener for a code, and
+      a listener without one — or with one whose scope does not cover the talkgroup — sees nothing.
+      There are five attempts per session and per address, and the fifth is refused as locked out, a
+      valid code included.
     </li>
     <li>
-      <strong>The cap.</strong> <code>MaxClients</code> caps the connections the server takes, and a
-      connection over the cap is refused in silence. The listeners count on the main screen is the number
-      to look at before you look anywhere else.
+      <strong>The cap.</strong> The <code>MaxClients</code> option caps the connections the server will
+      take, and a connection over the cap is refused in silence. The listener count on the main screen
+      of <a href="#ch-08-administration-interface">chapter 8</a> is the number to look at first.
     </li>
   </ol>
 
@@ -4225,20 +4232,20 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
 
   <p>
     Filter to the subsystem, read the counts strip, and read the message's own words: the messages this
-    server writes name what happened and what it did about it. A message that repeats every hour is a
-    scheduled pass failing, and a message that repeats on every call is a reference that does not resolve.
-    Retention is the control that keeps the log the size you chose; the pass says what it removed, and says
-    when it could not run.
+    server writes name what happened and what the server did about it. A message repeating every hour
+    is a scheduled pass failing; a message repeating on every call is a reference that does not
+    resolve. Retention is the control that keeps the log the size you chose, and the retention pass says
+    what it removed — and says when it could not run.
   </p>
 
   <h3>The interface will not save</h3>
 
   <p>
-    The save bar writes the working copy you have been editing. The conflict banner says another session
-    saved that section while you were editing it: the server has one saved configuration, and it will not
-    let a save overwrite what it has. Read the section as the server has it now, make your changes in it
-    again, and save. Two people editing one section at the same time is the situation the banner is for,
-    and the banner is the interface telling you before your work is written over, not after.
+    The save bar writes the working copy you have been editing. If a conflict banner appeared, another
+    session saved that section while you were editing it: the server holds one saved configuration and
+    will not let a save silently overwrite what it has. Read the section as the server has it now, make
+    your changes in that copy, and save again. Two people editing one section at once is the situation
+    the banner exists for, and it tells you before your work is written over, not after.
   </p>
 </section>
 
