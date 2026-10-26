@@ -3434,9 +3434,10 @@ trusted_proxies = 127.0.0.1, 10.0.0.0/8</code></pre>
   <h2 id="ch-21-running-as-a-service">21 · Running as a service</h2>
 
   <p class="lead">
-    A deployment you have to start by hand is a deployment that is down while you are asleep. The program
-    installs and controls itself as a service on Linux, Windows, macOS, and FreeBSD, and the same five
-    words do it on every one of them.
+    A deployment that only runs while someone is logged in is a deployment that is dark at three in the
+    morning. On Linux, Windows, macOS, and FreeBSD the program registers and controls itself as a service,
+    and the same two words do it on every one of them: <code>-service install</code>, then
+    <code>-service start</code>.
   </p>
 
   <h3>The service mode</h3>
@@ -3453,39 +3454,38 @@ trusted_proxies = 127.0.0.1, 10.0.0.0/8</code></pre>
   </table>
 
   <p>
-    Installing and controlling the service needs the privileges the manager asks for: root on Linux,
-    macOS, and FreeBSD, an elevated command prompt on Windows. The service runs as the account that
-    installed it, which is normally the system's most privileged account, so the deployment's folder must
-    be a folder you are content for that account to write in.
+    Talking to the service manager takes the privileges that manager demands: root on Linux, macOS, and
+    FreeBSD, a command prompt run as Administrator on Windows. The service then runs as the account that
+    installed it — normally the most privileged account the machine has — so choose the deployment's folder
+    knowing that account writes in it.
   </p>
 
   <p>
-    The service is registered under the name <code>rdio-scanner</code>, and on FreeBSD under
-    <code>rdioscanner</code>, because that manager does not accept a name with a hyphen in it. Its display
-    name is <em>Rdio Scanner</em> and its description is <em>The perfect software-defined radio
-    companion</em>, which is what you see in the manager's own tools.
+    The registration is made under the name <code>rdio-scanner</code>, except on FreeBSD, where the service
+    is <code>rdioscanner</code> because that manager rejects a name containing a hyphen. The display name
+    the managers show is <em>Rdio Scanner</em>, and the description beside it is <em>The perfect
+    software-defined radio companion</em>.
   </p>
 
   <p>
-    Stopping the service is the same shutdown as pressing the keys in a terminal: the server is told to
-    stop, closes its addresses, and closes the database. A control the manager refuses ends with a
-    non-zero status and no explanation, which is what a script needs and all a script gets.
+    Stopping the service stops the server the same way the keys stop it in a terminal: it is told to stop,
+    it closes its listening addresses, and it closes the database. A control the manager will not perform
+    ends with a non-zero exit status and no comment, which is everything a script needs to know.
   </p>
 
   <p>
-    A service has no terminal, so the console lines the server prints — the addresses it answers on, the
-    ffmpeg notice, the TLS failures — go to the manager's record, not to a window. The log view is where
-    the deployment's own messages are, and
-    <a href="#ch-14-logs">chapter 14</a> is how to read it.
+    A service has no window, so the console lines — the addresses, the ffmpeg notice, a TLS failure — go
+    into the manager's record instead of a terminal. The deployment's own messages are always in the log
+    view, and <a href="#ch-14-logs">chapter 14</a> says how to read them.
   </p>
 
   <h3>Linux</h3>
 
   <p>
-    The archive for a Linux deployment is <code>rdio-scanner-linux-amd64-v&lt;version&gt;.zip</code>, and
-    the builds for 386, ARM, and ARM64 are the same archive with the target named in its place. The Linux
-    builds carry their own <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled for
-    the architecture they run on, so nothing has to be installed on the host for recordings to convert.
+    The Linux archive is <code>rdio-scanner-linux-amd64-v&lt;version&gt;.zip</code>, with the 386, ARM, and
+    ARM64 builds named the same way in place of the architecture. Each Linux build carries its own
+    <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled for audio for the
+    architecture it runs on, so the host needs nothing installed for recordings to convert.
   </p>
 
   <pre><code>$ mkdir rdio-scanner &amp;&amp; cd rdio-scanner
@@ -3494,8 +3494,9 @@ $ sudo ./rdio-scanner -service install
 $ sudo ./rdio-scanner -service start</code></pre>
 
   <p>
-    The install writes a systemd unit at <code>/etc/systemd/system/rdio-scanner.service</code> that runs
-    the program with <code>-service run</code>. From then on the manager owns the process:
+    The install writes a systemd unit at <code>/etc/systemd/system/rdio-scanner.service</code> whose
+    <code>ExecStart</code> runs the program with <code>-service run</code>. From that moment the manager
+    owns the process:
   </p>
 
   <pre><code>$ sudo systemctl status rdio-scanner
@@ -3503,79 +3504,81 @@ $ sudo journalctl -u rdio-scanner -f
 $ sudo systemctl restart rdio-scanner</code></pre>
 
   <p>
-    The server's console lines are in the journal. The deployment's own record is in the log view, and a
-    line you read in the journal that the log view does not carry is a line the server printed before it
-    had a database to write to.
+    The journal holds the console lines. The log view holds the deployment's record, and a journal line the
+    log view does not carry is a line printed before the server had a database to write into.
   </p>
 
   <p>
-    Open the port the deployment answers on. With <code>ufw</code>:
+    Then open the port the deployment answers on. With <code>ufw</code>:
   </p>
 
   <pre><code>$ sudo ufw allow 3000/tcp</code></pre>
 
   <p>
-    A server answering on 80 and 443 needs those ports open, and a server answering them must be run by a
-    privileged account, which a service installed as root is. A container that must answer them is given
-    the capability to bind them, and
+    A deployment on 80 and 443 needs those ports open as well, and binding them needs a privileged account,
+    which a service installed as root is. In a container, grant the container the capability to bind them;
     <a href="#ch-04-installation">chapter 4</a> is the container's own chapter.
   </p>
 
   <h3>Windows</h3>
 
   <p>
-    The Windows archive is <code>rdio-scanner-windows-amd64-v&lt;version&gt;.zip</code> and carries the
-    program as <code>rdio-scanner.exe</code>, with <code>ffmpeg</code> and <code>ffprobe</code> inside it.
-    Run the install from a command prompt opened as Administrator, in the folder you extracted the archive
-    into — the service is registered with the path it was installed from, and moving the folder afterwards
-    leaves the service pointing at a program that is no longer there.
+    The Windows archive is <code>rdio-scanner-windows-amd64-v&lt;version&gt;.zip</code>, holding the program
+    as <code>rdio-scanner.exe</code> with its <code>ffmpeg</code> and <code>ffprobe</code> built in. Run
+    the install from an elevated command prompt, inside the folder you extracted the archive into: the
+    service is registered with the path it was installed from, so moving that folder later leaves the
+    service pointing at a program that is no longer there.
   </p>
 
   <pre><code>C:\rdio-scanner&gt; rdio-scanner.exe -service install
 C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
 
   <p>
-    The service appears in the Services console as <em>Rdio Scanner</em>, started manually by default: set
-    its startup type to <em>Automatic</em> if you want it to come up with the machine. The manager's own
-    tools work on it as they work on any service — <code>sc query rdio-scanner</code>,
-    <code>net start rdio-scanner</code>, and the same two commands with <code>stop</code>.
+    The Services console shows the registration as <em>Rdio Scanner</em>, with a startup type of manual:
+    set it to <em>Automatic</em> if the deployment should come up with the machine. The manager's own
+    tools address it like any other service — <code>sc query rdio-scanner</code>,
+    <code>net start rdio-scanner</code>, and the same pair with <code>stop</code>.
   </p>
 
   <p>
-    Windows does not let a program answer the standard ports the way a privileged Unix account does, and
-    its firewall asks once per program. Allow <code>rdio-scanner.exe</code> through Windows Defender
-    Firewall on the private network the machine sits on, and open the port on the public network if
-    listeners reach the deployment from outside:
+    Windows asks its firewall once per program, so allow <code>rdio-scanner.exe</code> through Windows
+    Defender Firewall on the network the machine lives on, and open the port publicly if listeners arrive
+    from outside the LAN:
   </p>
 
   <pre><code>C:\rdio-scanner&gt; netsh advfirewall firewall add rule name="Rdio Scanner" dir=in action=allow program="C:\rdio-scanner\rdio-scanner.exe" enable=yes</code></pre>
 
   <p>
-    A Windows deployment that answers 80 and 443 behind a proxy is the arrangement
-    <a href="#ch-20-reverse-proxies">chapter 20</a> describes; a deployment that answers them directly
-    needs the certificate chapter 19 describes.
+    A Windows deployment that answers 80 and 443 through a proxy is the arrangement
+    <a href="#ch-20-reverse-proxies">chapter 20</a> describes; one that answers them itself needs the
+    certificate in hand first.
   </p>
 
   <h3>macOS</h3>
 
   <p>
-    The macOS archive is <code>rdio-scanner-macos-amd64-v&lt;version&gt;.zip</code> for an Intel machine
-    and <code>rdio-scanner-macos-arm64-v&lt;version&gt;.zip</code> for an Apple one. Both carry their own
-    <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled for audio for the architecture
-    they run on, so nothing has to be installed on the host for recordings to convert; the release build
-    compiles the ffmpeg of every release target in a container, the two macOS targets among them, against an
-    Apple SDK its maintainer prepares, and it never starts what it compiled for a macOS target: what
-    <code>FFMPEG.txt</code> says about those two programs is what a read of the file's own header and its
-    load commands says, and it says which ones it read. On a Mac you can compile the pair with the Mac's own
-    compiler, linker and ad-hoc signer instead, with no container and no prepared SDK:
-    <code>go run ./cmd/build ffmpeg</code> on that Mac compiles them, runs them, and adopts what converts.
-    The two macOS architectures compile each other's ffmpeg binaries, so one Apple Silicon Mac compiles both
-    macOS archives — <code>go run ./cmd/build ffmpeg macos-amd64</code> compiles the Intel binaries there,
-    and Rosetta 2 is what lets that Mac run them. The arm64 binaries compiled on an Intel Mac are run on an
-    Apple Silicon Mac, because an Intel machine will not execute them: the compile leaves the binaries in the
-    target's bundle directory and names the Mac that runs them, and the operator carries them there. A
-    release run on a machine that has not prepared that SDK writes none of the two macOS archives, says
-    which two they are, and ends with the exit code that says the release is not the whole release.
+    The macOS archives are <code>rdio-scanner-macos-amd64-v&lt;version&gt;.zip</code> for an Intel machine
+    and <code>rdio-scanner-macos-arm64-v&lt;version&gt;.zip</code> for an Apple one. Each carries its own
+    <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled for audio for the
+    architecture it runs on, so a Mac needs nothing installed for recordings to convert.
+    <a href="#ch-03-requirements">Chapter 3</a> says what is in every archive: the release build compiles
+    the ffmpeg of every release target in a container, the two macOS targets among them, against an Apple
+    SDK its maintainer prepares, and it never starts a program it compiled for a macOS target. What
+    <code>FFMPEG.txt</code> records about those two programs is what a read of their own headers and load
+    commands says — including which ones it read — and a read says how a program was linked, not what it
+    does. A release run on a machine that has not prepared that SDK writes neither macOS archive, names
+    the two it left out, and ends with the exit code that says the release is not the whole release.
+  </p>
+
+  <p>
+    On your own Mac you can skip the container and the prepared SDK and let the Mac use its own compiler,
+    linker, and ad-hoc signer: <code>go run ./cmd/build ffmpeg</code> on that Mac compiles them, runs
+    them, and adopts what converts. The two macOS architectures compile each other's ffmpeg binaries, so
+    one Apple Silicon Mac compiles both macOS archives: <code>go run ./cmd/build ffmpeg macos-amd64</code>
+    produces the Intel binaries there, and Rosetta 2 is what lets that Mac run them. Going the other way,
+    the arm64 binaries compiled on an Intel Mac are run on an Apple Silicon Mac, because an Intel machine
+    will not execute them: the compile leaves the binaries in the target's bundle directory and names the
+    Mac that runs them, and you carry them there yourself.
   </p>
 
   <pre><code>% sudo ./rdio-scanner -service install
@@ -3583,52 +3586,52 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
 
   <p>
     The install writes a launchd property list at
-    <code>/Library/LaunchDaemons/rdio-scanner.plist</code>, and the daemon is registered with the name
-    <code>rdio-scanner</code>. The manager's own commands work on it:
+    <code>/Library/LaunchDaemons/rdio-scanner.plist</code>, registering the daemon under the name
+    <code>rdio-scanner</code>. The manager's own commands work on it from then on:
   </p>
 
   <pre><code>% sudo launchctl list | grep rdio
 % sudo launchctl stop rdio-scanner</code></pre>
 
   <p>
-    macOS asks you to allow the program when it first accepts incoming connections; answer
-    <em>Allow</em>, and answer it again when the program is replaced by a new version, because the
-    allowance belongs to the program you allowed. A deployment behind a proxy on the same machine needs no
-    allowance for the port the proxy connects to.
+    macOS asks you to allow incoming connections the first time the program tries to answer them, and asks
+    again when a new version replaces the old, because the allowance belongs to the exact program you
+    allowed. A deployment whose only listener is a proxy on the same machine needs no allowance for the
+    port the proxy connects to.
   </p>
 
   <h3>FreeBSD</h3>
 
   <p>
-    The FreeBSD archive is <code>rdio-scanner-freebsd-amd64-v&lt;version&gt;.zip</code>. The FreeBSD build
+    The FreeBSD archive is <code>rdio-scanner-freebsd-amd64-v&lt;version&gt;.zip</code>, and its build
     carries its own <code>ffmpeg</code> and <code>ffprobe</code> inside the program, compiled for audio for
-    the architecture it runs on, so nothing has to be installed on the host for recordings to convert. The
-    release build compiles them in a container on the machine that produces the releases, against a FreeBSD
-    sysroot — its headers, libraries and startup files, copied whole out of the FreeBSD project's own
-    toolchain image, which that build reads and never runs. Nothing FreeBSD is started anywhere in the
-    build, and <code>FFMPEG.txt</code> names what the build read out of the two programs instead: that each
-    is a 64-bit ELF executable of x86-64 machine code, carries FreeBSD's own operating-system byte, declares
-    no loader to start it and no dynamic section to ask one for, and carries the note its link wrote about
-    what linked it. The notice also says that a read describes how a program was linked and what it was
-    linked for, and not what the program does.
+    the architecture it runs on, so the host needs nothing installed for recordings to convert. The release
+    build compiles them in a container on the machine that produces the releases, against a FreeBSD sysroot
+    — its headers, libraries, and startup files, copied whole out of the FreeBSD project's own toolchain
+    image, which the build reads and never runs. Nothing FreeBSD is started anywhere in the build, so
+    <code>FFMPEG.txt</code> reports what it read out of the two programs instead: each one is a 64-bit ELF
+    executable of x86-64 machine code, it carries FreeBSD's own operating-system byte, it declares no
+    loader and no dynamic section, and it carries the note its link step wrote about what linked it. The
+    notice also says plainly that such a read describes how a program was linked and what it was linked
+    for, and not what the program does.
   </p>
 
   <pre><code># ./rdio-scanner -service install
 # ./rdio-scanner -service start</code></pre>
 
   <p>
-    The install writes a service script at <code>/usr/local/etc/rc.d/rdioscanner</code>, and the service is
-    known to the system as <code>rdioscanner</code> — the hyphenated name is what that manager rejects,
-    which is why FreeBSD is the one system whose service is spelled differently.
+    The install writes a service script at <code>/usr/local/etc/rc.d/rdioscanner</code>, and the system
+    knows the service as <code>rdioscanner</code> — the hyphen is what that manager rejects, which makes
+    FreeBSD the one system whose service name is spelled differently.
   </p>
 
   <pre><code># service rdioscanner status
 # service rdioscanner restart</code></pre>
 
   <p>
-    Open the port in the packet filter. With <code>pf</code>, a rule passing the deployment's port on the
-    external interface, reloaded, is the whole firewall step; a deployment behind a proxy on the same host
-    needs the rule only for the address the proxy answers on.
+    Open the port in the packet filter: one <code>pf</code> rule passing the deployment's port on the
+    external interface, then a reload, is the whole firewall step. Behind a proxy on the same host, the
+    rule is needed only for the address the proxy answers on.
   </p>
 
   <h3>What the service changes about the deployment</h3>
@@ -3636,25 +3639,25 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
   <ul>
     <li>
       <strong>The base directory is the folder the installed path lives in.</strong> The configuration, the
-      database, the recordings, and the migration archive are written there. A folder on a mount that is
-      not mounted at boot is a deployment that starts with a new database beside the one you meant it to
-      open.
+      database, the recordings, and the migration archive all go there. A folder on a mount that is not
+      mounted at boot gives you a deployment that starts with a fresh database beside the one you meant it
+      to open.
     </li>
     <li>
-      <strong>The service starts before you are logged in, and as the account that installed it.</strong> A
-      deployment whose base directory is inside a user's home folder is a deployment a privileged account
-      writes into that home. Give the deployment a folder of its own.
+      <strong>The service starts before anyone logs in, as the account that installed it.</strong> Keep the
+      base directory out of any user's home folder; a privileged account writing into a home is not what a
+      deployment should ask for. Give the deployment a folder of its own.
     </li>
     <li>
-      <strong>The timezone is the machine's.</strong> A server whose machine is set to the wrong zone
-      writes a log and a call history in the wrong hours, and the log view's dates follow it. Set the
-      machine's time zone, not the server's.
+      <strong>The time zone is the machine's.</strong> A machine set to the wrong zone writes its log and
+      its call history in the wrong hours, and the log view's dates follow it. Fix the machine, not the
+      server.
     </li>
     <li>
-      <strong>Updating the program is a stop, a replace, and a start.</strong> The service configuration
-      points at the path, so replacing the file in place keeps the service working. Back up first —
-      <a href="#ch-23-backup-and-restore">chapter 23</a> — and expect the first start to migrate the
-      database, <a href="#ch-24-upgrading-and-migrating">chapter 24</a>.
+      <strong>Updating the program is a stop, a replace, and a start.</strong> The service points at the
+      path, so replacing the file in place leaves the registration working. Back the folder up first —
+      <a href="#ch-23-backup-and-restore">chapter 23</a> — and expect the first start after the replace to
+      migrate the database, as <a href="#ch-24-upgrading-and-migrating">chapter 24</a> describes.
     </li>
   </ul>
 </section>
@@ -3663,10 +3666,10 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
   <h2 id="ch-22-security-hardening">22 · Security hardening</h2>
 
   <p class="lead">
-    A deployment holds four things worth protecting: the administrator's credential, the secret that signs
-    its sessions, the credentials that let audio in, and the credentials that let people listen. The server
-    has one model for each, and the hardening is knowing what each one is, and what it costs to leave it
-    as it shipped.
+    Four things stand between a deployment and whoever finds its port: the administrator's password, the
+    secret that signs its sessions, the keys that let audio in, and the codes that let people listen. The
+    server gives each one a model of its own, and hardening is knowing what each model is, and what leaving
+    it as it shipped costs you.
   </p>
 
   <h3>The credentials and what they are</h3>
@@ -3683,15 +3686,27 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
   </table>
 
   <p>
-    The session token is not a credential you store: it is a signature the server makes with its secret,
-    valid for seven days, and the server keeps the last five it issued. Signing in ends the sessions older
-    than the five, and a server that changes its secret ends every session opened before the change — which
-    is why the console
-    says it out loud on the start that does it, and why restoring a database from a backup ends the
-    sessions opened on the deployment you restored over.
+    The administrator's password is the whole deployment, so start by knowing it is stored only as a bcrypt
+    hash — there is no forgotten-password flow, because nobody can read what is stored, and losing it
+    means working through <a href="#ch-15-tools">chapter 15</a>. The signing secret is not a password
+    either: the server makes it on a start that finds none and keeps it in the database's options, and
+    replaces one it considers too short. What it is good for is signing session tokens — a token is not
+    stored anywhere but is a signature the secret makes, valid for seven days, and the server stands
+    behind only the five newest it issued. Change the secret and every session opened before the change is
+    over; that is why the console says so on the start that does it, and why restoring a database from a
+    backup ends the sessions of the deployment you restored over. An ingest key opens exactly one path —
+    posting a call to an upload endpoint — and lives in the configuration, listed in the API Keys section.
+    An access code opens the calls its scope covers, for as long as it is valid and up to its limit.
+    <a href="#ch-09-access-and-api-keys">Chapter 9</a> sets up the last two.
   </p>
 
   <h3>The checklist</h3>
+
+  <p>
+    The table below is ordered by what each step is worth, earliest first. The first row is not optional:
+    the password the program ships with is published, and while you are still using it the interface says
+    so in its todos banner.
+  </p>
 
   <table>
     <caption>Hardening, in the order it pays</caption>
@@ -3712,6 +3727,14 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
 
   <h3>The limits the server already runs</h3>
 
+  <p>
+    These need no configuration because they are the model rather than options, and they are worth knowing
+    before someone runs into one. Notice how every refusal is built: an empty body with a status, so
+    nothing outside the deployment learns which credential was wrong, or how close to the line it was.
+    That is deliberate, and it means the log — <a href="#ch-14-logs">chapter 14</a> — is the only place
+    you can see an attempt at all.
+  </p>
+
   <table>
     <caption>What the server refuses, and how</caption>
     <thead><tr><th scope="col">Limit</th><th scope="col">Value</th><th scope="col">What it looks like from outside</th></tr></thead>
@@ -3727,31 +3750,43 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
   <h3>What the server does not do</h3>
 
   <p>
-    Knowing the shape of the model is knowing where the work is yours:
+    The model has edges, and knowing where they are is knowing which protections are yours to supply:
   </p>
 
   <ul>
-    <li><strong>One administrator.</strong> There is no second administrator account, no roles, no
-    per-section permissions. Anyone with the password can do everything, so the password is the secret of
-    the deployment, and the people who do not need it do not have it.</li>
-    <li><strong>No second factor.</strong> The password is the credential. TLS, a proxy that is not
-    reachable from the internet, and a password nobody guesses are the controls.</li>
-    <li><strong>No address allowlist.</strong> The server answers whoever connects. Restricting who
-    reaches the deployment is the firewall's and the proxy's job.</li>
-    <li><strong>No rate limit on the upload endpoints.</strong> An ingest key is a key: anyone holding it
-    posts calls. Rotate a key you think is loose, and watch the log under <em>Uploads</em>, where the
-    refusals are filed, and <em>Call ingest</em>, where the calls it posts land.</li>
-    <li><strong>No audit trail beyond the log.</strong> The log is the record: configuration changes,
-    logins, refusals, lockouts, retention, migrations, the assistant surface's writes. It is filed by
-    subsystem, and it is pruned by the retention setting — so a deployment that needs the record keeps the
-    retention days long enough to hold it.</li>
+    <li>
+      <strong>There is one administrator.</strong> No second account, no roles, no per-section
+      permissions: whoever holds the password can do everything. The password is therefore the secret of
+      the deployment, and the people who do not need it should not have it.
+    </li>
+    <li>
+      <strong>There is no second factor.</strong> The password is the credential. TLS, a proxy that the
+      internet cannot reach — <a href="#ch-19-tls">chapter 19</a> and
+      <a href="#ch-20-reverse-proxies">chapter 20</a> — and a password nobody can guess are the controls.
+    </li>
+    <li>
+      <strong>The server keeps no list of allowed addresses.</strong> It answers whoever connects;
+      deciding who may reach it is the firewall's job and the proxy's.
+    </li>
+    <li>
+      <strong>The upload endpoints are not rate limited.</strong> An ingest key is a key: whoever holds it
+      can post calls. Rotate a key you believe is loose, and watch the refusals filed under
+      <em>Uploads</em> and the calls that land under <em>Call ingest</em>.
+    </li>
+    <li>
+      <strong>There is no audit record beyond the log.</strong> Configuration changes, logins, refusals,
+      lockouts, retention runs, migrations, and the assistant surface's writes are all filed there, by
+      subsystem — and the retention setting prunes it, so a deployment that needs the record keeps its
+      retention days long enough to hold it. <a href="#ch-13-options">Chapter 13</a> is where that
+      setting lives.
+    </li>
   </ul>
 
   <aside class="note">
     <p>
-      Nothing in the log is a credential. The server files addresses, subsystems, and outcomes, and never a
-      password, a token, an ingest key, or an access code. That is what makes the log view safe to read
-      aloud on a support call, and safe to keep.
+      A credential never appears in the log. What is filed there is addresses, subsystems, and outcomes —
+      never a password, a token, an ingest key, or an access code. That is what makes the log view safe to
+      read aloud on a support call, and safe to keep.
     </p>
   </aside>
 </section>
@@ -3760,11 +3795,13 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
   <h2 id="ch-23-backup-and-restore">23 · Backup and restore</h2>
 
   <p class="lead">
-    A deployment is a program and a folder. The program is in the release archive and can be downloaded
-    again; the folder cannot. Back up the folder, and the deployment is backed up.
+    A deployment is a folder and a database, and both of them change while the server runs. Taking a
+    working copy before you touch anything is the cheapest insurance in this guide: an upgrade that goes
+    wrong, a disk that dies, or a configuration mistake you cannot undo all end the same way when the
+    copy exists, and very badly when it does not.
   </p>
 
-  <h3>What is in the folder</h3>
+  <h3>The folder, and what sits in it</h3>
 
   <table>
     <caption>The files a deployment writes in its base directory</caption>
@@ -3779,17 +3816,25 @@ C:\rdio-scanner&gt; rdio-scanner.exe -service start</code></pre>
   </table>
 
   <p>
-    The recordings are in the database, which is the fact that makes a backup of a deployment one file
-    rather than a tree: a call's audio travels with the call, so a database restored on a new machine
-    plays its whole history, and a database restored without its recordings is a history of calls that
-    play nothing.
+    That is the whole deployment: the binary and its bundle, a configuration file only if you wrote one,
+    and the database where everything the interface shows actually lives. There is no second state store,
+    and nothing worth keeping sits in the operating system outside the folder, which is why moving a
+    deployment to another machine is a copy rather than a reinstallation.
   </p>
 
-  <h3>Backing up</h3>
+  <p>
+    Recordings are not files to back up separately because they are rows in the database: the audio the
+    server received became MP3 inside it the moment the call ended. A database copy carries the whole
+    recording history with it, which is usually exactly what you want, and the reason the database file
+    is the largest thing in the folder.
+  </p>
+
+  <h3>Taking the copy</h3>
 
   <p>
-    On the deployment's own database file, stop the server first. The server keeps the database open, and a
-    file copied while a program is writing it is a file that may not be a database.
+    The database is a single file the server holds open, and copying a file while a writer holds it open
+    can produce a copy that is not a database. The safe ritual stops the writer first, and the service
+    manager from <a href="#ch-21-running-as-a-service">chapter 21</a> makes it one command:
   </p>
 
   <pre><code>$ sudo ./rdio-scanner -service stop
@@ -3797,67 +3842,68 @@ $ cp rdio-scanner.db /backup/rdio-scanner-$(date +%F).db
 $ cp rdio-scanner.ini /backup/rdio-scanner-$(date +%F).ini</code></pre>
 
   <p>
-    On a server database, use the database's own tool, and the same settings the server uses:
+    The copy is worth taking whenever the deployment is about to change: before the upgrade of
+    <a href="#ch-24-upgrading-and-migrating">chapter 24</a>, before editing a configuration file you are
+    unsure of, before an administrative action you have never performed, and on the ordinary weekly
+    schedule for everything else. Recordings make the database grow, so a deployment with a long
+    history and a small disk is a deployment that should be watched, and a full disk is a failure that
+    a scheduled copy tells you about early.
+  </p>
+
+  <aside class="note">
+    <div>
+      <p>
+        If the purpose of the copy is a subset rather than the whole deployment — one talkgroup's
+        recordings, or the unit list — the Tools screen of
+        <a href="#ch-15-tools">chapter 15</a> exports selected records as a zip with the metadata beside
+        them, which restores into a different deployment than the copy of a whole folder does.
+      </p>
+    </div>
+  </aside>
+
+  <h3>Restoring</h3>
+
+  <p>
+    Restoring is the same ceremony in reverse. A cold restore stops the server, replaces the file, and
+    starts it again:
   </p>
 
   <pre><code>$ mysqldump --single-transaction -h 10.0.0.5 -u rdio -p rdio_scanner &gt; /backup/rdio-scanner-$(date +%F).sql
 $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F).sql</code></pre>
 
-  <p>
-    Back it up before you update, before you migrate, and before a retention change that will delete
-    history. A deployment that records continuously is a deployment whose newest hour is the part a
-    crash takes; a deployment that keeps a week of calls is a deployment whose history is worth a nightly
-    copy.
-  </p>
-
-  <aside class="note">
-    <p>
-      The Tools section's export writes the configuration as one JSON file. It is a record of the
-      configuration — the sections as the server has them — and it is not a backup: it carries no calls, no
-      recordings, no log. It is what you send a second deployment, and what you attach when you ask for
-      help. <a href="#ch-15-tools">Chapter 15</a> is the section's own chapter.
-    </p>
-  </aside>
-
-  <h3>Restoring</h3>
-
   <ol>
     <li>
-      <strong>Install the program</strong> you are restoring to, in the folder the deployment will live in,
-      and put the ini file there. A deployment restored with the flags it was running with is the same
-      deployment; a deployment restored with defaults answers on 3000 with a SQLite database in a folder
-      you did not mean.
+      Stop the server, so nothing is writing while the file underneath it changes — the service actions
+      of <a href="#ch-21-running-as-a-service">chapter 21</a>, or the terminal shortcut of
+      <a href="#ch-05-first-run">chapter 5</a>.
     </li>
     <li>
-      <strong>Put the database where the configuration points.</strong> The same name, the same path, the
-      same dialect. A SQLite file named <code>rdio-scanner.db</code> in the base directory is the default;
-      a server database is loaded with the database's own tool, into the name the ini file names.
+      Move the current folder aside rather than deleting it, so the failed state is still there if the
+      restore is not the answer you expected.
     </li>
     <li>
-      <strong>Start the server.</strong> It applies the schema to the database it finds, which on a
-      restored database is a pass that finds nothing to change, and says so in the log under
-      <em>Database</em>.
+      Put the copy in its place, with the same paths and the same permissions: the database file must be
+      writable by exactly the user the server runs as.
     </li>
     <li>
-      <strong>Expect every administrator session to be ended.</strong> The signing secret is in the
-      database you restored, and it is not the secret the deployment you restored over was signing with.
-      Log in again; the interface tells you the sessions it ended.
+      Start the server, check the listener health in the system status of
+      <a href="#ch-08-administration-interface">chapter 8</a>, and confirm the recordings you expected
+      are still searchable before declaring the work finished.
     </li>
   </ol>
 
   <p>
-    Then check the deployment as a listener: a call from the restored history plays, the systems are the
-    ones you had, the access codes are the ones you issued, and the watched directories are watching the
-    folders they were watching.
+    Everything that was in the copy comes back with it, including the administrator's password and the
+    secret that signs sessions: everyone who was logged in when the copy was taken is logged out, and
+    everyone who was logged in after it has to log in again, because the database now says the earlier
+    sessions are the current ones.
   </p>
 
-  <aside class="caution">
-    <p>
-      A backup you have never restored is a file you hope is a backup. Restore one onto a second machine,
-      or onto a folder beside the deployment with a different <code>-db_file</code>, and start the server
-      on it. The restore is the test, and it takes minutes.
-    </p>
-  </aside>
+  <p class="caution">
+    The copy is only a copy until you have restored it once. A restore you have never practiced is a
+    hope, not a plan: try the whole ritual against a throwaway port on a machine you do not mind, and
+    time it, so the first performance is rehearsed rather than improvised.
+  </p>
 </section>
 
 <section>
