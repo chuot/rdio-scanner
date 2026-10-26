@@ -3910,47 +3910,59 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   <h2 id="ch-24-upgrading-and-migrating">24 · Upgrading and migrating</h2>
 
   <p class="lead">
-    Updating the program is four steps. Migrating an older database is the first start of the new program
-    doing it for you, announcing itself in the log, and archiving what it cannot carry instead of throwing
-    it away.
+    Replacing the program with a newer release is four steps. Bringing an older database up to what the
+    new program expects is not a step at all: it is the first start of the new program, doing the work
+    itself, saying so in the log, and archiving anything it cannot carry rather than discarding it.
   </p>
 
   <aside class="caution">
-    <p>
-      Back up the base directory before you update. The migration rewrites the database in place, on the
-      first start, with no second copy and no undo. <a href="#ch-23-backup-and-restore">Chapter 23</a> is
-      the backup, and it takes a minute.
-    </p>
+    <div>
+      <p>
+        Take the copy of <a href="#ch-23-backup-and-restore">chapter 23</a> before updating. The
+        migration rewrites the database where it sits, on that first start, with no second copy and no
+        undo button.
+      </p>
+    </div>
   </aside>
 
   <h3>The update</h3>
 
   <ol>
-    <li>Stop the server. A database the server has open is a database you are about to rewrite.</li>
-    <li>Back up the database and the ini file.</li>
     <li>
-      Replace the program with the new release, in the same folder. The service is registered with the
-      path, so replacing the file in place keeps the service working; a folder moved is a service pointing
-      at a program that is no longer there.
+      Stop the server. A database the server has open is a database you are about to rewrite underneath
+      a live writer.
     </li>
-    <li>Start the server, and read what it says on the console and in the log.</li>
+    <li>
+      Back up the database and the configuration file, as both of them stand right now.
+    </li>
+    <li>
+      Put the new release in the same folder as the old program. The service of
+      <a href="#ch-21-running-as-a-service">chapter 21</a> was registered with a path, so replacing the
+      file in place keeps the service working, while moving the folder leaves the service pointing at a
+      program that is no longer there.
+    </li>
+    <li>
+      Start the server, and read what it says on the console and in the log of
+      <a href="#ch-14-logs">chapter 14</a> before walking away.
+    </li>
   </ol>
 
   <p>
-    The first start of a new server on a database it has already migrated changes nothing: every step of
-    the pass probes what it is about to do, finds it done, and says nothing. The pass is safe to run
-    twice, which is what makes a start after a failed start an ordinary start.
+    A start on a database the new program has already migrated changes nothing and prints nothing: every
+    step of the migration pass first probes whether its work is already done. The pass is safe to run
+    twice, which is what makes a start that follows a failed start an ordinary start rather than a
+    gamble.
   </p>
 
-  <h3>What the first start does to a version 6 database</h3>
+  <h3>What the first start does to an older database</h3>
 
   <p>
-    The migration pass applies the new schema, repairs four things the new server needs that the old
-    database does not have, and then moves the thirteen tables, in the order that order requires:
-    groups, tags, systems, talkgroups, units, options, meta, logs, downstreams, watched directories,
-    calls, ingest keys, access codes. The order is load-bearing: the talkgroup, unit, dirwatch, and call
-    migrations resolve their references against the tables the earlier migrations have already filled, and
-    the same pass run in another order migrates a different database.
+    The pass applies the new schema, repairs the few things the new server needs that an old database
+    never had, and then moves the tables in the order their references require: groups, tags, systems,
+    talkgroups, units, options, options-adjacent meta, logs, downstreams, watched directories, calls,
+    ingest keys, and access codes. The order is load-bearing — the talkgroup, unit, directory-watch, and
+    call migrations resolve their references against tables the earlier migrations already filled — and
+    the same pass in a different order would migrate a different database.
   </p>
 
   <table>
@@ -3965,32 +3977,31 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   </table>
 
   <p>
-    Each old table the pass finds is announced in the log under <em>Database</em> — <code>migrating
-    groups...</code> and its twelve siblings — and a database the new server created itself, or a version 7
-    database already migrated, is left exactly as it was, with nothing said.
+    Each old table the pass finds is announced in the log under <em>Database</em>, one notice per table,
+    and a database the new server created itself, or one already migrated, is left exactly as it was with
+    nothing said about it.
   </p>
 
   <p>
-    A row the pass cannot carry does not stop the pass: the row is archived, the reason is written with it,
-    and the migration continues. An old table is dropped only once every row in it has been carried or
-    archived, so a table that survived because one row of it could not be read is read again on the next
-    start, and its already-archived rows archive as nothing.
+    A row the pass cannot carry does not stop the pass. The row is archived with the reason written
+    beside it, and the migration goes on. An old table is dropped only once every row in it has been
+    carried or archived, so a table still standing because one row of it could not be read is read again
+    on the next start, and its already-archived rows archive as nothing.
   </p>
 
   <p>
-    One class of rows the old server lost is carried by this one. The old migration wrote some of its text
-    into its statements by escaping quotes and left the system blacklist, the system and talkgroup colours,
-    the log level, the watched directory type, and the call audio type unescaped, so a single quote in one
-    of those columns made its insert a syntax error and the row was lost. Those rows migrate here, as
-    bound parameters.
+    This server also carries rows an old server lost. Older migrations built some of their statements by
+    escaping quotes by hand and left a handful of text columns unescaped, so a single quote in one of
+    them turned that row's insert into a syntax error and the row was gone. Rows like those migrate here,
+    passed to the database as bound parameters instead of stitched into text.
   </p>
 
   <h3>The migration archive</h3>
 
   <p>
-    The archive is a table in the deployment's database, named <code>migrationArchive</code>. Each row is
-    one row the pass read and could not carry: the table it came from, its identifier there, the reason,
-    its contents as JSON, and the moment it was archived.
+    The archive is a table in the deployment's own database, named <code>migrationArchive</code>. Each
+    row records one row the pass read and could not carry: where it came from, its identifier there, the
+    reason it could not move, its contents as JSON, and the moment it was archived. To look at it:
   </p>
 
   <pre><code>SELECT "tableName", "rowId", "reason", "archivedAt", "contents"
@@ -3998,74 +4009,75 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
  ORDER BY "tableName", "rowId";</code></pre>
 
   <p>
-    Read it after the first start. A deployment whose archive is empty migrated completely; a deployment
-    with rows in it has history the new schema does not hold, and the reason column says why — a reference
-    that resolved to nothing, a row the old server had left damaged. What you do with them is your
-    decision: re-enter the configuration the archive names, or leave the row as a record.
+    Read it after the first start. An empty archive means the migration was complete; rows in it mean
+    history the new schema does not hold, and the reason column says why — a reference that resolved to
+    nothing, or a row the old server had left damaged. What to do about them is your call: re-enter the
+    configuration the archive names, or leave the rows as a record of what was lost.
   </p>
 
-  <h3>From the version 5 program</h3>
+  <h3>Coming from the version 5 program</h3>
 
   <p>
-    The version 5 server was a different program, and there is no upgrade path from it: the version 6
-    server replaced it. What carries over is the database, and the way to move it is a copy.
+    The version 5 server was a different program, and there is no upgrade path from it — the version 6
+    server replaced it. What carries over is the database, and the way to move it is a copy:
   </p>
 
   <ol>
     <li>Stop the version 5 server.</li>
     <li>
-      Copy its <code>database.sqlite</code> into the folder the new program lives in, and rename the copy
-      to <code>rdio-scanner.db</code>, the name the new server opens by default.
+      Copy its <code>database.sqlite</code> into the new program's folder, renaming the copy to
+      <code>rdio-scanner.db</code>, the name the new server opens by default.
     </li>
     <li>
-      Start the new program. It migrates the copy: the version 6 tables it finds are moved by the pass
-      above, and the version 5 rows the version 6 server had already moved are simply the version 6
-      tables the pass reads.
+      Start the new program. It migrates the copy: version 5 rows a version 6 server had already moved
+      are simply version 6 tables the pass reads, and the rest move by the pass above.
     </li>
     <li>
-      On MySQL or MariaDB, do not copy a file. Back the database up, and start the new program pointed at
+      On MySQL or MariaDB, do not copy a file at all: back the database up, and point the new program at
       the same database with the <code>-db_*</code> flags — host, port, name, user, password, and
-      <code>-db_type</code> naming the dialect. The pass runs against it in place.
+      <code>-db_type</code> naming the dialect — so the pass runs against it in place.
     </li>
   </ol>
 
   <p>
-    The version 5 program is the Node-era program, and going back to it means restoring the database from
-    before the copy and running the release you came from. That is the reason the copy is a copy: the
-    migration writes into the file you gave it.
+    Going back to the version 5 program afterward means restoring the database from before the copy and
+    running the release you came from, because the migration writes into the file you handed it. That is
+    exactly why the move is a copy.
   </p>
 
   <h3>After the first start</h3>
 
   <ul>
     <li>
-      <strong>Every administrator session is ended.</strong> The start that migrates is a start that
-      checked the signing secret, and a secret made or replaced ends the sessions signed with the old one.
-      Log in again.
+      <strong>Every administrator session is ended.</strong> A migrating start is a start that checked
+      the signing secret, and a secret made or replaced ends the sessions signed with the old one. Log
+      in again.
     </li>
     <li>
       <strong>Read the log under <em>Database</em>.</strong> The migration's notices, the rows it
-      archived, and the units the old server left damaged are all there, filed by the pass that made them.
-      <a href="#ch-14-logs">Chapter 14</a> is how to filter to one subsystem.
+      archived, and anything the old server left damaged are all there, filed by the pass that made
+      them, and <a href="#ch-14-logs">chapter 14</a> shows the filtering.
     </li>
     <li>
       <strong>Check the todos banner.</strong> A migration that carried your configuration clears the
-      banner it had; a banner that names something missing after a migration is a configuration the
-      archive holds, not a bug in the banner.
+      banner it had; a banner naming something missing afterwards is pointing at configuration the
+      archive holds, not at a bug in the banner.
     </li>
     <li>
-      <strong>Play a call from before the update.</strong> It is the shortest test of the recordings, the
-      talkgroup references, and the audio converter the new build carries.
+      <strong>Play a call recorded before the update.</strong> It is the shortest single test of the
+      recordings, the talkgroup references, and the audio converter the new build carries.
     </li>
   </ul>
 
   <aside class="note">
-    <p>
-      Two servers on one database is not an update in progress. The migration is a pass that drops old
-      tables when it is done, and a second server starting on the same database while it runs is a server
-      reading tables that are being moved. Stop the old server before the new one starts, and on a
-      container, the volume is the folder: one deployment, one volume.
-    </p>
+    <div>
+      <p>
+        Two servers on one database is not an update in progress. The migration is a pass that drops the
+        old tables when it finishes, so a second server starting against the same database while it runs
+        is a server reading tables out from under it. Stop the old server before the new one starts, and
+        on a container remember the volume is the folder: one deployment, one volume.
+      </p>
+    </div>
   </aside>
 </section>
 
