@@ -1,6 +1,7 @@
 // the search and unlock fields' keyboard focus: the visible field is
 // the box, the control inside it is inset, and a ring drawn on the
-// control frames the control, not the field; the ring belongs on the box.
+// control frames the control, not the field; the ring belongs on the
+// box — around it for the filter fields, inside it for the unlock field.
 // see the field-focus-ring-on-box maintainer note.
 
 import assert from 'node:assert/strict';
@@ -136,9 +137,9 @@ describe('the field\'s keyboard ring — drawn on the field box', () => {
     expect(FILTER_BOX, 'outline-offset', '2px');
   });
 
-  it('draws the same ring on the unlock field box', () => {
-    expect(UNLOCK_BOX, 'outline', '2px solid #424242');
-    expect(UNLOCK_BOX, 'outline-offset', '2px');
+  it('draws the ring inside the unlock field box\'s own edge, and none outside it', () => {
+    expect(UNLOCK_BOX, 'box-shadow', 'inset 0 0 0 2px #424242');
+    expect(UNLOCK_BOX, 'outline', 'none');
   });
 
   it('leaves the control inside the field no ring and no line of its own', () => {
@@ -188,10 +189,12 @@ describe('the field\'s other focus behaviour — unchanged while the ring moves'
 });
 
 describe('the field\'s keyboard ring — drawn whole, not cut off', () => {
-  // the ring is drawn outside the field box, so it only reads as the
-  // field's focus indicator while nothing nearer paints over it: the
-  // display clips everything inside itself, and the card carrying the
-  // unlock field hugs that field exactly.
+  // the forced-colours ring is drawn outside the field box, so it only
+  // reads as the field's focus indicator while nothing nearer paints
+  // over it: the display clips everything inside itself, and the card
+  // carrying the unlock field hugs that field exactly. (The normal-mode
+  // ring on this field is inset and needs no release; the filter
+  // fields' normal-mode ring is outside and rides no clipping chain.)
   const BLANKET = 'rdio-display *';
 
   for (const wrapper of ['rdio-display .auth form', 'rdio-display .auth form rdio-form-field']) {

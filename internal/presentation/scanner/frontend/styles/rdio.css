@@ -1462,27 +1462,42 @@ rdio-display .auth rdio-form-field input {
  * — its fill, its corner radii, its underline, its arrow — and the control inside it is inset 16px
  * from the box's sides, so the ring the keyboard gets is drawn on the box and frames the whole
  * field: the same 2px shape and the same 2px distance every other control on the page keeps, and
- * the outline follows the box's own corner radii, which a ring on the square-cornered control
- * could not do.
+ * the ring follows the box's own corner radii, which a ring on the square-cornered control could
+ * not do.
+ *
+ * The filter fields wear the ring outside the box's edge, as every other control on the page does.
+ * The access code box carries it inside its own edge: its box sits in the inset panel's darker
+ * fill, where a ring 2px outside read as two dark edges 2px apart — the box's resting border and
+ * the ring — with the card floating between them. An inset ring's outer edge is the box's border
+ * edge, so the ring sits flush with that border and follows the same rounded contour.
  *
  * The colour is the field's own caret colour, `#424242`, and not the theme's accent: on the light
  * surfaces these fields sit on, the accent green measures 2.6:1 against the fill, under the 3:1
  * floor an indicator has to clear, and the dark grey the field's text and its pressed line already
  * use measures 9.3:1 against the fill, 10.1:1 against the white card the filter ring is drawn on,
- * and 8.8:1 against the unlock card. The ring is the accent's shape at the accent's distance, in
- * the field's own ink. */
-rdio-search-panel .rdio-filters .rdio-field-box:has(:focus-visible),
-rdio-display .auth .rdio-field-box:has(:focus-visible) {
+ * and 8.8:1 against the unlock card. The inset ring clears 9.3:1 against both of its neighbours at
+ * once — the card outside the box and the fill inside it. The ring is the accent's shape at the
+ * accent's distance, in the field's own ink.
+ *
+ * The forced-colours block below keeps an outline ring on both boxes: a box-shadow is dropped in
+ * that mode, so the inset ring would leave the keyboard standing there with no mark at all. */
+rdio-search-panel .rdio-filters .rdio-field-box:has(:focus-visible) {
   outline: 2px solid #424242;
   outline-offset: 2px;
 }
 
-/* A ring drawn outside the box only reads as the field's indicator while nothing nearer paints it
- * away. The display clips everything inside itself to keep its readout lines tight, and that
- * blanket clipping reaches the card carrying the unlock field and the field's own wrapper — both of
- * which hug the field box exactly on the left, the top and the right, so the ring would be cut down
- * to its bottom edge alone. Those two let the ring out; the display keeps its clipping everywhere
- * else. */
+rdio-display .auth .rdio-field-box:has(:focus-visible) {
+  box-shadow: inset 0 0 0 2px #424242;
+  outline: none;
+}
+
+/* The forced-colours ring is drawn outside the box, and only reads as the field's indicator while
+ * nothing nearer paints it away. The display clips everything inside itself to keep its readout
+ * lines tight, and that blanket clipping reaches the card carrying the unlock field and the field's
+ * own wrapper — both of which hug the field box exactly on the left, the top and the right, so the
+ * ring would be cut down to its bottom edge alone. Those two let the ring out; the display keeps
+ * its clipping everywhere else. (The normal-mode ring on this field is inset and needs no
+ * release.) */
 rdio-display .auth form,
 rdio-display .auth form rdio-form-field {
   overflow: visible;
