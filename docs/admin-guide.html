@@ -4421,17 +4421,18 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   <h2 id="ch-27-reference">27 · Reference appendices</h2>
 
   <p class="lead">
-    The tables you look up rather than read: every flag and its default, the log's subsystems, the words
-    the guide uses, the recorders and how each one gets audio in, and the project's position on the licence
-    and the APIs.
+    Five appendices to look things up in rather than read through: every flag with the default it carries,
+    the subsystems the log files itself under, the words this guide uses, the recorders the project knows
+    with how each one gets its audio, and the project's one licence position, stated in full once.
   </p>
 
   <h3>Flag reference</h3>
 
   <p>
-    Every flag the server answers, with the default it carries when you do not name it. The ini key is the
-    flag's name; <a href="#ch-06-flags-and-ini">chapter 6</a> explains what each one does and the order the
-    settings are read in.
+    The table below is every flag the server answers, each beside the default it carries when you leave it
+    out. The ini key of a setting is its flag's name; <a href="#ch-06-flags-and-ini">chapter 6</a> says what
+    every flag does and the order the settings are read in. When the two disagree about a default, this
+    table was generated last and you should believe it.
   </p>
 
   <table>
@@ -4466,12 +4467,12 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
     </tbody>
   </table>
 
-  <h3>The log's subsystems</h3>
+  <h3>The subsystems the log files itself under</h3>
 
   <p>
-    Every entry the server writes is filed under the part of the server that wrote it.
-    <a href="#ch-14-logs">Chapter 14</a> says what each one reports and what its messages mean; this is the
-    index you filter by.
+    Every line the server logs is filed under the part of the server that wrote it, and the log view filters
+    by that name. <a href="#ch-14-logs">Chapter 14</a> explains what each subsystem reports and how to read
+    its messages; this table is the index you pick the filter from.
   </p>
 
   <table>
@@ -4500,6 +4501,11 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   </table>
 
   <h3>The words the guide uses</h3>
+
+  <p>
+    The terms the guide keeps, in the shape it keeps them, so that a word in an early chapter and the same
+    word in a late one name the same thing.
+  </p>
 
   <table>
     <caption>Glossary</caption>
@@ -4550,89 +4556,75 @@ $ pg_dump -h 10.0.0.5 -U rdio rdio_scanner &gt; /backup/rdio-scanner-$(date +%F)
   </table>
 
   <p>
-    A recorder not on this list works if it writes one file per transmission, and the file's name says
-    enough to identify the call. <a href="#ch-10-getting-audio-in">Chapter 10</a> is the ingest chapter,
-    with the mask tokens and the recorder configurations the project carries.
+    A recorder that is not on the table works too, as long as it writes one file per transmission and names
+    each file well enough to identify the call. <a href="#ch-10-getting-audio-in">Chapter 10</a> is the
+    ingest chapter: the mask tokens, and the recorder configurations the project ships.
   </p>
 
   <h3>The licence, and the two APIs</h3>
 
   <p>
-    The software is free software under the <strong>GNU General Public License, version 3</strong>: you may
-    use it, modify it, and distribute it under those terms.
-  </p>
-
-  <p>
-    That position covers the whole server, and both of the interfaces it answers. The <strong>HTTP REST
-    API</strong> — the endpoints in <a href="#ch-16-rest-api">chapter 16</a> — is available under the GPL
-    terms for every use, self-hosted deployments and third-party applications included. The
-    <strong>real-time connection</strong> a listener holds open, the one taken over the address the scanner
-    webapp is served from, is under the same terms: it is part of the server, not a service standing beside
-    it.
+    The server is free software under the <strong>GNU General Public License, version 3</strong>, and that
+    one position covers all of it, including both of the interfaces it answers. The HTTP REST API — every
+    endpoint of <a href="#ch-16-rest-api">chapter 16</a> — is available under the GPL for any use, a
+    self-hosted deployment's own webapp and a third party's applications alike. The real-time connection a
+    listener holds open, taken over the same address the scanner webapp is served from, is part of the
+    server and not a service standing beside it, so it is under the same terms.
   </p>
 
   <p>
     What limits a listener is the deployment's own choice, not the licence. A server configured with access
-    codes asks a listener for one, and a server configured without them answers openly. The access code
-    decides which systems and talkgroups a listener is given; the licence decides what anyone may do with
-    the software.
+    codes asks a listener for one before it shows anything; a server configured without them answers
+    openly. The access code decides what a particular listener may hear; the licence decides what anyone may
+    do with the software itself. The two never do each other's job.
   </p>
 
   <p>
-    Nothing here needs an agreement with anyone. A self-hosted deployment answers the HTTP REST API and the
-    real-time connection alike, for its own webapp, its own native applications, and its own third-party
-    clients.
+    Nothing here needs an agreement with anyone. One self-hosted deployment answers the REST API and the
+    real-time connection alike, and it serves its own webapp, its own native applications, and third-party
+    clients on the same terms.
   </p>
 
-  <h3>The ffmpeg licence</h3>
+  <h3>The ffmpeg the releases carry</h3>
 
   <p>
-    Every release build carries <code>ffmpeg</code> and <code>ffprobe</code> inside the program, and the
-    archive carries <code>FFMPEG.txt</code> beside it: the licence terms of the components the build embeds,
-    and what the binaries are. It says they are compiled for audio — no video codec, decoder, or encoder, and
-    no network protocol is compiled into it — and it names the codecs the recipe selects. For the binaries
-    this build compiled it names the container image and digest that compiled them, the Containerfile that
-    image was built from, the source release, its digest, the configure recipe and the command that produced
-    them, all reproducible from this project's own repository; and where the target's operating system was
-    not the one the compile ran on it names the sysroot the link read as well — the FreeBSD project's
-    toolchain image and the digest it is pinned at, which that build copies out of and never runs, or Apple's
-    SDK version, the tool that prepared that tree outside this project's repositories, and the digest that
-    preparation recorded. It also names the proof the build performed, which is nothing a program can show a
-    reader: that the pair was started in the container that compiled them, or started under a qemu or wine
-    runner in the container its record names, or that nothing was started anywhere and what stands in place
-    of a run is the list of things the build read out of the two programs, in the order it read them, beside
-    the sentence that a read says how a program was linked and what it was linked for, and not what it does.
-    For binaries the build adopted it names the host that ran them, the codecs the run recorded, and the
-    conversions it performed: that host is a Mac, because the two macOS targets on a host that runs macOS are
-    the ones whose dropped binaries a build adopts, and where the pair was compiled across the two macOS
-    architectures the Mac that ran them is the other Mac — the Apple Silicon Mac that ran the Intel programs
-    through Rosetta 2 is named as the host the release carries them from. A deployment that installs ffmpeg on
-    the host — which a release deployment has no reason to do, and a program you built yourself with plain
-    <code>go build</code> is the one case that needs it — takes the licence the package it installs carries.
+    Every release archive carries the <code>ffmpeg</code> and <code>ffprobe</code> this project's build
+    produced, and it carries <code>FFMPEG.txt</code> beside them. That file gives the licence terms of the
+    components the binaries embed, states that the pair is compiled for audio only — no video codec,
+    decoder, or encoder, and no network protocol inside it — and lists the codecs the run recorded. For the
+    binaries the release build compiled, the archive also names the container image and digest that
+    compiled them, the source release it compiled, and the configure recipe it used, so the pair can be
+    reproduced from this project's own repository. For binaries the build adopted rather than compiled, it
+    names the host that ran them and the conversions that host performed, because an adopted pair was
+    proved by a run somewhere else. A program you built yourself with plain <code>go build</code> carries
+    no embedded pair at all: it uses the ffmpeg your host's package manager installed, and that package
+    carries its own licence terms.
   </p>
 
-  <h3>Support</h3>
+  <h3>Getting support</h3>
 
   <ul>
     <li>
-      <strong>The log view, first.</strong> It is the deployment telling you what it saw, filtered by
-      subsystem, by level, by date, and by text. A report that quotes it is answered faster than one that
-      describes it.
+      <strong>Open the log view first.</strong> It is the deployment saying what it saw, and it filters by
+      subsystem, level, date, and text. A report that quotes the log gets answered faster than one that
+      remembers it.
     </li>
     <li>
-      <strong>The project's discussions</strong>, on the repository, are where questions and comments go,
-      and where the answers become the documentation the next release carries.
+      <strong>The project's discussions, on the repository,</strong> are where questions and comments
+      belong, and where the good answers turn into the documentation the next release ships.
     </li>
     <li>
-      <strong>rdio-scanner@saubeo.solutions</strong> is the address for support, and for the WebSocket API
-      licence.
+      <strong>rdio-scanner@saubeo.solutions</strong> is the address for support, and for anything that
+      needs a human about the interfaces.
     </li>
     <li>
       <strong>The project is funded by its sponsor and by sponsorship.</strong> A deployment that earns
-      something from the project, or runs it for others, is the deployment the project asks to sponsor it.
-      Starring the repository costs nothing and is appreciated.
+      from the project, or runs it for others, is exactly the deployment the project asks to sponsor it.
+      Starring the repository costs nothing and still helps.
     </li>
   </ul>
+</section>
+
 </section>
 
 </main>
