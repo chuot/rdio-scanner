@@ -781,6 +781,34 @@ func TestMigrateSystemsStoresTheBlacklistWithoutItsBrackets(t *testing.T) {
 	}
 }
 
+// The form the brackets alone are not enough to produce: the v6 blacklist is a JSON
+// array written with a space after every comma, so cutting the brackets leaves the
+// spaces inside the text. What the upgrade hands the v8 server has to be a blacklist
+// the server enforces, so every entry the v6 row named still refuses its talkgroup.
+func TestMigrateSystemsLeavesABlacklistTheServerEnforces(t *testing.T) {
+	db, _ := migrateLegacyV6Fixture(t)
+
+	stored := readRows(t, db, `SELECT "blacklists" FROM "systems" WHERE "systemRef" = 10001`)
+
+	if len(stored) != 1 {
+		t.Fatalf("the migrated system's blacklist: %v, want the one system the v6 fixture blacklists two talkgroups on", stored)
+	}
+
+	blacklists := domain.Blacklists(stored[0][0])
+
+	if got, want := blacklists.Count(), 2; got != want {
+		t.Fatalf("the stored blacklist %q names %d entries, want %d: the v6 row names two talkgroups",
+			stored[0][0], got, want)
+	}
+
+	for _, ref := range []uint{40000, 40001} {
+		if !blacklists.IsBlacklisted(ref) {
+			t.Errorf("the stored blacklist %q does not refuse %d: the system the upgrade carried stops enforcing that talkgroup",
+				stored[0][0], ref)
+		}
+	}
+}
+
 // A deliberate deviation, the cost of binding values instead of writing
 // them into the statement: the legacy migration escaped the system label but
 // not the blacklist or the color, and a single quote in either one made its
