@@ -528,8 +528,8 @@ footer.site .signoff {
 
   <table>
     <caption>
-      What changed on the listening screen between version 6.6.3 and version 8, and the chapter of this guide that
-      operates it.
+      What changed on the listening screen between version 6.6.3 and version 8, and the chapter of this guide
+      that operates it.
     </caption>
     <thead>
       <tr>
@@ -539,23 +539,21 @@ footer.site .signoff {
       </tr>
     </thead>
     <tbody>
-      
-      
       <tr>
         <th scope="row">The listening screens were remade to match the old ones.</th>
         <td>
-          Nothing you knew moved when you upgraded. The sizes, the positions, and the distance a press moves
-          something on the screen were measured against the version 6.6.3 page rather than judged by eye, so the
-          screen you arrive at is the screen you left.
+          Upgrading moved nothing you knew. Sizes, positions, and how far a press carries something across the
+          screen were measured against the version 6.6.3 page instead of judged by eye, so the screen you arrive
+          at is the screen you left.
         </td>
         <td><a href="#ch-02-the-main-screen">The main screen</a></td>
       </tr>
       <tr>
         <th scope="row">The main screen was brought back to the version 6.6.3 look and behaviour.</th>
         <td>
-          The plain LED, the two-column display rows, the bevelled controls, the history mechanics, the
-          avoid cycle, the holds, and the walk through replayed calls are the ones version 6.6.3 had, with a short
-          list of what deliberately stays different.
+          The plain LED, the display rows in two columns, the bevelled controls, the history mechanics, the
+          avoid cycle, the holds, and the walk through replayed calls return as version 6.6.3 had them, beside a
+          short list of what deliberately stays different.
         </td>
         <td>
           <a href="#ch-02-the-main-screen">The main screen</a>,
@@ -566,17 +564,19 @@ footer.site .signoff {
       <tr>
         <th scope="row">Alert tones.</th>
         <td>
-          Before a live call's recording begins, you hear the sound an operator assigned to it, resolved group
-          first, then tag, then system, then talkgroup, out of nine built-in sequences. A call you replay, a call
-          you reach through a search, and anything in playback mode all begin with no tone in front of them.
+          A live call can begin with a sound its operator assigned to it before its recording starts: the
+          assignment resolves group first, then tag, then system, then talkgroup, and the sound comes from nine
+          built-in sequences. Replayed calls, calls reached through a search, and everything in playback mode
+          still begin with no tone in front of them.
         </td>
         <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
       </tr>
       <tr>
         <th scope="row">A talkgroup can now sit in more than one group.</th>
         <td>
-          A group's colour and a group's alert tone reach every talkgroup that belongs to it, not only the ones a
-          group happens to come first for, so a talkgroup that used to arrive plain can arrive coloured and toned.
+          A group's colour and alert tone reach every talkgroup belonging to that group, not only the talkgroups
+          whose first group it happens to be, so a talkgroup that once arrived plain can now arrive coloured and
+          toned.
         </td>
         <td>
           <a href="#ch-03-listening-to-live-calls">Listening to live calls</a>,
@@ -586,26 +586,26 @@ footer.site .signoff {
       <tr>
         <th scope="row">Colours and alert tones can be set for a group or a tag.</th>
         <td>
-          The colour the LED takes for a call, and the tone in front of it, can follow a grouping you share across
-          systems instead of being set again for every talkgroup inside it.
+          Set the LED's colour and the tone in front of a call once, at a grouping you share across systems, and
+          it applies to the talkgroups inside it instead of being set again for each one.
         </td>
         <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
       </tr>
       <tr>
         <th scope="row">A press in the select panel is a plain switch off or on.</th>
         <td>
-          It clears a timed avoid that was armed elsewhere, and the timed windows belong to the control bar's
-          <code>AVOID</code> alone. Each press plays its confirmation tone in the direction of the state it is
-          leaving, and each button states its status to a screen reader.
+          It clears any timed avoid that was armed elsewhere, and the control bar's  %d AVOID %d  alone keeps
+          the timed windows. Each press plays its confirmation tone in the direction of the state being left,
+          and each button states its status to a screen reader.
         </td>
         <td><a href="#ch-04-choosing-what-to-hear">Choosing what to hear</a></td>
       </tr>
       <tr>
         <th scope="row">The timed-avoid flag draws its hourglass as a monochrome symbol.</th>
         <td>
-          It is drawn in the display's own colour rather than as an emoji, and the minutes beside it are unchanged.
-          The symbol depends on a font that carries it, so on a machine whose font does not, the shape you see is
-          different.
+          The hourglass beside a timed-avoid flag is now drawn in the display's own colour as a text symbol, not
+          an emoji, and the minutes next to it mean what they meant. The symbol comes from a font, so a machine
+          whose font lacks the shape shows a different one.
         </td>
         <td>
           <a href="#ch-06-what-the-display-says">What the display says</a>,
@@ -615,24 +615,23 @@ footer.site .signoff {
       <tr>
         <th scope="row">The queue count falls on every skip.</th>
         <td>
-          It no longer climbs as you skip, and it counts what is live at the moment it is painted, including calls
-          that arrived while an alert tone was still open.
+          The count no longer climbs while you skip: it names what is live at the moment it is painted, calls
+          that arrived while an alert tone was still open included.
         </td>
         <td><a href="#ch-03-listening-to-live-calls">Listening to live calls</a></td>
       </tr>
       <tr>
         <th scope="row">Playing searched calls walks toward the newest one.</th>
         <td>
-          Whichever way the list is sorted, the next call played is the newer one, and the count in the search
-          panel names how many calls will play — the one playing now included — counting only what your filters
-          leave in.
+          The next call played is the newer one however the list is sorted, and the count in the search panel
+          says how many calls will play, the one playing included, counting only what your filters leave in.
         </td>
         <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
       </tr>
       <tr>
         <th scope="row">Pause, skip, and stop do what their names say.</th>
         <td>
-          A recording in flight is silenced rather than left running, a skip or a stop actually stops it, and the
+          A recording in flight is silenced instead of left running, a skip or a stop truly ends it, and the
           elapsed time follows the audio rather than the wall clock.
         </td>
         <td>
@@ -643,34 +642,34 @@ footer.site .signoff {
       <tr>
         <th scope="row">The search panel's System and Talkgroup filters actually filter.</th>
         <td>
-          The panel sends the references the server reads, the form is held while a search is in flight, paging
-          during a search asks for nothing, the Date field is bounded to the window the server answered, and a
-          criterion the server does not recognise leaves the list unfiltered instead of emptying it.
+          The panel now sends the references the server reads, holds its form while a search is in flight, asks
+          for nothing when paged during one, bounds the Date field to the window the server answered, and
+          answers a criterion it does not recognise by leaving the list unfiltered rather than empty.
         </td>
         <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
       </tr>
       <tr>
         <th scope="row">Every result row carries its duration.</th>
         <td>
-          The length comes from the recorder's own declaration, the converter's report, or a probe of the file, in
-          that order of trust.
+          The length shown comes first from the recorder's own declaration, then from the converter's report,
+          then from a probe of the file, in that order of trust.
         </td>
         <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
       </tr>
       <tr>
         <th scope="row">No page scrollbars while a drawer slides, and the search progress bar completes on an empty answer.</th>
         <td>
-          Opening the select or search panel no longer shakes the page, and a search that finds nothing still
-          finishes its bar instead of leaving it hanging.
+          Opening the select or search panel no longer shakes the page with scrollbars, and a search that finds
+          nothing still finishes its progress bar instead of leaving it hanging part-way.
         </td>
         <td><a href="#ch-05-searching-archived-calls">Searching recorded calls</a></td>
       </tr>
       <tr>
         <th scope="row">Delayed audio.</th>
         <td>
-          A system or a talkgroup can hold a call for whole minutes. The hold is measured from when the call
-          happened, a held call cannot be searched until its hold has run out, and when it arrives it is flagged
-          <code>DELAYED</code>.
+          A system or a talkgroup can hold a call back for whole minutes. The hold is measured from when the
+          call happened, search cannot reach a call until its hold has run out, and the call arrives flagged
+           %d DELAYED %d .
         </td>
         <td>
           <a href="#ch-05-searching-archived-calls">Searching recorded calls</a>,
@@ -678,11 +677,10 @@ footer.site .signoff {
           <a href="#ch-11-when-something-does-not-work">When something does not work</a>
         </td>
       </tr>
-      
       <tr>
         <th scope="row">The tags toggle is gone from the select panel.</th>
         <td>
-          Groups are the categories you switch between, and a talkgroup can sit in more than one of them.
+          Groups are the categories you switch between now, and one talkgroup can belong to several of them.
         </td>
         <td>
           <a href="#ch-04-choosing-what-to-hear">Choosing what to hear</a>,
@@ -692,23 +690,23 @@ footer.site .signoff {
       <tr>
         <th scope="row">The listening screens were brought up to the accessibility standard.</th>
         <td>
-          What you can rely on when you read the page by keyboard or with a screen reader: a skip link that comes
-          first, a page broken into named parts, a visible mark on whatever the keyboard has reached, states said in
-          words instead of only in colour, motion you can turn off, text raised to a contrast you can read, a page
-          that still works when your machine's own colours replace the ones on the screen, controls at least 24
-          pixels across, a layout that reflows at 320 CSS pixels, fields with labels, and a way into full screen
-          that needs no mouse. The chapter on keyboards and screen readers also names what still falls short, and
-          which readings carry something besides colour.
+          What you can rely on reading the page by keyboard or with a screen reader: a skip link that comes
+          first, a page broken into named parts, a visible mark on wherever the keyboard has arrived, states
+          spoken in words rather than carried by colour alone, motion you can turn off, text raised to a
+          readable contrast, a page that still works when your machine's own colours replace the ones drawn on
+          screen, controls at least 24 pixels across, a layout that reflows at 320 CSS pixels, fields with
+          labels, and a way into full screen that needs no mouse. The chapter on keyboards and screen readers
+          also says where the page still falls short, and which readings carry something besides colour.
         </td>
         <td><a href="#ch-10-keyboard-and-screen-readers">Keyboard and screen readers</a></td>
       </tr>
       <tr>
         <th scope="row">The unlock screen and its codes say what they are doing.</th>
         <td>
-          When the page needs a code it asks, and it says which thing went wrong: a code that has expired, a code
-          that is wrong, too many listeners joined at once, a code that has reached its own limit of connections, or
-          too many attempts from your session or from your address. The code you type is kept, so the page does not
-          ask you to type it again.
+          When the page needs a code it asks for one, and it names what went wrong: a code that has expired, a
+          code that is wrong, too many listeners joined at once, a code at the limit of its own connections, or
+          too many attempts from your session or your address. A code you type is kept, so the page does not
+          make you type it again.
         </td>
         <td><a href="#ch-07-access-codes">Access codes and the unlock screen</a></td>
       </tr>
@@ -716,8 +714,8 @@ footer.site .signoff {
         <th scope="row"><code>/reset</code> and <code>?id=</code>.</th>
         <td>
           Two addresses you can use yourself. One throws away everything the application kept about you in that
-          browser: your selection, the search you left open, the code it stored. The other lets one server give one
-          listener several separate selections, each keeping its own talkgroups.
+          browser: your selection, the search you left open, the code it stored. The other lets one server hold
+          several separate selections for one listener, each keeping its own talkgroups.
         </td>
         <td>
           <a href="#ch-07-access-codes">Access codes and the unlock screen</a>,
@@ -727,16 +725,16 @@ footer.site .signoff {
       <tr>
         <th scope="row">The application installs, works offline, and asks before reloading.</th>
         <td>
-          It can be added to a home screen, its shell is kept available with no server, and when a new version is
-          published it asks you before it reloads the page out from under you.
+          It can be added to a home screen, its shell stays available with no server, and when a new version is
+          published it asks you before reloading the page out from under you.
         </td>
         <td><a href="#ch-08-on-your-phone-or-tablet">On a phone or a tablet</a></td>
       </tr>
       <tr>
         <th scope="row">The branding line, the help affordance, and the promotion of the native applications.</th>
         <td>
-          The line an operator sets appears at the top of the screen, the help affordance names the operator's own
-          support address, and a phone is offered the native applications.
+          The line the operator sets appears at the top of the screen, the help affordance names the operator's
+          own support address, and a phone is offered the native applications.
         </td>
         <td>
           <a href="#ch-02-the-main-screen">The main screen</a>,
@@ -747,9 +745,9 @@ footer.site .signoff {
       <tr>
         <th scope="row">Retention.</th>
         <td>
-          A deployment keeps calls for as long as its operator sets and clears older ones on a pass that runs every
-          hour. A call past that is not missing and not broken: it is simply no longer kept, and no search can reach
-          it.
+          A deployment keeps calls for as long as its operator sets, and clears older ones on a pass that runs
+          every hour. A call past that limit is neither missing nor broken: it is simply no longer kept, and no
+          search can reach it.
         </td>
         <td>
           <a href="#ch-05-searching-archived-calls">Searching recorded calls</a>,
@@ -759,8 +757,8 @@ footer.site .signoff {
       <tr>
         <th scope="row">Converted audio.</th>
         <td>
-          A deployment that converts audio hands you the converted recording, and the level the operator chose
-          changes what you hear: the converter now writes AAC at 32 kilobits per second in an <code>m4a</code>
+          Where the deployment converts audio, you receive the converted recording, and the level the operator
+          chose changes what you hear: the converter now writes AAC at 32 kilobits per second in an  %d m4a %d 
           container.
         </td>
         <td>
@@ -769,7 +767,7 @@ footer.site .signoff {
         </td>
       </tr>
     </tbody>
-  </table>
+</table>
 
   <h3>What the update costs you</h3>
 
