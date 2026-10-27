@@ -926,6 +926,25 @@ func TestTheWatchDelayNeverFallsBelowTheTwoSecondFloor(t *testing.T) {
 	}
 }
 
+// TestAWatchDelayFromTheConfigurationScreenReachesTheWatch is the settle time an operator
+// names in the configuration screen reaching the watcher that has to wait it. The screen,
+// the published guide, and the floor test above all read the number as milliseconds, and
+// the guide promises the clamp only bites past a day. The save path clamps at 1440 of the
+// same unit, so a watch configured to settle for fifteen seconds settles for the two-second
+// floor instead, and the half-written recording the longer wait was set for is read anyway.
+func TestAWatchDelayFromTheConfigurationScreenReachesTheWatch(t *testing.T) {
+	t.Parallel()
+
+	dirwatch := domain.NewDirwatch().ApplyMap(map[string]any{
+		"directory": t.TempDir(),
+		"delay":     float64(15000),
+	})
+
+	if got := watchDelay(dirwatch); got != 15*time.Second {
+		t.Errorf("the watch settles for %v, want the 15000 ms its configuration named", got)
+	}
+}
+
 // TestAPanicInAFilesSettledReadIsReportedAndTheWatchCarriesOn: the settle timer's read had no
 // guard; a parser or ingest path panicking there took the whole process down. The panic is
 // caught and reported, naming the recording and the panic's own text, and the watch keeps
