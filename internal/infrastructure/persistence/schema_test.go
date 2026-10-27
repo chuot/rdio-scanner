@@ -419,3 +419,19 @@ func TestEveryDialectSchemaDeclaresTheLogSourceColumn(t *testing.T) {
 		}
 	}
 }
+
+// MySQL has no `CREATE INDEX IF NOT EXISTS` — that spelling belongs to MariaDB, which took
+// it on in 10.1.4 — and the schema is applied on every start, so the first statement MySQL
+// refuses stops the server before it has opened its listening sockets. The rest of the
+// schema copy already probes index existence instead of asking the backend to skip a
+// duplicate, so the copy has to keep probing.
+func TestMysqlSchemaCreatesIndexesInSyntaxMysqlAccepts(t *testing.T) {
+	provisioned := regexp.MustCompile(`(?i)CREATE\s+(UNIQUE\s+)?INDEX\s+IF\s+NOT\s+EXISTS`)
+
+	for _, statement := range mysqlSchema {
+		if refused := provisioned.FindString(statement); refused != "" {
+			t.Errorf("the MySQL schema creates an index with %q, a spelling MySQL reports as a syntax error: %s",
+				refused, statement)
+		}
+	}
+}
