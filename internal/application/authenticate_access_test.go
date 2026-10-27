@@ -151,6 +151,40 @@ func TestAuthenticateAccessRefusesAnUnknownCodeAndAsksAgain(t *testing.T) {
 	}
 }
 
+// A row stored with a blank code compares equal to a listener that presented nothing, so the
+// credential that stands for "nobody in particular" ends up opening the door for anyone. The
+// listener route is the one way such a row reaches the store: the access form posts what the
+// browser has, and a save that replaces the whole access list validates the apikey rows and
+// says nothing about these. A code the server cannot match to a named listener admits nobody.
+func TestAStoredAccessWithNoCodeDoesNotAdmitAListenerThatPresentedNothing(t *testing.T) {
+	fixture := newAccessFixture()
+	fixture.addAccess(domain.Access{
+		ID:    1,
+		Code:  "",
+		Ident: "legacy import",
+		Scope: domain.AccessScope{Present: true, Wildcard: true},
+	})
+	fixture.hub.Open("listener", "10.0.0.1")
+
+	result, err := fixture.presentCode("listener", "")
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	if result.Outcome == AccessAuthenticated || result.Outcome == AccessNotRequired {
+		t.Errorf("outcome = %q, want the listener refused: a stored row with no code must not admit "+
+			"a listener that presented nothing", result.Outcome)
+	}
+
+	if _, ok := fixture.hub.AccessOf("listener"); ok {
+		t.Error("a listener that presented no code must not be left holding an access")
+	}
+
+	if len(fixture.hub.DeliveredConfigs["listener"]) != 0 {
+		t.Error("a listener that presented no code must not be sent a configuration")
+	}
+}
+
 // The attempt counter is examined before the code is looked up, the legacy order: a code that
 // is valid but arrives on the last allowed attempt is refused anyway.
 func TestAuthenticateAccessLocksAValidCodeArrivingOnTheLastAttempt(t *testing.T) {
