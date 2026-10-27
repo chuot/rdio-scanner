@@ -2290,25 +2290,26 @@ footer.site .signoff {
   <h2 id="ch-08-on-your-phone-or-tablet">8 · On a phone or a tablet</h2>
 
   <p class="lead">
-    There is one listening screen. It is not a different application on a phone, and nothing in this chapter is a
-    feature that only exists there. What changes on a small screen is how the layout gives way, what the device does
-    with the page, two notices that only appear on a phone or a tablet, and what the browser keeps so that the page
-    can open at all when the server cannot be reached.
+    There is only one listening screen. A phone does not run a different application, and nothing in this chapter
+    describes something that exists only there. On a small screen, what changes is the way the layout gives way, what
+    the device does with the page, two notices a phone or a tablet alone will show, and what the browser holds on to
+    so the page can open even when the server cannot be reached.
   </p>
 
   <h3>How the layout gives way</h3>
 
   <p>
-    The page asks to be as wide as the device it opened on, and its layout is fluid: nothing about it becomes a second
-    design at a phone's width. Each row of the display is a line with its readings pushed out to its two ends, so a
-    narrow screen narrows the space between those ends rather than moving readings onto new lines, and a reading too
-    long for its cell is cut by the cell rather than wrapped. The nine control buttons stay three rows of three at
-    every width. They only get narrower, and their labels are what give way, so a two-word label takes two lines.
+    The page asks the device for its full width, and the layout is fluid: nothing turns into a second design at a
+    phone's width. Every row of the display is a single line with its readings pushed out to the two ends, so a narrow
+    screen shrinks the space between those ends instead of moving readings onto new lines, and a reading too long for
+    its cell gets cut by the cell rather than wrapped. The nine control buttons remain three rows of three at every
+    width; the buttons only grow narrower, and it is their labels that give way first, so a two-word label takes two
+    lines.
   </p>
 
   <p>
-    The two panels are where the layout genuinely changes shape, because their contents are laid out by count and that
-    count depends on the width available.
+    The two panels are the one place the layout genuinely changes shape, because what fills them is laid out by count,
+    and that count follows the width available: their contents move as the count changes.
   </p>
 
   <table>
@@ -2346,39 +2347,39 @@ footer.site .signoff {
   </figure>
 
   <p>
-    What the narrowest widths cost is worth naming, because it is the one place the layout loses a reading instead of
-    rearranging it. At 320 pixels the branding line across the top is the line that goes: it is cut where a word will
-    not fit, and it ends in an ellipsis, which at least says that something was cut. Measured at 320 pixels and at 390,
-    nothing else on the screen is cut inside the box it sits in — every row of the display keeps its readings, and the
-    version line keeps the whole of the version a release stamps. <a href="#ch-09-help-and-support">Help and
-    support</a> explains what those two lines are for; said here, the point is that a phone at the narrowest width
-    still tells you which build you are listening with.
+    What the narrowest widths cost deserves naming, because it is the one spot where the layout loses a reading rather
+    than rearranging one. At 320 pixels the branding line across the top is the line that goes: it gets cut where a
+    word will no longer fit, and it trails off into an ellipsis, which at least admits something was cut. Measured at
+    320 pixels and again at 390, nothing else on the screen is cut inside the box it sits in — every row of the
+    display keeps all of its readings, and the version line keeps the whole of the version a release stamps. <a
+    href="#ch-09-help-and-support">Help and support</a> explains what those two lines are for; the point here is that
+    a phone at its narrowest still tells you which build you are listening with.
   </p>
 
   <h3>Putting it on a home screen</h3>
 
   <p>
-    The application declares itself as something a device can install. Its manifest gives it the name <code>Rdio
-    Scanner</code>, declares it a <code>standalone</code> application — the device is asked to open it as its own
-    application rather than as one more page in a browser tab — asks to be kept upright, gives its background colour
-    and its theme colour the same dark grey the page's own chrome is built with, and carries its icon at sizes from 72
-    to 512 pixels so that the device has one to draw whatever shape it needs. The page also carries the icon and the
-    status-bar setting an Apple device uses when a web page is added to a home screen.
+    The application declares itself as something a device can install. Its manifest names it <code>Rdio
+    Scanner</code>, marks it a <code>standalone</code> application — the device is asked to open it as an application
+    of its own rather than as one more tab in a browser — asks to be kept upright, sets its background colour and its
+    theme colour to the same dark grey the page's own chrome is built from, and carries its icon at sizes from 72 to
+    512 pixels, so the device always has one to draw whatever shape it needs. The page also carries the icon and the
+    status-bar setting an Apple device wants when a web page is added to a home screen.
   </p>
 
   <p>
-    How the adding happens is the browser's business rather than the application's: the wording, the moment, and
-    whether it is offered at all belong to the browser, and the listening screen carries no install control of its
-    own. What does belong to the application is worth knowing before you do it.
+    How the adding actually happens is the browser's business, not the application's: the wording, the moment, and
+    whether it is offered at all all belong to the browser, and the listening screen carries no install control of its
+    own. What does belong to the application is worth knowing before you add it.
   </p>
 
   <aside class="caution">
     <span class="label">Caution: A shortcut opens the plain address</span>
     <p>
-      The manifest tells the device to open the application at its own plain address. If you gave a page a profile of
-      its own with <code>?id=</code>, its shortcut does not carry that profile: the installed icon opens the default
-      profile, which is the one the browser remembers for the plain address. The stored access code behaves the same
-      way and worse, because it belongs to the browser rather than to any profile, as <a
+      The manifest tells the device to open the application at its own plain address. If you had given a page a profile
+      of its own with <code>?id=</code>, the shortcut carries no profile: the installed icon opens the default
+      profile, the one the browser remembers for the plain address. The stored access code behaves the same way, and
+      worse, because it belongs to the browser rather than to any profile, as <a
       href="#ch-07-access-codes">the chapter on access codes</a> explains.
     </p>
   </aside>
@@ -2386,19 +2387,19 @@ footer.site .signoff {
   <h3>The notice about the native applications</h3>
 
   <p>
-    Ten seconds after the page opens, on a phone or a tablet, the application shows a notice of its own about the
-    native applications. It appears when what the browser reports about the device says <code>Android</code>,
-    <code>iPad</code>, or <code>iPhone</code> — which is why it never appears in a browser on a desktop computer, and
+    On a phone or a tablet, ten seconds after the page opens, the application puts up a notice of its own about the
+    native applications. It shows only when what the browser reports about the device says <code>Android</code>,
+    <code>iPad</code>, or <code>iPhone</code> — which is why it never appears in a browser on a desktop machine, and
     why nothing you do on the page can make it appear there either.
   </p>
 
   <p>
-    The sentence it shows is built with the platform's own word in the middle: <q>Do you know that Rdio Scanner works
+    The sentence it shows carries the platform's own word in the middle: <q>Do you know that Rdio Scanner works
     natively on Android devices?</q>, or the same sentence with <code>Apple</code> in that place. Beside it sits a
-    badge that points at the store page for that platform's native application — Google Play on Android, the App Store
-    on the Apple one — and a countdown that runs down from ten, and the end of that countdown is what closes the
-    notice. The notice records nothing about having been shown, offers no way to decline it for good, and comes back
-    ten seconds after every time the page is opened.
+    badge pointing at the store page for that platform's native application — Google Play for Android, the App Store
+    for the Apple one — together with a countdown running down from ten, and the end of that countdown is what closes
+    the notice. The notice records nothing about having been shown, offers no way to decline it for good, and comes
+    back ten seconds after every opening of the page.
   </p>
 
   <figure data-shot="promo-snackbar">
@@ -2409,20 +2410,20 @@ footer.site .signoff {
   <p>
     That is as far as this guide goes with the native applications. They exist, for Android and for Apple devices;
     their screens are not documented here, and this guide links to neither store. What the notice does is point at the
-    store's own page for the application belonging to that platform, which is where the comparison between the
-    webapp and the native application has to be made.
+    store's own page for the application belonging to that platform, which is the only place the comparison between
+    the webapp and the native application can be made.
   </p>
 
   <aside class="caution">
     <span class="label">Caution: What that notice is like with a screen reader</span>
     <p>
-      It arrives by itself, ten seconds in, while you are doing something else, in a region the page reports as a
-      status. The countdown is written into the same block of text as the sentence, so a reading of the notice gives a
-      bare digit run onto the end of the sentence rather than a sentence and then a number, and that digit rewrites
-      itself once a second. There is no dismiss control anywhere in the notice: the countdown is what closes it, and
-      the only thing in it the keyboard can act on is the badge — which is a picture, and the link it sits inside is
-      given no name for a screen reader to read. On the Apple form the picture does have a name, but it is the name of
-      the file the badge was drawn from rather than something a person would say. <a
+      It arrives on its own, ten seconds in, while you are doing something else, in a region the page reports as a
+      status. The countdown sits in the same block of text as the sentence, so a reading of the notice gives a bare
+      digit run onto the end of the sentence rather than a sentence and then a number, and that digit rewrites itself
+      once a second. There is no dismiss control anywhere in the notice: the countdown is what closes it, and the only
+      thing inside it the keyboard can act on is the badge — which is a picture, and the link it sits inside is given
+      no name for a screen reader to read. On the Apple form the picture does have a name, but it is the name of the
+      file the badge was drawn from rather than something a person would say. <a
       href="#ch-10-keyboard-and-screen-readers">The chapter on keyboard and screen readers</a> counts this among the
       application's accessibility findings, beside the ones it earns credit for.
     </p>
@@ -2431,25 +2432,25 @@ footer.site .signoff {
   <h3>When a new version is waiting</h3>
 
   <p>
-    The page keeps its own files in the browser, and looks for a newer version of them every five minutes. When a
-    newer one has been published the browser takes it in the background and holds it waiting: nothing on the screen
-    changes while you are listening, because a replacement does not take over a page that is in use. Telling the open
-    pages is something the browser does only when it is replacing a version that is in charge, which is why opening a
-    server for the first time never brings this prompt.
+    The page keeps its own files in the browser, and it looks for a newer version of them every five minutes. When a
+    newer one has been published, the browser takes it in the background and holds it waiting: nothing on the screen
+    shifts while you are listening, because a replacement does not take over a page that is in use. Telling the open
+    pages is something the browser does only when it is replacing the version in charge, which is why opening a
+    server for the very first time never brings this prompt.
   </p>
 
   <p>
     When a newer version is waiting, the page opens a dialog titled <code>New version available</code>, reading
     <q>A new version of the scanner webapp is available. Would you like to reload the page?</q>, with <code>No</code>
-    and <code>Yes</code> beside it. It appears once each time the page is opened.
+    and <code>Yes</code> beside it. It appears once for each opening of the page.
   </p>
 
   <p>
-    <code>Yes</code> puts the new version in charge and reloads the page, which ends whatever the old one was doing.
-    <code>No</code> leaves the version you are on running; the newer one goes on waiting, and takes over when the page
-    is opened again with no copy of the running version still open. The consequence is worth holding on to: the version
-    you are listening on is the version your browser has, which is not necessarily the version the server is running,
-    and that dialog is how you are told the two have diverged.
+    <code>Yes</code> puts the new version in charge and reloads the page, ending whatever the old one was doing.
+    <code>No</code> leaves the version you are on running; the newer one keeps waiting, and it takes over when the
+    page is opened again with no copy of the running version still open. The consequence is worth holding on to: the
+    version you are listening on is the version your browser has, which is not necessarily the version the server is
+    running, and that dialog is how you are told the two have diverged.
   </p>
 
   <figure data-shot="update-dialog">
@@ -2460,9 +2461,9 @@ footer.site .signoff {
   <h3>With the server gone</h3>
 
   <p>
-    Because the page keeps its own files, it opens even when the server cannot be reached. That is worth knowing in
-    both directions: the page coming up is not evidence that the server is working, and the parts of the screen that
-    fill themselves in are not evidence that there is anything to see.
+    Because the page keeps its own files, it opens even when the server cannot be reached at all. That is worth
+    knowing in both directions: the page coming up is no proof that the server is working, and the parts of the screen
+    that fill themselves in are no proof that there is anything to see.
   </p>
 
   <table>
@@ -2512,17 +2513,17 @@ footer.site .signoff {
   </table>
 
   <p>
-    The version line is the one reading on an offline page that a listener might act on, and it is the one to be
-    careful with: quoted while the server is unreachable, it tells somebody what your browser has, not what the
-    deployment is running. <a href="#ch-11-when-something-does-not-work">The chapter on when something does not
-    work</a> takes the whole question of a server that will not answer.
+    Of every reading an offline page can show, the version line is the one a listener may act on, so quote it with
+    care: while the server is unreachable, what it reports is what your browser holds, not what the deployment runs.
+    <a href="#ch-11-when-something-does-not-work">The chapter on when something does not work</a> takes up the whole
+    question of a server that will not answer.
   </p>
 
   <h3>What the page keeps in the browser</h3>
 
   <p>
-    Everything the page remembers lives in the browser's own stored data for that site. The list is short, and what
-    is not on it matters as much as what is.
+    Whatever the page remembers, it remembers in the browser's own stored data for that site. The list is short, and
+    what is missing from it matters as much as what is on it.
   </p>
 
   <table>
@@ -2574,8 +2575,8 @@ footer.site .signoff {
   </table>
 
   <p>
-    All of it is cleared by <code>/reset</code>, which clears what the browser has stored for that site rather than
-    only these entries, and changes nothing on the server. What it is for, and what it cannot fix, is in <a
+    <code>/reset</code> clears all of it, although it clears everything the browser has stored for that site rather
+    than only these entries, and it leaves the server untouched. What it is for, and what it cannot fix, is in <a
     href="#ch-07-access-codes">the chapter on access codes</a>.
   </p>
 </section>
