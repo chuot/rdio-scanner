@@ -2100,26 +2100,26 @@ footer.site .signoff {
   <h2 id="ch-07-access-codes">7 · Access codes and the unlock screen</h2>
 
   <p class="lead">
-    An access code is the operator's way of deciding who may watch a server. A listener does not choose a code, does
-    not extend it, and cannot give themselves a different one. What a listener can do is present the code they were
-    given, and understand what the screen is telling them when it refuses.
+    An access code is how an operator decides who may watch a server. A listener never chooses a code, never
+    extends one, and cannot hand themselves a different one. What a listener can do is present the code they
+    were given, and read what the screen means when it refuses.
   </p>
 
   <h3>When the screen asks for a code</h3>
 
   <p>
-    A server with no access codes configured never asks. On that kind of server the listening screen opens straight
-    into the live feed and nothing else in this chapter applies to you. A server with one or more codes is a
-    restricted server, and on a restricted server the page connects, is turned away, and puts the unlock form over the
-    history area at the bottom of the display. The display rows above it are still there, still showing what they
-    were built with. The nine control buttons stay where they are and are all marked unavailable: they are not taken
-    off the screen, and they are not something you can press through. While the page is waiting, the server reads
-    nothing else the page sends it.
+    A server with no access codes configured never asks. On that kind of server the listening screen opens
+    straight onto the live feed, and nothing else in this chapter applies to you. A server carrying one or more
+    codes is a restricted server, and on a restricted server the page connects, is turned away, and lays the
+    unlock form over the history area at the bottom of the display. The display rows above it stay in place,
+    still showing what they were built with. The nine control buttons keep their places and all of them are
+    marked unavailable: they are not taken off the screen, and they are not something you can press through.
+    While the page waits, the server reads nothing else the page sends it.
   </p>
 
   <p>
-    The form is a single field, and the words on it are <code>Unlock code</code>. There is no button to press: the
-    code is presented when you press Enter in the field, and nothing else on the screen will do it for you.
+    The form is a single field, and the words on it read <code>Unlock code</code>. No button comes with it: the
+    code is presented when you press Enter inside the field, and nothing else on the screen will do it for you.
   </p>
 
   <figure data-shot="unlock-code">
@@ -2168,120 +2168,121 @@ footer.site .signoff {
   </figure>
 
   <p>
-    Whichever sentence appears, the code you typed stays in the field. The screen does not clear it, which is the
-    right choice: a code with one character wrong is corrected rather than retyped. The field is also given back the
-    keyboard, so the correction is ready to make.
+    Whichever sentence appears, the code you typed stays in the field. The screen never clears it, and that is
+    the right choice: a code with one character wrong gets corrected rather than retyped. The keyboard is handed
+    back to the field as well, so making the correction is ready to go.
   </p>
 
   <h3>Five tries, then a wait</h3>
 
   <p>
-    A listener may present a code five times on one connection. Five more are counted against the address that
-    connection came from, over a window of ten minutes, and that second counter is shared by everything else
-    presenting codes from the same place — another tab, a phone on the same network, the administration page on the
-    same browser. Either counter running out ends the tries. And the fifth attempt is refused <em>even when the code
-    it presents is the correct one</em>: the count is a limit on trying, not a record of whether the last try was
-    right.
+    A listener may present a code five times on a single connection. A further five attempts are counted against
+    the address that connection came from, spread over a window of ten minutes, and that second counter is shared
+    with everything else presenting codes from the same place — another tab, a phone on the same network, the
+    administration page in the same browser. Whichever counter runs out ends the tries. And the fifth attempt is
+    refused <em>even when the code it presents is the correct one</em>: the count puts a limit on trying, it does
+    not record whether the last try was right.
   </p>
 
   <p>
-    Spending the budget feels exactly like being wrong. There is no sentence anywhere on the screen that says the
-    tries are gone; the field goes on saying <code>Invalid unlock code</code> and nothing about it changes. A refused
-    try is not forgiven afterwards, whichever reason refused it. A code that is accepted clears both counters — the
-    connection's and the address's — and starts the budget again, the way a successful sign-in renews a login budget.
-    Reloading the page does not buy a fresh start, because the reload shares the address counter with the page it
-    replaces. Waiting for the window to pass is the only move that costs nothing.
+    Spending the budget feels exactly like being wrong. No sentence anywhere on the screen says the tries are
+    gone; the field just goes on saying <code>Invalid unlock code</code> and nothing about it changes. A refused
+    try is not forgiven afterwards, whatever the reason that refused it. A code that is accepted clears both
+    counters — the connection's and the address's — and restarts the budget, much as a successful sign-in renews
+    a login budget. Reloading the page buys no fresh start, since the reload shares the address counter with the
+    page it replaces. Waiting out the window is the only move that costs nothing.
   </p>
 
   <aside class="caution">
     <span class="label">Caution: If the sentence will not change</span>
     <p>
-      Stop presenting the code. Every presentation is one of the five that the address has, so a listener who keeps
-      trying a code they are not sure of uses up the tries of everyone else working from the same place, and can lock
-      out a colleague who was doing nothing wrong. Confirm the code with the operator instead of testing it: the
-      operator can see the attempts in the server's own log, and can tell you in one look whether the code is wrong
-      or the tries are gone.
+      Stop presenting the code. Every presentation draws on the five the address has, so a listener who keeps
+      trying a code they are unsure of spends the tries of everyone else working from the same place, and can
+      lock out a colleague who was doing nothing wrong. Check the code with the operator rather than testing it:
+      the operator can see the attempts in the server's own log, and can tell you at a glance whether the code is
+      wrong or the tries are gone.
     </p>
   </aside>
 
   <h3>The code the page keeps</h3>
 
   <p>
-    A code that was accepted is kept in the browser, and the next time the page opens it presents that code again
-    without asking. It is kept in an encoded form rather than a protected one: anyone with access to the machine can
-    read it back. A code kept in a browser on a shared or public machine is not a secret that machine is keeping for
-    you.
+    A code that is accepted is kept in the browser, and next time the page opens it presents that code again
+    without asking. It is kept in an encoded form rather than a protected one: anyone who can reach the machine
+    can read it back. A code sitting in a browser on a shared or public machine is not a secret that machine is
+    holding for you.
   </p>
 
   <p>
-    Nothing in the ordinary running of the page ever forgets it. An expired code is not forgotten, a wrong code is not
-    forgotten, and the stored one is offered again on every reconnect. That has one consequence a listener should
-    know about: a code the server no longer accepts can spend the address's five tries by itself, one attempt per
-    reconnect, with nobody typing anything. If the field starts refusing a code you know is right, on a machine that
-    has been left open, this is a thing to check, and <code>/reset</code> at the end of the page's address is the way
-    to clear it.
+    Nothing in the page's ordinary running ever forgets it. An expired code is not forgotten, a wrong code is not
+    forgotten, and the stored one is offered again on every reconnect. That carries one consequence a listener
+    should know: a code the server no longer accepts can spend the address's five tries all on its own, one
+    attempt per reconnect, with nobody typing anything. If the field starts refusing a code you know is right, on
+    a machine that has been left open, this is one to check, and <code>/reset</code> at the end of the page's
+    address is how to clear it.
   </p>
 
   <h3>What a code lets you hear</h3>
 
   <p>
-    A code is not only a door. The deployment attaches a scope to it: the systems that code may see. A code scoped to
-    two systems gives the listener a screen with two systems on it, and the systems it was not given are not on the
-    screen at all — not greyed out, not folded away, not findable by searching. A listener who was told to listen to
-    a talkgroup and cannot find it is usually holding a code that does not name that talkgroup's system, and no
-    choice made on the selection panel will bring it back. The same limit runs through a search of recorded calls,
-    and through fetching a recording: a code cannot reach past its own systems in either.
+    A code is more than a door. The deployment attaches a scope to it: the systems that code may see. A code
+    scoped to two systems gives its listener a screen holding exactly two systems, and the systems it was not
+    given are absent entirely — not greyed out, not folded away, not findable by searching. The listener who was
+    told to listen to a talkgroup and cannot find it is almost always holding a code that does not name that
+    talkgroup's system, and no choice on the selection panel will bring it back. The same limit runs through a
+    search of recorded calls, and through fetching a recording: in neither case can a code reach past its own
+    systems.
   </p>
 
   <p>
-    Before a code has been accepted there is no configuration, no live calls, and no search. The page is connected to
-    the server and is being shown nothing. On the screen that looks like a server that is not answering, and it is not
-    the same thing; the chapter on <a href="#ch-11-when-something-does-not-work">when something does not work</a>
-    takes the two apart.
+    Until a code has been accepted there is no configuration, no live calls, and no search: the page stands
+    connected to the server and is being shown nothing. On screen that resembles a server that is not answering,
+    and it is not the same thing; the chapter on
+    <a href="#ch-11-when-something-does-not-work">when something does not work</a> pulls the two apart.
   </p>
 
   <h3>When the server itself is full</h3>
 
   <p>
-    A deployment caps how many connections it will hold at once. The setting is <code>Max Clients</code>, it starts at
-    200, and it counts every connection the server is holding — including ones that never got as far as becoming a
-    listener. Over the cap the server closes the connection and sends nothing at all. No sentence appears on any
-    field: the display keeps <code>NO LINK</code> and behaves as though the network had failed, which is why a full
-    server is usually mistaken for a broken one. The field's <code>Too many connections</code> sentence is not this
-    cap; it is the limit on your own code.
+    A deployment caps how many connections it will hold at once. The setting that decides this is
+    <code>Max Clients</code>, it opens at 200, and it counts every connection the server is holding — including
+    ones that never got as far as becoming a listener. Past the cap the server closes the connection and sends
+    nothing at all. No sentence lands on any field: the display keeps holding <code>NO LINK</code> and behaves as
+    though the network had failed, which is why a full server gets mistaken for a broken one so often. The
+    field's <code>Too many connections</code> sentence is not this cap — that one is the limit on your own code.
   </p>
 
   <h3>Several listeners on one machine</h3>
 
   <p>
-    The page remembers its selection under a name taken from the address it was opened at, and the address carries a
-    profile: adding <code>?id=</code> and a word of your choosing gives that page its own profile. Two pages opened
-    with different <code>?id=</code> values keep separate saved selections, so two radios on one machine stop
-    overwriting each other's choices, and what you change in one does not appear in the other.
+    The page remembers its saved selection under a name taken from the address it was opened at, and that address
+    carries a profile: append <code>?id=</code> and a word of your choosing and the page gets a profile of its
+    own. Two pages opened with different <code>?id=</code> values keep separate saved selections, so two radios
+    on one machine stop overwriting each other's choices, and a change made in one never shows up in the other.
   </p>
 
   <p>
-    A profile covers the saved selection and nothing else. The stored access code is not per profile: every profile on
-    one browser shares the same single stored code, and so does the administration page on that browser. Two profiles
-    are a way of keeping two selections apart, not a way of keeping two codes apart, and not a way of getting past the
-    attempt budget, which counts the address rather than the profile.
+    A profile covers the saved selection and nothing besides. The stored access code is not kept per profile:
+    every profile on one browser shares one and the same stored code, and so does that browser's administration
+    page. Two profiles keep two selections apart; they do not keep two codes apart, and they do not get you past
+    the attempt budget, which counts the address rather than the profile.
   </p>
 
   <h3>Starting over</h3>
 
   <p>
-    Putting <code>/reset</code> at the end of the page's address clears what the application kept in the browser — the
-    stored access code, the saved selection, all of it — and returns you to the plain address with nothing
-    remembered. It is the move to make when a stored code is causing trouble, or when a saved selection has to be
-    abandoned rather than corrected.
+    Putting <code>/reset</code> at the end of the page's address clears everything the application kept in the
+    browser — the stored access code, the saved selection, the lot — and returns you to the plain address with
+    nothing remembered. It is the move to make when a stored code is making trouble, or when a saved selection
+    has to be abandoned rather than corrected.
   </p>
 
   <p>
-    Two things about it are worth knowing first. It clears the browser's stored data for that site rather than only
-    the entries this application wrote, so anything else that site had stored there goes with it. And it changes
-    nothing on the server: an address that has spent its tries has still spent them, and an expired code is still
-    expired. If you have locked an address out, <code>/reset</code> gets you a clean page and you still have to wait,
-    or get the code from the operator.
+    Two things about it are worth knowing first. It clears the browser's stored data for that site as a whole
+    rather than only the entries this application wrote, so anything else that site had stored there goes with
+    it. And it leaves the server entirely alone: an address that has spent its tries has still spent them, and an
+    expired code is still expired. If you have locked an address out, <code>/reset</code> buys you a clean page
+    and you still have to wait, or get the code from the operator.
   </p>
 </section>
 
