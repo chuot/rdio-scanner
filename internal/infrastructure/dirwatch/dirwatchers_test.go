@@ -1472,3 +1472,79 @@ func aWatchOver(directory string) domain.Dirwatch {
 
 	return watch
 }
+
+// heldSink is an ingest path that keeps the one recording it is handed until the test lets
+// it go, and then reports the context the watch was running the handover on. It stands for
+// the ingest a configuration save finds busy: the shipped ingest path stores the call
+// through that context and converts its audio under it.
+type heldSink struct {
+	started chan domain.Call
+	finish  chan struct{}
+	seen    chan context.Context
+}
+
+func newHeldSink() *heldSink {
+	return &heldSink{
+		started: make(chan domain.Call, 1),
+		finish:  make(chan struct{}),
+		seen:    make(chan context.Context, 1),
+	}
+}
+
+var _ IngestSink = (*heldSink)(nil)
+
+func (sink *heldSink) IngestCall(ctx context.Context, call domain.Call) error {
+	sink.started <- call
+
+	<-sink.finish
+
+	sink.seen <- ctx
+
+	return nil
+}
+
+// A save stops the watchers so the watch list it just wrote takes effect, and the stop's own
+// comment says the watchers close first so that a call halfway through being ingested
+// finishes. The stop closes each subscription and then ends the context every read is running
+// on, without waiting for the read one of them is standing in front of: the handover that is
+// running is the one that loses its context, so the ingest cannot store the call or convert
+// its audio, and the watch deletes the recording it was reading either way.
+func TestARecordingHalfwayThroughBeingIngestedWhenTheWatchersAreStoppedIsNotCutOff(t *testing.T) {
+	t.Parallel()
+
+	sink := newHeldSink()
+
+	watched := watchingOverWithSink(t, t.TempDir(), nil, sink)
+
+	// The subscription is only live once the pass over the directory has registered it, so the
+	// recording is presented until the watch begins reading it.
+	deadline := time.Now().Add(30 * time.Second)
+
+	ingesting := false
+
+	for !ingesting {
+		if time.Now().After(deadline) {
+			t.Fatalf("the watch never began reading %q, want the settle path to hand it over", recordedFile)
+		}
+
+		putRecording(t, watched.directory, recordedFile)
+
+		select {
+		case <-sink.started:
+			ingesting = true
+
+		case <-time.After(settleWait):
+		}
+	}
+
+	// A configuration save, while that handover is still running.
+	watched.watchers.Stop(context.Background())
+
+	close(sink.finish)
+
+	ctx := <-sink.seen
+
+	if err := ctx.Err(); err != nil {
+		t.Errorf("the handover a save found running sees %v when it is let carry on, want the save to leave a running handover alone: the ingest path stores the call through that context and converts its audio under it, and the watch deletes the recording it was reading either way", err)
+	}
+}
