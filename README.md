@@ -10,7 +10,7 @@ experience of a real police scanner, while adding its own touch.
 
 You can listen on any modern browsers using the integrated scanner webapp.
 
-> **Note: How the name is said**
+> **How the name is said**
 >
 > **Rdio Scanner** — /ˈreɪ.di.oʊ ˈskæn.ər/ — *RAY-dee-oh SCAN-er*
 >
