@@ -215,6 +215,91 @@ func TestARecordingConvertedWithoutTagsCarriesNoTags(t *testing.T) {
 	}
 }
 
+// sourceTaggedRecording is a recording whose file already carries tags of its
+// own, the way a recording tool's output can: every label names the tool that
+// wrote it, so a tag that reaches the converted recording names where it came
+// from.
+func sourceTaggedRecording(t *testing.T) []byte {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "recorder.mp3")
+
+	command := exec.Command("ffmpeg",
+		"-hide_banner",
+		"-loglevel", "error",
+		"-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+		"-metadata", "album=Album From The Recorder",
+		"-metadata", "artist=Artist From The Recorder",
+		"-metadata", "comment=Comment From The Recorder",
+		"-metadata", "genre=Genre From The Recorder",
+		"-metadata", "title=Title From The Recorder",
+		"-y", path,
+	)
+
+	if out, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("building a recording that carries its own tags: %v\n%s", err, out)
+	}
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading the recording that carries its own tags: %v", err)
+	}
+
+	return body
+}
+
+// TestARecordingConvertedFromATaggedSourceKeepsNoneOfThoseTags is the
+// recording that arrives already tagged: the converted recording the server
+// stores says what this server knows about the call, and nothing the file it
+// came from already said.
+
+// TestARecordingConvertedFromATaggedSourceKeepsNoneOfThoseTags is the
+// recording that arrives already tagged: the converted recording the server
+// stores says what this server knows about the call, and nothing the file it
+// came from already said.
+func TestARecordingConvertedFromATaggedSourceKeepsNoneOfThoseTags(t *testing.T) {
+	converter := installedConverter(t)
+
+	in := ports.AudioFile{Filename: "recorder.mp3", Mime: "audio/mpeg", Data: sourceTaggedRecording(t)}
+
+	calls := []struct {
+		name     string
+		metadata *ports.AudioMetadata
+	}{
+		{
+			name:     "a call on a talkgroup with no tag",
+			metadata: nil,
+		},
+		{
+			name: "a call on a talkgroup with a tag",
+			metadata: &ports.AudioMetadata{
+				Album:  "Ground",
+				Artist: "Car 4",
+				Date:   time.Date(2026, 10, 6, 16, 0, 0, 0, time.UTC),
+				Genre:  "Dispatch",
+				Title:  "Dispatch 1",
+			},
+		},
+	}
+
+	for _, call := range calls {
+		converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, call.metadata)
+		if err != nil {
+			t.Fatalf("converting a recording that carries its own tags (%s): %v", call.name, err)
+		}
+
+		path := writeConverted(t, converted)
+
+		for _, key := range []string{"album", "artist", "comment", "genre", "title"} {
+			got := probe(t, path, "-show_entries", "format_tags="+key, "-of", "default=nw=1:nk=1")
+
+			if strings.Contains(got, "From The Recorder") {
+				t.Errorf("the converted recording's %s tag is %q for %s, want nothing the file it came from already said", key, got, call.name)
+			}
+		}
+	}
+}
+
 // TestTheLoudnessLevelsPadTheRecordingOnlyForTheReleaseThatHasTheFilters is
 // the observable difference between the two releases: the filters pad the
 // recording to three seconds, and a release without them does not.
