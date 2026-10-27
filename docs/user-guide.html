@@ -1323,9 +1323,10 @@ footer.site .signoff {
   <h2 id="ch-04-choosing-what-to-hear">4 · Choosing what to hear</h2>
 
   <p class="lead">
-    The select panel is where you decide which talkgroups the deployment offers you. The <code>SELECT TG</code>
-    control at the bottom right of the control bar opens it over the main display, every button in it is named for
-    the thing it speaks for, and every button in it answers the same question: are you hearing this one or not.
+    The select panel decides which talkgroups the deployment lets reach your speakers. The
+    <code>SELECT TG</code> control at the bottom right of the control bar opens it over the main display:
+    every button is named for the thing it stands for, and every button answers the same question — this
+    one, yes or no.
   </p>
 
   <figure data-shot="select-panel">
@@ -1336,21 +1337,21 @@ footer.site .signoff {
   <h3>How the panel is arranged</h3>
 
   <p>
-    The panel's first row is built from the <em>groups</em> the deployment defines, and it appears only when the
-    deployment has two or more groups. It is drawn as a box with a border and no heading of its own, so your eye
-    groups those buttons by the line around them; a screen reader is handed a group with no name, which is one of
-    the things the chapter on keyboards and screen readers counts against the application. A group button's name is
-    its label followed by its state word — <code>on</code>, <code>off</code>, or <code>partial</code> — held as
-    words inside the button that the page shows to a screen reader and not to your eye.
+    The panel's first row belongs to the <em>groups</em> the deployment defines, and it is present only when
+    the deployment has two or more groups. The row is drawn as a bordered box with no heading, so the line
+    around the buttons is what tells your eye they belong together; a screen reader is handed a group with
+    no name, one of the gaps the chapter on keyboards and screen readers counts against the application. A
+    group button's name is its label plus its state word — <code>on</code>, <code>off</code>, or
+    <code>partial</code> — kept as words the page hands to a screen reader rather than to your eye.
   </p>
 
   <p>
-    Under the group row sits one box per system, headed by that system's own name, holding its talkgroups. A system
-    with no talkgroups is not shown at all. At the end of each box sits a pair of small buttons, <code>OFF</code>
-    and <code>ON</code>, drawn as faces of their own in red and green. A talkgroup button carries its state in two
-    ways: the corner light, and a name a screen reader is given as pressed or not pressed. The four
-    state-bearing controls on the control bar do not do that, and the difference matters to a reader who cannot see
-    the lights.
+    Beneath the group row, one bordered box per system holds that system's talkgroups, headed by the
+    system's own name; a system with no talkgroups is not shown at all. At the end of each box sits a small
+    pair of buttons, <code>OFF</code> and <code>ON</code>, drawn as faces of their own in red and green. A
+    talkgroup button signals its state in two ways: through the corner light, and through a name the screen
+    reader hears as pressed or not pressed. The four state-bearing controls on the control bar do not work
+    that way, and the difference matters to anyone reading without the lights.
   </p>
 
   <table>
@@ -1390,16 +1391,16 @@ footer.site .signoff {
   </table>
 
   <p>
-    Neither pair is always there. The pair at the end of a system's box appears only when that system has more than
-    one talkgroup: with a single talkgroup, that talkgroup's own button already says everything the pair would. The
-    pair under the group row is there whenever the group row is.
+    Neither pair is guaranteed. The pair at the end of a system's box appears only once that system has more
+    than one talkgroup — with a single talkgroup, that talkgroup's own button already says everything the
+    pair could. The pair under the group row is there whenever the group row is.
   </p>
 
   <p>
-    A deployment whose systems carry no talkgroups is the same arrangement with nothing in it: no group row, no
-    boxes, no buttons. The panel answers in words instead, with one line: <code>No talkgroup configured!</code> That
-    line is the whole of what the panel does in that state. It is also the quickest way to say to an operator that
-    the server has been started without talkgroups, rather than that your own selection has gone wrong.
+    A deployment whose systems hold no talkgroups is the same arrangement emptied out: no group row, no
+    boxes, no buttons. The panel speaks in words instead, one line only: <code>No talkgroup configured!</code>
+    That line is the whole of the panel in that state, and it is the fastest way to tell an operator the
+    server came up without talkgroups rather than that your own selection has gone wrong.
   </p>
 
 <figure data-shot="select-panel-empty">
@@ -1410,46 +1411,46 @@ footer.site .signoff {
   <h3>What a press does to the queue</h3>
 
   <p>
-    A press in the panel trims the waiting list as well as the selection. Calls already queued that the new
-    selection would not accept are dropped, so switching a talkgroup off takes its calls out of the queue behind it
-    and the count above the display falls with them. This is also why a press on <code>ON</code> does not bring back
-    calls that arrived while you were not hearing that talkgroup: the server stopped sending them, and nothing is
-    held aside to give them back.
+    A press in the panel trims the waiting list as well as the selection. Calls already waiting that the new
+    selection would not accept are dropped, so switching a talkgroup off pulls its calls out of the queue
+    behind it and the count above the display falls with them. This is also why pressing <code>ON</code>
+    does not bring back calls that arrived while you were not hearing that talkgroup: the server stopped
+    sending them, and nothing was kept aside to return.
   </p>
 
   <h3>What a press does to a hold</h3>
 
   <p>
     A press anywhere in the panel lets go of a hold. The chapter about live calls says a second press on
-    <code>HOLD SYS</code> or <code>HOLD TG</code> puts your selection back exactly as it was — that works only while
-    the panel has not been touched. Press anything in the panel while a hold is standing and the copy the hold was
-    keeping is thrown away, the hold control goes unlit, and the narrowed selection stays where it is. Pressing the
-    hold control after that takes a fresh hold rather than restoring anything, so the way back from there is the
-    panel itself: a system's <code>ON</code> for one system's talkgroups, the pair under the group row for
-    everything.
+    <code>HOLD SYS</code> or <code>HOLD TG</code> puts your selection back exactly as it was — that works
+    only while the panel has stayed untouched. Press anything in the panel while a hold is standing, and the
+    copy the hold was keeping is thrown away, the hold control goes unlit, and the narrowed selection stays
+    where it is. Pressing the hold control after that takes a fresh hold instead of restoring anything, so
+    the way back is the panel itself: a system's <code>ON</code> for that system's talkgroups, the pair
+    under the group row for everything.
   </p>
 
   <h3>The sound of a press</h3>
 
   <p>
-    The panel answers with the three tones the chapter about live calls describes. A talkgroup button answers with
-    the tone for the change it just made: the tone for going off when you had been hearing it, the tone for going on
-    when you had not. <code>ON</code> answers with the tone for turning on, <code>OFF</code> with the tone for
-    turning off, whatever the state was before. A group button answers with the tone for turning off when its group
-    was fully chosen and with the tone for turning on in every other case, which is why a group that was
-    half-chosen answers with the tone for going on.
+    The panel answers with the three tones the chapter about live calls describes. A talkgroup button answers
+    with the tone for the change it just made: the tone for going off when you had been hearing it, the tone
+    for going on when you had not. <code>ON</code> answers with the tone for turning on and <code>OFF</code>
+    with the tone for turning off, whatever the state was before. A group button answers with the tone for
+    turning off when its group was fully chosen, and with the tone for turning on in every other case, which
+    is why a group that was half-chosen answers with the tone for going on.
   </p>
 
   <h3>Timed avoid</h3>
 
   <p>
-    When the control bar's <code>AVOID</code> has a talkgroup held off for a window of minutes, that talkgroup's
-    button shows it: its corner light carries the timed mark, which is the red of a talkgroup held off blinking at
-    its faster rate, and in a page read where the operating system asks for less motion it stands still instead.
-    The number of minutes is not written on the button. It is given as words inside the button that the page shows
-    to a screen reader and not to your eye — <q>avoided for 30 minutes</q> — which is the only place in the panel
-    where the length of a window can be read at all. That is how you find out that a talkgroup is being held off
-    when it is not the call in front of you.
+    When the control bar's <code>AVOID</code> holds a talkgroup off for a timed window of minutes, that
+    talkgroup's button shows it: its corner light carries the timed mark, the red of a held-off talkgroup
+    blinking at its faster rate, and where the operating system asks for less motion the light stands still
+    instead. The number of minutes is not written on the button. It lives as words the page shows to a
+    screen reader and not to your eye — <q>avoided for 30 minutes</q> — the only place in the panel where
+    the length of a window can be read at all. That is how you find out a talkgroup is being held off when
+    it is not the call in front of you.
   </p>
 
   <figure data-shot="select-panel-timed">
@@ -1458,41 +1459,42 @@ footer.site .signoff {
   </figure>
 
   <p>
-    Pressing a talkgroup that is doing this does two things at once, and the second is easy to miss: the talkgroup
-    comes back to hearing, and the window is cleared. The same clearing happens on any press that reaches the
-    talkgroup — its group button, its system's <code>OFF</code> or <code>ON</code>, or the pair under the group row.
-    Nothing in the panel shortens a window or sets a different length: the 30, 60, and 120 minute windows belong to
-    <code>AVOID</code> alone, and the panel only ever ends them.
+    Pressing a talkgroup that is doing this does two things at once, and the second is easy to miss: the
+    talkgroup comes back to hearing, and the window is cleared. The same clearing follows any press that
+    reaches the talkgroup — its group button, its system's <code>OFF</code> or <code>ON</code>, or the pair
+    under the group row. Nothing in the panel shortens a window or sets a different length: the 30, 60, and
+    120 minute windows belong to <code>AVOID</code> alone, and the panel only ever ends them.
   </p>
 
   <aside class="caution">
     <span class="label">Caution: A timed window does not outlive the page</span>
     <p>
-      A window lives only in the page you are in. It is not written into the saved selection, it is not sent to the
-      server, and when the deployment's configuration reaches the page again every window standing at that moment is
-      dropped. What survives is the holding-off: a talkgroup you left held off stays held off after a reload, with
-      no window attached to it and nothing waiting to bring it back. If a talkgroup you expected to start hearing
-      again has not, this is the first thing to check.
+      A window lives only in the page you are in. It is not written into the saved selection, it is not sent
+      to the server, and when the deployment's configuration reaches the page again every window standing at
+      that moment is dropped. What survives is the holding-off: a talkgroup you left held off stays held off
+      after a reload, with no window attached and nothing waiting to bring it back. If a talkgroup you
+      expected to start hearing again has not, check here first.
     </p>
   </aside>
 
   <h3>Where your selection is kept</h3>
 
   <p>
-    Every press writes your selection into the browser, under a name that includes the listener identifier your
-    address carries, which is what lets two pages on the same browser hold different selections; the chapter about
-    addresses gives that part of the address. When the page is opened again the saved selection is read back and
-    matched against the configuration that arrives: a talkgroup the deployment still has keeps the state you left it
-    in, a talkgroup the deployment no longer has is dropped, and a talkgroup the deployment has newly gained comes
-    in chosen unless a group it belongs to was left off. Tags no longer have a row of their own in the panel, so a
-    tag cannot hold a new talkgroup back. A selection saved by the older application is read once, as a fallback
-    when the current one has nothing saved yet.
+    Every press writes your selection into the browser, under a name that includes the listener identifier
+    your address carries — which is what lets two pages in the same browser hold different selections, and
+    the chapter about addresses gives that part of the address. When the page opens again, the saved
+    selection is read back and matched against the configuration that arrives: a talkgroup the deployment
+    still has keeps the state you left it in, one the deployment no longer has is dropped, and one the
+    deployment has newly gained comes in chosen unless a group it belongs to was left off. Tags no longer
+    have a row of their own in the panel, so a tag cannot hold a new talkgroup back. A selection saved by
+    the older application is read once, as a fallback when the current one has nothing saved yet.
   </p>
 
   <p>
-    The selection is also sent to the server, but only while the live feed is on. A press made while the feed is off
-    is written down and kept, and switching the feed on sends the whole selection at that moment — which is why a
-    selection you changed while you were not listening can seem to take effect all at once.
+    The selection also goes to the server, but only while the live feed is on. A press made while the feed
+    is off is written down and kept, and switching the feed on sends the whole selection as it stands at
+    that moment — which is why a selection you changed while you were not listening can seem to take effect
+    all at once.
   </p>
 </section>
 
