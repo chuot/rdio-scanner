@@ -347,3 +347,42 @@ func TestAMaterializeRefusesASymlinkAtTheProgramPath(t *testing.T) {
 		t.Errorf("the file the symlink points at is %q, want it untouched", string(body))
 	}
 }
+
+// TestAMaterializeRefusesAFolderOtherAccountsCanWriteInto: the folder the server
+// writes its programs into has one name, in the system's shared temp directory, and
+// the server runs the programs from that folder every time it converts a recording.
+// On a host with more than one account, the first account to name that folder owns
+// it, and a folder every account can write into is a folder every account can put a
+// program in for this server to run.
+func TestAMaterializeRefusesAFolderOtherAccountsCanWriteInto(t *testing.T) {
+	bundle := aBundle(t, "linux-amd64", "the ffmpeg", "the ffprobe")
+
+	dir := filepath.Join(t.TempDir(), "rdio-scanner.ffmpeg")
+
+	if err := os.Mkdir(dir, 0777); err != nil {
+		t.Fatalf("the test cannot make the folder it was given: %v", err)
+	}
+
+	// Whatever this account's umask is, the folder has to be one every account on
+	// the host can write into.
+	if err := os.Chmod(dir, 0777); err != nil {
+		t.Fatalf("the test cannot open the folder to every account: %v", err)
+	}
+
+	ffmpegPath, _, err := bundle.Materialize(dir)
+	if err != nil {
+		// Saying no is an answer the server already knows how to take: it converts
+		// with the ffmpeg its host installs, and nothing is run out of the open folder.
+		return
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("the folder the server wrote its program into cannot be read: %v", err)
+	}
+
+	if open := info.Mode().Perm() & 0o077; open != 0 {
+		t.Errorf("the server runs %s out of a folder mode %o, want a folder no other account on the host can write into",
+			filepath.Base(ffmpegPath), info.Mode().Perm())
+	}
+}
