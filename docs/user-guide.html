@@ -800,9 +800,9 @@ footer.site .signoff {
   <h2 id="ch-02-the-main-screen">2 · The main screen</h2>
 
   <p class="lead">
-    Everything you do with the listening application happens on one screen. It is built in three parts, and they
-    sit in the same order on every device: the branding line with the LED beside it, the display,
-    and the control bar. Learn where things are on this page and every later chapter is short.
+    Everything you do happens on this one screen. The page is built in three parts, and they sit in the same
+    order on every device: the branding line with the LED beside it, the display, and the control bar.
+    Once you know where these three parts are, every later chapter in this guide can be short.
   </p>
 
   <figure data-shot="main-idle">
@@ -861,38 +861,38 @@ footer.site .signoff {
   <h3>The branding line and the LED</h3>
 
   <p>
-    The branding line is the operator's own words for the deployment: the name of the department, the name of the
-    scanner network, or nothing at all. When the operator sets nothing the line is empty, and the LED
-    sits at the left end of where the line would have been. The line tells you which deployment you are looking
-    at, which is the first thing to check when two deployments look the same.
+    The branding line carries the operator's own words for the deployment: a department name, a scanner network
+    name, or nothing at all. When the operator sets nothing, the line stays empty, and the LED sits at the left
+    end of the space the line would have filled. Reading the line tells you which deployment you are on, and that
+    is the first thing to check when two deployments look alike.
   </p>
 
   <p>
-    The light is the quickest indication on the screen. It has three states, and they differ by colour, glow, and
-    motion rather than by shape: the same square is dark, lit, or lit inside a ring.
+    The LED is the quickest signal on the screen. It has three states, told apart by colour, glow, and motion
+    rather than by shape: the same square sits dark, lit, or lit inside a ring.
   </p>
 
   <ul>
     <li>
-      <strong>Dark</strong> while nothing is playing and nothing has just played. The application is not receiving
+      <strong>Dark</strong> when nothing is playing and nothing has just played: the application is not receiving
       a call.
     </li>
     <li>
-      <strong>Lit</strong> while a call is playing, in the colour that call's talkgroup resolves to — which comes
-      from a group, a tag, the system, or the talkgroup itself, in that order of being looked at first.
+      <strong>Lit</strong> while a call plays, in the colour the call's talkgroup resolves to. The application
+      looks for that colour at four levels, in this order: group, tag, system, then the talkgroup itself.
     </li>
     <li>
-      <strong>Paused</strong> while audio is held: the light alternates between the colour it is lit with and the dark
-      grey it wears at rest, on a cycle that switches rather than fades. When your operating system asks for less
-      motion, the alternation stops and a ring drawn standing around the lit face takes over the meaning — the ring
-      the figure below was photographed in.
+      <strong>Paused</strong> while the audio is held: the light alternates between its lit colour and the dark
+      grey it wears at rest, switching rather than fading. When your operating system asks for less motion, the
+      alternation stops, and a standing ring around the lit face carries the meaning instead — the ring the
+      figure below was photographed in.
     </li>
   </ul>
 
   <p>
-    The page also says each state out loud for a screen reader, as <code>Server status:</code> followed by the
-    state — <code>off</code>, <code>on</code>, or <code>on paused</code> — so the state is not only a colour you
-    have to look at.
+    The page also names each state for a screen reader: <code>Server status:</code> followed by
+    <code>off</code>, <code>on</code>, or <code>on paused</code>, so the state is never only a colour you have
+    to look at.
   </p>
 
   <figure data-shot="light-states">
@@ -903,55 +903,53 @@ footer.site .signoff {
   <aside class="note">
     <span class="label">Note: If you cannot rely on colour</span>
     <p>
-      The paused state is carried by the ring as well as by the colour, and the lit state is carried by a glow as
-      well as by the hue. The colours themselves are not reliable enough on their own, and neither is the glow:
-      the chapter on keyboards and screen readers gives the measured figures and says what the screen still leaves
-      to colour alone.
+      The paused state rides on the ring as well as the colour, and the lit state rides on a glow as well as the
+      hue. Neither the colours nor the glow is reliable on its own, and the chapter on keyboards and screen
+      readers gives the measured figures and says what the screen still leaves to colour alone.
     </p>
   </aside>
 
   <h3>The display</h3>
 
   <p>
-    At the top of the display, three readings sit in one line: the time on your machine, the state of the page's
-    connection to the server, and the queue count. The connection reads <code>NO LINK</code> until the page has
-    joined the server, and once joined it reads <code>L:</code> followed by the number of other listeners when the
-    operator has chosen to show that number, and nothing at all when the operator has not. What to do when it stays
-    at <code>NO LINK</code> is in the chapter about when something does not work.
+    One line sits at the top of the display with three readings: the time on your machine, the state of the
+    page's link to the server, and the queue count. The link reads <code>NO LINK</code> until the page joins the
+    server. After that it reads <code>L:</code> followed by the number of other listeners when the operator has
+    chosen to show that number, and nothing at all when the operator has not. If it stays at <code>NO LINK</code>,
+    the chapter about when something does not work says what to do.
   </p>
 
   <p>
-    Below that line sit the rows that describe a call: the system, the talkgroup's type, the tag, the talkgroup,
-    the date and the running clock of the call, the call's name in the largest type on the page, the frequency,
-    the talkgroup identifier, the statistics line, and the unit that spoke. Before a first call has arrived, each
-    row holds the placeholder it was built with — <code>System</code>, <code>Tag</code>, <code>Talkgroup</code>,
-    <code>TGID: 0</code>, <code>E: 0 S: 0</code>, <code>UID: 0</code>, a frequency written as a run of zero
-    digits, and <code>00:00</code> in the place where a call's running clock will appear. The row that carries the
-    clock shows the time on your machine the whole time, placeholder or not.
+    Below that line, one row describes each part of a call: the system, the talkgroup's type, the tag, the
+    talkgroup, the date and the running clock of the call, the call's name in the largest type on the page, the
+    frequency, the talkgroup identifier, the statistics line, and the unit that spoke. Before any call has
+    arrived, each row holds the placeholder it was built with — <code>System</code>, <code>Tag</code>,
+    <code>Talkgroup</code>, <code>TGID: 0</code>, <code>E: 0 S: 0</code>, <code>UID: 0</code>, a frequency
+    written as a run of zero digits, and <code>00:00</code> where a call's running clock will appear. The row
+    that carries the clock shows the time on your machine the whole time, placeholder or not.
   </p>
 
   <p>
-    The name row is what tells you the version you are listening with. Before the first call arrives it reads
-    <code>Rdio Scanner</code> followed by the version and the build the operator's server is running. Once a call
-    has played, that row carries call names from then on, and the last call's rows stay on the screen after the
-    call ends; the version is not shown again until the page is reloaded. This guide asks you to read that line to
-    the operator when something is missing, and the chapter about help and support says how.
+    The name row is also how you find out which version you are listening with. Before the first call arrives it
+    reads <code>Rdio Scanner</code> followed by the version and build the operator's server runs. Once a call has
+    played, the name row carries call names from then on: the last call's rows stay on the screen after the call
+    ends, and the version does not appear again until the page is reloaded. This guide asks you to read that
+    line to the operator when something is missing, and the chapter about help and support says how.
   </p>
 
   <p>
-    Underneath the call rows sits the list of recent calls, with its own column headings — <code>Time</code>,
-    <code>System</code>, <code>Talkgroup</code>, <code>Name</code> — and the flags that appear beside them when a
-    call carries something extra: <code>AVOID</code>, <code>PATCH</code>, <code>DELAYED</code>, and the hourglass
-    marking an avoid you armed, with the minutes that window is held for. Every row, and what each one holds, is
-    given one at a time in the
-    chapter about what the display says.
+    Under the call rows sits the list of recent calls, with its own column headings — <code>Time</code>,
+    <code>System</code>, <code>Talkgroup</code>, <code>Name</code> — and beside them the flags that appear when
+    a call carries something extra: <code>AVOID</code>, <code>PATCH</code>, <code>DELAYED</code>, and the
+    hourglass marking an avoid you armed, with the minutes that window is held for. The chapter about what the
+    display says takes every row, and what each one holds, one at a time.
   </p>
 
   <h3>The control bar</h3>
 
   <p>
-    Nine controls, in three rows of three. Where a control sits is how you find it again on a phone in one hand,
-    and the names below are the names printed on the buttons — each printed on two lines except
+    Nine controls sit in three rows of three. Position is how you find a control again on a phone held in one
+    hand, and the names below are the names printed on the buttons: every button is printed on two lines except
     <code>AVOID</code> and <code>PAUSE</code>, which are printed on one.
   </p>
 
@@ -980,10 +978,9 @@ footer.site .signoff {
   </table>
 
   <p>
-    The controls that start and stop what you hear are operated in the chapter about listening to live calls, the
-    two that decide what you are offered are operated in the chapter about choosing what to hear, and the search
-    control is operated in the chapter about searching recorded calls. The reference carries all nine in one
-    table.
+    The chapter about listening to live calls operates the controls that start and stop what you hear, the
+    chapter about choosing what to hear operates the two that decide what you are offered, and the chapter about
+    searching recorded calls operates the search control. The reference chapter carries all nine in one table.
   </p>
 </section>
 
