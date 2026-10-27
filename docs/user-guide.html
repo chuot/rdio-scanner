@@ -1842,14 +1842,15 @@ footer.site .signoff {
   <h2 id="ch-06-what-the-display-says">6 · What the display says</h2>
 
   <p class="lead">
-    The display is a fixed grid of rows. Its cells are laid out for the longest reading they might have to hold,
-    which is why a short call leaves gaps on the screen and a long label gets cut rather than wrapped.
+    The display is a fixed grid of rows. Its cells are sized for the longest reading each could ever have to
+    hold, so a short call leaves open gaps on the screen, and a label too long for its cell gets cut rather
+    than wrapped onto a second line.
   </p>
 
   <p>
-    The display starts dimmed and stays dimmed until a call arrives or you press something. The chapter on listening to
-    live calls gives the delay that dims it again; what matters here is that a display you have not touched yet is
-    showing the readings it was built with, not readings about anything the server knows.
+    The display starts dimmed and stays that way until a call arrives or you press something. The chapter on
+    listening to live calls gives the delay that dims it again. What matters here is what a display you have
+    not touched is showing: the readings it was built with, not readings about anything the server knows.
   </p>
 
   <h3>The display rows</h3>
@@ -1916,64 +1917,66 @@ footer.site .signoff {
   </table>
 
   <p>
-    Those placeholder readings are what the screen was built with, and they are the only place the version line
-    appears: once a call has reached the display the rows keep the last call's readings, and the version line does
-    not come back. The display does not clear when a call ends, and neither do the flags on it — they keep being
-    re-evaluated against the last call the display showed, which is why a flag can still be lit when nothing is
-    playing.
+    Those placeholders are the screen's built-in state, and the version line appears nowhere else on it: once a
+    call has reached the display, the rows hold that call's readings and the version line never returns. When a
+    call ends, the display does not clear, and the flags do not either — they go on being re-evaluated against
+    the last call the display showed, which is how a flag can still be lit while nothing plays.
   </p>
 
   <h3>The name row</h3>
 
   <p>
-    The large row is the talkgroup's name. A deployment that names its talkgroups put those names here, and a
-    deployment that does not gets the call's frequency in that space instead, written the grouped way the frequency
-    row writes it. That is the reading a listener of an unnamed deployment sees at the largest size on the screen, and
-    it is why the same number can appear twice on one screen at two different sizes.
+    The large row holds the talkgroup's name. A deployment that names its talkgroups has those names written
+    there; a deployment that does not has the call's frequency in that space instead, in the grouped form the
+    frequency row uses. That frequency-when-there-is-no-name is the largest writing on the screen for a
+    listener of an unnamed deployment, and it is why one number can sit on the same screen twice at two
+    different sizes.
   </p>
 
   <p>
-    A deployment whose systems or talkgroups carry the older type the application reads as provoice gets the
-    talkgroup's number rewritten into a different form on both the talkgroup row and the <code>TGID:</code> row, which
-    is why a talkgroup number can look nothing like the number in the configuration.
+    A deployment using the older type the application reads as provoice gets the talkgroup's number rewritten
+    into a different form on both the talkgroup row and the <code>TGID:</code> row, which is how a talkgroup
+    number can look nothing like the number the configuration holds.
   </p>
 
   <h3>Time, progress, and elapsed time</h3>
 
   <p>
-    The time at the top left is the page's own clock, kept from the machine it runs on, and it moves at the turn of
-    each minute. The reading at the right of the talkgroup row is not a duration: it is a time of day, the moment the
-    call started moved forward by how far the recording has got, so a call that began at 14:03 and has run forty
-    seconds reads as 14:07. Before any call it reads <code>00:00</code>.
+    The clock at the top left is the page's own, kept from the machine it runs on, and it advances at the turn
+    of each minute. The reading at the right of the talkgroup row is not a duration at all: it is a time of
+    day — the moment the call started, moved forward by how far the recording has got — so a call that began
+    at 14:03 and has run forty seconds reads as 14:07. Before any call, that reading stands at
+    <code>00:00</code>.
   </p>
 
   <p>
-    How far a recording has got is measured from the audio rather than from the wall clock. It starts again with each
-    recording, and while the feed is paused it freezes with the sound instead of running on: the elapsed reading and
-    therefore the progress reading stand still for as long as the pause holds, and continue from where they stood.
+    How far the recording has got is measured from the audio, not from the wall clock. The measure restarts
+    with each recording, and while the feed is paused it freezes along with the sound rather than running on:
+    the elapsed reading, and with it the progress reading, stand still for exactly as long as the pause holds,
+    then continue from where they stopped.
   </p>
 
   <p>
-    The date in front of that reading appears only when the call is at least a day old, and it is written as month and
-    day. A live call never carries it, and a call you found in yesterday's history does.
+    The date that stands in front of that reading appears only once the call is at least a day old, and it is
+    written as month and day. A live call never carries it; a call pulled up from yesterday's history does.
   </p>
 
   <h3>Frequency, counts, and unit</h3>
 
   <p>
-    The <code>F:</code> row follows the call. A recording whose frequency changed partway through carries that
-    history, and the display moves through it as the call progresses, so the frequency you read is the one the call
-    was on at the point the display has reached. The two counts beside it work the same way: <code>E:</code> and
-    <code>S:</code> are the error count and the spike count the call reports for that same part of the recording, and
-    where a call reports none the reading is zero. Nothing on the screen explains what the application counted; the
-    numbers are what the recorder said.
+    The <code>F:</code> row tracks the call. A recording whose frequency changed partway through carries that
+    whole history, and the display walks through it as the call plays on, so the frequency in front of you is
+    the one the call sat on at the point the display has reached. The two counts beside it follow the same
+    rule: <code>E:</code> and <code>S:</code> are the error count and the spike count reported for that same
+    stretch of the recording, and where the call reports none, the reading shows zero. Nothing on the screen
+    explains what the application counted — those numbers are what the recorder said.
   </p>
 
   <p>
-    <code>UID:</code> is the unit the call came from. Where the deployment defines names for its units the row carries
-    that name, and the number the recorder reported is resolved against the ranges the deployment sets for it. Where
-    no name can be found the row is left blank rather than falling back to the bare number, so a blank unit row means
-    the deployment has not named that unit, not that the call had none.
+    <code>UID:</code> names the unit the call came from. Where the deployment defines unit names, the row
+    carries the name, with the number the recorder reported resolved against the ranges the deployment sets.
+    Where no name resolves, the row is left blank rather than falling back to the bare number, so a blank
+    unit row tells you the deployment has not named that unit — not that the call had no unit at all.
   </p>
 
   <h3>The flag row</h3>
@@ -2016,32 +2019,34 @@ footer.site .signoff {
   </figure>
 
   <p>
-    The hourglass is worth knowing about on its own. Every other mark on this screen is drawn from an icon set the
-    application ships with itself and never asks the internet for; the timed-avoid mark is a single character,
-    <code>⧖</code>, written into the text of the row. That character is in none of the faces the application ships, so
-    the page carries a rule offering a font family for that one character and nothing else — its letters and its
-    digits keep the face every other line on the screen uses — drawn from four faces already on the machine, which is
-    what keeps the mark from arriving as an empty box on a plain Linux install. Where none of those four is installed
-    the mark can still appear as a box, or as nothing, with the minutes still beside it, and the minutes are then the
-    reading to trust. The chapter on keyboards and screen readers counts that rule as one of the things the
-    application does well, and gives what the selection panel says about the same state in words.
+    The hourglass deserves a paragraph of its own. Every other mark on this screen comes from an icon set the
+    application ships and never asks the internet for; the timed-avoid mark is a lone character,
+    <code>⧖</code>, written straight into the row's text. No face the application ships contains that
+    character, so the page carries a rule offering a font family for that one character and nothing else —
+    letters and digits everywhere else keep the face the rest of the screen uses — drawn from four faces
+    already present on the machine, and that is what stops the mark landing as an empty box on a plain Linux
+    install. If none of those four faces is installed, the mark can still show as a box, or as nothing at
+    all, with the minutes sitting beside it; the minutes are then the reading to trust. The chapter on
+    keyboards and screen readers counts that rule among the things the application does well, and gives what
+    the selection panel says about the same state in words.
   </p>
 
   <h3>The history table</h3>
 
   <p>
-    Under the display sits a table of five rows, always five. Calls that have not happened yet leave their rows
-    blank, so a listener who has heard two calls sees two rows and three empty ones. Its columns are headed
-    <code>Time</code>, <code>System</code>, <code>Talkgroup</code>, and <code>Name</code>, and the
-    <code>Name</code> column falls back the same way the large row does — except that it writes the frequency as a
-    bare number rather than in the grouped form the display uses. The row holding the call the display is on is
-    marked, which is what tells you that what you are hearing is a replay rather than a new call.
+    Beneath the display sits a table of five rows — always five. Calls that have not happened yet leave their
+    rows blank, so a listener who has heard two calls sees two filled rows beside three empty ones. Its
+    columns carry the headings <code>Time</code>, <code>System</code>, <code>Talkgroup</code>, and
+    <code>Name</code>, and the <code>Name</code> column falls back the same way the large row does — only it
+    writes the frequency as a bare number, not in the grouped form the display uses. The row holding whichever
+    call the display is on is marked, and that mark is what tells you the audio is a replay rather than a new
+    call.
   </p>
 
   <p>
-    The table holds calls the listener has already heard, not the one being heard. A call joins it when it has ended,
-    and the control bar's replay control walks this list: successive presses within a second of one another move
-    backwards through it, which is the route the chapter on live calls describes.
+    This table holds calls the listener has already heard, never the one being heard now: a call joins it when
+    it ends. Successive presses of the control bar's replay control within a second of one another step
+    backwards through this list, the route the chapter on live calls describes.
   </p>
 
   <figure data-shot="main-history">
@@ -2052,39 +2057,42 @@ footer.site .signoff {
   <h3>Long labels</h3>
 
   <p>
-    The grid does not widen for a long name, and a label longer than its cell is cut. What is written on the screen
-    may therefore be the beginning of a talkgroup's name rather than all of it, at any zoom. The application gives the
-    whole of the text to a screen reader for each row it clips, including the history rows, so the reader who cannot
-    see the cut is not missing the part that did not fit. That is one of the things the application does
-    deliberately for assistive technology, and the chapter on keyboards and screen readers counts it as one.
+    The grid never widens to fit a long name, and a label longer than its cell gets cut. What stands on the
+    screen may therefore be only the beginning of a talkgroup's name, at any zoom. For every row it clips,
+    including the history rows, the application hands the whole of the text to a screen reader, so a reader
+    who cannot see the cut is not missing the part that did not fit. That is one of the moves the application
+    makes deliberately for assistive technology, and the chapter on keyboards and screen readers counts it as
+    one.
   </p>
 
   <h3>Full screen</h3>
 
   <p>
-    Double-clicking anywhere on the display puts the page into full screen and takes it out again. Because a
-    double-click is not something every reader can perform, the same move has a control: it sits at the lower right of
-    the screen beside the help control, and it names the move it will make rather than the state it sits in —
-    <code>Fullscreen</code> while the page is in the window, <code>Exit fullscreen</code> once it is not — and it reads
-    as pressed while the screen is filled. Pressing it and double-clicking the display do the same thing, and the
-    control's name and pressed state follow whichever one you used.
+    Double-clicking any part of the display puts the page into full screen, and does the reverse when the page
+    is already there. A double-click is not a move every reader can perform, so the same action also has a
+    control: it sits at the screen's lower right beside the help control, and it names the move it is about to
+    make rather than the state it sits in — <code>Fullscreen</code> while the page is in its window,
+    <code>Exit fullscreen</code> once it is not — reading as pressed while the screen is filled. Pressing that
+    control and double-clicking the display achieve the same thing, and the control's name and pressed state
+    follow whichever route was taken.
   </p>
 
 
   <h3>What the display says out loud</h3>
 
   <p>
-    Everything on this screen is also said. The display writes the state it shows into the region a screen reader
-    listens to: a call starting is announced as <q>Playing</q> followed by the talkgroup's label, a pause as
-    <q>Paused</q> and the same label, a call ending as <q>Stopped</q> and the label it had, and a change in the waiting
-    list as <q>Queue: 3</q>. When the queue changes at the same moment a call starts, the queue is said first and the
-    call last, so the last thing a listener hears is the talkgroup they are now hearing. The first painting of the
-    page is not announced at all: the page does not introduce itself as a change.
+    Everything this screen shows, it also says. The display writes each state it paints into the region a screen
+    reader listens to: a call starting is announced as <q>Playing</q> with the talkgroup's label after it, a
+    pause as <q>Paused</q> with the same label, a call ending as <q>Stopped</q> with the label it had, and any
+    change to the waiting list as <q>Queue: 3</q>. When the queue shifts at the very moment a call starts, the
+    queue is announced first and the call last, so the final thing a listener hears is the talkgroup they are
+    now hearing. The page's very first painting is never announced: the page does not announce its own arrival
+    as a change.
   </p>
 
   <p>
-    The shape of each of those sentences, and what a screen reader makes of them, belongs to the chapter on keyboards
-    and screen readers.
+    The shape of each of those announcements, and what a screen reader makes of it, belongs to the chapter on
+    keyboards and screen readers.
   </p>
 </section>
 
