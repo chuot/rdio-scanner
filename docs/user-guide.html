@@ -3402,12 +3402,11 @@ footer.site .signoff {
   <h2 id="ch-12-reference">12 · Reference</h2>
 
   <p class="lead">
-    Everything the guide has been working through, gathered where a reader can scan it instead of reading it. Nothing
-    here is new. Each row names a thing an earlier chapter operates, and the last column says which chapter — except
-    in the table of the operator's settings, where the thing being named belongs to somebody else's screen and this
-    guide's only business is what it does to yours. The rows are deliberately shorter than the chapters they point at:
-    a reference is read by scanning, and a reader who wants the reasoning behind a row goes to the chapter the row
-    names.
+    Everything the guide works through, gathered in one place so a reader can scan it rather than read it. Nothing here
+    is new: each row names something an earlier chapter operates, and its last column says which chapter. The one
+    exception is the table of the operator's settings, where the thing named belongs to somebody else's screen, and this
+    guide's business is only what it does to yours. Rows are deliberately shorter than the chapters they point at,
+    because a reference is read by scanning; the reasoning behind any row lives in the chapter that row names.
   </p>
 
   <h3>The nine controls</h3>
@@ -3722,10 +3721,11 @@ footer.site .signoff {
   <h3>The settings a listener feels</h3>
 
   <p>
-    These are named as the operator's settings name them, because an operator can hand a listener one of these words
-    and a listener needs to know what it did to their screen. Changing any of them, and finding out what the current
-    value is in the deployment in front of you, belongs to the operator. What this guide adds is the effect, and the
-    value the server starts with before anyone changes it, which is what the last column of the table gives.
+    These settings are named exactly as the operator's screen names them, because an operator may hand a listener one of
+    these words, and the listener needs to know what it did to their screen. Finding the current value in the
+    deployment in front of you, and changing it, belongs to the operator. What this guide adds is the effect each
+    setting has, and the value the server starts with before anyone changes it — the last column of the table gives
+    that.
   </p>
 
   <table>
@@ -3827,18 +3827,18 @@ footer.site .signoff {
   </table>
 
   <p>
-    An access code has two settings of its own, an expiry and a limit on how many connections it carries at once. Both
-    belong to the code rather than to the server, and chapter 7 gives what a listener feels when either one is reached:
-    the field reading <code>This unlock code has expired</code>, and the field reading
+    An access code carries two settings of its own: an expiry, and a limit on how many connections it may carry at
+    once. Both belong to the code rather than to the server, and chapter 7 says what a listener feels when either limit
+    is reached — the field reading <code>This unlock code has expired</code>, and the field reading
     <code>Too many connections</code>.
   </p>
 
   <h3>The sentences the page says out loud</h3>
 
   <p>
-    The page writes one sentence at a time into a region a screen reader announces, so two changes happening together
-    arrive as the later one. None of these sentences is the LED's name: that name is written into the element itself,
-    and it is a name rather than something the page says.
+    The page writes one sentence at a time into a region a screen reader announces, so when two changes land together
+    only the later one arrives. None of these sentences is the LED's name: that name lives in the element itself, and
+    it is a name rather than something the page says out loud.
   </p>
 
   <table>
@@ -3894,25 +3894,25 @@ footer.site .signoff {
   <h3>The application's own words</h3>
 
   <p>
-    These are the words the guide uses throughout, collected here in the order a reader is most likely to meet them.
-    Where a word is the application's own rather than the guide's, the entry says so.
+    These are the words the guide uses throughout, gathered here in the order a reader is most likely to meet them.
+    Where a word belongs to the application rather than to the guide, the entry says so.
   </p>
 
   <dl>
     <dt><dfn>attempt</dfn></dt>
-    <dd>One try at an access code. The server counts them against the session and against the address the code arrived
-      from, over a window, and clearing the page does not clear the counters.</dd>
+    <dd>One try at an access code. The server counts attempts against the session and against the address the code
+      arrived from, over a window, and clearing the page does not clear the counters.</dd>
 
     <dt><dfn>avoid</dfn></dt>
     <dd>What <code>AVOID</code> does: the talkgroup of the call in front of you is held off, and pressing through the
-      cycle steps the hold to 30 minutes, 60, 120, and then to no hold at all.</dd>
+      cycle steps the hold to 30 minutes, then 60, then 120, and then to no hold at all.</dd>
 
     <dt><dfn>call</dfn></dt>
-    <dd>One transmission the server recorded: when it happened, how long it lasted, the talkgroup it was heard on, and
-      the audio itself.</dd>
+    <dd>A single transmission the server recorded: when it happened, how long it lasted, the talkgroup it was heard
+      on, and the audio itself.</dd>
 
     <dt><dfn>delay</dfn></dt>
-    <dd>A deployment holding a call's audio back for whole minutes from the moment the call happened. A held call
+    <dd>A deployment that holds a call's audio back for whole minutes from the moment the call happened. A held call
       arrives carrying the flag <code>DELAYED</code>, and until it arrives no search can find it.</dd>
 
     <dt><dfn>group</dfn></dt>
@@ -3920,7 +3920,7 @@ footer.site .signoff {
       not the same thing as a tag.</dd>
 
     <dt><dfn>hold</dfn></dt>
-    <dd>What <code>HOLD SYS</code> and <code>HOLD TG</code> take: the selection narrowed to the system, or the
+    <dd>What <code>HOLD SYS</code> and <code>HOLD TG</code> take: the selection narrowed to the system, or to the
       talkgroup, of the call in front of you. A second press puts the selection back exactly as it was, unless
       something in the selection panel has been pressed since.</dd>
 
@@ -3930,31 +3930,31 @@ footer.site .signoff {
 
     <dt><dfn>link reading</dfn></dt>
     <dd>The guide's name for the place in the row above the display that says whether the page is joined to the server.
-      It reads <code>NO LINK</code> while it is not.</dd>
+      While it is not, it reads <code>NO LINK</code>.</dd>
 
     <dt><dfn>patch</dfn></dt>
     <dd>A call that was moved onto a talkgroup other than the one it was heard on. The screen marks it
       <code>PATCH</code> when it reaches you that way and you are choosing the talkgroup it landed on.</dd>
 
     <dt><dfn>playback</dfn></dt>
-    <dd>A recording the page plays out of the archive rather than out of the live feed. While one is running the
+    <dd>A recording the page plays out of the archive rather than out of the live feed. While one is running, the
       <code>LIVE FEED</code> control carries its third state, and one press of it ends the playback and leaves the
       feed off.</dd>
 
     <dt><dfn>queue</dfn></dt>
-    <dd>The calls the server has for the page to play, printed on the screen as <code>Q:</code> and a number. Changing
-      your selection takes calls out of it.</dd>
+    <dd>The calls the server has lined up for the page to play, printed on the screen as <code>Q:</code> and a number.
+      Changing your selection takes calls out of it.</dd>
 
     <dt><dfn>retention</dfn></dt>
     <dd>How long the server keeps the calls it has recorded. A pass on an hourly schedule removes what has outlived
-      it, and nothing a listener does brings a removed call back.</dd>
+      that period, and nothing a listener does brings a removed call back.</dd>
 
     <dt><dfn>selection</dfn></dt>
     <dd>What the panel opened by <code>SELECT TG</code> says you are willing to hear: the systems and talkgroups the
       page will play for you. It is not a volume, and it is not a filter on what the server recorded.</dd>
 
     <dt><dfn>site</dfn></dt>
-    <dd>A physical location of a system that has more than one, the application's own word for it. Two calls heard on
+    <dd>A physical location of a system that has more than one — the application's own word for it. Two calls heard on
       different sites of the same system are not the same call heard twice.</dd>
 
     <dt><dfn>system</dfn></dt>
@@ -3962,15 +3962,15 @@ footer.site .signoff {
       and a talkgroup's colour can come from it.</dd>
 
     <dt><dfn>tag</dfn></dt>
-    <dd>A label the operator puts on a talkgroup. The display carries it in the row beside the system and the type, and
-      a search can ask with it.</dd>
+    <dd>A label the operator puts on a talkgroup. The display carries it in the row beside the system and the type,
+      and a search can ask with it.</dd>
 
     <dt><dfn>talkgroup</dfn></dt>
-    <dd>The channel a call is heard on, and the thing a listener is choosing when they choose what to hear. The display
-      names it, and the call's colour comes from what it resolves to.</dd>
+    <dd>The channel a call is heard on, and the thing a listener chooses when choosing what to hear. The display names
+      it, and the call's colour comes from what it resolves to.</dd>
 
     <dt><dfn>type</dfn></dt>
-    <dd>The word a deployment's configuration carries for a system or a talkgroup to say what kind of thing it is. The
+    <dd>The word a deployment's configuration carries for a system or a talkgroup, saying what kind of thing it is. The
       display writes it in capitals in the row it shares with the system and the tag, and a system or talkgroup typed
       provoice has its number rewritten into another form on the screen, so the number a listener reads need not match
       the number in the configuration.</dd>
@@ -3987,10 +3987,10 @@ footer.site .signoff {
   <h3>Where the licence position is written</h3>
 
   <p>
-    This guide states no licence position of its own. It documents the screen a listener uses, and the terms the project
-    ships under belong where the whole project is described: the reference appendices of the operator's guide carry
-    them, beside the licence. A reader who wants to know what they may do with the software, or who is asking on behalf
-    of a deployment they run, asks the operator, who holds the copy and the terms that come with it.
+    This guide states no licence position of its own. It documents the screen a listener uses, and the terms the
+    project ships under belong where the whole project is described: the reference appendices of the operator's guide
+    carry them, beside the licence text. A reader who wants to know what they may do with the software, or who is
+    asking on behalf of a deployment they run, asks the operator, who holds the copy and the terms that come with it.
   </p>
 </section>
 
