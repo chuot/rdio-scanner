@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -196,6 +197,125 @@ func TestSchemaForAnUnknownDialectIsTheLegacyFailure(t *testing.T) {
 
 	if err.Error() != "no database schema" {
 		t.Errorf("error = %v, want the legacy wording", err)
+	}
+}
+
+// schemaClassOf folds away only the spellings one backend uses for the same
+// storage: sqlite has no boolean type and spells it integer(1), PostgreSQL
+// spells binary as bytea and fractional as float, and a type width suffix
+// changes nothing about what the column holds. What it keeps apart is the
+// class a bound Go value has to land in: a text column where every other
+// backend has a numeric one is not a spelling, it is a column that cannot
+// hold the value the Go side binds to it.
+func schemaClassOf(declaredType string) string {
+	declaredType = strings.ToLower(declaredType)
+
+	if declaredType == "integer(1)" {
+		return "boolean"
+	}
+
+	if i := strings.IndexByte(declaredType, '('); i >= 0 {
+		declaredType = declaredType[:i]
+	}
+
+	switch declaredType {
+	case "boolean", "bool":
+		return "boolean"
+
+	case "integer", "int", "bigint", "smallint", "mediumint", "bigserial", "serial":
+		return "numeric"
+
+	case "real", "float", "double", "numeric", "decimal":
+		return "fractional"
+
+	case "text", "varchar", "char", "character":
+		return "text"
+
+	case "blob", "bytea", "longblob", "mediumblob", "tinyblob", "varbinary":
+		return "binary"
+
+	case "datetime", "timestamp", "date":
+		return "temporal"
+
+	default:
+		return "? " + declaredType
+	}
+}
+
+// Guards the divergence the table-coverage check cannot see: the same column
+// declared in a different type class for one backend. The server works on the
+// backends that spell the column right and fails at bind time on the one that
+// does not, because the domain binds one Go type to the column and every
+// backend has to be able to hold it: a unit range is a pair of numbers bound
+// as uint values, and a text column refuses them.
+func TestEveryDialectSchemaStoresEverySharedColumnInOneTypeClass(t *testing.T) {
+	// Column names are compared case-insensitively because the legacy server
+	// spelled some of them inconsistently and every backend resolves column
+	// names without regard to case.
+	table := regexp.MustCompile(`(?is)CREATE TABLE IF NOT EXISTS "([A-Za-z]+)"\s*\((.*?)\n\s*\);`)
+	column := regexp.MustCompile(`(?is)^\s*"([A-Za-z]+)"\s+([A-Za-z]+(?:\([0-9]+\))?)`)
+	constraint := regexp.MustCompile(`(?i)^\s*(CONSTRAINT|PRIMARY KEY|UNIQUE|FOREIGN KEY|CHECK)\b`)
+
+	classesOf := func(schema []string) map[string]string {
+		classes := map[string]string{}
+
+		for _, statement := range schema {
+			if !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(statement)), "CREATE TABLE") {
+				continue
+			}
+
+			match := table.FindStringSubmatch(statement)
+			if match == nil {
+				t.Fatalf("a CREATE TABLE statement this check cannot read: %.80s", statement)
+			}
+
+			for _, line := range strings.Split(match[2], "\n") {
+				line = strings.TrimSpace(line)
+
+				if line == "" || constraint.MatchString(line) {
+					continue
+				}
+
+				declared := column.FindStringSubmatch(line)
+				if declared == nil {
+					t.Fatalf("a column definition this check cannot read in %s: %q", match[1], line)
+				}
+
+				classes[strings.ToLower(match[1])+"."+strings.ToLower(declared[1])] = schemaClassOf(declared[2])
+			}
+		}
+
+		return classes
+	}
+
+	sqliteClasses := classesOf(sqliteSchema)
+
+	compareTo := map[Dialect]map[string]string{
+		DialectMariadb:    classesOf(mysqlSchema),
+		DialectMysql:      classesOf(mysqlSchema),
+		DialectPostgresql: classesOf(postgresSchema),
+	}
+
+	names := make([]string, 0, len(sqliteClasses))
+	for name := range sqliteClasses {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		for _, dialect := range []Dialect{DialectMariadb, DialectMysql, DialectPostgresql} {
+			other, shared := compareTo[dialect][name]
+			if !shared {
+				t.Errorf("%s declares no column %s that the sqlite schema declares", dialect, name)
+
+				continue
+			}
+
+			if other != sqliteClasses[name] {
+				t.Errorf("%s stores column %s as %s while sqlite stores it as %s: the domain binds one Go type to it and every backend must hold it",
+					dialect, name, other, sqliteClasses[name])
+			}
+		}
 	}
 }
 
