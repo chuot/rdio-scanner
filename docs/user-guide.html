@@ -988,10 +988,10 @@ footer.site .signoff {
   <h2 id="ch-03-listening-to-live-calls">3 · Listening to live calls</h2>
 
   <p class="lead">
-    Listening is what the application does once you start it. The server sends the calls its recorder is
-    capturing, the display lights for the one now playing, and the controls decide what you are offered next. One
-    press on <code>LIVE FEED</code> is what sets the listening going: the page opens with the feed off, and it
-    stays off until you press, even when your selection is already saved and the server is already recording.
+    The page opens ready to listen, but it waits for you. The server may already be recording and your selection
+    may already be saved, and the feed still stays off until you press <code>LIVE FEED</code>. This chapter works
+    through the control bar one control at a time and says exactly what each press does to the display, the
+    queue, and what you hear next.
   </p>
 
   <figure data-shot="main-live">
@@ -1003,11 +1003,11 @@ footer.site .signoff {
 
   <p>
     <code>LIVE FEED</code> decides whether the application is offering you anything at all. Like the other
-    controls that carry a state, it has a small light in the upper right corner of its face. That light is present
-    in every state and its shape never changes, so the state is told by its colour alone: red for off, green for live,
-    yellow for a search holding the feed. Nothing else on the control says which state it is in, and the chapter on
+    controls with a state, it carries a small light in the upper right corner of its face. That light is there in
+    every state and keeps the same shape, so its colour is the whole of the signal: red for off, green for live,
+    yellow while a search holds the feed. Nothing else on the button says which state it is in, and the chapter on
     keyboards and screen readers gives the measured figures for those colours and says what a reader who cannot
-    tell them apart has to work from.
+    tell them apart has left to work from.
   </p>
 
   <table>
@@ -1048,52 +1048,52 @@ footer.site .signoff {
   </table>
 
   <p>
-    A press moves between those states, but not in the order the states are arranged in. From off, a press starts
-    the live feed. From live, a press stops it. From the state a search leaves the feed in, a press ends that
-    playback and leaves the feed off, and a second press is needed before live calls come back. That second press
-    is the thing a listener reaches for and does not find, and it is the first symptom the chapter about things not
+    A press moves between those states, but not in the order the states sit in. From off, a press starts the live
+    feed. From live, a press stops it. From the state a search leaves the feed in, a press ends that playback and
+    leaves the feed off, and you have to press once more before live calls come back. That second press is the
+    thing a listener reaches for and does not find, and it is the first symptom the chapter about things not
     working takes up. Pressing <code>SEARCH CALL</code> again while that panel is already open does nothing to a
-    searched playback, and neither does closing it: the searched calls go on playing with the panel shut. What ends a
-    searched playback from inside the panel is a change to one of its filters, or a press on its <code>Reset</code>,
-    and the chapter on searching recorded calls gives both.
+    searched playback, and neither does closing the panel: the searched calls keep playing with the panel shut.
+    What ends a searched playback from inside the panel is a change to one of its filters, or a press on its
+    <code>Reset</code>, and the chapter on searching recorded calls gives both.
   </p>
 
   <h3>Queue and listener counts</h3>
 
   <p>
-    <code>Q:</code> is the number of calls waiting to be played. It does not count the call you are hearing,
-    because a call leaves the waiting list when its tone is taken up, before its recording begins: while one call
-    is playing and nothing else is queued, the reading is zero. A skip takes one out of the list, so the number
-    falls as you work through what is waiting rather than climbing. The reading is taken from what is waiting at
-    the moment the page paints it, and only a recording waits on an alert tone, never the queue, which is why a
-    call that arrives while a tone is still sounding is already counted. When a search is holding the feed, the
-    same reading names the searched calls that will play, including the one playing now.
+    <code>Q:</code> counts the calls waiting to be played. It does not count the call you are hearing: a call
+    leaves the waiting list when its tone is taken up, before its recording begins, so while one call plays and
+    nothing else is queued the reading is zero. A skip takes one out of the list, so the number falls as you work
+    through what is waiting instead of climbing. The reading comes from what is waiting at the moment the page
+    paints it, and an alert tone never sits in the queue by itself — only a recording does — which is why a call
+    that arrives while a tone is still sounding is already counted. When a search holds the feed, the same reading
+    counts the searched calls still to play, including the one playing now.
   </p>
 
   <p>
-    <code>L:</code> is the number of other listeners the server can see. It appears only when the operator has
-    chosen to show it, and when the operator has not, nothing is printed in that place at all. It is a number
-    about the deployment, not about you: it says how many other pages are joined to the server, and it is the
-    first thing to mention when a deployment is failing to feed people. Where it reads <code>NO LINK</code>
-    instead, the page has not joined the server, and the chapter about things not working starts there.
+    <code>L:</code> counts the other listeners the server can see. It is a number about the deployment, not about
+    you: it says how many other pages are joined to the server, and it is the first thing to mention when a
+    deployment is failing to feed people. The operator decides whether it shows at all, and when the operator has
+    not, nothing is printed in that place. Where it reads <code>NO LINK</code> instead, the page has not joined
+    the server, and the chapter about things not working starts there.
   </p>
 
   <h3>Alert tones</h3>
 
   <p>
     An alert tone is a short sound that plays in front of a live call's recording, never over it. Four levels can
-    carry a tone, and the application consults them in order: the groups the talkgroup belongs to, then the
-    talkgroup's tag, then the system, then the talkgroup itself. The first of those that carries a tone name is
-    the one used, and the rest are not consulted.
+    carry a tone, and the application consults them in a fixed order: the groups the talkgroup belongs to, then
+    the talkgroup's tag, then the system, then the talkgroup itself. The first level that carries a tone name is
+    the one used, and the levels after it are not consulted at all.
   </p>
 
   <p>
-    The name refers to a tone in a table the server sends with the deployment's configuration. Nine are built in,
-    named <code>alert1</code> through <code>alert9</code>, and each is a sequence of short tones with its own
+    That name refers to a tone in a table the server sends with the deployment's configuration. Nine are built
+    in, named <code>alert1</code> through <code>alert9</code>, and each is a sequence of short tones with its own
     shape: <code>alert1</code> is three quick high beeps, <code>alert5</code> is one long hold,
     <code>alert8</code> is three short low clicks. The operator assigns a name to a group, a tag, a system, or a
-    talkgroup. A name the table does not carry, or an entry that is not a sequence, means the call begins with no
-    tone in front of it, and that is worth knowing when a deployment has been configured by hand.
+    talkgroup. If the table does not carry the name, or the entry is not a sequence, the call begins with no tone
+    in front of it — worth knowing when a deployment has been configured by hand.
   </p>
 
   <p>
@@ -1104,18 +1104,18 @@ footer.site .signoff {
   </p>
 
   <p>
-    A tone opens a window, and what happens inside it matters. While the tone is playing the recording has not
-    started, and a call that is skipped, stopped, or taken out of your selection before its tone ends never starts
-    its recording at all: the tone is the only part of that call you hear.
+    A tone opens a window, and what happens inside the window matters. While the tone is playing, the recording
+    has not started, so a call that is skipped, stopped, or taken out of your selection before its tone ends
+    never starts its recording at all: the tone is the only part of that call you hear.
   </p>
 
   <h3>LED colour</h3>
 
   <p>
-    The same four levels are consulted for colour, in the same order, and the first one carrying a colour wins.
-    The colour is used for the LED beside the branding line; the rows of the display keep the display's
-    own colour, so a call is not written out in the colour its talkgroup carries. The eight colours the
-    application knows are <code>blue</code>, <code>cyan</code>, <code>green</code>, <code>magenta</code>,
+    The same four levels are consulted for colour, in the same order, and again the first one carrying a colour
+    wins. That colour paints the LED beside the branding line; the rows of the display keep the display's own
+    colour, so a call is never written out in the colour its talkgroup carries. The application knows eight
+    colours: <code>blue</code>, <code>cyan</code>, <code>green</code>, <code>magenta</code>,
     <code>orange</code>, <code>red</code>, <code>white</code>, and <code>yellow</code>. When none of the four
     levels carries a colour, the light takes <code>green</code>, which is why an unconfigured deployment and a
     deployment whose light is green for every call look the same from the listener's side.
@@ -1124,9 +1124,9 @@ footer.site .signoff {
   <aside class="note">
     <span class="label">Note: A colour you cannot rely on</span>
     <p>
-      The light's colour is the only thing that tells you which colour was resolved, and the measured contrast of
+      The light's colour is the only thing telling you which colour was resolved, and the measured contrast of
       some of those colours is not sufficient. If you tell calls apart by their light, read the chapter on
-      keyboards and screen readers, which gives the figures and says what the light carries besides colour.
+      keyboards and screen readers: it gives the figures and says what the light carries besides colour.
     </p>
   </aside>
 
@@ -1134,26 +1134,26 @@ footer.site .signoff {
 
   <p>
     <code>HOLD SYS</code> and <code>HOLD TG</code> narrow what you are hearing down to the call in front of you.
-    <code>HOLD SYS</code> keeps the system that call came from switched on and switches off every system other
-    than it; if the system you are hearing was switched off as a whole, it comes on. <code>HOLD TG</code> keeps
+    <code>HOLD SYS</code> keeps the system that call came from switched on and switches off every other system;
+    if the system you are hearing had been switched off as a whole, it comes back on. <code>HOLD TG</code> keeps
     only that one talkgroup and switches off everything else, including the rest of its own system. Both act on
     the call now playing, and when nothing is playing they act on the last call that played, which is how a hold
     is still useful a moment after a call has finished.
   </p>
 
   <p>
-    The application keeps what your selection was before the hold. Press the same control a second time and what
-    you had selected is put back as it was, which is the reason a hold is safe to try: it is reversible by the
-    same press. Press <code>HOLD SYS</code> while a talkgroup hold is standing and the talkgroup hold is released
-    first, then the system is held. Press either control when nothing has played yet and the press is refused with
-    the refusal tone, and nothing about your selection changes.
+    The application remembers what your selection was before the hold. Press the same control a second time and
+    your selection is put back exactly as it was, which is what makes a hold safe to try: the same press undoes
+    it. Press <code>HOLD SYS</code> while a talkgroup hold is standing and the talkgroup hold is released first,
+    then the system is held. Press either control when nothing has played yet and the press is refused with the
+    refusal tone, and nothing about your selection changes.
   </p>
 
   <p>
     A hold is not only a filter in your browser. Your selection is sent to the server, which stops sending what
-    the selection excludes, and calls that were already waiting and would not be accepted by the new selection
-    are dropped from the waiting list. When you put your selection back, the server starts sending the rest again;
-    what it does not do is give back the calls that arrived while the hold was standing.
+    the selection excludes, and calls already waiting that the new selection would not accept are dropped from
+    the waiting list. When you put your selection back, the server starts sending the rest again — what it does
+    not do is give back the calls that arrived while the hold was standing.
   </p>
 
   <h3>Replay last</h3>
@@ -1172,10 +1172,10 @@ footer.site .signoff {
   <p>
     <code>SKIP NEXT</code> stops the recording that is playing and moves on to the next call in the waiting list.
     It does not clear the list, and it does not silence the deployment: what is coming is still coming. Pressed
-    when nothing is waiting it still answers with the activation tone, which can read as a promise the page cannot
-    keep. When a search is holding the feed, the same control advances the walk through the searched calls; the
-    short gap that sits between one searched call and the next belongs to the walk itself, and the chapter about
-    searching recorded calls gives it.
+    when nothing is waiting, it still answers with the activation tone, which can sound like a promise the page
+    cannot keep. When a search holds the feed, the same control advances the walk through the searched calls, and
+    the short gap between one searched call and the next belongs to the walk itself — the chapter about searching
+    recorded calls gives it.
   </p>
 
   <h3>Avoid windows</h3>
@@ -1219,17 +1219,17 @@ footer.site .signoff {
   </table>
 
   <p>
-    A timed window closes itself when it runs out; you do not have to remember to press anything, and the talkgroup
-    is hearing again on its own. While a window is standing, the display shows the hourglass mark with the minutes
-    that window is held for beside it, and the select panel marks that talkgroup with the same timed reading — which
-    is how you find out that a talkgroup is being held off when it is not the call in front of you. The chapter about
-    choosing what to hear gives that mark, and it also gives the one thing that clears a window armed here: a
-    plain press on that talkgroup in the select panel.
+    A timed window closes itself when it runs out: you do not have to remember to press anything, and the
+    talkgroup is open to you again on its own. While a window is standing, the display shows the hourglass mark
+    with the minutes that window is held for beside it, and the select panel marks that talkgroup with the same
+    timed reading — which is how you find out that a talkgroup is being held off when it is not the call in front
+    of you. The chapter about choosing what to hear gives that mark, and it also gives the one thing that clears
+    a window armed here: a plain press on that talkgroup in the select panel.
   </p>
 
   <p>
-    <code>AVOID</code> needs a call to act on. Pressed when nothing has played yet it is refused with the refusal
-    tone, and the refusal leaves everything as it was.
+    <code>AVOID</code> needs a call to act on. Pressed when nothing has played yet, it is refused with the
+    refusal tone, and the refusal leaves everything as it was.
   </p>
 
   <h3>Pause</h3>
@@ -1247,11 +1247,10 @@ footer.site .signoff {
   </figure>
 
   <p>
-    <code>PAUSE</code> works whether the audio is a live call, a replayed call, or a searched one. Pressed when
-    nothing is playing it does nothing you can hear, and it leaves the control lit as though something were
-    paused; press it again to put the control back, and note that the LED does not take the paused
-    reading without a call to attach it to. If audio will not pause at all, or pauses and will not come back, that
-    is the chapter about things not working.
+    <code>PAUSE</code> works for live audio, replayed audio, and searched audio alike. Pressed while nothing plays,
+    it does nothing you can hear, and it leaves the control lit as though something were paused; press it again to
+    put the control back, and the LED does not take the paused reading without a call to attach it to. If audio will
+    not pause at all, or pauses and will not come back, that is the chapter about things not working.
   </p>
 
   <h3>The sound of a press</h3>
@@ -1291,10 +1290,9 @@ footer.site .signoff {
   <h3>The prompt when you try to leave</h3>
 
   <p>
-    While the application is offering you anything — live calls, or a queue a search made — it asks your browser
-    to confirm before you leave the page. The application does not draw a dialog of its own; it hands your browser
-    the words it wants used, and your browser shows its own warning, sometimes in its own wording. The words the
-    application supplies are <code>Live Feed is ON, do you really want to leave?</code>
+    The application draws no dialog of its own for this. It hands your browser the words it wants used, and your
+    browser shows its own warning, sometimes in its own wording. The words the application supplies are
+    <code>Live Feed is ON, do you really want to leave?</code>
   </p>
 
   <p>
@@ -1307,9 +1305,9 @@ footer.site .signoff {
   <h3>Why the display dims</h3>
 
   <p>
-    The display starts dimmed, and it is not a fault: it lights when a call arrives, and dims again five seconds
-    after that. A press on the controls that change what the display is showing lights it the same way — the feed,
-    the two holds, <code>REPLAY LAST</code>, <code>SKIP NEXT</code>, <code>PAUSE</code>, and
+    The display starts dimmed, and that is by design, not a fault: it lights when a call arrives, and dims again
+    five seconds after that. A press on any control that changes what the display is showing lights it the same
+    way — the feed, the two holds, <code>REPLAY LAST</code>, <code>SKIP NEXT</code>, <code>PAUSE</code>, and
     <code>AVOID</code> when there is a call to avoid. The two panel openers do not light it, and neither does a
     refused <code>AVOID</code>: pressing <code>SEARCH CALL</code> on a dimmed display leaves it dimmed.
   </p>
