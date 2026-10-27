@@ -2,8 +2,10 @@ package backend
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"rdio-scanner/internal/application/fakes"
 	"rdio-scanner/internal/domain"
@@ -63,4 +65,62 @@ func TestAGrantOfAccessRacesTheListenerReportsOfTheSameSession(t *testing.T) {
 	grants.Wait()
 
 	f.hub.Close(context.Background())
+}
+
+// TestTheHubClosesAListenerStillStalledAtTheShutdownDeadline: the server's
+// shutdown hands the hub one deadline and expects the hub to have released
+// every connection by then, closing the ones still open at the deadline the
+// way the composition root's note promises. Hub.Close takes that context and
+// never reads it: it only waits for each session's writer goroutine to come
+// back on its own, and a writer stalled in a socket write comes back only
+// when its own per-frame write patience runs out, ten seconds in production.
+// So one listener that stopped reading keeps the whole shutdown waiting a
+// frame's patience past the deadline that was supposed to bound it. This
+// test shrinks that patience to five seconds, stalls one registered listener
+// by filling its send queue without reading, and gives the close half a
+// second: the close comes back roughly a full patience late, and until it
+// enforces its own deadline by closing what it is waiting on, this test
+// stays red.
+func TestTheHubClosesAListenerStillStalledAtTheShutdownDeadline(t *testing.T) {
+	f := newBareFixture(t, openSettings)
+
+	// The stalled writer gives up on a frame after the hub's write patience.
+	// Five seconds is far enough past this close's half-second deadline to
+	// show the overshoot, and far shorter than waiting out the production
+	// ten would make the test slow.
+	f.hub.writeWait = 5 * time.Second
+
+	id, _ := f.dial(t)
+	f.register(t, id)
+
+	f.hub.mutex.Lock()
+	session := f.hub.sessions[id]
+	f.hub.mutex.Unlock()
+
+	// Stop reading and fill the queue: the writer takes the first frame and
+	// blocks in the socket, and the goodbye the close wants to deliver has
+	// nowhere to go until the writer gives up on the frame it is holding.
+	big := strings.Repeat("x", 4*1024*1024)
+
+fill:
+	for {
+		select {
+		case session.send <- delivery{frame: Message{Command: CommandVersion, Payload: big}}:
+
+		default:
+			break fill
+		}
+	}
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+
+	f.hub.Close(ctx)
+
+	if elapsed := time.Since(deadline); elapsed > time.Second {
+		t.Errorf("hub.Close finished %s after its deadline, want the stalled connection "+
+			"closed at the deadline: %s past", elapsed.Round(time.Millisecond), elapsed.Round(time.Millisecond))
+	}
 }
