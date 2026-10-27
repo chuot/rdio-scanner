@@ -1502,9 +1502,9 @@ footer.site .signoff {
   <h2 id="ch-05-searching-archived-calls">5 · Searching recorded calls</h2>
 
   <p class="lead">
-    The search panel is the part of the listening screen that reaches backwards. <code>SEARCH CALL</code> at the
-    bottom left of the control bar opens it, and everything in it concerns calls the server has already recorded and
-    kept.
+    The search panel is the part of the listening screen that looks backwards. The <code>SEARCH CALL</code>
+    control at the bottom left of the control bar opens it, and everything inside it concerns calls the
+    server recorded earlier and has kept since.
   </p>
 
   <figure data-shot="search-list">
@@ -1515,21 +1515,21 @@ footer.site .signoff {
   <h3>Results and filters</h3>
 
   <p>
-    The panel is two blocks inside one scrolling area. The results come first: the table of calls, and under it a row
-    holding the switch that changes what a row's button does and the paginator that says which part of the answer you
-    are looking at. The filter form sits under that. The panel scrolls on its own, and at the window size the
-    pictures in this guide were taken at, the <code>Reset</code> button at the end of the form sits below what is
-    visible until you scroll the panel — which is what a listener's wheel is for, and what the key does in the
-    chapter on keyboards and screen readers.
+    One scrolling area holds two blocks. The results come first: the table of calls, and beneath it a row
+    carrying the switch that decides what a row's button does and the paginator that names the part of the
+    answer in front of you. The filter form sits below that. The panel scrolls by itself, and at the window
+    size this guide's pictures were taken at, the <code>Reset</code> button at the end of the form waits
+    below the visible area until you scroll the panel down — by wheel, or by the key the chapter on
+    keyboards and screen readers gives.
   </p>
 
   <h3>What a result row says</h3>
 
   <p>
-    The table has seven columns. The first carries no heading at all: it is the column of actions, and its buttons
-    are drawn as marks with names given to a screen reader rather than words your eye reads. The other six are
-    headed, and that nameless column is one of the things the chapter on keyboards and screen readers counts against
-    the application.
+    Seven columns make up the table. The first of them carries no heading at all: it is the column of
+    actions, and its buttons are drawn as marks whose names go to a screen reader rather than as words for
+    your eye. The other six carry headings, and that unheaded column is one of the things the chapter on
+    keyboards and screen readers holds against the application.
   </p>
 
   <table>
@@ -1578,34 +1578,34 @@ footer.site .signoff {
   </table>
 
   <p>
-    Ten calls are shown at a time, and a last page with fewer than ten on it is padded with rows that carry nothing,
-    so the table keeps its shape instead of shrinking. Those are blank cells with no action in them.
+    A page holds ten calls. A final page with fewer than ten gets rows that carry nothing, so the table
+    keeps its shape instead of shrinking, and those padded rows hold blank cells with no action to press.
   </p>
 
   <h3>The paginator's wording</h3>
 
   <p>
-    The paginator's wording is a single line: the number of the first call on this page, an en dash, the number of
-    the last one on it, then the word <q>of</q> and the whole number of calls the search found. A search that found
-    twenty-two calls reads <q>1 – 10 of 22</q> on its first page and <q>11 – 20 of 22</q> on its second, and the last
-    page clamps to <q>21 – 22 of 22</q> rather than naming calls that do not exist. A search with nothing to answer
-    leaves the table empty and the paginator reading 0 of 0.
+    One line is the paginator's whole wording: the number of the first call on this page, an en dash, the
+    number of the last, then <q>of</q> and the full number of calls the search found. Twenty-two calls read
+    <q>1 – 10 of 22</q> on page one and <q>11 – 20 of 22</q> on page two, and the last page settles at
+    <q>21 – 22 of 22</q> rather than naming calls that were never found. When the search turned up nothing,
+    the table stands empty and the paginator reads 0 of 0.
   </p>
 
   <p>
-    Four buttons move it, and their names are <code>First page</code>, <code>Previous page</code>,
-    <code>Next page</code>, and <code>Last page</code>, each an icon carrying a name a screen reader is given. The
-    two standing at the end you are already at are unavailable: at the first page the first and previous ones are,
-    and at the last page the next and last ones are. The paginator itself stays available during a search and during
-    a playback, which is worth saying plainly, because the page this guide replaces promised otherwise.
+    Four buttons move it, named <code>First page</code>, <code>Previous page</code>,
+    <code>Next page</code>, and <code>Last page</code>; each is an icon with a name handed to a screen
+    reader. The pair at the end you already stand on is unavailable — first and previous at the first page,
+    next and last at the last. The paginator itself stays available during a search and during a playback.
+    That is worth putting plainly, because the page this guide replaces promised otherwise.
   </p>
 
   <p>
-    Two page sizes are at work under it. The server answers a search with two hundred calls at a time, and the panel
-    shows ten at a time. Moving a page inside the two hundred already in hand asks the server for nothing and happens
-    at once; a move past them asks for the next two hundred. The panel says each move out loud as <q>Page 3</q>. A
-    page move made while an answer is on its way is not refused: the panel takes the move and draws the rows it
-    already holds.
+    Underneath, two page sizes are at work. The server answers a search two hundred calls at a time; the
+    panel displays ten at a time. A move within the two hundred already in hand asks the server for nothing
+    and lands at once; a move beyond them asks for the next two hundred. The panel says each move out loud
+    as <q>Page 3</q>. A move made while an answer is on its way is not refused either: the panel takes the
+    move and draws the rows it already has.
   </p>
 
   <figure data-shot="search-empty">
@@ -1616,8 +1616,9 @@ footer.site .signoff {
   <h3>The six filters</h3>
 
   <p>
-    There is no search button. The panel sends its search when it opens and again whenever anything in the form
-    changes, and the page says <code>Searching calls</code> as the search leaves. What the form holds:
+    There is no search button. The panel sends a search when the panel opens and again every time anything
+    in the form changes, and as the search leaves the page says <code>Searching calls</code>. Here is what
+    the form holds:
   </p>
 
   <table>
@@ -1665,11 +1666,12 @@ footer.site .signoff {
   </table>
 
   <p>
-    Those four criteria narrow one another. A group or a tag shortens the list of systems to the ones with
-    talkgroups in that group or carrying that tag, and a system shortens the talkgroup list to that system's
-    talkgroups, narrowed again by any group or tag already chosen. Before a system is chosen the talkgroup list holds
-    no talkgroups at all: its only entry is <code>All Talkgroups</code>. A choice that the others have made
-    impossible falls back to its <q>All</q> entry instead of being kept and quietly ignored.
+    Those four criteria narrow one another. Choosing a group or a tag shortens the list of systems to the
+    ones with talkgroups in that group or carrying that tag, and choosing a system shortens the talkgroup
+    list to that system's talkgroups, narrowed again by any group or tag already chosen. Until a system is
+    chosen, the talkgroup list holds no talkgroups: its one entry is <code>All Talkgroups</code>. If the
+    other criteria make a choice impossible, that criterion falls back to its <q>All</q> entry rather than
+    being kept and quietly ignored.
   </p>
 
   <figure data-shot="search-filters">
@@ -1678,73 +1680,75 @@ footer.site .signoff {
   </figure>
 
   <p>
-    A criterion the server cannot match is not an error, and it does not empty the list. It is read as no criterion
-    at all, and the answer comes back as though that filter had been left at its <q>All</q> entry.
+    A criterion the server cannot match is not treated as an error, and it does not empty the list. It is
+    read as no criterion at all, and the answer arrives as if that filter had been left at its <q>All</q>
+    entry.
   </p>
 
   <p>
-    Two of these did nothing in version 6.6.3. <code>System</code> and <code>Talkgroup</code> were read by the page
-    and never reached the server, so the answer came back unfiltered however you set them; that is the difference a
-    listener who upgraded will notice first, and the reason a search that seemed to be working in the older page was
-    not narrowing anything.
+    Two of the six did nothing in version 6.6.3. The page read <code>System</code> and
+    <code>Talkgroup</code> but never passed them to the server, so the answer came back unfiltered however
+    you set them. A listener who upgraded notices that first: a search that seemed to be narrowing things
+    down in the older page was not narrowing anything.
   </p>
 
   <h3>The date field</h3>
 
   <p>
-    The date field does not mean <q>this day</q>. The search takes twenty-four hours measured from the instant typed,
-    and which way those hours run depends on the sort order: with <code>Ascending</code> the window starts at the
-    instant and runs forward, with <code>Descending</code> it ends at the instant and reaches back. The seconds
-    typed are discarded, so the field is read at whole minutes.
+    The date field does not mean <q>this day</q>. The search spans twenty-four hours counted from the
+    instant you type, and the sort order decides which way those hours run: with <code>Ascending</code> the
+    window opens at the instant and moves forward, and with <code>Descending</code> it closes at the instant
+    and reaches backwards. Seconds are dropped when the field is read, so only whole minutes count.
   </p>
 
   <aside class="caution">
     <span class="label">Caution: The bounds of the date field</span>
     <p>
-      The panel bounds that field to the two ends the last answer named, which are the ends of the whole match rather
-      than of the page in front of you, so the calendar the field offers follows your last search. When the last
-      answer was empty the panel deliberately leaves the field unbounded: an empty answer names a span the archive
-      has nothing in, and a field held to that span reads like a search that asked for the wrong day. Pressing
-      <code>Reset</code> searches with no criteria and bounds the field to whatever the whole history spans.
+      The panel bounds that field to the two ends named by your last answer — the ends of the whole match,
+      not of the page in front of you — so the calendar the field offers tracks your most recent search.
+      When that answer was empty, the panel deliberately leaves the field unbounded: an empty answer names a
+      span the archive holds nothing in, and a field clamped to that span would read like a search that
+      asked for the wrong day. Pressing <code>Reset</code> searches with no criteria at all and bounds the
+      field to whatever the whole history spans.
     </p>
   </aside>
 
   <h3>While a search runs</h3>
 
   <p>
-    A search in flight holds the form. A progress bar runs along the panel and is marked as busy to a screen
-    reader, and the six criteria and <code>Reset</code> are all marked unavailable so that a change cannot start a
-    second search behind the first. They are marked rather than taken away, and they keep their place in the
-    keyboard's order, which is what lets a reader stay where they were when the answer lands. The paginator is not
-    among them: it stays available, and a move made during a search asks the server for nothing until it steps
-    outside the answer already in hand.
+    While a search is in flight, the form holds still. A progress bar runs along the panel and is marked as
+    busy to a screen reader, and the six criteria plus <code>Reset</code> are marked unavailable, so no
+    change can launch a second search behind the first. Marked, not removed: they keep their places in the
+    keyboard's order, which is what lets a reader still be standing there when the answer lands. The
+    paginator is not among them — it stays available, and a move during a search asks the server for
+    nothing until it steps outside the answer already in hand.
   </p>
 
   <p>
-    The count the search found is said once per answer, not once per redraw, and nothing is said before the first
-    answer arrives. Before it, the panel has no number to give.
+    The number of calls found is announced once per answer, not once per redraw, and nothing at all is
+    announced before the first answer. Until it lands, the panel has no number to give.
   </p>
 
   <h3>Download mode</h3>
 
   <p>
-    The switch under the results carries the name <code>Download mode</code>, and it decides what a row's button is
-    for. With it off, pressing a row plays that recording on the page. With it on, every row's button becomes
-    <code>Download</code> and the recording arrives as a file in your browser instead of playing. Switching it does
-    not search again: the rows you already hold are redrawn, so the page keeps its calls and only changes what
-    pressing one of them does.
+    Under the results sits a switch named <code>Download mode</code>, and it decides what a row's button is
+    for. Off, pressing a row plays that recording on the page. On, every row's button reads
+    <code>Download</code> and the recording arrives as a file in your browser instead of playing. Toggling
+    the switch does not search again — the rows you already hold are redrawn, so your calls stay put on the
+    page and only what a press does changes.
   </p>
 
   <p>
-    What the page plays and what <code>Download mode</code> saves is the deployment's own recording, and it is the
-    converted copy when the operator has audio conversion switched on: the audio you hear and the file you keep are
-    the same copy. <a href="#ch-12-reference">The reference chapter</a> names that setting and what it does to what
-    you hear.
+    Both what the page plays and what <code>Download mode</code> saves are the deployment's own recording:
+    it is the converted copy when the operator has audio conversion switched on, and the audio you hear and
+    the file you keep are the same copy. <a href="#ch-12-reference">The reference chapter</a> names that
+    setting and what it does to what you hear.
   </p>
 
   <p>
-    A recording on its way to you replaces that one row's button with <code>Loading</code>: a turning mark,
-    unavailable to press, and it appears on one row at a time.
+    While a recording is on its way to you, that one row's button is replaced by <code>Loading</code>: a
+    turning mark, unavailable to press, and it shows on one row at a time.
   </p>
 
   <figure data-shot="search-download">
@@ -1755,31 +1759,32 @@ footer.site .signoff {
   <h3>Playing a searched call</h3>
 
   <p>
-    Pressing a row's <code>Play</code> starts that recording. If the live feed is off, the panel is now in playback
-    mode, and the call you pressed is the beginning of a walk through the calls the search found: when one ends, the
-    next begins on its own, with the short gap the chapter on <a href="#ch-03-listening-to-live-calls">listening to
-    live calls</a> gives.
+    Pressing a row's <code>Play</code> starts that recording. If the live feed is off, the panel is now in
+    playback mode, and the call you pressed is the start of a walk through the calls the search found: when
+    one ends, the next starts on its own, after the short gap the chapter on
+    <a href="#ch-03-listening-to-live-calls">listening to live calls</a> describes.
   </p>
 
   <p>
-    The walk goes toward the newest call in the search's results whichever way the list is sorted, which means it
-    crosses from the page you pressed on into the pages the server has not sent yet and keeps going. When it runs out
-    of what it has in hand it asks for the next two hundred calls and continues; running out a second time ends the
-    walk and puts the feed back on live. There is no setting that makes a searched playback stop instead of going
-    live: the one the older deployment offered is gone.
+    The walk moves toward the newest call in the search's results no matter which way the list is sorted, so
+    it crosses from the page you pressed on into pages the server has not sent yet and keeps going. When it
+    runs out of what is in hand, it asks for the next two hundred calls and continues; running out a second
+    time ends the walk and puts the feed back on live. No setting makes a searched playback stop rather than
+    go live — the option the older deployment offered is gone.
   </p>
 
   <p>
-    In playback mode the count above the display means something else than it does while the feed is live. It counts
-    the searched calls still to play, and that count includes the call being heard now and the calls the server has
-    not sent yet, so it can be larger than the number of rows on the page in front of you.
+    During playback mode, the count above the display counts something different than while the feed is
+    live. It counts the searched calls still waiting to play — the call being heard included, and the calls
+    the server has not sent yet included — so it can be bigger than the number of rows on the page in front
+    of you.
   </p>
 
   <p>
-    Pressing <code>Play</code> on a row while the live feed is on does not switch the feed off: that recording plays,
-    the live calls keep arriving and joining the queue, and the panel stays in the state it was in. A paused feed
-    does not take the play action away from a row either — the rows keep their play actions while the feed is paused,
-    and the panel does not redraw itself when pause is pressed.
+    Pressing <code>Play</code> on a row while the live feed is on does not switch the feed off: that
+    recording plays, live calls keep arriving and joining the queue, and the panel stays in the state it was
+    in. A paused feed does not take the play action away from a row either — the rows keep their play
+    actions while the feed is paused, and pause does not redraw the panel.
   </p>
 
   <figure data-shot="search-playback">
@@ -1788,46 +1793,47 @@ footer.site .signoff {
   </figure>
 
   <p>
-    The row whose recording is playing carries <code>Stop</code> in place of its play action, and pressing it
-    silences the recording and leaves the walk stalled. It does not start the next searched call — the mark that
-    would have carried the recording into its follow-on step is taken down first, deliberately — and it does not
-    leave playback mode either. The walk picks up again when <code>SKIP NEXT</code> is pressed, or when another row's
-    play action is pressed, and from there it continues from wherever that left it.
+    The row whose recording is playing shows <code>Stop</code> where its play action was. Pressing it
+    silences the recording and leaves the walk stalled where it stands. It does not start the next searched
+    call — the mark that would have carried the recording into its follow-on step is taken down first, on
+    purpose — and it does not leave playback mode. The walk picks up again when <code>SKIP NEXT</code> is
+    pressed, or when another row's play action is pressed, and continues from wherever that left it.
   </p>
 
   <h3>Stopping a searched playback</h3>
 
   <p>
-    Changing any criterion in the form, or pressing <code>Reset</code>, ends it: the panel stops the playback, puts
-    itself back on the first page, and searches again. Pressing <code>SEARCH CALL</code> while the panel is already
-    open does nothing to a searched playback, and neither does closing the panel with its
-    <code>Close search panel</code> control — the searched calls go on playing with the panel shut, which is how a
-    listener can walk a list they are no longer looking at. The control bar's <code>LIVE FEED</code> ends it and
-    leaves the feed off, as the chapter on listening says, and one more press is needed after that before live calls
-    come back.
+    Changing any criterion in the form, or pressing <code>Reset</code>, ends the playback: the panel stops
+    what is playing, returns to the first page, and searches again. Pressing <code>SEARCH CALL</code> while
+    the panel is already open does nothing to a searched playback, and neither does closing the panel with
+    its <code>Close search panel</code> control — the searched calls keep playing with the panel shut,
+    which is how a listener walks a list they are no longer looking at. The control bar's
+    <code>LIVE FEED</code> ends it and leaves the feed off, as the chapter on listening says, and a further
+    press is needed after that before live calls return.
   </p>
 
   <h3>How far back a search can reach</h3>
 
   <p>
-    A search can only find what the server has kept. The operator's retention setting removes calls older than the
-    span it names, on a pass that runs every hour, and a call that pass has taken is not findable by any route the
-    application offers. A deployment that holds a call's audio back — a delay set on a system or a talkgroup, counted
-    from the moment the call happened — keeps that call out of a search until its hold has run out, and when it does
-    arrive it arrives flagged <code>DELAYED</code>, which is the flag the display's flag row carries; chapter 6 gives
-    that row.
+    A search finds only what the server has kept. The operator's retention setting removes calls older than
+    the span it names, on a pass that runs every hour, and a call that pass has taken is not findable by any
+    route the application offers. A deployment that holds a call's audio back — a delay set on a system or
+    a talkgroup, counted from the moment the call happened — keeps that call out of search results until the
+    hold runs out, and when it finally arrives it arrives flagged <code>DELAYED</code>, the same flag the
+    display's flag row carries; chapter 6 gives that row.
   </p>
 
   <aside class="caution">
     <span class="label">Caution: Four things a listener who upgraded may already believe</span>
     <p>
-      The page this guide replaces described four things about this panel that the application has never done, and a
-      reader arriving from it has them in mind. The paginator was described as taken away during a searched playback
-      and during a search: it is taken away in neither. A row's stop action was described as leaving a searched
-      playback behind: it silences the recording and leaves the walk where it was. A row's play action was described
-      as unavailable when the feed is paused: the rows keep it. And the paginator was described as moving along with
-      the walk so that the table always held the call being heard: it never moves on its own, and a listener who
-      wants the row in front of them presses a page themselves.
+      The page this guide replaces described four things about this panel that the application has never
+      done, and a reader arriving from it carries them along. It said the paginator was taken away during a
+      search and during a searched playback: it is taken away in neither. It said a row's stop action left
+      a searched playback behind: it silences one recording and leaves the walk standing where it was. It
+      said a row's play action was not there while the feed is paused: the rows keep it. And it said the
+      paginator moved along with the walk so the table always held the call being heard: the panel never
+      moves the page on its own, and a listener who wants that row in front of them presses a page button
+      themselves.
     </p>
   </aside>
 </section>
