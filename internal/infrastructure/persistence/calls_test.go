@@ -1296,6 +1296,47 @@ func resultIDs(page ports.CallSearchPage) []uint64 {
 	return ids
 }
 
+// The history page decode reads the stored call identifier into a 64-bit signed value
+// and casts it into the unsigned summary identity, while the search count beside it is
+// clamped. A legacy upgrade carries the uploaded call's own numbering straight into
+// "callId", so a stored negative identifier reaches the operator as the wrapped
+// identity, and a call the history page hands out cannot be opened by it. Every
+// summary the history hands out has to name a call the same reader can open, whatever
+// the stored row's identity turns out to be.
+func TestStoredNegativeCallIdSearchResultsReportTheStoredRow(t *testing.T) {
+	fixture := newCallsFixture(t)
+
+	saved := fixture.storeCall(t, 10001, 1514000, callHistoryTime())
+
+	// The stored call has no child rows, and every child foreign key into
+	// "calls"."callId" cascades updates, so its own primary key can be rewritten to
+	// the negative value a legacy call numbering leaves behind, the way the
+	// upgrade's INSERT writes the uploaded identifier in.
+	if _, err := fixture.db.Exec(`UPDATE "calls" SET "callId" = -7 WHERE "callId" = ?`, saved.ID); err != nil {
+		t.Fatalf("storing a legacy call identifier: %v", err)
+	}
+
+	page := fixture.search(t, ports.CallSearch{SystemRef: 10001, TalkgroupRef: 1514000, Limit: 10})
+
+	// The search still finds the row: only the identity handed out for it is wrong.
+	if page.Count != 1 || len(page.Results) != 1 {
+		t.Fatalf("the search found %d of %d calls, want the one stored call", len(page.Results), page.Count)
+	}
+
+	summary := page.Results[0]
+
+	call, err := fixture.calls.GetCall(context.Background(), summary.ID)
+	if err != nil {
+		t.Errorf("the call the history page handed out, identity %d, cannot be opened: %v", summary.ID, err)
+
+		return
+	}
+
+	if call.Talkgroup.TalkgroupRef != 1514000 {
+		t.Errorf("opening identity %d found a call on talkgroup %d, want the stored call", summary.ID, call.Talkgroup.TalkgroupRef)
+	}
+}
+
 func candidateIDs(candidates []domain.Call) []uint64 {
 	ids := []uint64{}
 
