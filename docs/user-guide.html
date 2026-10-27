@@ -463,17 +463,17 @@ footer.site .signoff {
   <h2 id="ch-01-overview">1 · The scanner webapp, and this guide</h2>
 
   <p class="lead">
-    Rdio Scanner is a server that collects the recordings a software-defined radio recorder writes, works out
-    which system, site, talkgroup, and unit each recording came from, keeps them, and hands them to the people
-    who listen. This guide is about the part you listen with: the page the server serves at its own root
+    Rdio Scanner is the server that gathers the recordings a software-defined radio recorder writes, identifies
+    the system, site, talkgroup, and unit behind each recording, keeps the recordings, and hands them to the
+    people who listen. This guide covers the part you listen with: the page the server serves at its own root
     address, where calls arrive as they happen, where you choose what you want to hear, and where you search the
     calls the server has already kept.
   </p>
 
   <p>
-    It is one page, it needs nothing installed, and it is kept in your browser — so it opens even when the server
-    cannot be reached. What it can show you with no server is a chapter of its own, and so is what happens on a
-    phone or a tablet.
+    The page needs nothing installed and stays in your browser, so it opens even when the server cannot be
+    reached. What it can show you with no server at all is a chapter of its own, and so is what it feels like on
+    a phone or a tablet.
   </p>
 
   <aside class="note">
@@ -484,46 +484,44 @@ footer.site .signoff {
       <span class="syllables">RAY-dee-oh SCAN-er</span>
     </p>
     <p>
-      The name is written <em>Rdio</em> and spoken <em>Raydio</em>. The written name is the one on the screen and
-      in this guide; the spoken name is the one to use when you have to ask an operator about a call, because
-      saying it out loud is enough for them to know which product you mean.
+      The written form <em>Rdio</em> is what the screen and this guide show. Say the name out loud as
+      <em>Raydio</em> when you ask an operator about a call, and they will know at once which product you mean.
     </p>
   </aside>
 
   <h3>Who this guide is for</h3>
 
   <p>
-    It is written for the person who listens, and for the operator who hands it to them. Everything in it is
-    written from the listening side of the deployment: what a control does when you press it, what the screen says
-    when something has gone wrong, and what you can and cannot settle yourself. Nothing in it asks you to
-    configure a server, and nothing in it assumes you can. Where a thing can only be settled by the operator who
-    runs the server, the guide says so and says what to tell them.
+    It is written for the listener, and for the operator who hands over the address. Every chapter speaks from the
+    listening side of a deployment: what a control does when you press it, what the screen shows when something
+    has gone wrong, and what you can put right yourself. No chapter asks you to configure the server, and none
+    assumes you can. When only the operator can settle a thing, the guide says so, and says what to tell them.
   </p>
 
   <p>
-    What this guide does not cover is the server itself: installing it, meeting its requirements, configuring what
-    it records and how long it keeps it, driving its administration interface, and driving its APIs. The administration
-    interface lives at a separate address of the same server — the operator's own screens, which the server names
-    <code>/admin</code> when it starts — and the administrator guide, published beside this one, covers all of it.
+    What this guide does not cover is the server behind the page: installing it, meeting its requirements,
+    choosing what it records and how long it keeps it, and driving its APIs. The administration interface — the
+    operator's own screens — sits at a separate address of the same server, which the server names
+    <code>/admin</code> when it starts; the administrator guide, published beside this one, covers all of that.
     Where a listener needs the operator's guide, this guide names it in words rather than as a file, because the
-    copy you are reading may be all you have.
+    copy you are reading may be the only copy you have.
   </p>
 
   <p>
-    The native applications for Android and Apple are named here and not described. The listening application
-    offers them on a small screen, which is described in the chapter about phones and tablets; the applications
-    in the stores have their own screens, their own settings, and their own maintainers, and this guide documents
-    none of them and links to no store.
+    The native applications for Android and Apple are named in this guide and never described. The webapp offers
+    them to a small screen, and that offer is described in the chapter about phones and tablets; the applications
+    you install from a store have their own screens, their own settings, and their own maintainers, and this
+    guide documents none of them and links to no store.
   </p>
 
   <h3>What's new since version 6.6.3</h3>
 
   <p>
-    If you listened to version 6.6.3, the screens are the screens you knew: the same main screen, the same
-    controls, the same search. What changed is what those screens do — when a call reaches you, what you hear
-    before it starts, what a press answers with, how far back a search can reach. Version 7 was assembled and never
-    published, so everything it brought arrives together with version 8. Each row below names the change, what it
-    does to the way you listen, and the chapter of this guide that operates it.
+    If you listened to version 6.6.3, keep the map: the main screen, the controls, and the search are the ones
+    you knew. What changed under them is behavior — when a call reaches you, what you hear before it starts,
+    what a press answers with, how far back a search can reach. Version 7 was assembled and never published, so
+    everything it brought arrives together with version 8. Each row below names the change, says what it does to
+    the way you listen, and links to the chapter of this guide that operates it.
   </p>
 
   <table>
@@ -772,27 +770,28 @@ footer.site .signoff {
   <h3>What the update costs you</h3>
 
   <p>
-    The update is the operator's, not yours, and there is nothing for you to install. What it costs a listener is
-    small and worth knowing in advance, because it is the kind of thing that looks like a broken deployment on the
-    day it happens:
+    The update is the operator's job, not yours: there is nothing for you to install. What a listener feels is
+    small, and worth knowing in advance, because on the day it happens each piece looks like a broken deployment:
   </p>
 
   <ul>
     <li>
-      The operator's database is upgraded in place. It is the same database, with its recorded calls, at the same
-      address; it is not copied somewhere new.
+      The operator's database is upgraded in place. It stays the same database, at the same address, with its
+      recorded calls; nothing is copied somewhere new.
     </li>
-    <li>Every administration session that was open when the update ran ends. That is the operator's screens, not
-      your listening.</li>
+    <li>
+      Any administration session open when the update ran is ended. That is the operator's screens closing, not
+      your listening.
+    </li>
     <li>
       A stored access code is usually presented again by itself, because the newer application reads the copy the
-      older one left in your browser. When the screen opens straight to the unlock screen after an update, that copy
-      is not answering, and the code to type is the one the operator gave you.
+      older one left in your browser. If the screen opens straight to the unlock screen after an update, that
+      copy is not answering, and the code to type is the one the operator gave you.
     </li>
     <li>
-      A saved selection may need clearing. The selection the application kept in your browser can survive the
-      update in a shape the new application does not recognise, and <code>/reset</code>, which the chapter on
-      phones and tablets describes, puts it back to a starting point.
+      A saved selection may need clearing. The selection kept in your browser can survive the update in a shape
+      the new application does not recognise, and <code>/reset</code> — described in the chapter on phones and
+      tablets — puts it back to a starting point.
     </li>
   </ul>
 </section>
