@@ -1209,6 +1209,34 @@ func TestIngestCallReportsFailureWhenARepositoryFails(t *testing.T) {
 	}
 }
 
+// A read the ingest path depends on is one of the ways an ingest can end, and the record of
+// every one of them reaching the server's log view is what lets the upload endpoints answer
+// success whatever ingest says and lets a watcher delete the recording it handed over. A read
+// that failed is written like every other failure: what the server was trying to do, then the
+// failure's own text.
+func TestIngestCallReportsAConfigurationReadThatFailed(t *testing.T) {
+	fixture := newIngestFixture()
+
+	fixture.options.Err = errors.New("options.read: no such table: options")
+
+	call := validIngestCall()
+	call.Meta.SystemLabel = "Test System"
+	call.Meta.TalkgroupRef = 123
+
+	result, err := fixture.ingest(call)
+	if err == nil {
+		t.Fatalf("ingest returned %v, want the failure the repository reported", result)
+	}
+
+	if result.Outcome != IngestCallFailed {
+		t.Errorf("outcome = %q, want %q", result.Outcome, IngestCallFailed)
+	}
+
+	if !fixture.loggedAs(domain.LogSourceIngest, `the call could not be ingested: options.read: no such table: options`) {
+		t.Errorf("logs = %v, want what the server tried to do and the failure's own text after it", fixture.logMessages())
+	}
+}
+
 // The server stores one call at a time: the watchers run on their own goroutines and an upload
 // is answered on the connection that posted it, so the rule is held on purpose. Duplicate
 // detection and creating an unknown system once both depend on it; the rationale lives in the
