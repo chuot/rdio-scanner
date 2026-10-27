@@ -99,6 +99,41 @@ func TestAllTagsReportsTheLegacyFailureShapeWhenTheDatabaseCannotBeRead(t *testi
 	}
 }
 
+// The order column is signed and the list reads it into an unsigned field, so a
+// stored negative order reads as zero like the accesses list already clamps, and
+// never fails the whole tag read: one row with a negative order must not leave
+// the server without its tags.
+func TestStoredNegativeTagOrderReadsAsZero(t *testing.T) {
+	db := openLegacyDatabase(t)
+
+	const query = `INSERT INTO "tags" ("label", "order") VALUES ('legacy-row', -7)`
+
+	if _, err := db.Exec(query); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	list, err := NewTags(db, DialectSqlite).AllTags(context.Background())
+	if err != nil {
+		t.Fatalf("AllTags: %v", err)
+	}
+
+	var legacy domain.Tag
+
+	for _, tag := range list {
+		if tag.Label == "legacy-row" {
+			legacy = tag
+		}
+	}
+
+	if legacy.Label != "legacy-row" {
+		t.Fatal("the stored legacy-row tag did not read back at all")
+	}
+
+	if legacy.Order != 0 {
+		t.Errorf("the stored -7 read as order %d, want 0", legacy.Order)
+	}
+}
+
 // A successful save re-reads and caches the stored row.
 func TestSaveTagsStoresANewTagAndCachesTheStoredRow(t *testing.T) {
 	db := openSchemaDatabase(t)
