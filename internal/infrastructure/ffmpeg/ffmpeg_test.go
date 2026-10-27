@@ -647,3 +647,65 @@ func TestTheConverterReportsWhetherItsProgramRanItsProbe(t *testing.T) {
 		t.Error("Available() = true for a program that is not there, want false: no audio conversion will be performed")
 	}
 }
+
+// TestTheConverterReportsAProgramThatWentAwayAfterStartup: the probe that decides
+// whether this server has a converter runs once, at startup, against a program the
+// server wrote into a disposable folder. The operating system may take that folder
+// away while the server is running, and the server finds out by failing to run the
+// program: what it reports has to carry why nothing converted.
+func TestTheConverterReportsAProgramThatWentAwayAfterStartup(t *testing.T) {
+	path := aProgramIsGiven(t, filtersWithLoudnorm)
+
+	converter := NewAt(path)
+
+	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
+
+	if _, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil); err != nil {
+		t.Fatalf("the program this converter was given refused its first recording: %v", err)
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("the test cannot take the program away: %v", err)
+	}
+
+	_, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
+	if err == nil {
+		t.Fatal("a converter whose program went away mid-run reported nothing")
+	}
+
+	if reason := strings.TrimPrefix(err.Error(), "ffmpeg:"); strings.TrimSpace(reason) == "" {
+		t.Errorf("the failure report = %q, want the reason the program could not be run: it is the only thing that says why nothing converted", err.Error())
+	}
+}
+
+// TestAConverterWhoseProgramWentAwayStopsClaimingItHasOne: the status view answers
+// whether this deployment converts audio from the same startup probe. A program
+// taken away mid-run leaves every conversion failing while the status view keeps
+// saying the converter is there.
+func TestAConverterWhoseProgramWentAwayStopsClaimingItHasOne(t *testing.T) {
+	path := aProgramIsGiven(t, filtersWithLoudnorm)
+
+	converter := NewAt(path)
+
+	if !converter.Available() {
+		t.Fatal("Available() = false before the program was taken away: this test's program answers the filter probe")
+	}
+
+	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: recordedRecording(t)}
+
+	if _, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil); err != nil {
+		t.Fatalf("the program this converter was given refused its first recording: %v", err)
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("the test cannot take the program away: %v", err)
+	}
+
+	if _, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil); err == nil {
+		t.Fatal("a converter whose program went away mid-run reported nothing")
+	}
+
+	if converter.Available() {
+		t.Error("Available() = true after its program went away, want false: the status view describes the converter this server can run now")
+	}
+}
