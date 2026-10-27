@@ -1086,6 +1086,28 @@ func TestMigrateOptionsUnpacksTheV6OptionsBlobAndCopiesTheOtherRows(t *testing.T
 	}
 }
 
+// The v6 options blob stores audio conversion as the switch the owner set, and the v8
+// options table stores it as the mode the options reader selects with. An owner who
+// turned conversions off set that switch off, so a migrated deployment keeps reading the
+// off mode rather than falling back to the enabled default.
+func TestMigrateOptionsKeepsAnOwnerWhoTurnedAudioConversionsOff(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `UPDATE "rdioScannerConfigs" SET "val" = REPLACE("val", '"audioConversion":true', '"audioConversion":false') WHERE "key" = 'options'`)
+
+	migrateDatabase(t, db)
+
+	options, err := NewOptions(db, DialectSqlite).ReadOptions(context.Background())
+	if err != nil {
+		t.Fatalf("ReadOptions: %v", err)
+	}
+
+	if options.AudioConversion != domain.AudioConversionDisabled {
+		t.Errorf("AudioConversion = %d, want %d: this deployment's v6 options blob says conversions are off",
+			options.AudioConversion, domain.AudioConversionDisabled)
+	}
+}
+
 // The state a start that carried rows but could not drop their v6 tables
 // leaves behind: the v6 rows are still there, and so is the v8 table they
 // were already written into — where the next start refuses an identity it
