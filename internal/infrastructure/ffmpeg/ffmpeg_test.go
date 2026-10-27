@@ -424,6 +424,118 @@ func TestTheConverterReportsAFailingProgramShortAndQuiet(t *testing.T) {
 	}
 }
 
+// theTranscriptOfARefusedRecording is what a real ffmpeg says when it is handed
+// a body that is not audio: its own banner first, then the reason it refused.
+// Shortened where ffmpeg lists its build configuration and its libraries; the
+// banner alone is already more than the report's whole budget.
+const theTranscriptOfARefusedRecording = `ffmpeg version 8.0.1-3ubuntu2 Copyright (c) 2000-2025 the FFmpeg developers
+  built with gcc 15 (Ubuntu 15.2.0-13ubuntu3)
+  configuration: --prefix=/usr --extra-version=3ubuntu2 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-gnutls --enable-libaom --enable-libass --enable-libmp3lame --enable-libopus --enable-libspeex --enable-libvorbis --enable-libvpx --enable-libx264 --enable-libx265 --enable-shared
+  libavutil      60.  8.100 / 60.  8.100
+  libavcodec     62. 11.100 / 62. 11.100
+  libavformat    62.  3.100 / 62.  3.100
+  libavdevice    62.  1.100 / 62.  1.100
+  libavfilter    11.  4.100 / 11.  4.100
+  libswscale      9.  1.100 /  9.  1.100
+  libswresample   6.  1.100 /  6.  1.100
+[in#0 @ 0x587e61e98c80] Error opening input: Invalid data found when processing input
+Error opening input file -.
+Error opening input files: Invalid data found when processing input
+`
+
+// aProgramThatRefusesTheRecording writes a program that refuses every recording
+// the way a real ffmpeg does: it prints the given transcript on its standard
+// error and exits 1. The transcript travels through a file, so nothing about its
+// shape is flattened on the way to the converter.
+func aProgramThatRefusesTheRecording(t *testing.T, transcript string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+
+	path := filepath.Join(dir, "ffmpeg")
+	filtersFile := filepath.Join(dir, "filters")
+	transcriptFile := filepath.Join(dir, "transcript")
+
+	if err := os.WriteFile(filtersFile, []byte(filtersWithLoudnorm), 0644); err != nil {
+		t.Fatalf("the test cannot write the filter list it was given: %v", err)
+	}
+
+	if err := os.WriteFile(transcriptFile, []byte(transcript), 0644); err != nil {
+		t.Fatalf("the test cannot write the transcript it was given: %v", err)
+	}
+
+	script := "#!/bin/sh\n" +
+		"for arg in \"$@\"; do\n" +
+		"  if [ \"$arg\" = \"-filters\" ]; then\n" +
+		"    cat \"" + filtersFile + "\"\n" +
+		"    exit 0\n" +
+		"  fi\n" +
+		"done\n" +
+		"cat > /dev/null\n" +
+		"cat \"" + transcriptFile + "\" >&2\n" +
+		"exit 1\n"
+
+	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+		t.Fatalf("the test cannot write the program it was given: %v", err)
+	}
+
+	return path
+}
+
+// TestTheConverterReportsWhyTheProgramRefusedTheRecording: the reason a
+// recording was refused is what an administrator reads in order to fix the
+// recording tool that wrote it. A refusal spends its report on the program's
+// banner before it says anything, and the report is the length of that banner:
+// what reaches the log has to be the reason.
+func TestTheConverterReportsWhyTheProgramRefusedTheRecording(t *testing.T) {
+	converter := NewAt(aProgramThatRefusesTheRecording(t, theTranscriptOfARefusedRecording))
+
+	in := ports.AudioFile{Filename: "call.wav", Mime: "audio/wav", Data: []byte("this is not audio at all")}
+
+	_, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
+	if err == nil {
+		t.Fatal("a program that refused the recording reported nothing")
+	}
+
+	message := err.Error()
+	report := message[:min(len(message), 90)]
+
+	if !strings.Contains(message, "Invalid data found when processing input") {
+		t.Errorf("the failure report = %q, want the reason the program gave for refusing the recording", report)
+	}
+
+	if strings.Contains(message, "built with gcc") {
+		t.Errorf("the failure report = %q, want the program's build settings left out of the report: the reason has to fit in it", report)
+	}
+}
+
+// TestTheDateTagOfACallStampedByTheClockNamesOnlyTheInstant: the directory watch
+// stamps a sidecar that names `start_time` with the moment it read the file, and
+// that moment carries a reading of the server's own monotonic clock. The tag
+// written into the stored recording names when the call happened, and nothing of
+// the server that wrote it: the recording outlives the process by years.
+func TestTheDateTagOfACallStampedByTheClockNamesOnlyTheInstant(t *testing.T) {
+	stamped := time.Now()
+
+	args := Arguments(domain.AudioConversionEnabled, &ports.AudioMetadata{Date: stamped}, false)
+
+	date := ""
+
+	for i, arg := range args {
+		if arg == "-metadata" && i+1 < len(args) && strings.HasPrefix(args[i+1], "date=") {
+			date = strings.TrimPrefix(args[i+1], "date=")
+		}
+	}
+
+	if date == "" {
+		t.Fatal("the program is given no date tag for a call that has a moment")
+	}
+
+	if strings.Contains(date, " m=") {
+		t.Errorf("the date tag = %q, want only the instant the call happened: the reading of the server's own clock is debug, and it is written into a file that outlives the server", date)
+	}
+}
+
 // aProgramThatConvertsWithProgress writes a program that converts by
 // echoing a fixed body and says the given progress lines on its standard
 // error.
