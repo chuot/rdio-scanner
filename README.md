@@ -13,9 +13,6 @@ You can listen on any modern browsers using the integrated scanner webapp.
 > **How the name is said**
 >
 > **Rdio Scanner** — /ˈreɪ.di.oʊ ˈskæn.ər/ — *RAY-dee-oh SCAN-er*
->
-> The written form *Rdio* is what the screen and this readme show. Say the name out loud as *Raydio*
-> when you ask an operator about a call, and they will know at once which product you mean.
 
 ## Recorders compatibility
 
