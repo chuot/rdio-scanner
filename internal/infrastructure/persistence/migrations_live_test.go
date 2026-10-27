@@ -702,3 +702,78 @@ func TestMigrateLiveOnMariaDBDeduplicatesDuplicateOptionRows(t *testing.T) {
 		t.Error("the table accepted a duplicate key after the migration, want the options_key index to refuse it")
 	}
 }
+
+// Every v8 primary key is handed to the backend's own counter: AUTO_INCREMENT on MariaDB,
+// bigserial on PostgreSQL. The migration pass inserts the identifiers the v6 rows already
+// carry, and the two backends treat an explicitly inserted identifier differently: MariaDB moves
+// AUTO_INCREMENT past it, PostgreSQL does not move the sequence behind a bigserial at all. The
+// tags table is the smallest place an administrator writes to after the migration, and its v6
+// identifiers start at 1, so on PostgreSQL the first tag the server creates for itself is
+// assigned the identifier 1, which the migrated data is already using.
+func TestMigrateLiveOnMariaDBLeavesTheTagCounterPastTheMigratedTags(t *testing.T) {
+	liveTagCounter(t, DialectMariadb)
+}
+
+func TestMigrateLiveOnPostgreSQLLeavesTheTagCounterPastTheMigratedTags(t *testing.T) {
+	liveTagCounter(t, DialectPostgresql)
+}
+
+// liveTagCounter migrates the deployment and then does what the administrator does with it:
+// adds a tag through the server's own tag adapter, which leaves the new identifier to the
+// backend. The tag lands beside the migrated ones.
+func liveTagCounter(t *testing.T, dialect Dialect) {
+	t.Helper()
+
+	db := liveDatabase(t, dialect)
+
+	liveMigrate(t, db, dialect)
+
+	tags := NewTags(db, dialect)
+
+	ctx := context.Background()
+
+	stored, err := tags.AllTags(ctx)
+	if err != nil {
+		t.Fatalf("AllTags on %s: %v", dialect, err)
+	}
+
+	if len(stored) == 0 {
+		t.Fatalf("the database migrated on %s holds no tags to add to", dialect)
+	}
+
+	highest := uint64(0)
+
+	for _, tag := range stored {
+		if tag.ID > highest {
+			highest = tag.ID
+		}
+	}
+
+	next := append(stored, domain.Tag{Label: "Harbor Patrol", LED: "yellow", Alert: "none", Order: uint(len(stored))})
+
+	if err := tags.SaveTags(ctx, next); err != nil {
+		t.Fatalf("adding a tag to the database migrated on %s: %v", dialect, err)
+	}
+
+	var added uint64
+
+	if err := db.QueryRow(`SELECT "tagId" FROM "tags" WHERE "label" = 'Harbor Patrol'`).Scan(&added); err != nil {
+		t.Fatalf("reading back the tag added on %s: %v", dialect, err)
+	}
+
+	if added <= highest {
+		t.Errorf("the tag added on %s is stored with the identifier %d, want a number past the highest migrated tag identifier %d",
+			dialect, added, highest)
+	}
+
+	counted := 0
+
+	if err := db.QueryRow(`SELECT COUNT(*) FROM "tags"`).Scan(&counted); err != nil {
+		t.Fatalf("counting the tags on %s: %v", dialect, err)
+	}
+
+	if counted != len(stored)+1 {
+		t.Errorf("the tags table on %s holds %d rows after the tag was added, want the %d migrated tags and the added one",
+			dialect, counted, len(stored))
+	}
+}
