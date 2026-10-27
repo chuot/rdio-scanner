@@ -433,3 +433,31 @@ func TestParseLogSearchClampsThePageParameters(t *testing.T) {
 		}
 	}
 }
+
+// TestALogDateFilterSelectsTheSameSpanWhicheverOrderTheResultsComeIn pins that the log
+// screen's sort-order control changes the order entries arrive in, not which entries the
+// date criterion selects. The screen sends its dates with the sort control left at its
+// default of descending, and the descending reading of a date runs back a day and then back
+// again by the submitted hour and minute, so the entries that answer are written before the
+// day the operator named.
+func TestALogDateFilterSelectsTheSameSpanWhicheverOrderTheResultsComeIn(t *testing.T) {
+	submitted := time.Date(2026, 3, 14, 0, 0, 0, 0, time.UTC)
+
+	fromUp, toUp, _ := LogSearch{Date: submitted, Ascending: true}.DateWindow()
+
+	fromDown, toDown, ok := LogSearch{Date: submitted, Ascending: false}.DateWindow()
+
+	if !ok {
+		t.Fatal("descending DateWindow = no window, want the date criterion to select a span")
+	}
+
+	if !fromDown.Equal(fromUp) {
+		t.Errorf("descending window starts at %v, want %v: reading the newest entries first from the date of 14 March 2026 selects a span beginning the day before the one the operator named",
+			fromDown.UTC(), fromUp.UTC())
+	}
+
+	if !toDown.Equal(toUp) {
+		t.Errorf("descending window stops at %v, want %v: an entry written on the day the operator named is outside the span the search runs",
+			toDown.UTC(), toUp.UTC())
+	}
+}
