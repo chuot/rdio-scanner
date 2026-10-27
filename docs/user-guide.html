@@ -2585,39 +2585,39 @@ footer.site .signoff {
   <h2 id="ch-09-help-and-support">9 · Help and support</h2>
 
   <p class="lead">
-    A listener cannot configure anything about support. The name on the screen, the address the screen will offer, and
-    the version the screen reports are all decided by the deployment and by the build the page came from. What a
-    listener can do is read what the screen already says, know when the screen has nothing to offer, and say the right
-    things when asking somebody for help.
+    Nothing about support is something a listener configures. The deployment decides the name on the screen and the
+    address it will offer, and the build the page came from decides the version the screen reports. What a listener
+    can do is read what the screen already shows, notice when it has nothing to offer, and say the useful things when
+    asking somebody for help.
   </p>
 
   <h3>Which deployment this is</h3>
 
   <p>
-    The line across the top of the screen is the name the operator gave the deployment. It is not a name the listener
-    chooses, changes, or can add, and a deployment whose operator gave no name shows nothing there at all: an empty
-    space with the light beside it. That is not the server failing, it is the deployment not having a name to show.
-    Beside the name sits the light that says whether the page is joined to the server, and that light carries its
-    state in its name as well as in its colour — a reader who cannot see the colour is told <code>Server status</code>
-    and the state, and not only the state's colour.
+    Across the top of the screen sits the name the operator chose for the deployment. A listener never picks it,
+    changes it, or adds one, and when the operator left it blank the space shows nothing at all: an empty stretch with
+    the light beside it. The deployment simply has no name to show, which is not the server failing. The light beside
+    the name says whether the page is joined to the server, and its name carries the state as well as its colour — a
+    reader who cannot see the colour is still told <code>Server status</code> and the state, rather than only the
+    colour of the state.
   </p>
 
   <p>
-    When a deployment runs more than one server, or when the same person listens to deployments run by different
-    people, the name on the screen is the only thing that tells the two apart. It is the first thing worth quoting
-    when something is wrong, and if the line is empty, quote the address you were given instead.
+    The name on the screen is the only thing telling two setups apart when one person runs several servers, or when
+    the same listener follows deployments run by different people. Quote that name first when something goes wrong,
+    and when the line is blank quote the address you were given instead.
   </p>
 
   <h3>The help control</h3>
 
   <p>
-    A deployment whose operator configured a contact address gets one more control in the corner of the screen, named
-    <code>Help</code>. Press it and a notice appears along the bottom of the screen: the sentence <q>For further
-    assistance please contact</q>, then the deployment's own address, written so that you can act on it — pressing it
-    starts a mail message addressed to that address, in a new window rather than by taking you away from the screen
-    you were watching. The notice counts down from ten, one a second, and the end of the countdown closes it: the
-    address is on the screen for about ten seconds, and if you needed longer than that to copy it down, the notice has
-    gone and the control has to be pressed again.
+    When the operator configured a contact address, one extra control named <code>Help</code> joins the corner of the
+    screen. Pressing it brings up a notice along the bottom of the screen: the sentence <q>For further assistance
+    please contact</q>, followed by the deployment's own address, formatted so that you can act on it — pressing the
+    address opens a mail message to it in a new window instead of pulling you away from the screen you were watching.
+    The notice shows a countdown starting from ten, one a second, and when the countdown ends the notice closes: the
+    address stays on the screen for roughly ten seconds, so if copying it took longer than that, the notice is gone
+    and the control has to be pressed again.
   </p>
 
   <figure data-shot="help-snackbar">
@@ -2626,25 +2626,25 @@ footer.site .signoff {
   </figure>
 
   <p>
-    A deployment whose operator did not configure an address gets no <code>Help</code> control at all. Nothing on the
-    screen says so, and nothing on the screen offers a way to find out who runs it: the control that would have shown
-    the notice is the thing that is missing. The application does have a sentence ready for that case — it would point
-    at the project's own discussions, named <strong>Rdio Scanner discussions</strong> — but the control that shows the
-    notice is hidden in exactly the situation where that sentence is the one the application would need to say, so
-    there is no press that reaches it. If your screen has no help control, the operator who gave you the address is
-    the way to get help, and the discussions are where the application itself would have sent you.
+    A deployment whose operator left the contact address unconfigured has no <code>Help</code> control at all. The
+    screen gives no hint of that, and it offers no way to discover who runs the deployment: the missing control is
+    itself the thing that would have shown the notice. The application keeps a sentence ready for exactly this
+    situation — it would point at the project's own discussions, named <strong>Rdio Scanner discussions</strong> — yet
+    the control that displays the notice is hidden in precisely the case where that sentence is the one the
+    application needs to say, so no press reaches it. When your screen has no help control, the operator who gave you
+    the address is your route to help, and the discussions are where the application itself would have sent you.
   </p>
 
   <h3>The version line</h3>
 
   <p>
-    The large row of the display carries the display's own name until a call arrives on it, and that name is
-    <code>Rdio Scanner v</code> followed by a version. That version was stamped into the page when the page was built,
-    and it belongs to the page and to your browser. A build made at the release stamps the version with nothing after
-    it, so at this version the line reads Rdio Scanner v8.0.0. A build made from a commit that no tag names stamps the
-    version with a mark naming that commit — the mark begins with +g and then the commit's own name — so the line
-    reads something like Rdio Scanner v8.0.0+g6db8cf2, and that is what a development page carries rather than what a
-    release prints. A build made without the release tool stamps the version the repository declares, or
+    Until a call arrives on it, the large row of the display shows the display's own name, and that name is
+    <code>Rdio Scanner v</code> followed by a version. The stamp was set when the page was built, so the version
+    belongs to the page and to your browser. A build taken at the release stamps the version with nothing after it,
+    which at this version means the line reads Rdio Scanner v8.0.0. A build taken from a commit that no tag names
+    stamps the version with a mark naming that commit — the mark begins with +g and then the commit's own name — so
+    the line reads something like Rdio Scanner v8.0.0+g6db8cf2, and that is what a development page carries rather
+    than what a release prints. A build taken without the release tool stamps the version the repository declares, or
     <code>dev</code> — and a version line that says <code>dev</code> is a page somebody built from a source tree,
     which no release ever had.
   </p>
@@ -2661,8 +2661,8 @@ footer.site .signoff {
   <h3>What to say when you report a problem</h3>
 
   <p>
-    Everything in this list is something the screen already shows you, and everything on it is something the operator
-    can use to find the same event on their side.
+    Every item in this list is something the screen already puts in front of you, and each one is something the
+    operator can use to locate the same event on their side.
   </p>
 
   <table>
@@ -2724,10 +2724,10 @@ footer.site .signoff {
   </table>
 
   <p>
-    If the problem is that the screen is not showing what you expect rather than that it is showing something wrong,
-    read <a href="#ch-11-when-something-does-not-work">the chapter on when something does not work</a> first. It starts
-    from what you can see and works back to what it means, and most of what a listener reports as a fault is one of
-    its cases rather than a fault at all.
+    When the trouble is that the screen is not showing what you expect, rather than that it is showing something
+    wrong, read <a href="#ch-11-when-something-does-not-work">the chapter on when something does not work</a> first.
+    It starts from what you can see and works back to what it means, and most of what a listener reports as a fault
+    turns out to be one of its cases rather than a fault at all.
   </p>
 
   <h3>Where this guide stops</h3>
