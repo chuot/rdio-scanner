@@ -2751,43 +2751,43 @@ footer.site .signoff {
   <h2 id="ch-10-keyboard-and-screen-readers">10 · Keyboard and screen readers</h2>
 
   <p class="lead">
-    The listening screen grew out of a version that carried none of this, and what it now carries for a keyboard and a
-    screen reader is worth knowing in both directions. There is more on the page than what you can see. And some of
-    what you can see is the only place a piece of information lives. This chapter gives both, and the colour figures
-    behind them: the guide measured the listening screens against WCAG 2.2 at its AA conformance level, and the
-    figures here come from the colours the shipped page declares rather than from judging a picture of it.
+    The listening screen came from an older version that offered none of this, and what it now offers a keyboard and a
+    screen reader is worth weighing in both directions. The page holds more than what you can see, and some of what you
+    can see is the only place a particular fact lives at all. This chapter covers both sides and the colour measurements
+    behind them: the guide measured the listening screen against WCAG 2.2 at its AA conformance level, and every figure
+    here comes from the colours the shipped page declares, never from judging a picture of it.
   </p>
 
   <h3>Getting onto the page</h3>
 
   <p>
-    The first thing the page offers is a link named <code>Skip to contents</code>, ahead of everything else, and it
-    moves the keyboard to the part of the page that holds the screen. That part carries the name <code>Rdio
-    Scanner</code>, given to it by a heading the page keeps hidden from the eye and hands to a screen reader — which is
-    what lets a reader move by landmark and land on the listening screen by name instead of by counting positions.
-    Each panel is a landmark of its own, and the landmark carries no name of its own: what says which panel a panel
-    is, is a heading the page keeps hidden from the eye — <code>Search</code> and <code>Select</code> — and the close
-    control, <code>Close search panel</code> and <code>Close select panel</code>, which names the panel by saying what
-    pressing it does. A reader who moves from heading to heading finds both panels by name; a reader who moves from
-    landmark to landmark is handed two regions with nothing on them saying which is which.
+    Ahead of everything else on the page stands a link named <code>Skip to contents</code>, and it carries the keyboard
+    to the part of the page that holds the screen. That part answers to the name <code>Rdio Scanner</code>, a name given
+    to it by a heading the page keeps hidden from the eye and hands to a screen reader — which is what lets a reader
+    move by landmark and land on the listening screen by name rather than by counting positions. Every panel is a
+    landmark of its own, and no landmark carries a name of its own: what says which panel is which is a heading the page
+    keeps hidden from the eye — <code>Search</code> and <code>Select</code> — together with the close control,
+    <code>Close search panel</code> and <code>Close select panel</code>, which names the panel by saying what pressing
+    it does. A reader who travels from heading to heading finds both panels by name; a reader who travels from landmark
+    to landmark is handed two regions with nothing on them saying which is which.
   </p>
 
   <h3>Where the keyboard goes in a panel</h3>
 
   <p>
-    A drawer that slides out under a press and leaves the keyboard sitting on the control that opened it puts the panel
-    behind the reader in the tab order, so the page marks a landing place inside each panel. Opening one moves the
+    A drawer that slides out under a press and leaves the keyboard resting on the control that opened it puts the panel
+    behind the reader in the tab order, so the page marks a landing place inside each panel. Opening a panel moves the
     keyboard to that marked control. A panel that marks nothing takes the first control its own content offers, and a
-    panel with nothing to work in takes the control that closes it. Closing a panel puts the keyboard back on the
-    control that opened it, because focus left standing on a control that has just left the page lands the reader at
+    panel with nothing to work in takes the control that closes it. When a panel closes, the keyboard goes back to the
+    control that opened it, because focus left standing on a control that has just left the page drops the reader at
     the top of the document.
   </p>
 
   <p>
-    The marked landing place matters because a panel rebuilds its own content while the page answers. The search panel
-    repaints every row of its table on each answer, so a keyboard standing on a row is standing on a control the answer
-    takes away, and the browser puts the reader at the top of the page. The control a panel marks as its landing place
-    is one its own answers leave standing.
+    That marked landing place matters because a panel rebuilds its own content while the page is answering. The search
+    panel repaints every row of its table on each answer, so a keyboard standing on a row is standing on a control the
+    answer takes away, and the browser puts the reader at the top of the page. The control a panel marks as its landing
+    place is one its own answers leave standing.
   </p>
 
   <p>
@@ -2804,16 +2804,16 @@ footer.site .signoff {
   <h3>What the page says out loud</h3>
 
   <p>
-    The page carries one live region, and it is kept empty until something happens: a region that holds permanent text
+    The page carries a single live region, and it stays empty until something happens: a region holding permanent text
     tells a screen reader the page is answering every time it paints. A sentence is written into it only when the thing
-    that sentence names changes, and the first painting of a page is silent. It holds one sentence at a time, and a new
-    writing replaces it, so two things changing in the same beat are given as the later one. These are the sentences,
-    in the application's own words:
+    that sentence names has changed, and the first painting of a page is silent. It holds one sentence at a time, and a
+    new writing replaces the old one, so two things changing in the same beat are given as the later one. These are the
+    sentences, in the application's own words:
   </p>
 
   <ul>
     <li>
-      <q>Queue:</q> and a number, when the queue of calls waiting to be heard changes.
+      <q>Queue:</q> and a number, whenever the queue of calls waiting to be heard changes.
     </li>
     <li>
       <q>Playing</q> or <q>Paused</q> and the talkgroup's label, when the audio in front of you starts or stops for a
@@ -2823,7 +2823,7 @@ footer.site .signoff {
       <q>Stopped</q> and the name the display was showing, when a call ends.
     </li>
     <li>
-      <q>Searching calls</q>, when a search begins, and then the number of calls the answer found.
+      <q>Searching calls</q>, when a search begins, followed by the number of calls the answer found.
     </li>
     <li>
       <q>Page</q> and a number, when the results are turned to another page.
@@ -2832,17 +2832,17 @@ footer.site .signoff {
 
   <p>
     The notices the page shows along its bottom — the two described in <a href="#ch-08-on-your-phone-or-tablet">the
-    chapter on phones and tablets</a> and <a href="#ch-09-help-and-support">the chapter on help and support</a> — are a
-    separate announcement surface, and neither carries a dismiss control. Each one's countdown is a bare number written
-    into the same block of text as its sentence and rewritten once a second, which is why the countdown reads as part of
-    the sentence rather than as a number after it.
+    chapter on phones and tablets</a> and <a href="#ch-09-help-and-support">the chapter on help and support</a> — form a
+    separate announcement surface, and neither one carries a dismiss control. Each notice's countdown is a bare number
+    written into the same block of text as its sentence and rewritten once a second, which is why the countdown reads as
+    part of the sentence rather than as a number trailing after it.
   </p>
 
   <h3>Where a state is only a colour</h3>
 
   <p>
-    This is where the application is uneven, and the difference is worth having straight. The table below says, for each
-    thing the screen reports about itself, what a reader is given besides its colour.
+    This is where the application is uneven, and the difference is worth having straight. For each thing the screen
+    reports about itself, the table below says what a reader is given besides its colour.
   </p>
 
   <table>
@@ -2916,9 +2916,9 @@ footer.site .signoff {
   <p>
     One credit belongs here even though the reader meets it earlier. The mark the page draws for a talkgroup kept out
     of the feed for a window of minutes is a single character that appears in none of the faces the application ships,
-    and the page carries a rule offering a font family for that one character and for nothing else — the flag's
+    so the page carries a font rule offering a font family for that one character and nothing else — the flag's
     minutes and the words beside it keep the face every other line uses — drawn from four faces already on the
-    machine. Left to a browser's own guess the glyph arrives as an empty box on a plain Linux install, which is where
+    machine. Left to a browser's own guess, the glyph arrives as an empty box on a plain Linux install, which is where
     the reading a listener most needs would become a hole in the display.
     <a href="#ch-06-what-the-display-says">The chapter on what the display says</a> gives what it costs when none of
     those four faces is installed.
@@ -2929,7 +2929,7 @@ footer.site .signoff {
   <p>
     The standard sets two floors. Words a person reads are measured against 4.5 to 1, unless they are large enough for
     the lower 3 to 1. A thing that carries meaning by how it looks — a light, an outline, an icon you press — is
-    measured against 3 to 1. These are the colours the listening page paints, measured from the colours it declares,
+    measured against 3 to 1. Below are the colours the listening page paints, measured from the colours it declares,
     with the transparency the page paints through composited onto the surface beneath it.
   </p>
 
@@ -3007,8 +3007,8 @@ footer.site .signoff {
   </table>
 
   <p>
-    One pair does not clear its floor: the LED in its resting state, at 2.07 to 1 against the page. It is also
-    the colour that light falls to for half of every blink of the paused state, which is the state the blink exists to
+    A single pair fails to clear its floor: the LED in its resting state, at 2.07 to 1 against the page. It is also
+    the colour the light falls to for half of every blink of the paused state, which is the state the blink exists to
     tell. The application's answer is the one in the table above — the light's name carries the state in words — and
     under a device's reduced motion request the paused light gains a standing mark instead of a blink, drawn as a dark
     band against the lit face and a light band against the page it sits on, so the paused state stops depending on
@@ -3021,8 +3021,8 @@ footer.site .signoff {
     Two of these pairs are only what they are because of how they were measured. A flag's words are painted on the
     flag's own dark chip, not on the display's face, and measuring them against the display's face instead would have
     reported a flag as unreadable when it is one of the clearest things on the screen. An unlit flag is not painted
-    anywhere at all, which is a different fault from an unreadable one, and is named in the table above rather than
-    given a number.
+    anywhere at all, which is a different fault from an unreadable one, and the table above names it rather than
+    giving it a number.
   </p>
 
   <h3>High Contrast mode</h3>
@@ -3032,9 +3032,9 @@ footer.site .signoff {
     reading the page wears the system's canvas and ink, and the parts of it that carry information keep a boundary
     drawn in that ink: the display, every control, the LED as a filled square whose name still says which
     state it is in, and the keyboard's ring in the system's own highlight colour. What does not survive is the small
-    state lights in the corners of the controls, which are taken by the mode outright. That is the clearest case in
-    this chapter of the difference the table above names: where the state was also given in words it survives, and where
-    it was only ever a colour it does not.
+    state lights in the corners of the controls, which the mode takes outright. That is the clearest case in this
+    chapter of the difference the table above names: where the state was also given in words it survives, and where it
+    was only ever a colour it does not.
   </p>
 
   <figure data-shot="forced-colours">
@@ -3045,13 +3045,13 @@ footer.site .signoff {
   <h3>Motion you can turn off</h3>
 
   <p>
-    The page has motion. The LED blinks while audio is held. A talkgroup's button in the select panel blinks
-    in its corner while that talkgroup is held off for a set window of minutes. The search panel shows a progress bar
-    moving while an answer is on its way, and a spinning reload icon in a row while that row's recording is being
-    fetched. The drawers slide open and shut. There is no control anywhere on the screen that turns any of it off. What
-    answers is the reader's own device: the page carries a rule for the operating system's setting for reduced motion,
-    and under it every one of those animations stops, the drawers and the sliding bars arrive already at the state they
-    were heading to, and the paused light gains the standing mark described above instead of a blink. A reader who needs
+    The page has motion. The LED blinks while audio is held. A talkgroup's button in the select panel blinks in its
+    corner while that talkgroup is held off for a set window of minutes. While an answer is on its way, the search
+    panel shows a progress bar moving, and a spinning reload icon in a row while that row's recording is being
+    fetched. The drawers slide open and shut. No control anywhere on the screen turns any of it off. What answers is
+    the reader's own device: the page carries a rule for the operating system's setting for reduced motion, and under
+    it every one of those animations stops, the drawers and the sliding bars arrive already at the state they were
+    heading to, and the paused light gains the standing mark described above instead of a blink. A reader who needs
     that has to ask the device for it, and cannot ask the page.
   </p>
 
@@ -3060,20 +3060,20 @@ footer.site .signoff {
   <p>
     The smallest pressable things on the screen are the round controls in the search panel — the play, stop, and
     download controls in its rows, and the four controls that turn its results to another page — and they are 48 CSS
-    pixels across. The nine controls under the display are 40 pixels tall. The standard's floor for a target is 24 by
-    24, and nothing a listener presses is under it. A control the page has itself switched off is a different matter:
-    when there is no further page to turn to, the paginator's four controls are dimmed to 38 percent of the colour its
-    own words are painted in, and the standard asks nothing of a control that is inactive.
+    pixels across. The nine controls under the display stand 40 pixels tall. The standard's floor for a target is 24
+    by 24, and nothing a listener presses falls under it. A control the page has itself switched off is a different
+    matter: when there is no further page to turn to, the paginator's four controls are dimmed to 38 percent of the
+    colour its own words are painted in, and the standard asks nothing of a control that is inactive.
   </p>
 
   <p>
     The page sets the width it uses to the device it opened on, and sets no ceiling on the device's own zoom, which is
-    what a reader who needs larger text depends on. At 320 CSS pixels — the narrowest width the application claims, and
-    the one it refuses to go below — everything a listener needs is still on the page, the controls are still three
-    rows of three, and nothing runs off the side. One reading is trimmed by the box it sits in: the deployment's name
-    ends in an ellipsis, which at least says that something was cut. The display's rows are cut rather than wrapped,
-    and at this width none of them has to be; the version line in the large row keeps the whole of the version a
-    release stamps. Both readings matter when a listener reports a problem, and
+    what a reader who needs larger text depends on. At 320 CSS pixels — the narrowest width the application claims,
+    and the one it refuses to go below — everything a listener needs is still on the page, the controls are still
+    three rows of three, and nothing runs off the side. One reading is trimmed by the box it sits in: the deployment's
+    name ends in an ellipsis, which at least says that something was cut. The display's rows are cut rather than
+    wrapped, and at this width none of them has to be; the version line in the large row keeps the whole of the
+    version a release stamps. Both readings matter when a listener reports a problem, and
     <a href="#ch-09-help-and-support">the chapter on help and support</a> says what to say when they will not fit.
   </p>
 
@@ -3085,9 +3085,9 @@ footer.site .signoff {
   <h3>What still falls short</h3>
 
   <p>
-    Everything below is a fault the measured reading and the shipped page both support. Each one is named with what the
-    application offers a reader who cannot use the thing that is missing, because a fault with an answer in it is a
-    different thing from a fault with none.
+    Everything below is a fault the measured reading and the shipped page both support. Each one is named together with
+    what the application offers a reader who cannot use the thing that is missing, because a fault with an answer in it
+    is a different thing from a fault with none.
   </p>
 
   <table>
@@ -3158,8 +3158,8 @@ footer.site .signoff {
   </table>
 
   <p>
-    What the application does well is worth saying once plainly, because most of it was a deliberate departure from the
-    version the screen grew out of: the skip link and the named landmark, the landing place inside a panel and the
+    What the application does well is worth saying once plainly, because most of it was a deliberate departure from
+    the version the screen grew out of: the skip link and the named landmark, the landing place inside a panel and the
     return to the control that opened it, the focus ring on every control the keyboard reaches, the announcements that
     speak only when something named has changed, the state carried in words where a screen reader needs it, the marked
     controls and marked results instead of removed ones, the quieted motion that keeps the state motion was carrying,
@@ -3173,9 +3173,9 @@ footer.site .signoff {
   <p>
     The guide carries the two device rules in its own stylesheet: under a request for reduced motion its motion stops,
     and under a forced colours reading it draws itself in the system's colours rather than its own. Its colours are
-    measured against the same floors as the page's, its figures are given a name and a sentence, no meaning in it is
-    carried by colour alone, and it links to nothing outside itself. Where it describes a fault above it does not soften
-    it, and where it names a figure it names the figure that was measured.
+    measured against the same floors as the application's, its figures are given a name and a sentence, no meaning in
+    it is carried by colour alone, and it links to nothing outside itself. Where it describes a fault above it does
+    not soften it, and where it names a figure it names the figure that was measured.
   </p>
 </section>
 
