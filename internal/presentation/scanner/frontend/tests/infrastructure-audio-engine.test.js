@@ -76,6 +76,26 @@ class FakeAudioContext {
     }
 }
 
+// The real decodeAudioData never answers synchronously: the success callback
+// runs in a later task. This context holds the callback until the test hands it
+// back, which is the only way a stop can overtake a decode.
+class DeferredDecodeAudioContext extends FakeAudioContext {
+    constructor(options) {
+        super(options);
+        this.pendingDecode = [];
+    }
+
+    decodeAudioData(arrayBuffer, onsuccess) {
+        this.decoded.push(arrayBuffer);
+        this.pendingDecode.push(onsuccess);
+    }
+
+    completeDecode() {
+        const [onsuccess] = this.pendingDecode.splice(0, 1);
+        onsuccess({ duration: 2 });
+    }
+}
+
 function createFakeDocument() {
     const listeners = { keydown: [], mousedown: [], touchstart: [] };
     const appended = [];
@@ -106,6 +126,15 @@ function setup() {
     const documentImpl = createFakeDocument();
 
     const engine = createAudioEngine({ AudioContextImpl: FakeAudioContext, documentImpl });
+
+    return { engine, documentImpl };
+}
+
+function setupDeferredDecode() {
+    FakeAudioContext.instances = [];
+    const documentImpl = createFakeDocument();
+
+    const engine = createAudioEngine({ AudioContextImpl: DeferredDecodeAudioContext, documentImpl });
 
     return { engine, documentImpl };
 }
@@ -321,6 +350,34 @@ describe('infrastructure/audio-engine — call playback', () => {
 
         assert.equal(interactive.oscillators.length, 1);
         assert.equal(FakeAudioContext.instances[0].oscillators.length, 0);
+    });
+});
+
+describe('infrastructure/audio-engine — a stop that outranks a decode in flight', () => {
+    it('a recording stopped while its decode is in flight never enters the graph and leaves no clock', async () => {
+        const { engine, documentImpl } = setupDeferredDecode();
+
+        engine.bootstrap();
+        await documentImpl.listeners.touchstart[0]();
+
+        const [playback] = FakeAudioContext.instances;
+
+        const handle = engine.playCall({ id: 1, audio: { data: [1, 2, 3] } }, {});
+
+        assert.equal(playback.pendingDecode.length, 1, 'a real decode answers in a later task');
+        assert.equal(playback.sources.length, 0, 'nothing has entered the graph yet');
+
+        // the listener has already moved on: the use case calls stop and drops the
+        // handle, so no later call can reach whatever this recording starts.
+        handle.stop();
+        playback.completeDecode();
+
+        assert.deepEqual(
+            playback.sources.filter((source) => source.started && !source.stopped),
+            [],
+            'the stopped recording leaves no source playing that nothing can silence',
+        );
+        assert.equal(engine.playbackElapsed(), null, 'a stopped recording has no clock');
     });
 });
 

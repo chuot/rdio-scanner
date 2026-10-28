@@ -196,3 +196,69 @@ describe('presentation/listener/rdio-select-panel — the states the panel names
     }
   });
 });
+
+// Systems and talkgroups are named by free text an operator saves, and that text
+// reaches this panel verbatim in the configuration the server sends each listener.
+// A saved label is free to carry the characters markup is built from.
+const SYSTEM_LABEL_WITH_MARKUP = {
+  systems: [
+    { id: 20, label: 'Fire <img src="x" onerror="arm()"> Station', talkgroups: [{ id: 200, label: 'Squad Seven' }] },
+  ],
+};
+
+const TALKGROUP_LABEL_WITH_MARKUP = {
+  systems: [{ id: 21, label: 'Police', talkgroups: [{ id: 210, label: 'Squad <b>Seven</b>' }] }],
+};
+
+// A panel mounted on one saved configuration, so each case sees only the label it names.
+function mountedPanel(config) {
+  const { store } = getAppContext();
+
+  store.setState({ categories: [], config, map: {} });
+
+  const el = document.createElement('rdio-select-panel');
+
+  el.connectedCallback();
+
+  return el;
+}
+
+// Anything the panel built out of the label rather than out of its own markup: an
+// element the label introduced, or an attribute it introduced on one.
+const builtFromTheLabel = (el) =>
+  findAll(el, (n) => n.tag === 'img' || n.tag === 'b' || n.tag === 'script' || n.attributes.onerror !== undefined)
+    .map((n) => (n.attributes.onerror !== undefined ? `${n.tag}[onerror]` : n.tag));
+
+describe('presentation/listener/rdio-select-panel — labels a saved configuration carries', () => {
+  it('names a system by a label that carries markup, building no element out of that label', () => {
+    const el = mountedPanel(SYSTEM_LABEL_WITH_MARKUP);
+
+    try {
+      const legend = findAll(el, (n) => n.tag === 'legend')[0];
+
+      assert.ok(legend, 'the panel dropped the system fieldset legend');
+      assert.ok(legend.textContent.includes('Station'), 'the legend does not name the system by its label');
+
+      assert.deepEqual(builtFromTheLabel(el), [],
+        'the system label built an element or an attribute of its own into the panel');
+    } finally {
+      el.disconnectedCallback();
+    }
+  });
+
+  it('names a talkgroup by a label that carries markup, building no element out of that label', () => {
+    const el = mountedPanel(TALKGROUP_LABEL_WITH_MARKUP);
+
+    try {
+      const button = talkgroupButton(el, 210);
+
+      assert.ok(button, 'the panel dropped the talkgroup button');
+      assert.ok(button.textContent.includes('Seven'), 'the talkgroup button does not name the talkgroup by its label');
+
+      assert.deepEqual(builtFromTheLabel(el), [],
+        'the talkgroup label built an element or an attribute of its own into the panel');
+    } finally {
+      el.disconnectedCallback();
+    }
+  });
+});
