@@ -18,6 +18,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,7 +40,15 @@ type Systems struct {
 	mutex sync.Mutex
 	live  domain.Systems
 	known bool
+
+	// warn tells the operator about a stored value the read had to clamp. The server
+	// wires it to its log; without it the repository clamps silently.
+	warn func(message string)
 }
+
+// OnWarn sets the listener that hears about stored values the read had to clamp.
+// The server wires it at startup to file the line as a warning in the log view.
+func (systems *Systems) OnWarn(report func(message string)) { systems.warn = report }
 
 var _ ports.SystemRepository = (*Systems)(nil)
 
@@ -58,13 +67,14 @@ func (systems *Systems) AllSystems(ctx context.Context) (domain.Systems, error) 
 		return systems.live, nil
 	}
 
-	loaded, err := readSystems(ctx, systems.store)
+	loaded, clamped, err := readSystems(ctx, systems.store)
 	if err != nil {
 		return nil, err
 	}
 
 	systems.live = loaded
 	systems.known = true
+	systems.reportClamps(clamped)
 
 	return loaded, nil
 }
@@ -84,7 +94,7 @@ func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) er
 		return err
 	}
 
-	loaded, err := readSystems(ctx, systems.store)
+	loaded, clamped, err := readSystems(ctx, systems.store)
 	if err != nil {
 		// The legacy server logs a failed re-read and carries on with the partial read;
 		// here the failure is reported and what stays in effect is what was submitted.
@@ -92,6 +102,7 @@ func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) er
 	}
 
 	systems.live = loaded
+	systems.reportClamps(clamped)
 
 	return nil
 }
@@ -117,12 +128,13 @@ func (systems *Systems) SaveSystemSites(ctx context.Context, systemID uint64, si
 		return err
 	}
 
-	loaded, err := readSystems(ctx, systems.store)
+	loaded, clamped, err := readSystems(ctx, systems.store)
 	if err != nil {
 		return err
 	}
 
 	systems.live = loaded
+	systems.reportClamps(clamped)
 
 	return nil
 }
@@ -141,12 +153,13 @@ func (systems *Systems) SaveSystemSettings(ctx context.Context, next domain.Syst
 		return err
 	}
 
-	loaded, err := readSystems(ctx, systems.store)
+	loaded, clamped, err := readSystems(ctx, systems.store)
 	if err != nil {
 		return err
 	}
 
 	systems.live = loaded
+	systems.reportClamps(clamped)
 
 	return nil
 }
@@ -176,12 +189,13 @@ func (systems *Systems) SaveSystemTalkgroups(ctx context.Context, systemID uint6
 		return err
 	}
 
-	loaded, err := readSystems(ctx, systems.store)
+	loaded, clamped, err := readSystems(ctx, systems.store)
 	if err != nil {
 		return err
 	}
 
 	systems.live = loaded
+	systems.reportClamps(clamped)
 
 	return nil
 }
@@ -205,12 +219,13 @@ func (systems *Systems) SaveSystemUnits(ctx context.Context, systemID uint64, un
 		return err
 	}
 
-	loaded, err := readSystems(ctx, systems.store)
+	loaded, clamped, err := readSystems(ctx, systems.store)
 	if err != nil {
 		return err
 	}
 
 	systems.live = loaded
+	systems.reportClamps(clamped)
 
 	return nil
 }
@@ -249,10 +264,10 @@ func saveSystemLevel(ctx context.Context, s store, systemID uint64, write func(t
 // system's sites, talkgroups, and units through it, returning the result sorted by display
 // order; the transaction is asked for as read-only, per the systems aggregate transaction
 // maintainer note.
-func readSystems(ctx context.Context, s store) (domain.Systems, error) {
+func readSystems(ctx context.Context, s store) (domain.Systems, []string, error) {
 	tx, err := s.beginRead(ctx)
 	if err != nil {
-		return nil, operationError("systems", "read", err)
+		return nil, nil, operationError("systems", "read", err)
 	}
 
 	defer tx.rollback()
@@ -261,109 +276,242 @@ func readSystems(ctx context.Context, s store) (domain.Systems, error) {
 
 	rows, err := tx.query(ctx, query)
 	if err != nil {
-		return nil, statementError("systems", "read", err, query)
+		return nil, nil, statementError("systems", "read", err, query)
 	}
 
 	defer rows.Close()
 
 	out := domain.Systems{}
 
-	for rows.Next() {
-		var system domain.System
+	clamped := []string{}
 
-		if err := rows.Scan(&system.ID, &system.Alert, &system.AutoPopulate, &system.Blacklists, &system.Delay, &system.Label, &system.LED, &system.Order, &system.SystemRef, &system.Kind); err != nil {
-			return nil, operationError("systems", "read", err)
+	for rows.Next() {
+		var (
+			id        int64
+			delay     int64
+			order     int64
+			systemRef int64
+		)
+
+		system := domain.System{}
+
+		if err := rows.Scan(&id, &system.Alert, &system.AutoPopulate, &system.Blacklists, &delay, &system.Label, &system.LED, &order, &systemRef, &system.Kind); err != nil {
+			return nil, nil, operationError("systems", "read", err)
 		}
+
+		// The signed delay, order, and systemRef columns are clamped to zero on the
+		// way into the unsigned fields; why, recorded in the signed-column-clamp
+		// maintainer note.
+		clamps := []string{}
+
+		if delay < 0 {
+			clamps = append(clamps, fmt.Sprintf("delay %d read as 0", delay))
+		}
+
+		if order < 0 {
+			clamps = append(clamps, fmt.Sprintf("order %d read as 0", order))
+		}
+
+		if systemRef < 0 {
+			clamps = append(clamps, fmt.Sprintf("systemRef %d read as 0", systemRef))
+		}
+
+		if len(clamps) > 0 {
+			clamped = append(clamped, fmt.Sprintf("systems.read: system %d %q holds %s: these are not values this server can hold, and it enforces the clamped ones",
+				id, system.Label, strings.Join(clamps, ", ")))
+		}
+
+		system.ID = uint64(id)
+		system.Delay = uint(clampNonNegative(delay))
+		system.Order = uint(clampNonNegative(order))
+		system.SystemRef = uint(clampNonNegative(systemRef))
 
 		out = append(out, system)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, operationError("systems", "read", err)
+		return nil, nil, operationError("systems", "read", err)
 	}
 
 	rows.Close()
 
 	for i := range out {
-		if out[i].Sites, err = readSites(ctx, tx, out[i].ID); err != nil {
-			return nil, err
+		var siteClamps, talkgroupClamps, unitClamps []string
+
+		if out[i].Sites, siteClamps, err = readSites(ctx, tx, out[i].ID); err != nil {
+			return nil, nil, err
 		}
 
-		if out[i].Talkgroups, err = readTalkgroups(ctx, tx, s.dialect, out[i].ID); err != nil {
-			return nil, err
+		if out[i].Talkgroups, talkgroupClamps, err = readTalkgroups(ctx, tx, s.dialect, out[i].ID); err != nil {
+			return nil, nil, err
 		}
 
-		if out[i].Units, err = readUnits(ctx, tx, out[i].ID); err != nil {
-			return nil, err
+		if out[i].Units, unitClamps, err = readUnits(ctx, tx, out[i].ID); err != nil {
+			return nil, nil, err
 		}
+
+		clamped = append(clamped, siteClamps...)
+		clamped = append(clamped, talkgroupClamps...)
+		clamped = append(clamped, unitClamps...)
 	}
 
 	if err := tx.commit(); err != nil {
-		return nil, operationError("systems", "read", err)
+		return nil, nil, operationError("systems", "read", err)
 	}
 
-	return out.Ordered(), nil
+	// The clamp lines are collected, not said, inside the reads: the catalog read
+	// holds the transaction open while it walks it, and a line said here is a write
+	// into the database the cursor is reading — the server's own read blocks its own
+	// report.
+	return out.Ordered(), clamped, nil
+}
+
+// reportClamps says the collected clamp lines, once the read that collected them
+// has closed its cursor.
+func (systems *Systems) reportClamps(clamped []string) {
+	if systems.warn == nil {
+		return
+	}
+
+	for _, line := range clamped {
+		systems.warn(line)
+	}
 }
 
 // readSites is the legacy `Sites.ReadTx`: the stored `systemId` filters the query and the site
 // is given the system it was found under, per the patched systems catalog reads maintainer
 // note.
-func readSites(ctx context.Context, tx transaction, systemID uint64) (domain.Sites, error) {
+func readSites(ctx context.Context, tx transaction, systemID uint64) (domain.Sites, []string, error) {
 	const query = `SELECT "siteId", "label", "order", "siteRef" FROM "sites" WHERE "systemId" = ?`
 
 	rows, err := tx.query(ctx, query, systemID)
 	if err != nil {
-		return nil, statementError("sites", "read", err, query)
+		return nil, nil, statementError("sites", "read", err, query)
 	}
 
 	defer rows.Close()
 
 	out := domain.Sites{}
 
-	for rows.Next() {
-		var site domain.Site
+	clamped := []string{}
 
-		if err := rows.Scan(&site.ID, &site.Label, &site.Order, &site.SiteRef); err != nil {
-			return nil, operationError("sites", "read", err)
+	for rows.Next() {
+		var (
+			id      int64
+			order   int64
+			siteRef int64
+		)
+
+		site := domain.Site{}
+
+		if err := rows.Scan(&id, &site.Label, &order, &siteRef); err != nil {
+			return nil, nil, operationError("sites", "read", err)
 		}
 
+		// The signed order and siteRef columns are clamped to zero on the way into
+		// the unsigned fields; why, recorded in the signed-column-clamp maintainer
+		// note.
+		clamps := []string{}
+
+		if order < 0 {
+			clamps = append(clamps, fmt.Sprintf("order %d read as 0", order))
+		}
+
+		if siteRef < 0 {
+			clamps = append(clamps, fmt.Sprintf("siteRef %d read as 0", siteRef))
+		}
+
+		if len(clamps) > 0 {
+			clamped = append(clamped, fmt.Sprintf("systems.read: site %d %q holds %s: these are not values this server can hold, and it enforces the clamped ones",
+				id, site.Label, strings.Join(clamps, ", ")))
+		}
+
+		site.ID = uint64(id)
+		site.Order = uint(clampNonNegative(order))
+		site.SiteRef = uint(clampNonNegative(siteRef))
 		site.SystemID = systemID
 
 		out = append(out, site)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, operationError("sites", "read", err)
+		return nil, nil, operationError("sites", "read", err)
 	}
 
-	return out.Ordered(), nil
+	return out.Ordered(), clamped, nil
 }
 
 // readTalkgroups is the legacy `Talkgroups.ReadTx`: the talkgroup columns plus its group
 // memberships aggregated out of `talkgroupGroups` in the same row; `order` and `talkgroupRef`
 // are read from the columns they are stored in, never from each other, per the patched systems
 // catalog reads maintainer note.
-func readTalkgroups(ctx context.Context, tx transaction, dialect Dialect, systemID uint64) (domain.Talkgroups, error) {
+func readTalkgroups(ctx context.Context, tx transaction, dialect Dialect, systemID uint64) (domain.Talkgroups, []string, error) {
 	query := talkgroupsReadQuery(dialect)
 
 	rows, err := tx.query(ctx, query, systemID)
 	if err != nil {
-		return nil, statementError("talkgroups", "read", err, query)
+		return nil, nil, statementError("talkgroups", "read", err, query)
 	}
 
 	defer rows.Close()
 
 	out := domain.Talkgroups{}
 
+	clamped := []string{}
+
 	for rows.Next() {
 		var (
-			talkgroup domain.Talkgroup
-			groups    string
+			id           int64
+			delay        int64
+			frequency    int64
+			order        int64
+			tagID        int64
+			talkgroupRef int64
+			groups       string
 		)
 
-		if err := rows.Scan(&talkgroup.ID, &talkgroup.Alert, &talkgroup.Delay, &talkgroup.Frequency, &talkgroup.Label, &talkgroup.LED, &talkgroup.Name, &talkgroup.Order, &talkgroup.TagID, &talkgroup.TalkgroupRef, &talkgroup.Kind, &groups); err != nil {
-			return nil, operationError("talkgroups", "read", err)
+		talkgroup := domain.Talkgroup{}
+
+		if err := rows.Scan(&id, &talkgroup.Alert, &delay, &frequency, &talkgroup.Label, &talkgroup.LED, &talkgroup.Name, &order, &tagID, &talkgroupRef, &talkgroup.Kind, &groups); err != nil {
+			return nil, nil, operationError("talkgroups", "read", err)
 		}
+
+		// The signed delay, frequency, order, tagId, and talkgroupRef columns are
+		// clamped to zero on the way into the unsigned fields; why, recorded in the
+		// signed-column-clamp maintainer note.
+		clamps := []string{}
+
+		if delay < 0 {
+			clamps = append(clamps, fmt.Sprintf("delay %d read as 0", delay))
+		}
+
+		if frequency < 0 {
+			clamps = append(clamps, fmt.Sprintf("frequency %d read as 0", frequency))
+		}
+
+		if order < 0 {
+			clamps = append(clamps, fmt.Sprintf("order %d read as 0", order))
+		}
+
+		if tagID < 0 {
+			clamps = append(clamps, fmt.Sprintf("tagId %d read as 0", tagID))
+		}
+
+		if talkgroupRef < 0 {
+			clamps = append(clamps, fmt.Sprintf("talkgroupRef %d read as 0", talkgroupRef))
+		}
+
+		if len(clamps) > 0 {
+			clamped = append(clamped, fmt.Sprintf("systems.read: talkgroup %d %q holds %s: these are not values this server can hold, and it enforces the clamped ones",
+				id, talkgroup.Label, strings.Join(clamps, ", ")))
+		}
+
+		talkgroup.ID = uint64(id)
+		talkgroup.Delay = uint(clampNonNegative(delay))
+		talkgroup.Frequency = uint(clampNonNegative(frequency))
+		talkgroup.Order = uint(clampNonNegative(order))
+		talkgroup.TagID = clampNonNegative(tagID)
+		talkgroup.TalkgroupRef = uint(clampNonNegative(talkgroupRef))
 
 		talkgroup.GroupIDs = parseGroupIDs(groups)
 
@@ -371,43 +519,84 @@ func readTalkgroups(ctx context.Context, tx transaction, dialect Dialect, system
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, operationError("talkgroups", "read", err)
+		return nil, nil, operationError("talkgroups", "read", err)
 	}
 
-	return out.Ordered(), nil
+	return out.Ordered(), clamped, nil
 }
 
 // readUnits is the legacy `Units.ReadTx`. Like the sites read, it reads the unit columns and
 // gives the unit the system it was found under.
-func readUnits(ctx context.Context, tx transaction, systemID uint64) (domain.Units, error) {
+func readUnits(ctx context.Context, tx transaction, systemID uint64) (domain.Units, []string, error) {
 	const query = `SELECT "unitId", "label", "order", "unitRef", "unitFrom", "unitTo" FROM "units" WHERE "systemId" = ?`
 
 	rows, err := tx.query(ctx, query, systemID)
 	if err != nil {
-		return nil, statementError("units", "read", err, query)
+		return nil, nil, statementError("units", "read", err, query)
 	}
 
 	defer rows.Close()
 
 	out := domain.Units{}
 
-	for rows.Next() {
-		var unit domain.Unit
+	clamped := []string{}
 
-		if err := rows.Scan(&unit.ID, &unit.Label, &unit.Order, &unit.UnitRef, &unit.UnitFrom, &unit.UnitTo); err != nil {
-			return nil, operationError("units", "read", err)
+	for rows.Next() {
+		var (
+			id       int64
+			order    int64
+			unitRef  int64
+			unitFrom int64
+			unitTo   int64
+		)
+
+		unit := domain.Unit{}
+
+		if err := rows.Scan(&id, &unit.Label, &order, &unitRef, &unitFrom, &unitTo); err != nil {
+			return nil, nil, operationError("units", "read", err)
 		}
 
+		// The signed order, unitRef, unitFrom, and unitTo columns are clamped to
+		// zero on the way into the unsigned fields; why, recorded in the
+		// signed-column-clamp maintainer note.
+		clamps := []string{}
+
+		if order < 0 {
+			clamps = append(clamps, fmt.Sprintf("order %d read as 0", order))
+		}
+
+		if unitRef < 0 {
+			clamps = append(clamps, fmt.Sprintf("unitRef %d read as 0", unitRef))
+		}
+
+		if unitFrom < 0 {
+			clamps = append(clamps, fmt.Sprintf("unitFrom %d read as 0", unitFrom))
+		}
+
+		if unitTo < 0 {
+			clamps = append(clamps, fmt.Sprintf("unitTo %d read as 0", unitTo))
+		}
+
+		if len(clamps) > 0 {
+			clamped = append(clamped, fmt.Sprintf("systems.read: unit %d %q holds %s: these are not values this server can hold, and it enforces the clamped ones",
+				id, unit.Label, strings.Join(clamps, ", ")))
+		}
+
+		unit.ID = uint64(id)
+		unit.Order = uint(clampNonNegative(order))
+		unit.UnitRef = uint(clampNonNegative(unitRef))
+		unit.UnitFrom = uint(clampNonNegative(unitFrom))
+		unit.UnitTo = uint(clampNonNegative(unitTo))
 		unit.SystemID = systemID
 
 		out = append(out, unit)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, operationError("units", "read", err)
+		return nil, nil, operationError("units", "read", err)
 	}
 
-	return out.Ordered(), nil
+	return out.Ordered(), clamped, nil
 }
 
 // talkgroupsReadQuery is the one statement in this file spelled two ways: the aggregate that

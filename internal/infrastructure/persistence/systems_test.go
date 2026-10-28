@@ -1620,3 +1620,106 @@ func openDatabaseAt(t *testing.T, path string, statements []string) *sql.DB {
 
 	return db
 }
+
+// The systems columns delay, order, and systemRef are signed and the read scans them
+// straight into unsigned fields, so a stored negative must read as zero with a warning
+// naming the system, not as a wrapped huge number, and never fail the whole catalog read.
+func TestStoredNegativeSystemValuesReadAsZeroWithAWarning(t *testing.T) {
+	db := openLegacyDatabase(t)
+
+	const query = `INSERT INTO "systems" ("label", "delay", "order", "systemRef", "type") VALUES ('legacy-row', -5, -7, -9, 'talkgroup')`
+
+	if _, err := db.Exec(query); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	repo := NewSystems(db, DialectSqlite)
+
+	warnings := []string{}
+
+	repo.OnWarn(func(message string) {
+		warnings = append(warnings, message)
+	})
+
+	list, err := repo.AllSystems(context.Background())
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	var legacy domain.System
+
+	for _, system := range list {
+		if system.Label == "legacy-row" {
+			legacy = system
+		}
+	}
+
+	if legacy.Label != "legacy-row" {
+		t.Fatal("the stored legacy-row system did not read back at all")
+	}
+
+	if legacy.Delay != 0 || legacy.Order != 0 || legacy.SystemRef != 0 {
+		t.Errorf("the stored -5, -7, -9 read as delay %d, order %d, systemRef %d, want all 0",
+			legacy.Delay, legacy.Order, legacy.SystemRef)
+	}
+
+	if len(warnings) == 0 {
+		t.Fatal("the clamp was said to nobody, want a warning naming the system it clamped")
+	}
+
+	if !strings.Contains(warnings[0], "legacy-row") {
+		t.Errorf("the warning says %q, want it to name the system it clamped", warnings[0])
+	}
+}
+
+// The units columns order, unitRef, unitFrom, and unitTo are signed and the read scans
+// them straight into unsigned fields, so a stored negative must read as zero with a
+// warning naming the unit, and the clamps found under a system must reach the same
+// listener the systems read reports through.
+func TestStoredNegativeUnitValuesReadAsZeroWithAWarning(t *testing.T) {
+	db := openLegacyDatabase(t)
+
+	const query = `INSERT INTO "units" ("label", "order", "unitRef", "unitFrom", "unitTo", "systemId") VALUES ('legacy-row', -7, -11, -13, -17, 1)`
+
+	if _, err := db.Exec(query); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	repo := NewSystems(db, DialectSqlite)
+
+	warnings := []string{}
+
+	repo.OnWarn(func(message string) {
+		warnings = append(warnings, message)
+	})
+
+	list, err := repo.AllSystems(context.Background())
+	if err != nil {
+		t.Fatalf("AllSystems: %v", err)
+	}
+
+	var legacy domain.Unit
+
+	for _, unit := range list[0].Units {
+		if unit.Label == "legacy-row" {
+			legacy = unit
+		}
+	}
+
+	if legacy.Label != "legacy-row" {
+		t.Fatal("the stored legacy-row unit did not read back at all")
+	}
+
+	if legacy.Order != 0 || legacy.UnitRef != 0 || legacy.UnitFrom != 0 || legacy.UnitTo != 0 {
+		t.Errorf("the stored -7, -11, -13, -17 read as order %d, unitRef %d, unitFrom %d, unitTo %d, want all 0",
+			legacy.Order, legacy.UnitRef, legacy.UnitFrom, legacy.UnitTo)
+	}
+
+	if len(warnings) == 0 {
+		t.Fatal("the clamp was said to nobody, want a warning naming the unit it clamped")
+	}
+
+	if !strings.Contains(warnings[0], "legacy-row") {
+		t.Errorf("the warning says %q, want it to name the unit it clamped", warnings[0])
+	}
+}

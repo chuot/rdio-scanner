@@ -289,6 +289,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 	dirwatches.OnWarn(clampWarning)
 	downstreams.OnWarn(clampWarning)
 	groups.OnWarn(clampWarning)
+	systems.OnWarn(clampWarning)
 	tags.OnWarn(clampWarning)
 
 	credentials := passwords.NewBcrypt(s.config.BcryptCost)
