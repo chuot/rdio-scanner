@@ -18,6 +18,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
 
 	"rdio-scanner/internal/application/ports"
@@ -36,7 +37,15 @@ type Groups struct {
 	mutex sync.Mutex
 	live  domain.Groups
 	known bool
+
+	// warn tells the operator about a stored value the read had to clamp. The server
+	// wires it to its log; without it the repository clamps silently.
+	warn func(message string)
 }
+
+// OnWarn sets the listener that hears about stored values the read had to clamp.
+// The server wires it at startup to file the line as a warning in the log view.
+func (groups *Groups) OnWarn(report func(message string)) { groups.warn = report }
 
 var _ ports.GroupRepository = (*Groups)(nil)
 
@@ -55,10 +64,12 @@ func (groups *Groups) AllGroups(ctx context.Context) (domain.Groups, error) {
 		return groups.live, nil
 	}
 
-	loaded, err := readGroups(ctx, groups.store)
+	loaded, clamped, err := readGroups(ctx, groups.store)
 	if err != nil {
 		return nil, err
 	}
+
+	groups.reportClamps(clamped)
 
 	groups.live = loaded
 	groups.known = true
@@ -79,10 +90,12 @@ func (groups *Groups) SaveGroups(ctx context.Context, next domain.Groups) error 
 		return err
 	}
 
-	loaded, err := readGroups(ctx, groups.store)
+	loaded, clamped, err := readGroups(ctx, groups.store)
 	if err != nil {
 		return err
 	}
+
+	groups.reportClamps(clamped)
 
 	groups.live = loaded
 
@@ -90,33 +103,69 @@ func (groups *Groups) SaveGroups(ctx context.Context, next domain.Groups) error 
 }
 
 // readGroups is the legacy `Groups.Read`, stored rows sorted by display order.
-func readGroups(ctx context.Context, s store) (domain.Groups, error) {
+func readGroups(ctx context.Context, s store) (domain.Groups, []string, error) {
 	const query = `SELECT "groupId", "alert", "label", "led", "order" FROM "groups"`
 
 	rows, err := s.query(ctx, query)
 	if err != nil {
-		return nil, statementError("groups", "read", err, query)
+		return nil, nil, statementError("groups", "read", err, query)
 	}
 
 	defer rows.Close()
 
 	out := domain.Groups{}
 
-	for rows.Next() {
-		var group domain.Group
+	clamped := []string{}
 
-		if err := rows.Scan(&group.ID, &group.Alert, &group.Label, &group.LED, &group.Order); err != nil {
-			return nil, operationError("groups", "read", err)
+	for rows.Next() {
+		var (
+			id    int64
+			alert string
+			label string
+			led   string
+			order int64
+		)
+
+		if err := rows.Scan(&id, &alert, &label, &led, &order); err != nil {
+			return nil, nil, operationError("groups", "read", err)
 		}
 
-		out = append(out, group)
+		// The signed order column is clamped to zero on the way into the unsigned
+		// field; why, recorded in the signed-column-clamp maintainer note.
+		if order < 0 {
+			clamped = append(clamped, fmt.Sprintf("groups.read: group %d %q holds order %d: that is not a display order this server can hold, and it is read as 0",
+				id, label, order))
+		}
+
+		out = append(out, domain.Group{
+			ID:    uint64(id),
+			Alert: alert,
+			Label: label,
+			LED:   led,
+			Order: uint(clampNonNegative(order)),
+		})
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, operationError("groups", "read", err)
+		return nil, nil, operationError("groups", "read", err)
 	}
 
-	return out.Ordered(), nil
+	// The clamp lines are collected, not said, inside the loop: the read holds the
+	// table open while it walks it, and a line said here is a write into the table
+	// the cursor is reading — the server's own read blocks its own report.
+	return out.Ordered(), clamped, nil
+}
+
+// reportClamps says the collected clamp lines, once the read that collected them
+// has closed its cursor.
+func (groups *Groups) reportClamps(clamped []string) {
+	if groups.warn == nil {
+		return
+	}
+
+	for _, line := range clamped {
+		groups.warn(line)
+	}
 }
 
 // writeGroups reconciles the stored groups with the given ones in one

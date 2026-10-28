@@ -298,3 +298,54 @@ func TestSaveGroupsStoresAQuoteInALabelAsText(t *testing.T) {
 		t.Errorf("the groups table has %d rows, want 1: the value was never part of the statement", got)
 	}
 }
+
+// The order column is signed and the list reads it into an unsigned field, so a
+// stored negative order reads as zero like the accesses list already clamps, and
+// never fails the whole group read: one row with a negative order must not leave
+// the server without its groups.
+func TestStoredNegativeGroupOrderReadsAsZero(t *testing.T) {
+	db := openLegacyDatabase(t)
+
+	const query = `INSERT INTO "groups" ("label", "order") VALUES ('legacy-row', -7)`
+
+	if _, err := db.Exec(query); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	repo := NewGroups(db, DialectSqlite)
+
+	warnings := []string{}
+
+	repo.OnWarn(func(message string) {
+		warnings = append(warnings, message)
+	})
+
+	list, err := repo.AllGroups(context.Background())
+	if err != nil {
+		t.Fatalf("AllGroups: %v", err)
+	}
+
+	var legacy domain.Group
+
+	for _, group := range list {
+		if group.Label == "legacy-row" {
+			legacy = group
+		}
+	}
+
+	if legacy.Label != "legacy-row" {
+		t.Fatal("the stored legacy-row group did not read back at all")
+	}
+
+	if legacy.Order != 0 {
+		t.Errorf("the stored -7 read as order %d, want 0", legacy.Order)
+	}
+
+	if len(warnings) == 0 {
+		t.Fatal("the clamp was said to nobody, want a warning naming the group it clamped")
+	}
+
+	if !strings.Contains(warnings[0], "legacy-row") {
+		t.Errorf("the warning says %q, want it to name the group it clamped", warnings[0])
+	}
+}

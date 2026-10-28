@@ -624,3 +624,54 @@ func TestSaveDirwatchesOnADatabaseTheLegacyServerWroteKeepsTheStoredWatch(t *tes
 		t.Errorf("the legacy watch is stored as %v, want it unchanged: %v", after[0], loaded[0])
 	}
 }
+
+// The delay, frequency, and order columns are signed and the list reads them into
+// unsigned fields, so stored negatives read as zero like the accesses list already
+// clamps, and never fail the whole watch read: one row with a negative delay must
+// not leave the server without its watches.
+func TestStoredNegativeDirwatchValuesReadAsZeroWithAWarning(t *testing.T) {
+	db := openLegacyDatabase(t)
+
+	const legacyRow = `INSERT INTO "dirwatches" ("delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "siteId", "systemId", "talkgroupId", "type") VALUES (-5, false, '/spool/negative-values', false, '', -3, '', -7, 0, 0, 0, 'default')`
+
+	if _, err := db.Exec(legacyRow); err != nil {
+		t.Fatalf("%s: %v", legacyRow, err)
+	}
+
+	dirwatches := NewDirwatches(db, DialectSqlite)
+
+	warnings := []string{}
+
+	dirwatches.OnWarn(func(message string) {
+		warnings = append(warnings, message)
+	})
+
+	list, err := dirwatches.AllDirwatches(context.Background())
+	if err != nil {
+		t.Fatalf("AllDirwatches: %v", err)
+	}
+
+	var legacy domain.Dirwatch
+
+	for _, watch := range list {
+		if watch.Directory == "/spool/negative-values" {
+			legacy = watch
+		}
+	}
+
+	if legacy.Directory != "/spool/negative-values" {
+		t.Fatal("the stored legacy-row watch did not read back at all")
+	}
+
+	if legacy.Delay != 0 || legacy.Frequency != 0 || legacy.Order != 0 {
+		t.Errorf("the stored -5, -3, -7 read as delay %d, frequency %d, order %d, want 0, 0, 0", legacy.Delay, legacy.Frequency, legacy.Order)
+	}
+
+	if len(warnings) == 0 {
+		t.Fatal("the clamp was said to nobody, want a warning naming the watch it clamped")
+	}
+
+	if !strings.Contains(warnings[0], "/spool/negative-values") {
+		t.Errorf("the warning says %q, want it to name the watch it clamped", warnings[0])
+	}
+}

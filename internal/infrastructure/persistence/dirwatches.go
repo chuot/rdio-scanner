@@ -18,6 +18,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -44,7 +45,15 @@ type Dirwatches struct {
 	// liveIsKnown says whether the live watches have been read yet; the first
 	// read is the startup read.
 	liveIsKnown bool
+
+	// warn tells the operator about a stored value the read had to clamp. The server
+	// wires it to its log; without it the repository clamps silently.
+	warn func(message string)
 }
+
+// OnWarn sets the listener that hears about stored values the read had to clamp.
+// The server wires it at startup to file the line as a warning in the log view.
+func (dirwatches *Dirwatches) OnWarn(report func(message string)) { dirwatches.warn = report }
 
 var _ ports.DirwatchRepository = (*Dirwatches)(nil)
 
@@ -60,10 +69,12 @@ func (dirwatches *Dirwatches) AllDirwatches(ctx context.Context) (domain.Dirwatc
 	defer dirwatches.mutex.Unlock()
 
 	if !dirwatches.liveIsKnown {
-		loaded, err := dirwatches.read(ctx)
+		loaded, clamped, err := dirwatches.read(ctx)
 		if err != nil {
 			return nil, err
 		}
+
+		dirwatches.reportClamps(clamped)
 
 		dirwatches.live = loaded
 		dirwatches.liveIsKnown = true
@@ -90,10 +101,12 @@ func (dirwatches *Dirwatches) SaveDirwatches(ctx context.Context, next domain.Di
 
 	// A save that persisted is normalized through the stored rows, which gives a
 	// newly added watch the identifier the table assigned it.
-	loaded, err := dirwatches.read(ctx)
+	loaded, clamped, err := dirwatches.read(ctx)
 	if err != nil {
 		return err
 	}
+
+	dirwatches.reportClamps(clamped)
 
 	dirwatches.live = loaded
 
@@ -106,44 +119,82 @@ const dirwatchColumns = `"dirwatchId", "delay", "deleteAfter", "directory", "dis
 
 // read loads the whole stored collection. It is the legacy `Dirwatches.Read`, with the values
 // bound instead of formatted into the statement.
-func (dirwatches *Dirwatches) read(ctx context.Context) (domain.Dirwatches, error) {
+func (dirwatches *Dirwatches) read(ctx context.Context) (domain.Dirwatches, []string, error) {
 	query := `SELECT ` + dirwatchColumns + ` FROM "dirwatches"`
 
 	rows, err := dirwatches.store.query(ctx, query)
 	if err != nil {
-		return nil, statementError("dirwatches", "read", err, query)
+		return nil, nil, statementError("dirwatches", "read", err, query)
 	}
 
 	defer rows.Close()
 
 	out := domain.Dirwatches{}
 
+	clamped := []string{}
+
 	for rows.Next() {
 		dirwatch := domain.NewDirwatch()
 
+		var (
+			id        int64
+			delay     int64
+			frequency int64
+			order     int64
+		)
+
 		if err := rows.Scan(
-			&dirwatch.ID,
-			&dirwatch.Delay,
+			&id,
+			&delay,
 			&dirwatch.DeleteAfter,
 			&dirwatch.Directory,
 			&dirwatch.Disabled,
 			&dirwatch.Extension,
-			&dirwatch.Frequency,
+			&frequency,
 			&dirwatch.Mask,
-			&dirwatch.Order,
+			&order,
 			&dirwatch.SiteID,
 			&dirwatch.SystemID,
 			&dirwatch.TalkgroupID,
 			&dirwatch.Kind,
 		); err != nil {
-			return nil, statementError("dirwatches", "read", err, query)
+			return nil, nil, statementError("dirwatches", "read", err, query)
 		}
+
+		dirwatch.ID = uint64(id)
+
+		// The signed delay, frequency, and order columns are clamped to zero on the
+		// way into the unsigned fields; why, recorded in the signed-column-clamp
+		// maintainer note. The deleteAfter column is boolean in every schema and the
+		// field is a Go bool, so it has no signed value to clamp.
+		clamps := []string{}
+
+		if delay < 0 {
+			clamps = append(clamps, fmt.Sprintf("delay %d read as 0", delay))
+		}
+
+		if frequency < 0 {
+			clamps = append(clamps, fmt.Sprintf("frequency %d read as 0", frequency))
+		}
+
+		if order < 0 {
+			clamps = append(clamps, fmt.Sprintf("order %d read as 0", order))
+		}
+
+		if len(clamps) > 0 {
+			clamped = append(clamped, fmt.Sprintf("dirwatches.read: dirwatch %d %q holds %s: these are not values this server can hold, and it enforces the clamped ones",
+				id, dirwatch.Directory, strings.Join(clamps, ", ")))
+		}
+
+		dirwatch.Delay = uint(clampNonNegative(delay))
+		dirwatch.Frequency = uint(clampNonNegative(frequency))
+		dirwatch.Order = uint(clampNonNegative(order))
 
 		out = append(out, dirwatch)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, operationError("dirwatches", "read", err)
+		return nil, nil, operationError("dirwatches", "read", err)
 	}
 
 	// The legacy server sorts the list it read by `order` rather than asking the
@@ -154,7 +205,22 @@ func (dirwatches *Dirwatches) read(ctx context.Context) (domain.Dirwatches, erro
 		return out[i].Order < out[j].Order
 	})
 
-	return out, nil
+	// The clamp lines are collected, not said, inside the loop: the read holds the
+	// table open while it walks it, and a line said here is a write into the table
+	// the cursor is reading — the server's own read blocks its own report.
+	return out, clamped, nil
+}
+
+// reportClamps says the collected clamp lines, once the read that collected them
+// has closed its cursor.
+func (dirwatches *Dirwatches) reportClamps(clamped []string) {
+	if dirwatches.warn == nil {
+		return
+	}
+
+	for _, line := range clamped {
+		dirwatches.warn(line)
+	}
 }
 
 // write reconciles the stored watches with the given ones in one transaction: select the stored

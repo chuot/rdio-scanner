@@ -612,3 +612,54 @@ func TestAllDownstreamsReportsAnUnreachableStore(t *testing.T) {
 		t.Errorf("error = %v, want it to name the statement that failed", err)
 	}
 }
+
+// The order column is signed and the list reads it into an unsigned field, so a
+// stored negative order reads as zero like the accesses list already clamps, and
+// never fail the whole downstream read: one row with a negative order must not
+// leave the server without its downstreams.
+func TestStoredNegativeDownstreamOrderReadsAsZeroWithAWarning(t *testing.T) {
+	db := openDownstreamTestDatabase(t)
+
+	const legacyRow = `INSERT INTO "downstreams" ("apikey", "disabled", "order", "systems", "url") VALUES ('legacy-downstream', false, -7, '"*"', 'http://127.0.0.1:4000/api/call-upload')`
+
+	if _, err := db.Exec(legacyRow); err != nil {
+		t.Fatalf("%s: %v", legacyRow, err)
+	}
+
+	downstreams := NewDownstreams(db, DialectSqlite)
+
+	warnings := []string{}
+
+	downstreams.OnWarn(func(message string) {
+		warnings = append(warnings, message)
+	})
+
+	list, err := downstreams.AllDownstreams(context.Background())
+	if err != nil {
+		t.Fatalf("AllDownstreams: %v", err)
+	}
+
+	var legacy domain.Downstream
+
+	for _, downstream := range list {
+		if downstream.Apikey == "legacy-downstream" {
+			legacy = downstream
+		}
+	}
+
+	if legacy.Apikey != "legacy-downstream" {
+		t.Fatal("the stored legacy-downstream row did not read back at all")
+	}
+
+	if legacy.Order != 0 {
+		t.Errorf("the stored -7 read as order %d, want 0", legacy.Order)
+	}
+
+	if len(warnings) == 0 {
+		t.Fatal("the clamp was said to nobody, want a warning naming the downstream it clamped")
+	}
+
+	if !strings.Contains(warnings[0], "legacy-downstream") {
+		t.Errorf("the warning says %q, want it to name the downstream it clamped", warnings[0])
+	}
+}

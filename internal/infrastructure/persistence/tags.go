@@ -18,6 +18,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
 
 	"rdio-scanner/internal/application/ports"
@@ -33,7 +34,15 @@ type Tags struct {
 	mutex sync.Mutex
 	live  domain.Tags
 	known bool
+
+	// warn tells the operator about a stored value the read had to clamp. The server
+	// wires it to its log; without it the repository clamps silently.
+	warn func(message string)
 }
+
+// OnWarn sets the listener that hears about stored values the read had to clamp.
+// The server wires it at startup to file the line as a warning in the log view.
+func (tags *Tags) OnWarn(report func(message string)) { tags.warn = report }
 
 var _ ports.TagRepository = (*Tags)(nil)
 
@@ -52,10 +61,12 @@ func (tags *Tags) AllTags(ctx context.Context) (domain.Tags, error) {
 		return tags.live, nil
 	}
 
-	loaded, err := readTags(ctx, tags.store)
+	loaded, clamped, err := readTags(ctx, tags.store)
 	if err != nil {
 		return nil, err
 	}
+
+	tags.reportClamps(clamped)
 
 	tags.live = loaded
 	tags.known = true
@@ -78,10 +89,12 @@ func (tags *Tags) SaveTags(ctx context.Context, next domain.Tags) error {
 		return err
 	}
 
-	loaded, err := readTags(ctx, tags.store)
+	loaded, clamped, err := readTags(ctx, tags.store)
 	if err != nil {
 		return err
 	}
+
+	tags.reportClamps(clamped)
 
 	tags.live = loaded
 
@@ -90,33 +103,69 @@ func (tags *Tags) SaveTags(ctx context.Context, next domain.Tags) error {
 
 // readTags reads the stored rows sorted by display order, labels exactly as stored —
 // trailing spaces included.
-func readTags(ctx context.Context, s store) (domain.Tags, error) {
+func readTags(ctx context.Context, s store) (domain.Tags, []string, error) {
 	const query = `SELECT "tagId", "alert", "label", "led", "order" FROM "tags"`
 
 	rows, err := s.query(ctx, query)
 	if err != nil {
-		return nil, statementError("tags", "read", err, query)
+		return nil, nil, statementError("tags", "read", err, query)
 	}
 
 	defer rows.Close()
 
 	out := domain.Tags{}
 
-	for rows.Next() {
-		var tag domain.Tag
+	clamped := []string{}
 
-		if err := rows.Scan(&tag.ID, &tag.Alert, &tag.Label, &tag.LED, &tag.Order); err != nil {
-			return nil, operationError("tags", "read", err)
+	for rows.Next() {
+		var (
+			id    int64
+			alert string
+			label string
+			led   string
+			order int64
+		)
+
+		if err := rows.Scan(&id, &alert, &label, &led, &order); err != nil {
+			return nil, nil, operationError("tags", "read", err)
 		}
 
-		out = append(out, tag)
+		// The signed order column is clamped to zero on the way into the unsigned
+		// field; why, recorded in the signed-column-clamp maintainer note.
+		if order < 0 {
+			clamped = append(clamped, fmt.Sprintf("tags.read: tag %d %q holds order %d: that is not a display order this server can hold, and it is read as 0",
+				id, label, order))
+		}
+
+		out = append(out, domain.Tag{
+			ID:    uint64(id),
+			Alert: alert,
+			Label: label,
+			LED:   led,
+			Order: uint(clampNonNegative(order)),
+		})
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, operationError("tags", "read", err)
+		return nil, nil, operationError("tags", "read", err)
 	}
 
-	return out.Ordered(), nil
+	// The clamp lines are collected, not said, inside the loop: the read holds the
+	// table open while it walks it, and a line said here is a write into the table
+	// the cursor is reading — the server's own read blocks its own report.
+	return out.Ordered(), clamped, nil
+}
+
+// reportClamps says the collected clamp lines, once the read that collected them
+// has closed its cursor.
+func (tags *Tags) reportClamps(clamped []string) {
+	if tags.warn == nil {
+		return
+	}
+
+	for _, line := range clamped {
+		tags.warn(line)
+	}
 }
 
 // writeTags performs the reconcile: select the stored identifiers, delete the ones

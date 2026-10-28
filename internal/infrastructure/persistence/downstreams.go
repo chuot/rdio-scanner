@@ -18,6 +18,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -41,7 +42,15 @@ type Downstreams struct {
 
 	// liveIsKnown reports whether the live list has been read yet.
 	liveIsKnown bool
+
+	// warn tells the operator about a stored value the read had to clamp. The server
+	// wires it to its log; without it the repository clamps silently.
+	warn func(message string)
 }
+
+// OnWarn sets the listener that hears about stored values the read had to clamp.
+// The server wires it at startup to file the line as a warning in the log view.
+func (downstreams *Downstreams) OnWarn(report func(message string)) { downstreams.warn = report }
 
 var _ ports.DownstreamRepository = (*Downstreams)(nil)
 
@@ -57,10 +66,12 @@ func (downstreams *Downstreams) AllDownstreams(ctx context.Context) (domain.Down
 	defer downstreams.mutex.Unlock()
 
 	if !downstreams.liveIsKnown {
-		loaded, err := downstreams.read(ctx)
+		loaded, clamped, err := downstreams.read(ctx)
 		if err != nil {
 			return nil, err
 		}
+
+		downstreams.reportClamps(clamped)
 
 		downstreams.live = loaded
 		downstreams.liveIsKnown = true
@@ -83,10 +94,12 @@ func (downstreams *Downstreams) SaveDownstreams(ctx context.Context, next domain
 		return err
 	}
 
-	loaded, err := downstreams.read(ctx)
+	loaded, clamped, err := downstreams.read(ctx)
 	if err != nil {
 		return err
 	}
+
+	downstreams.reportClamps(clamped)
 
 	downstreams.live = loaded
 
@@ -95,27 +108,42 @@ func (downstreams *Downstreams) SaveDownstreams(ctx context.Context, next domain
 
 // read loads the whole stored list. It is the legacy `Downstreams.Read`, with the values bound
 // instead of formatted into the statement.
-func (downstreams *Downstreams) read(ctx context.Context) (domain.Downstreams, error) {
+func (downstreams *Downstreams) read(ctx context.Context) (domain.Downstreams, []string, error) {
 	query := `SELECT "downstreamId", "apikey", "disabled", "order", "systems", "url" FROM "downstreams"`
 
 	rows, err := downstreams.store.query(ctx, query)
 	if err != nil {
-		return nil, statementError("downstreams", "read", err, query)
+		return nil, nil, statementError("downstreams", "read", err, query)
 	}
 
 	defer rows.Close()
 
 	out := domain.Downstreams{}
 
+	clamped := []string{}
+
 	for rows.Next() {
 		var (
+			id         int64
+			order      int64
 			downstream domain.Downstream
 			systems    string
 		)
 
-		if err := rows.Scan(&downstream.ID, &downstream.Apikey, &downstream.Disabled, &downstream.Order, &systems, &downstream.URL); err != nil {
-			return nil, statementError("downstreams", "read", err, query)
+		if err := rows.Scan(&id, &downstream.Apikey, &downstream.Disabled, &order, &systems, &downstream.URL); err != nil {
+			return nil, nil, statementError("downstreams", "read", err, query)
 		}
+
+		downstream.ID = uint64(id)
+
+		// The signed order column is clamped to zero on the way into the unsigned
+		// field; why, recorded in the signed-column-clamp maintainer note.
+		if order < 0 {
+			clamped = append(clamped, fmt.Sprintf("downstreams.read: downstream %d %q holds order %d: that is not a display order this server can hold, and it is read as 0",
+				id, downstream.Apikey, order))
+		}
+
+		downstream.Order = uint(clampNonNegative(order))
 
 		// The scope is stored as JSON text. An empty column, a `null`, and text
 		// that is not JSON all mean no scope was supplied, which is the state
@@ -126,12 +154,28 @@ func (downstreams *Downstreams) read(ctx context.Context) (domain.Downstreams, e
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, operationError("downstreams", "read", err)
+		return nil, nil, operationError("downstreams", "read", err)
 	}
 
 	// The legacy server sorts the list it read by `order`; `Downstreams.Ordered`
 	// is that rule, stable where the legacy `sort.Slice` was not.
-	return out.Ordered(), nil
+	//
+	// The clamp lines are collected, not said, inside the loop: the read holds the
+	// table open while it walks it, and a line said here is a write into the table
+	// the cursor is reading — the server's own read blocks its own report.
+	return out.Ordered(), clamped, nil
+}
+
+// reportClamps says the collected clamp lines, once the read that collected them
+// has closed its cursor.
+func (downstreams *Downstreams) reportClamps(clamped []string) {
+	if downstreams.warn == nil {
+		return
+	}
+
+	for _, line := range clamped {
+		downstreams.warn(line)
+	}
 }
 
 // write reconciles the stored downstreams with the given ones in one transaction: select the

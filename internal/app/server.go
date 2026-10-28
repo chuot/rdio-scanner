@@ -286,6 +286,10 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	accesses.OnWarn(clampWarning)
 	apikeys.OnWarn(clampWarning)
+	dirwatches.OnWarn(clampWarning)
+	downstreams.OnWarn(clampWarning)
+	groups.OnWarn(clampWarning)
+	tags.OnWarn(clampWarning)
 
 	credentials := passwords.NewBcrypt(s.config.BcryptCost)
 	s.hashes = credentials
