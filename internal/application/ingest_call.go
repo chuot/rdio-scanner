@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -481,13 +482,37 @@ func (handler *IngestCallHandler) DeliverCall(ctx context.Context, call domain.C
 // receiving servers, and the posts queue behind the eight in flight.
 var forwardSlots = make(chan struct{}, 8)
 
+// maxForwardingCalls caps how many calls are inside the forwarding path at once,
+// posted or waiting behind the slots: a downstream that accepts the connection but
+// answers slower than calls arrive would otherwise make the server grow one goroutine
+// per call, each holding its recording, until the server runs out of memory. Past the
+// cap a call is dropped from forwarding like any other forwarding failure — a
+// server-log line, not this use case's failure.
+const maxForwardingCalls = 32
+
+// forwardingCalls counts the calls inside the forwarding path right now. The count
+// is checked before it is taken, so it is a bound, not a fence: a few calls arriving
+// at the same instant may pass it together, which costs nothing worth guarding.
+var forwardingCalls atomic.Int64
+
 // forwardCall re-posts a stored call to every downstream server whose scope covers it.
 // It runs on its own goroutine, bounded only by the forwarder's own timeout, so a slow
 // or unreachable downstream cannot hold up later calls; the call was already stored
 // and delivered here, so a forwarding failure is a server-log line, not this use
 // case's failure — see the downstream-forwarding-from-ingest maintainer note.
 func (handler *IngestCallHandler) forwardCall(ctx context.Context, call domain.Call) {
+	if forwardingCalls.Load() >= maxForwardingCalls {
+		handler.log(ctx, domain.LogLevelWarn, domain.LogSourceDownstream, fmt.Sprintf("call from system %d talkgroup %d was not forwarded: too many calls were already waiting for the downstream servers",
+			call.System.SystemRef, call.Talkgroup.TalkgroupRef))
+
+		return
+	}
+
+	forwardingCalls.Add(1)
+
 	go func() {
+		defer forwardingCalls.Add(-1)
+
 		ctx = context.WithoutCancel(ctx)
 
 		downstreams, err := handler.downstreams.AllDownstreams(ctx)

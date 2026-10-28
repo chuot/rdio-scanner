@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -2052,5 +2053,61 @@ func TestIngestCallPostsNoMoreThanEightCallsToTheDownstreamsAtOnce(t *testing.T)
 
 	if max > 8 {
 		t.Errorf("the server posted %d calls to the downstream at once, want no more than 8", max)
+	}
+}
+
+// A downstream server that accepts the connection but answers slower than calls arrive
+// must not make the server grow one goroutine per call, each holding its recording:
+// past a bound, later calls are dropped from forwarding like any other forwarding
+// failure, and the log says so.
+func TestDeliveringCallsToASlowDownstreamDropsThemPastTheForwardingBound(t *testing.T) {
+	fixture := newIngestFixture()
+
+	system := fixture.seedKnownSystem()
+
+	fixture.downstreams.Stored = domain.Downstreams{{
+		ID:     1,
+		Apikey: "downstream-key",
+		URL:    "http://downstream.example",
+		Scope:  domain.AccessScope{Present: true, Wildcard: true},
+	}}
+
+	// Every re-post is held until the test releases it: the downstream never answers,
+	// so the eight posts in flight never free their slots and everything else queues.
+	fixture.forwarder.Release = make(chan struct{})
+
+	baseline := runtime.NumGoroutine()
+
+	for i := 0; i < 200; i++ {
+		call := validIngestCall()
+
+		call.ID = uint64(1000 + i)
+		call.System = system
+		call.Talkgroup = system.Talkgroups[0]
+		call.AudioFilename = fmt.Sprintf("TG123-%03d.wav", i)
+
+		fixture.handler.DeliverCall(context.Background(), call)
+	}
+
+	// The posts settle at the eight in flight; what must not keep growing is
+	// everything waiting behind them.
+	deadline := time.Now().Add(5 * time.Second)
+
+	for time.Now().Before(deadline) && fixture.forwarder.MaxInFlight() < 8 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	waiting := runtime.NumGoroutine() - baseline
+
+	close(fixture.forwarder.Release)
+
+	if waiting > 40 {
+		t.Errorf("the stalled downstream left %d goroutines waiting to forward, want a bounded few", waiting)
+	}
+
+	if !fixture.loggedAs(domain.LogSourceDownstream, "was not forwarded") {
+		t.Errorf("logs = %v, want the calls dropped from forwarding to say so", fixture.logMessages())
 	}
 }
