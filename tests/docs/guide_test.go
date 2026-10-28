@@ -698,6 +698,56 @@ func TestTheFlagsTheGuideTabulatesAreTheFlagsTheServerAccepts(t *testing.T) {
 	}
 }
 
+// proseFlagPattern matches a code element whose whole text is one flag: the guide's prose
+// names a flag this way when it describes what the flag does, as distinct from a command
+// line where the flag sits among its arguments, and a trailing star is the guide's glob
+// for a family of flags rather than one flag's name.
+var proseFlagPattern = regexp.MustCompile(`(?is)<code>\s*-([a-z_][a-z0-9_]*)\s*(\*?)\s*</code>`)
+
+// proseFlags collects the flags the guide names in a code element of its own, outside the
+// flag tables the tabulated check reads.
+func proseFlags(t *testing.T, body string) []string {
+	t.Helper()
+
+	var named []string
+
+	for _, m := range proseFlagPattern.FindAllStringSubmatch(body, -1) {
+		if m[2] == "*" {
+			continue
+		}
+
+		if !slices.Contains(named, m[1]) {
+			named = append(named, m[1])
+		}
+	}
+
+	if len(named) < 20 {
+		t.Fatalf("the guide names %d flags outside its flag tables: the mentions are not readable from it", len(named))
+	}
+
+	sort.Strings(named)
+
+	return named
+}
+
+// the guide describes flags in its prose as well as in its tables, and a reader follows the
+// prose: every flag it names in a code element has to be one the composition root registers.
+func TestTheFlagsTheGuideNamesOutsideItsTablesAreTheFlagsTheServerAccepts(t *testing.T) {
+	body := guidePath(t)
+
+	accepted := map[string]bool{}
+
+	for _, flag := range serverFlags(t) {
+		accepted[flag.name] = true
+	}
+
+	for _, name := range proseFlags(t, body) {
+		if !accepted[name] {
+			t.Errorf("the guide describes the -%s flag in its prose, which the server does not accept", name)
+		}
+	}
+}
+
 // httpMethods are the methods the contract publishes as operations; its websocket
 // entries are the listener's channel, not endpoints a client calls.
 var httpMethods = map[string]bool{
