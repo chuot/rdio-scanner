@@ -401,3 +401,74 @@ func TestAnUnparseableConnectTimeoutIsRejected(t *testing.T) {
 		}
 	}
 }
+
+// the ini file overrides a setting only when it actually carries that setting:
+// a value the operator typed on the command line survives an ini file that
+// leaves it out, the way every other setting in this file behaves.
+func TestAFlagSurvivesAnIniFileThatLeavesTheSettingOut(t *testing.T) {
+	baseDir := t.TempDir()
+
+	writeFile(t, filepath.Join(baseDir, "operator.ini"), "db_type = mysql\ndb_host = db.internal\ndb_name = rdio\n")
+
+	cfg, _, err := newConfig([]string{"-base_dir", baseDir, "-config", "operator.ini",
+		"-db_port", "6000", "-bcrypt_cost", "13"}, "", &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("newConfig: %v", err)
+	}
+
+	checks := map[string]struct{ got, want any }{
+		"DbPort":     {cfg.DbPort, uint(6000)},
+		"BcryptCost": {cfg.BcryptCost, 13},
+		"DbHost":     {cfg.DbHost, "db.internal"},
+	}
+
+	for name, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s = %v, want %v: an ini file that leaves a setting out must leave the operator's flag alone", name, c.got, c.want)
+		}
+	}
+}
+
+// the port that comes with a database type is the port the operator gets whether
+// or not an ini file is in the way: the postgresql default is the postgres port.
+func TestAPostgresDatabaseWithoutAnIniFileGetsThePostgresPort(t *testing.T) {
+	cfg, _ := newTestConfig(t, "-db_type", "postgresql", "-db_host", "db.internal", "-db_name", "rdio")
+
+	if got, want := cfg.DbPort, uint(5432); got != want {
+		t.Errorf("DbPort = %d, want %d: a postgresql database with no ini file uses the postgres port", got, want)
+	}
+}
+
+// a saved file decides the port for every later boot, so a save must not write a
+// port the server's own answer for the chosen database type contradicts.
+func TestConfigSaveDoesNotPinTheOtherDatabasesPortForPostgres(t *testing.T) {
+	cfg, _ := newTestConfig(t, "-db_type", "postgresql", "-db_host", "db.internal", "-db_name", "rdio", "-config_save")
+
+	data, err := os.ReadFile(filepath.Join(cfg.BaseDir, "rdio-scanner.ini"))
+	if err != nil {
+		t.Fatalf("read saved ini: %v", err)
+	}
+
+	if strings.Contains(string(data), "db_port = 3306") {
+		t.Errorf("saved ini =\n%q\nwant no db_port line: 3306 is the port of a different database type, and this file pins it for every later boot", string(data))
+	}
+}
+
+// an ini file the server cannot read stops the start and names the file, the
+// way the admin guide says it does; today the read failure is swallowed and the
+// server boots on its built-in defaults while the operator believes their file
+// is in force.
+func TestAnUnreadableIniFileStopsTheStartAndNamesTheFile(t *testing.T) {
+	baseDir := t.TempDir()
+
+	writeFile(t, filepath.Join(baseDir, "rdio-scanner.ini"), "this line is not a setting\n")
+
+	cfg, _, err := newConfig([]string{"-base_dir", baseDir}, "", &bytes.Buffer{})
+	if err == nil {
+		t.Fatalf("newConfig accepted an ini file it cannot read: listen = %q, want a failure naming rdio-scanner.ini", cfg.Listen)
+	}
+
+	if !strings.Contains(err.Error(), "rdio-scanner.ini") {
+		t.Errorf("error = %q, want it to name rdio-scanner.ini: the operator has to know which file the server could not read", err.Error())
+	}
+}
