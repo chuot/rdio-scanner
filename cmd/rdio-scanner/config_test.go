@@ -506,3 +506,32 @@ func TestConfigSaveDoesNotWriteAFileTheServerRefusesToStartFrom(t *testing.T) {
 	saved, _ := os.ReadFile(filepath.Join(cfg.BaseDir, "rdio-scanner.ini"))
 	t.Errorf("config_save wrote an rdio-scanner.ini the next start refuses: %v\nsaved ini =\n%q", nextErr, string(saved))
 }
+
+// the admin guide says -config_save rewrites the file from what the server
+// currently holds, and the precedence it states puts the ini file between the
+// flags and the built-in defaults. The settings the file already held are part
+// of what the server holds, so a save has to carry them into the file it writes:
+// a save that never reads the file replaces the operator's whole configuration
+// with the built-in defaults.
+func TestConfigSaveKeepsTheSettingsTheIniFileAlreadyHolds(t *testing.T) {
+	baseDir := t.TempDir()
+
+	writeFile(t, filepath.Join(baseDir, "rdio-scanner.ini"),
+		"db_type = mysql\ndb_host = db.internal\ndb_name = rdio\ndb_user = rdio\nlisten = :3001\n")
+
+	cfg, _, err := newConfig([]string{"-base_dir", baseDir, "-config_save"}, "", &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("newConfig: %v", err)
+	}
+
+	saved, err := os.ReadFile(filepath.Join(cfg.BaseDir, "rdio-scanner.ini"))
+	if err != nil {
+		t.Fatalf("read saved ini: %v", err)
+	}
+
+	for _, setting := range []string{"db_type = mysql", "db_host = db.internal", "db_name = rdio", "listen = :3001"} {
+		if !strings.Contains(string(saved), setting) {
+			t.Errorf("saved ini =\n%q\nwant it to keep %q: a save that reads the file it is rewriting keeps the settings the operator's file already held", string(saved), setting)
+		}
+	}
+}
