@@ -498,10 +498,11 @@ func TestConfigSaveWritesTheCredentialTheServerReadsBack(t *testing.T) {
 func TestConfigSaveDoesNotWriteAFileTheServerRefusesToStartFrom(t *testing.T) {
 	cfg, _ := newTestConfig(t, "-db_type", "oracle", "-db_host", "db.internal", "-db_name", "rdio", "-config_save")
 
-	if _, _, err := newConfig([]string{"-base_dir", cfg.BaseDir}, "", &bytes.Buffer{}); err == nil {
+	_, _, nextErr := newConfig([]string{"-base_dir", cfg.BaseDir}, "", &bytes.Buffer{})
+	if nextErr == nil {
 		return
 	}
 
-	saved, readErr := os.ReadFile(filepath.Join(cfg.BaseDir, "rdio-scanner.ini"))
-	t.Errorf("config_save wrote rdio-scanner.ini that the next start refuses: %v\nsaved ini =\n%q", readErr, string(saved))
+	saved, _ := os.ReadFile(filepath.Join(cfg.BaseDir, "rdio-scanner.ini"))
+	t.Errorf("config_save wrote an rdio-scanner.ini the next start refuses: %v\nsaved ini =\n%q", nextErr, string(saved))
 }
