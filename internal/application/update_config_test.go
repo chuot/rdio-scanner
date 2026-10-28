@@ -798,3 +798,35 @@ func TestUpdateConfigurationSectionStoresAWatchWithAValidMask(t *testing.T) {
 		t.Errorf("dirwatches = %v, want the watch with the valid mask stored", fixture.dirwatches.Stored)
 	}
 }
+
+// A dirwatch payload whose mask only becomes impossible to compile once the watch tokens
+// are replaced by the patterns they name is refused at apply as well: the administrator's
+// brackets survive the plain check, and the mask that reaches the watcher cannot be
+// compiled from them.
+func TestUpdateConfigurationSectionRefusesAMaskThatTokensMakeImpossibleToCompile(t *testing.T) {
+	fixture := newConfigFixture()
+
+	before := append(domain.Dirwatches{}, fixture.dirwatches.Stored...)
+
+	dirwatches := domain.Dirwatches{
+		{ID: 1, Directory: "/var/spool/rdio", Kind: "wild", Mask: "[#DATE]", Extension: "wav"},
+	}
+
+	result, err := fixture.saveSection(DirwatchSection, ConfigurationChanges{Dirwatches: &dirwatches})
+
+	if err == nil {
+		t.Error("a watch whose mask cannot be compiled after its tokens are replaced must not be stored")
+	}
+
+	if result.Outcome != ConfigurationSaveFailed {
+		t.Errorf("outcome = %q, want %q: a per-section save reports its failure", result.Outcome, ConfigurationSaveFailed)
+	}
+
+	if len(result.Failed) != 1 || result.Failed[0] != DirwatchSection {
+		t.Errorf("failed = %v, want the dirwatch section reported as not stored", result.Failed)
+	}
+
+	if len(fixture.dirwatches.Stored) != len(before) {
+		t.Errorf("dirwatches = %v, want the stored list left alone: a refused save stores nothing", fixture.dirwatches.Stored)
+	}
+}

@@ -17,8 +17,10 @@ package parsers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -639,4 +641,81 @@ func TestExtractDefaultReportsAConfigurationItCannotRead(t *testing.T) {
 	if !strings.Contains(err.Error(), "permission") {
 		t.Errorf("Extract = %v, want it to carry the reason the read gave", err)
 	}
+}
+
+// TestExtractDefaultRefusesAMaskThatTokensMakeImpossibleToCompile: a mask the plain
+// regex check accepts, brackets and all, becomes impossible to compile once the tokens
+// are swapped for the patterns they name. The watcher still has to be told, not
+// crashed: a panic here lands in the timer goroutine reading the notification, and the
+// watch ends there, deaf to that directory until the server restarts.
+func TestExtractDefaultRefusesAMaskThatTokensMakeImpossibleToCompile(t *testing.T) {
+	for _, mask := range impossibleAfterTokens(t) {
+		watch := domain.NewDirwatch()
+		watch.Mask = mask
+		watch.Extension = "wav"
+
+		path := watchedFile(t, "20261028.wav")
+
+		var (
+			recognized bool
+			err        error
+			crashed    any
+		)
+
+		func() {
+			defer func() {
+				crashed = recover()
+			}()
+
+			_, recognized, err = newParsers(configuredSystems()).Extract(context.Background(), watch, path)
+		}()
+
+		if crashed != nil {
+			t.Errorf("reading %q through the mask %q stopped the watcher with a panic: %v, want the watcher told the mask cannot be read",
+				"20261028.wav", mask, crashed)
+			continue
+		}
+
+		if recognized {
+			t.Errorf("the mask %q handed a call to the ingest path, want it refused: the mask cannot be matched at all", mask)
+		}
+
+		if err == nil {
+			t.Errorf("Extract through the mask %q = nil, want the reason the mask cannot be read", mask)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), "mask") {
+			t.Errorf("Extract through the mask %q = %v, want the error to name the mask as the reason", mask, err)
+		}
+	}
+}
+
+// impossibleAfterTokens are the masks that compile as written, so the apply-time check
+// lets them through, and stop compiling once every token is replaced by the pattern the
+// token table gives it.
+func impossibleAfterTokens(t *testing.T) []string {
+	impossible := []string{}
+
+	t.Helper()
+
+	for _, mask := range []string{"[#DATE]", "[#TIME]", "[#SYSLBL]", "#DATE[#TG]", "#SITE-#TG"} {
+		substituted := mask
+
+		for _, token := range maskTokens {
+			if strings.Contains(substituted, token.Text) {
+				substituted = strings.Replace(substituted, token.Text, fmt.Sprintf("(%v)", token.Pattern), 1)
+			}
+		}
+
+		if _, err := regexp.Compile(mask); err != nil {
+			t.Errorf("the mask %q does not compile as written, want a mask the apply-time check accepts", mask)
+		}
+
+		if _, err := regexp.Compile(substituted); err != nil {
+			impossible = append(impossible, mask)
+		}
+	}
+
+	return impossible
 }
