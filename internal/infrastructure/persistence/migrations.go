@@ -48,13 +48,13 @@ type Progress func(level, message string)
 // reporting maintainer notes.
 //
 // Stages that add columns or indexes this server owns run before the pass: the
-// log source column, the call audio length column, the migration archive, and
-// the options key index are additive steps kept out of the dialect schemas, as
-// the migration archives maintainer note explains. A database the legacy
-// server already migrated can still hold damage this pass will not touch,
-// because the v6 rows it read from are gone, so reportMigrationDamage reads
-// what is left at the end of the startup pass, before the server starts
-// answering from it.
+// log source column, the call audio length column, the calls search index, the
+// migration archive, and the options key index are additive steps kept out of
+// the dialect schemas, as the migration archives maintainer note explains. A
+// database the legacy server already migrated can still hold damage this pass
+// will not touch, because the v6 rows it read from are gone, so
+// reportMigrationDamage reads what is left at the end of the startup pass,
+// before the server starts answering from it.
 func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock, progress Progress) error {
 	if progress == nil {
 		progress = func(_, _ string) {}
@@ -86,6 +86,14 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 	// source column: the column a legacy-written database arrives with is the zero
 	// that means never measured, so no row needs a length the migration cannot know.
 	if err := ensureCallAudioLengthColumn(ctx, s); err != nil {
+		return operationError("database", "migrate", err)
+	}
+
+	// And the calls table gets its search index the same way: the copied statement
+	// spells it `IF NOT EXISTS`, which MySQL reports as a syntax error, and the copy
+	// is applied on every start, so the index belongs to a step that probes the
+	// catalog instead of to the copied DDL.
+	if err := ensureCallsSearchIndex(ctx, s); err != nil {
 		return operationError("database", "migrate", err)
 	}
 

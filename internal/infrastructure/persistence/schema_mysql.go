@@ -127,8 +127,6 @@ var mysqlSchema = []string{
     FOREIGN KEY ("talkgroupId") REFERENCES "talkgroups" ("talkgroupId") ON DELETE CASCADE ON UPDATE CASCADE
   );`,
 
-	`CREATE INDEX IF NOT EXISTS "calls_idx" ON "calls" ("systemId","siteRef","talkgroupId","timestamp");`,
-
 	`CREATE TABLE IF NOT EXISTS "callFrequencies" (
     "callFrequencyId" bigint NOT NULL AUTO_INCREMENT PRIMARY KEY,
     "callId" bigint NOT NULL,
