@@ -519,6 +519,133 @@ func TestADistRunArchivesTheBinaryItCompiled(t *testing.T) {
 	}
 }
 
+// A binary that is newer than every file it is built from is a binary that reports the version the
+// release ships. The release names its archive for the commit it is built from, so after two runs
+// with a moved commit between them, the second run's archive carries a program that reports the
+// version that archive is named for.
+func TestTheSecondOfTwoReleaseRunsArchivesAProgramThatReportsItsOwnVersion(t *testing.T) {
+	repo := scratchRepository(t, "")
+
+	target := "linux-amd64"
+
+	writeScratchVersionFile(t, repo, "8.0.0")
+
+	// The build writes binaries and archives under dist; a tree the release is built from
+	// stays clean only while that output is ignored.
+	writeRepoFile(t, repo, ".gitignore", "/dist\n")
+
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
+	writeArchiveLicence(t, repo, target, "the licence")
+
+	// A release is built from a commit, so everything these runs read is committed before
+	// the first one runs.
+	for _, args := range [][]string{
+		{"add", "-A"},
+		{"commit", "-q", "-m", "the tree the first release is built from"},
+	} {
+		if out := scratchGit(t, repo, args...); out != "" {
+			t.Fatalf("git %s in the scratch repository printed %q", strings.Join(args, " "), out)
+		}
+	}
+
+	tl, _, _ := fakeRun(released, "")
+
+	// This run asks its own scratch repository what version it is, builds from what the
+	// tree says has already been built, and writes the archive it names.
+	tl.repo = repo
+	tl.read = func(string) (source, error) {
+		return readSource(repo)
+	}
+	tl.state = buildState
+	tl.releaseFiles = archiveFiles
+	tl.archive = func(path string, files []archiveFile) error {
+		return writeArchive(filepath.Join(repo, path), files)
+	}
+
+	// The stand-in compile writes, where the step says it writes, a program whose body is
+	// the version that step stamped through the linker: what a real binary reports.
+	tl.execute = func(s step) error {
+		stamp := ""
+
+		for _, arg := range s.args {
+			if rest, found := strings.CutPrefix(arg, "-s -w -X main.Version="); found {
+				stamp = strings.Fields(rest)[0]
+			}
+		}
+
+		// A step that stamps no version compiles no server binary.
+		if stamp == "" {
+			return nil
+		}
+
+		path := filepath.Join(repo, theOutputPathOf(s))
+
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("making %s: %v", filepath.Dir(path), err)
+		}
+
+		if err := os.WriteFile(path, []byte(stamp), 0o755); err != nil {
+			t.Fatalf("writing %s: %v", path, err)
+		}
+
+		return nil
+	}
+
+	if code := tl.run([]string{"dist", target}, io.Discard); code != 0 {
+		t.Fatalf("the first release run's exit code = %d, want 0", code)
+	}
+
+	// A commit that touches no file the server is built from still changes the version the
+	// next release is named for.
+	if out := scratchGit(t, repo, "commit", "-q", "--allow-empty", "-m", "a commit the release names itself for"); out != "" {
+		t.Fatalf("git commit in the scratch repository printed %q", out)
+	}
+
+	if code := tl.run([]string{"dist", target}, io.Discard); code != 0 {
+		t.Fatalf("the second release run's exit code = %d, want 0", code)
+	}
+
+	commit := scratchGit(t, repo, "rev-parse", "--short", "HEAD")
+
+	// The program the second run's archive carries is read out of it the way a listener's
+	// download would read it.
+	body, err := os.ReadFile(filepath.Join(repo, archivePath(target, "8.0.0+g"+commit)))
+	if err != nil {
+		t.Fatalf("the second release run wrote no archive: %v", err)
+	}
+
+	reader, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatalf("a standard zip reader cannot open the archive: %v", err)
+	}
+
+	var program string
+
+	for _, f := range reader.File {
+		if f.Name != "rdio-scanner" {
+			continue
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("cannot open %s in the archive: %v", f.Name, err)
+		}
+
+		got, err := io.ReadAll(rc)
+		if err != nil {
+			t.Fatalf("reading %s in the archive: %v", f.Name, err)
+		}
+
+		program = string(got)
+	}
+
+	if program != "8.0.0+g"+commit {
+		t.Errorf("the second run's archive carries a program reporting %q, want the version %s it is named for",
+			program, "8.0.0+g"+commit)
+	}
+}
+
 // theOutputPathOf is the path a step was told to write to: the word after `-o` on its command line.
 func theOutputPathOf(s step) string {
 	for i, arg := range s.args {
