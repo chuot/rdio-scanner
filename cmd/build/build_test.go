@@ -224,6 +224,85 @@ func TestTheServerBinaryIsCurrentWhenItIsNewerThanEveryGoFileItIsBuiltFrom(t *te
 	}
 }
 
+// the server embeds the ffmpeg pair and the manifest that describes it, so a pair
+// newer than the binary means that binary carries an ffmpeg other than the one the
+// release archive's licence names
+func TestTheServerBinaryIsNotCurrentWhenTheFfmpegItEmbedsIsNewer(t *testing.T) {
+	repo := t.TempDir()
+
+	goSources := []string{
+		filepath.Join("cmd", "rdio-scanner", "main.go"),
+		filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", "bundle.go"),
+	}
+	for _, path := range goSources {
+		writeTreeFile(t, repo, path, "the source")
+		setMTime(t, repo, path, date(2026, 1, 1))
+	}
+
+	// The ffmpeg phase publishes the pair into the tree it embeds on every run that
+	// covers the target, whether it compiled the pair or read it back from its cache.
+	pair := []string{
+		filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", "linux-amd64", "ffmpeg.gz"),
+		filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", "linux-amd64", "ffprobe.gz"),
+	}
+	for _, path := range pair {
+		writeTreeFile(t, repo, path, "the compiled ffmpeg")
+		setMTime(t, repo, path, date(2026, 1, 1))
+	}
+
+	output := filepath.Join("dist", "linux-amd64", "rdio-scanner")
+	writeTreeFile(t, repo, output, "the binary")
+	setMTime(t, repo, output, date(2026, 1, 2))
+
+	if current, err := serverIsCurrent(repo, output); err != nil || !current {
+		t.Errorf("a binary newer than everything the phase has published is not reported as current: current %v, err %v", current, err)
+	}
+
+	for _, path := range pair {
+		writeTreeFile(t, repo, path, "the ffmpeg this run published")
+		setMTime(t, repo, path, date(2026, 1, 3))
+	}
+
+	if current, err := serverIsCurrent(repo, output); err != nil || current {
+		t.Errorf("the ffmpeg the server embeds is newer than the binary that embeds it, and the binary is reported as current: current %v, err %v", current, err)
+	}
+}
+
+// the bundle embeds the manifest that names the ffmpeg release, so a manifest newer
+// than the binary means the binary describes a different ffmpeg than the release
+// archive's licence does
+func TestTheServerBinaryIsNotCurrentWhenTheManifestOfTheFfmpegItEmbedsIsNewer(t *testing.T) {
+	repo := t.TempDir()
+
+	goSources := []string{
+		filepath.Join("cmd", "rdio-scanner", "main.go"),
+		filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", "bundle.go"),
+	}
+	for _, path := range goSources {
+		writeTreeFile(t, repo, path, "the source")
+		setMTime(t, repo, path, date(2026, 1, 1))
+	}
+
+	embedded := filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", "manifest.json")
+	writeTreeFile(t, repo, embedded, `{"release": "ffmpeg-7.1.1"}`)
+	setMTime(t, repo, embedded, date(2026, 1, 1))
+
+	output := filepath.Join("dist", "linux-amd64", "rdio-scanner")
+	writeTreeFile(t, repo, output, "the binary")
+	setMTime(t, repo, output, date(2026, 1, 2))
+
+	if current, err := serverIsCurrent(repo, output); err != nil || !current {
+		t.Errorf("a binary newer than the manifest it embeds is not reported as current: current %v, err %v", current, err)
+	}
+
+	writeTreeFile(t, repo, embedded, `{"release": "ffmpeg-8.0.1"}`)
+	setMTime(t, repo, embedded, date(2026, 1, 3))
+
+	if current, err := serverIsCurrent(repo, output); err != nil || current {
+		t.Errorf("the manifest the server embeds is newer than the binary that embeds it, and the binary is reported as current: current %v, err %v", current, err)
+	}
+}
+
 // the ffmpeg phase writes disposable scratch no later build reads and a cache every
 // later build reads; a clean run removes the first and leaves the second standing
 func TestACleanRunRemovesTheFfmpegScratchAndLeavesTheCacheStanding(t *testing.T) {
