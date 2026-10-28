@@ -584,7 +584,7 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 		}
 
 		if blacklists.Valid {
-			blacklist = strings.ReplaceAll(strings.ReplaceAll(blacklists.String, "[", ""), "]", "")
+			blacklist = normalizeBlacklist(blacklists.String)
 		}
 
 		if label.Valid {
@@ -637,6 +637,23 @@ func migrateSystems(ctx context.Context, s store, progress Progress) error {
 	}
 
 	return nil
+}
+
+// normalizeBlacklist turns the v6 blacklist text, a JSON array kept as text, into the
+// comma-joined shape the domain comparison matches. The brackets come off and the spaces
+// around each entry come off with them: v6 deployments wrote their arrays with a space
+// after every comma, and the domain comparison takes entries exactly as written, so a
+// carried space would stop a migrated system refusing the talkgroups it always refused.
+func normalizeBlacklist(text string) string {
+	text = strings.ReplaceAll(strings.ReplaceAll(text, "[", ""), "]", "")
+
+	entries := strings.Split(text, ",")
+
+	for i, entry := range entries {
+		entries[i] = strings.TrimSpace(entry)
+	}
+
+	return strings.Join(entries, ",")
 }
 
 // migrateTalkgroups mirrors `migrateTalkgroups` in `server/migrations.go`: each row's system and

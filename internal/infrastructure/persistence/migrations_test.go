@@ -766,13 +766,14 @@ func TestMigrateTagsKeepTheirIdentityAndAreOrderedByLabel(t *testing.T) {
 }
 
 // The one transformation the system migration performs on a value: the v6
-// blacklist is a JSON array, stored with the brackets cut out.
+// blacklist is a JSON array, stored as the comma-joined list the server
+// enforces, brackets and the padding around each entry stripped away.
 func TestMigrateSystemsStoresTheBlacklistWithoutItsBrackets(t *testing.T) {
 	db, _ := migrateLegacyV6Fixture(t)
 
 	got := rowsOf(t, db, "systems", `"systemId", "autoPopulate", "blacklists", "label", "led", "order", "systemRef"`)
 	want := [][]string{
-		{"101", "1", "40000, 40001", "Grand Metro", "red", "1", "10001"},
+		{"101", "1", "40000,40001", "Grand Metro", "red", "1", "10001"},
 		{"102", "0", "", "Harbour", "", "2", "10002"},
 	}
 
@@ -2498,11 +2499,12 @@ func auditValues(t *testing.T, db *sql.DB) {
 	assertOrderedByLabel(t, db, "auditrdioScannerTags", "_id", "tags", "tagId", "label")
 
 	// Systems keep their identity, their radio-system reference, and their settings; the blacklist JSON
-	// arrives stripped of the brackets v6 stored it in.
+	// arrives as the comma-joined list the server enforces, stripped of the brackets and the padding
+	// around each entry that v6 stored it with.
 	assertCarriedValues(t, db, "rdioScannerSystems",
 		`SELECT v."_id", `+number("id", "systemRef")+`, `+pair("label", "label")+`, `+pair("led", "led")+`, `+
 			number("order", "order")+`, `+flag("autoPopulate", "autoPopulate")+
-			`, COALESCE(REPLACE(REPLACE(v."blacklists", '[', ''), ']', ''), ''), t."blacklists" `+
+			`, COALESCE(REPLACE(REPLACE(REPLACE(v."blacklists", '[', ''), ']', ''), ', ', ','), ''), t."blacklists" `+
 			`FROM "auditrdioScannerSystems" v JOIN "systems" t ON t."systemId" = v."_id" ORDER BY v."_id"`,
 		"id", "label", "led", "order", "autoPopulate", "blacklists")
 
