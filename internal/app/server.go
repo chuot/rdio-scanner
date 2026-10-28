@@ -286,6 +286,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	accesses.OnWarn(clampWarning)
 	apikeys.OnWarn(clampWarning)
+	calls.OnWarn(clampWarning)
 	dirwatches.OnWarn(clampWarning)
 	downstreams.OnWarn(clampWarning)
 	groups.OnWarn(clampWarning)

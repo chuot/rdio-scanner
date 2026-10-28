@@ -19,6 +19,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -31,6 +32,10 @@ import (
 // placeholders, per the call-history statements maintainer note.
 type Calls struct {
 	store
+
+	// warn tells the operator about a stored value the read had to clamp. The server
+	// wires it to its log; without it the repository clamps silently.
+	warn func(message string)
 }
 
 var _ ports.CallRepository = (*Calls)(nil)
@@ -39,6 +44,22 @@ var _ ports.CallRepository = (*Calls)(nil)
 // with.
 func NewCalls(db *sql.DB, dialect Dialect) *Calls {
 	return &Calls{store: newStore(db, dialect)}
+}
+
+// OnWarn sets the listener that hears about stored values the read had to clamp.
+// The server wires it at startup to file the line as a warning in the log view.
+func (calls *Calls) OnWarn(report func(message string)) { calls.warn = report }
+
+// reportClamps says the collected clamp lines, once the read that collected them
+// has closed its cursor and its transaction.
+func (calls *Calls) reportClamps(clamped []string) {
+	if calls.warn == nil {
+		return
+	}
+
+	for _, line := range clamped {
+		calls.warn(line)
+	}
 }
 
 // GetCall returns one recorded call with its audio, its frequencies, its source
@@ -52,27 +73,33 @@ func (calls *Calls) GetCall(ctx context.Context, id uint64) (domain.Call, error)
 		return domain.Call{}, operationError("calls", "getcall", err)
 	}
 
-	call, err := readCall(ctx, tx, id)
+	call, clamped, err := readCall(ctx, tx, id)
 	if err != nil {
 		// This rollback is a preserved quirk fix: without it the open
 		// transaction holds the SQLite read lock until the garbage collector
 		// runs. Pinned by TestGetCallLeavesTheDatabaseFreeForTheNextWrite,
 		// which fails at the connection string's busy_timeout if removed.
 		tx.rollback()
+		calls.reportClamps(clamped)
 
 		return domain.Call{}, err
 	}
 
 	if err := tx.commit(); err != nil {
 		tx.rollback()
+		calls.reportClamps(clamped)
 		return domain.Call{}, operationError("calls", "getcall", err)
 	}
+
+	calls.reportClamps(clamped)
 
 	return call, nil
 }
 
-// readCall reads one call row and the three child tables that belong to it.
-func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, error) {
+// readCall reads one call row and the three child tables that belong to it. The
+// clamp lines it collects ride out to the caller, which says them once the read
+// transaction has closed: the server's own read would block its own log write.
+func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, []string, error) {
 	// Only the references, labels, and delays the call payload and the re-arm
 	// rule need are joined in; the rest of the two aggregates belongs to the
 	// configuration repositories.
@@ -95,18 +122,21 @@ func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, erro
 		talkgroupDelay int64
 	)
 
-	err := tx.queryRow(ctx, query, id).Scan(&audio, &filename, &mime, &audioLength, &siteRef, &timestamp, &systemID, &talkgroupID, &systemRef, &talkgroupRef, &talkgroupLabel, &talkgroupName, &systemDelay, &talkgroupDelay)
+	// The identity goes back to SQL signed: an upgraded legacy history can hold a
+	// call identifier with the high bit set, and the driver refuses an unsigned
+	// bind; the stored bit pattern is what names the row.
+	err := tx.queryRow(ctx, query, int64(id)).Scan(&audio, &filename, &mime, &audioLength, &siteRef, &timestamp, &systemID, &talkgroupID, &systemRef, &talkgroupRef, &talkgroupLabel, &talkgroupName, &systemDelay, &talkgroupDelay)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		// The legacy server does not stop here: it falls through its own no-rows result with
 		// every value still zero and then reports the missing call as
 		// `cannot retrieve system id 0 for call id N`. The port asks for ErrNotFound, which is
 		// what the CAL fetch answers with.
-		return domain.Call{}, ports.ErrNotFound
+		return domain.Call{}, nil, ports.ErrNotFound
 	}
 
 	if err != nil {
-		return domain.Call{}, statementError("calls", "getcall", err, query)
+		return domain.Call{}, nil, statementError("calls", "getcall", err, query)
 	}
 
 	call := domain.NewCall()
@@ -116,24 +146,57 @@ func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, erro
 	call.AudioFilename = filename
 	call.AudioMime = mime
 	call.AudioLength = durationOf(audioLength)
-	call.SiteRef = uint(siteRef)
+	// The joined references and delays are signed columns read into unsigned
+	// fields: a negative one is clamped to zero and reported, the signed-column
+	// clamp posture the configuration repositories already take. The identities
+	// keep their stored bit pattern.
+	values := []string{}
+
+	if siteRef < 0 {
+		values = append(values, fmt.Sprintf("siteRef %d read as 0", siteRef))
+	}
+
+	if systemRef < 0 {
+		values = append(values, fmt.Sprintf("systemRef %d read as 0", systemRef))
+	}
+
+	if talkgroupRef < 0 {
+		values = append(values, fmt.Sprintf("talkgroupRef %d read as 0", talkgroupRef))
+	}
+
+	if systemDelay < 0 {
+		values = append(values, fmt.Sprintf("system delay %d read as 0", systemDelay))
+	}
+
+	if talkgroupDelay < 0 {
+		values = append(values, fmt.Sprintf("talkgroup delay %d read as 0", talkgroupDelay))
+	}
+
+	clamped := []string{}
+
+	if len(values) > 0 {
+		clamped = append(clamped, fmt.Sprintf("calls.read: call %d holds %s: these are not values this server can hold, and it enforces the clamped ones",
+			int64(id), strings.Join(values, ", ")))
+	}
+
+	call.SiteRef = uint(clampNonNegative(siteRef))
 	call.Timestamp = instantOf(timestamp)
-	call.System = domain.System{ID: uint64(systemID), Delay: uint(systemDelay), SystemRef: uint(systemRef)}
-	call.Talkgroup = domain.Talkgroup{ID: uint64(talkgroupID), Delay: uint(talkgroupDelay), TalkgroupRef: uint(talkgroupRef), Label: talkgroupLabel, Name: talkgroupName}
+	call.System = domain.System{ID: uint64(systemID), Delay: uint(clampNonNegative(systemDelay)), SystemRef: uint(clampNonNegative(systemRef))}
+	call.Talkgroup = domain.Talkgroup{ID: uint64(talkgroupID), Delay: uint(clampNonNegative(talkgroupDelay)), TalkgroupRef: uint(clampNonNegative(talkgroupRef)), Label: talkgroupLabel, Name: talkgroupName}
 
 	if call.PatchTalkgroupRefs, err = readCallPatches(ctx, tx, id); err != nil {
-		return domain.Call{}, err
+		return domain.Call{}, clamped, err
 	}
 
 	if call.Frequencies, err = readCallFrequencies(ctx, tx, id); err != nil {
-		return domain.Call{}, err
+		return domain.Call{}, clamped, err
 	}
 
 	if call.Units, err = readCallUnits(ctx, tx, id); err != nil {
-		return domain.Call{}, err
+		return domain.Call{}, clamped, err
 	}
 
-	return call, nil
+	return call, clamped, nil
 }
 
 // readCallPatches reads the references of the talkgroups a call was patched
@@ -143,7 +206,7 @@ func readCallPatches(ctx context.Context, tx transaction, id uint64) ([]uint, er
 	// disappear, as in the legacy server.
 	const query = `SELECT COALESCE(t."talkgroupRef", 0) FROM "callPatches" AS cp LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = cp."talkgroupId" WHERE cp."callId" = ? ORDER BY cp."callPatchId"`
 
-	rows, err := tx.query(ctx, query, id)
+	rows, err := tx.query(ctx, query, int64(id))
 	if err != nil {
 		return nil, statementError("calls", "getcall", err, query)
 	}
@@ -175,7 +238,7 @@ func readCallPatches(ctx context.Context, tx transaction, id uint64) ([]uint, er
 func readCallFrequencies(ctx context.Context, tx transaction, id uint64) ([]domain.CallFrequency, error) {
 	const query = `SELECT "callFrequencyId", "dbm", "errors", "frequency", "offset", "spikes" FROM "callFrequencies" WHERE "callId" = ? ORDER BY "callFrequencyId"`
 
-	rows, err := tx.query(ctx, query, id)
+	rows, err := tx.query(ctx, query, int64(id))
 	if err != nil {
 		return nil, statementError("calls", "getcall", err, query)
 	}
@@ -222,7 +285,7 @@ func readCallFrequencies(ctx context.Context, tx transaction, id uint64) ([]doma
 func readCallUnits(ctx context.Context, tx transaction, id uint64) ([]domain.CallUnit, error) {
 	const query = `SELECT "callUnitId", "offset", "unitRef" FROM "callUnits" WHERE "callId" = ? ORDER BY "callUnitId"`
 
-	rows, err := tx.query(ctx, query, id)
+	rows, err := tx.query(ctx, query, int64(id))
 	if err != nil {
 		return nil, statementError("calls", "getcall", err, query)
 	}
@@ -326,7 +389,7 @@ func writeCallFrequencies(ctx context.Context, tx transaction, id uint64, freque
 	const query = `INSERT INTO "callFrequencies" ("callId", "dbm", "errors", "frequency", "offset", "spikes") VALUES (?, ?, ?, ?, ?, ?)`
 
 	for _, freq := range frequencies {
-		if _, err := tx.exec(ctx, query, id, freq.Dbm, freq.Errors, freq.Frequency, freq.Offset, freq.Spikes); err != nil {
+		if _, err := tx.exec(ctx, query, int64(id), freq.Dbm, freq.Errors, freq.Frequency, freq.Offset, freq.Spikes); err != nil {
 			return statementError("calls", "writecall", err, query)
 		}
 	}
@@ -354,7 +417,7 @@ func writeCallPatches(ctx context.Context, tx transaction, call domain.Call, id 
 			continue
 		}
 
-		if _, err := tx.exec(ctx, insertPatch, id, talkgroupID.Int64); err != nil {
+		if _, err := tx.exec(ctx, insertPatch, int64(id), talkgroupID.Int64); err != nil {
 			return statementError("calls", "writecall", err, insertPatch)
 		}
 	}
@@ -367,7 +430,7 @@ func writeCallUnits(ctx context.Context, tx transaction, id uint64, units []doma
 	const query = `INSERT INTO "callUnits" ("callId", "offset", "unitRef") VALUES (?, ?, ?)`
 
 	for _, unit := range units {
-		if _, err := tx.exec(ctx, query, id, unit.Offset, unit.UnitRef); err != nil {
+		if _, err := tx.exec(ctx, query, int64(id), unit.Offset, unit.UnitRef); err != nil {
 			return statementError("calls", "writecall", err, query)
 		}
 	}
@@ -430,6 +493,8 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 		return ports.CallSearchPage{}, statementError("calls", "search", err, pageQuery)
 	}
 
+	clamped := []string{}
+
 	defer rows.Close()
 
 	for rows.Next() {
@@ -445,10 +510,28 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 			return ports.CallSearchPage{}, statementError("calls", "search", err, pageQuery)
 		}
 
+		// The joined references are signed columns: a negative one is clamped to
+		// zero and reported. The identity keeps its stored bit pattern, so the row
+		// the page hands out stays openable by the same number.
+		values := []string{}
+
+		if systemRef < 0 {
+			values = append(values, fmt.Sprintf("systemRef %d read as 0", systemRef))
+		}
+
+		if talkgroupRef < 0 {
+			values = append(values, fmt.Sprintf("talkgroupRef %d read as 0", talkgroupRef))
+		}
+
+		if len(values) > 0 {
+			clamped = append(clamped, fmt.Sprintf("calls.search: call %d holds %s: these are not values this server can hold, and it enforces the clamped ones",
+				id, strings.Join(values, ", ")))
+		}
+
 		page.Results = append(page.Results, ports.CallSummary{
 			ID:           uint64(id),
-			SystemRef:    uint(systemRef),
-			TalkgroupRef: uint(talkgroupRef),
+			SystemRef:    uint(clampNonNegative(systemRef)),
+			TalkgroupRef: uint(clampNonNegative(talkgroupRef)),
 			Timestamp:    instantOf(timestamp),
 			AudioLength:  durationOf(audioLength),
 		})
@@ -457,6 +540,8 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 	if err := rows.Err(); err != nil {
 		return ports.CallSearchPage{}, operationError("calls", "search", err)
 	}
+
+	calls.reportClamps(clamped)
 
 	return page, nil
 }
@@ -644,6 +729,7 @@ func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkg
 	defer rows.Close()
 
 	candidates := []domain.Call{}
+	clamped := []string{}
 
 	for rows.Next() {
 		var (
@@ -660,13 +746,35 @@ func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkg
 			return nil, statementError("calls", "checkduplicate", err, query)
 		}
 
+		// The site reference and the joined references are signed columns: a
+		// negative one is clamped to zero and reported. The identities keep their
+		// stored bit patterns.
+		values := []string{}
+
+		if candidateSite < 0 {
+			values = append(values, fmt.Sprintf("siteRef %d read as 0", candidateSite))
+		}
+
+		if systemRef < 0 {
+			values = append(values, fmt.Sprintf("systemRef %d read as 0", systemRef))
+		}
+
+		if talkgroupRef < 0 {
+			values = append(values, fmt.Sprintf("talkgroupRef %d read as 0", talkgroupRef))
+		}
+
+		if len(values) > 0 {
+			clamped = append(clamped, fmt.Sprintf("calls.checkduplicate: call %d holds %s: these are not values this server can hold, and it enforces the clamped ones",
+				id, strings.Join(values, ", ")))
+		}
+
 		call := domain.NewCall()
 
 		call.ID = uint64(id)
 		call.Timestamp = instantOf(timestamp)
-		call.SiteRef = uint(candidateSite)
-		call.System = domain.System{ID: uint64(candidateSys), SystemRef: uint(systemRef)}
-		call.Talkgroup = domain.Talkgroup{ID: uint64(candidateTalk), TalkgroupRef: uint(talkgroupRef)}
+		call.SiteRef = uint(clampNonNegative(candidateSite))
+		call.System = domain.System{ID: uint64(candidateSys), SystemRef: uint(clampNonNegative(systemRef))}
+		call.Talkgroup = domain.Talkgroup{ID: uint64(candidateTalk), TalkgroupRef: uint(clampNonNegative(talkgroupRef))}
 
 		candidates = append(candidates, call)
 	}
@@ -674,6 +782,8 @@ func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkg
 	if err := rows.Err(); err != nil {
 		return nil, operationError("calls", "checkduplicate", err)
 	}
+
+	calls.reportClamps(clamped)
 
 	return candidates, nil
 }

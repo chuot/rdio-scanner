@@ -18,6 +18,8 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
 	"rdio-scanner/internal/application/ports"
@@ -108,6 +110,7 @@ func (calls *Calls) CountCallsByTalkgroup(ctx context.Context, from time.Time, l
 	defer rows.Close()
 
 	tallies := []ports.CallTalkgroupCount{}
+	clamped := []string{}
 
 	for rows.Next() {
 		var (
@@ -122,9 +125,27 @@ func (calls *Calls) CountCallsByTalkgroup(ctx context.Context, from time.Time, l
 			return nil, operationError(historySection, "talkgroupcalls", err)
 		}
 
+		// The joined references are signed columns: a negative one is clamped to
+		// zero and reported, the signed-column clamp posture the configuration
+		// repositories already take.
+		values := []string{}
+
+		if systemRef < 0 {
+			values = append(values, fmt.Sprintf("systemRef %d read as 0", systemRef))
+		}
+
+		if talkgroupRef < 0 {
+			values = append(values, fmt.Sprintf("talkgroupRef %d read as 0", talkgroupRef))
+		}
+
+		if len(values) > 0 {
+			clamped = append(clamped, fmt.Sprintf("calls.talkgroupcalls: talkgroup %d %q holds %s: these are not values this server can hold, and it enforces the clamped ones",
+				talkgroupRef, name.String, strings.Join(values, ", ")))
+		}
+
 		tallies = append(tallies, ports.CallTalkgroupCount{
-			SystemRef:    uint(systemRef),
-			TalkgroupRef: uint(talkgroupRef),
+			SystemRef:    uint(clampNonNegative(systemRef)),
+			TalkgroupRef: uint(clampNonNegative(talkgroupRef)),
 			Name:         name.String,
 			Label:        label.String,
 			Count:        clampNonNegative(count),
@@ -134,6 +155,8 @@ func (calls *Calls) CountCallsByTalkgroup(ctx context.Context, from time.Time, l
 	if err := rows.Err(); err != nil {
 		return nil, operationError(historySection, "talkgroupcalls", err)
 	}
+
+	calls.reportClamps(clamped)
 
 	return tallies, nil
 }
@@ -152,6 +175,7 @@ func (calls *Calls) RecentCalls(ctx context.Context, limit uint) ([]ports.CallSu
 	defer rows.Close()
 
 	recent := []ports.CallSummary{}
+	clamped := []string{}
 
 	for rows.Next() {
 		var (
@@ -166,10 +190,28 @@ func (calls *Calls) RecentCalls(ctx context.Context, limit uint) ([]ports.CallSu
 			return nil, operationError(historySection, "recentcalls", err)
 		}
 
+		// The joined references are signed columns: a negative one is clamped to
+		// zero and reported. The identity keeps its stored bit pattern, so the row
+		// the view hands out stays openable by the same number.
+		values := []string{}
+
+		if systemRef < 0 {
+			values = append(values, fmt.Sprintf("systemRef %d read as 0", systemRef))
+		}
+
+		if talkgroupRef < 0 {
+			values = append(values, fmt.Sprintf("talkgroupRef %d read as 0", talkgroupRef))
+		}
+
+		if len(values) > 0 {
+			clamped = append(clamped, fmt.Sprintf("calls.recentcalls: call %d holds %s: these are not values this server can hold, and it enforces the clamped ones",
+				id, strings.Join(values, ", ")))
+		}
+
 		recent = append(recent, ports.CallSummary{
 			ID:           uint64(id),
-			SystemRef:    uint(systemRef),
-			TalkgroupRef: uint(talkgroupRef),
+			SystemRef:    uint(clampNonNegative(systemRef)),
+			TalkgroupRef: uint(clampNonNegative(talkgroupRef)),
 			Timestamp:    instantOf(timestamp),
 			AudioLength:  durationOf(audioLength),
 		})
@@ -178,6 +220,8 @@ func (calls *Calls) RecentCalls(ctx context.Context, limit uint) ([]ports.CallSu
 	if err := rows.Err(); err != nil {
 		return nil, operationError(historySection, "recentcalls", err)
 	}
+
+	calls.reportClamps(clamped)
 
 	return recent, nil
 }
