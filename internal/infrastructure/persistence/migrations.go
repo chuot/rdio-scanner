@@ -1294,11 +1294,30 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 		return string(b), true
 	}
 
+	// The v6 server kept audio conversion as the on/off switch the owner set, while the
+	// v8 option is the mode the options reader selects with, and that reader only takes
+	// a number. Storing the switch as it stands leaves a value the reader ignores, and
+	// the owner's choice silently falls back to the default; the unpack translates the
+	// switch into the mode's number instead, keeping the plain meaning of the v8 name:
+	// a deployment that turned conversions off reads the off mode after the upgrade.
+	conversionMode := func(m map[string]any, key string) (string, bool) {
+		v, ok := m[key].(bool)
+		if !ok {
+			return "", false
+		}
+
+		if v {
+			return "1", true
+		}
+
+		return "0", true
+	}
+
 	unpacked := []struct {
 		key     string
 		extract func(map[string]any, string) (string, bool)
 	}{
-		{"audioConversion", boolean},
+		{"audioConversion", conversionMode},
 		{"autoPopulate", boolean},
 		{"branding", text},
 		{"dimmerDelay", number},

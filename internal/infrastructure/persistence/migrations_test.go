@@ -1091,7 +1091,7 @@ func TestMigrateOptionsUnpacksTheV6OptionsBlobAndCopiesTheOtherRows(t *testing.T
 
 	got := rowsOf(t, db, "options", `"optionId", "key", "value"`)
 	want := [][]string{
-		{"1", "audioConversion", "true"},
+		{"1", "audioConversion", "1"},
 		{"2", "autoPopulate", "false"},
 		{"3", "branding", `"Rdio Legacy"`},
 		{"4", "dimmerDelay", "30000"},
