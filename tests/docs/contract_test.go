@@ -18,6 +18,7 @@ package docs
 import (
 	"encoding/json"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -224,6 +225,120 @@ func TestTheContractDeclaresOnlyOptionsTheServerShows(t *testing.T) {
 	for key := range declared {
 		if _, ok := options[key]; !ok {
 			t.Errorf("the published contract declares the options key %q, which the server never answers with", key)
+		}
+	}
+}
+
+// deadlineAnswerCodes reads the failure answers the composition root's own deadline
+// middleware writes, so the comparison below asks the server what it answers rather than
+// answering for it.
+func deadlineAnswerCodes(t *testing.T) []string {
+	t.Helper()
+
+	// Every route the server answers is mounted under one handler, and that handler is
+	// wrapped once in the composition root: the read below confirms the wrap still covers
+	// the whole route set before it compares anything.
+	wiring := repoFile(t, "internal", "app", "wiring.go")
+	if !strings.Contains(wiring, `tree.Handle("/", withRequestDeadline(`) {
+		t.Fatalf("the composition root no longer bounds the whole route set in one place, " +
+			"and this check no longer knows which routes the deadline reaches")
+	}
+
+	writes := regexp.MustCompile(`WriteHeader\((http\.Status[A-Za-z0-9]+)\)`)
+
+	// The names the middleware writes mapped to the numbers a client sees. A name the
+	// middleware starts writing without a number here fails this read, because a new
+	// failure the server can answer on a handler's behalf has to be declared as well.
+	numbers := map[string]string{
+		"http.StatusServiceUnavailable": "503",
+	}
+
+	found := map[string]bool{}
+
+	for _, match := range writes.FindAllStringSubmatch(wiring, -1) {
+		code, ok := numbers[match[1]]
+		if !ok {
+			t.Fatalf("the composition root writes %s, which this check has no number for", match[1])
+		}
+
+		found[code] = true
+	}
+
+	if len(found) == 0 {
+		t.Fatalf("no failure answer found in the composition root's deadline middleware")
+	}
+
+	codes := make([]string, 0, len(found))
+	for code := range found {
+		codes = append(codes, code)
+	}
+
+	sort.Strings(codes)
+
+	return codes
+}
+
+// contractOperations reads the answers each published operation declares, keyed by
+// "METHOD /path", so the check below can ask whether one operation's answer is missing.
+func contractOperations(t *testing.T) map[string]map[string]json.RawMessage {
+	t.Helper()
+
+	operations := map[string]map[string]json.RawMessage{}
+
+	for path, item := range contractPaths(t) {
+		var entries map[string]json.RawMessage
+		if err := json.Unmarshal(item, &entries); err != nil {
+			t.Fatalf("reading the contract's entry for %s: %v", path, err)
+		}
+
+		for method, entry := range entries {
+			if !httpMethods[method] {
+				continue
+			}
+
+			var operation struct {
+				Responses map[string]json.RawMessage `json:"responses"`
+			}
+			if err := json.Unmarshal(entry, &operation); err != nil {
+				t.Fatalf("reading the contract's %s answer for %s: %v", method, path, err)
+			}
+
+			if operation.Responses == nil {
+				t.Fatalf("the contract's %s %s declares no answers at all", strings.ToUpper(method), path)
+			}
+
+			operations[strings.ToUpper(method)+" "+path] = operation.Responses
+		}
+	}
+
+	return operations
+}
+
+// TestTheContractDeclaresTheDeadlineAnswerEveryOperationCanGet proves every operation a
+// client is told about declares the answer the server's own request deadline writes when
+// the deadline passes before the handler has answered, so no client is surprised by a
+// failure the composition root can answer on its behalf.
+func TestTheContractDeclaresTheDeadlineAnswerEveryOperationCanGet(t *testing.T) {
+	codes := deadlineAnswerCodes(t)
+	operations := contractOperations(t)
+
+	if len(operations) == 0 {
+		t.Fatalf("the published contract declares no operations to compare the deadline answer against")
+	}
+
+	names := make([]string, 0, len(operations))
+	for name := range operations {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	for _, name := range names {
+		for _, code := range codes {
+			if _, ok := operations[name][code]; !ok {
+				t.Errorf("the server answers %s on %s when its request deadline passes, which the published contract does not declare",
+					code, name)
+			}
 		}
 	}
 }
