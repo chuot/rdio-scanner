@@ -51,6 +51,31 @@ func TestTheChangedPathsAreThePathsGitSaysAreNotCommitted(t *testing.T) {
 	}
 }
 
+// The paths a refusal names are the work the operator has to commit, so a file whose own
+// name holds the arrow git puts between the two paths of a rename is named the way that
+// file is named on disk.
+// see the version-changed-paths maintainer note.
+func TestTheChangedPathsNameAFileWhoseOwnNameHoldsTheRenameArrow(t *testing.T) {
+	dir := scratchRepository(t, "")
+
+	path := filepath.Join(dir, "the plan -> the plan v2.md")
+
+	if err := os.WriteFile(path, []byte("the work nobody has committed"), 0o644); err != nil {
+		t.Fatalf("writing the untracked file: %v", err)
+	}
+
+	src, err := readSource(dir)
+	if err != nil {
+		t.Fatalf("reading a scratch repository with one untracked file: %v", err)
+	}
+
+	want := "the plan -> the plan v2.md"
+
+	if len(src.changed) != 1 || src.changed[0] != want {
+		t.Errorf("the paths a release refusal names are\n  %q\nwant the one file the operator has to commit:\n  %q", src.changed, want)
+	}
+}
+
 // readSource is the only part of the tool that talks to git, so these
 // tests ask it in the two places the answers matter: this repository,
 // which is what gets built, and a scratch repository made to be the
