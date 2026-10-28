@@ -131,6 +131,17 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 		}
 	}
 
+	// The carry stages wrote the v6 identifiers into the v8 tables themselves, and
+	// PostgreSQL does not move the sequence behind a bigserial past an identifier it
+	// was handed: without this step the first row the server adds to a migrated
+	// table on its own is assigned an identifier the migrated data already uses.
+	// The advance runs after the last carry stage, because the highest migrated
+	// identifier is only knowable once every table is written, and only PostgreSQL
+	// needs it.
+	if err := advanceMigratedSequences(ctx, s); err != nil {
+		return operationError("database", "migrate", err)
+	}
+
 	// The pass is over, and the database is what it is: a database the legacy server
 	// already migrated can hold damage this pass will not touch, because the v6 rows it
 	// was read from are gone, so reading what is left and saying what it is belongs

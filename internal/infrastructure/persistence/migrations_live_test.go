@@ -777,3 +777,38 @@ func liveTagCounter(t *testing.T, dialect Dialect) {
 			dialect, counted, len(stored))
 	}
 }
+
+// The tag counter is the smallest instance of the problem; the general case is that
+// every migrated table whose identifiers the pass wrote itself has to hand out free
+// identifiers afterwards. The groups table is one the administrator edits by hand,
+// its rows arrive through the same explicit-identifier insert as the tags', and the
+// server's own group adapter is what writes them, so the journey here is the one the
+// upgrade actually takes.
+func TestMigrateLiveOnPostgreSQLAdvancesTheMigratedGroupCounter(t *testing.T) {
+	db := liveDatabase(t, DialectPostgresql)
+
+	liveMigrate(t, db, DialectPostgresql)
+
+	var highest int
+
+	if err := db.QueryRow(`SELECT COALESCE(MAX("groupId"), 0) FROM "groups"`).Scan(&highest); err != nil {
+		t.Fatalf("reading the highest migrated group identifier on PostgreSQL: %v", err)
+	}
+
+	if highest == 0 {
+		t.Fatalf("the database migrated on PostgreSQL holds no groups to collide with")
+	}
+
+	mustExec(t, db, `INSERT INTO "groups" ("label", "order") VALUES ('Harbor Patrol', 99)`)
+
+	var added int
+
+	if err := db.QueryRow(`SELECT "groupId" FROM "groups" WHERE "label" = 'Harbor Patrol'`).Scan(&added); err != nil {
+		t.Fatalf("reading back the group added on PostgreSQL: %v", err)
+	}
+
+	if added <= highest {
+		t.Errorf("the group added on PostgreSQL is stored with the identifier %d, want a number past the highest migrated group identifier %d",
+			added, highest)
+	}
+}
