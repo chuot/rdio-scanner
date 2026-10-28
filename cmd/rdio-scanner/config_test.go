@@ -472,3 +472,36 @@ func TestAnUnreadableIniFileStopsTheStartAndNamesTheFile(t *testing.T) {
 		t.Errorf("error = %q, want it to name rdio-scanner.ini: the operator has to know which file the server could not read", err.Error())
 	}
 }
+
+// the file a save writes is the file the next start reads: a credential the
+// operator chose has to come back out of the file unchanged, so the server must
+// write it in a form its own ini reader reads whole.
+func TestConfigSaveWritesTheCredentialTheServerReadsBack(t *testing.T) {
+	for _, secret := range []string{"ses#am", "ses;am", "ses am"} {
+		cfg, _ := newTestConfig(t, "-db_type", "mysql", "-db_host", "db.internal", "-db_name", "rdio",
+			"-db_pass", secret, "-config_save")
+
+		reread, _, err := newConfig([]string{"-base_dir", cfg.BaseDir}, "", &bytes.Buffer{})
+		if err != nil {
+			t.Fatalf("newConfig reading the file it saved for %q: %v", secret, err)
+		}
+
+		if reread.DbPassword != secret {
+			t.Errorf("a saved ini reads back the database password %q, want %q: the server wrote a value its own reader cuts short", reread.DbPassword, secret)
+		}
+	}
+}
+
+// a save writes the configuration the operator will start from, so it must not
+// write a file that the very next start refuses to read: the same database type
+// the server rejects at startup cannot be saved.
+func TestConfigSaveDoesNotWriteAFileTheServerRefusesToStartFrom(t *testing.T) {
+	cfg, _ := newTestConfig(t, "-db_type", "oracle", "-db_host", "db.internal", "-db_name", "rdio", "-config_save")
+
+	if _, _, err := newConfig([]string{"-base_dir", cfg.BaseDir}, "", &bytes.Buffer{}); err == nil {
+		return
+	}
+
+	saved, readErr := os.ReadFile(filepath.Join(cfg.BaseDir, "rdio-scanner.ini"))
+	t.Errorf("config_save wrote rdio-scanner.ini that the next start refuses: %v\nsaved ini =\n%q", readErr, string(saved))
+}
