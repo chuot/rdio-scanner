@@ -200,8 +200,8 @@ var postgresSchema = []string{
     "order" integer NOT NULL DEFAULT 0,
     "systemId" bigint NOT NULL,
     "unitRef" integer NOT NULL DEFAULT 0,
-    "unitFrom" text NOT NULL DEFAULT 0,
-    "unitTo" text NOT NULL DEFAULT 0,
+    "unitFrom" integer NOT NULL DEFAULT 0,
+    "unitTo" integer NOT NULL DEFAULT 0,
     CONSTRAINT "units_systemId" FOREIGN KEY ("systemId") REFERENCES "systems" ("systemId") ON DELETE CASCADE ON UPDATE CASCADE
   );`,
 }
