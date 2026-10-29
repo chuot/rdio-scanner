@@ -1,6 +1,21 @@
 // Shared UI primitives: keyboard-operable custom elements replacing
 // Angular Material. All are plain custom elements with Light DOM.
 
+// escapeHtml makes text safe to place inside an innerHTML template, in
+// both a text position and a quoted attribute: the five characters that
+// can end a text run or a quoted attribute value are replaced by their
+// character references. Free text the server carries — saved labels,
+// the configured contact email — goes through this before it is written
+// as markup, so it shows as the text it is and plants no element.
+export function escapeHtml(text) {
+  return String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 class RdioSnackbar extends HTMLElement {
   static show(message, duration = 5000) {
     let host = document.querySelector('rdio-snackbar');

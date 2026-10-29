@@ -17,7 +17,7 @@ import {
   resolveUnit,
   shouldShowDate,
 } from '../../../../common/frontend/presentation/display-format.js';
-import { announce } from '../../../../common/frontend/presentation/ui/primitives.js';
+import { announce, escapeHtml } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 class RdioDisplay extends HTMLElement {
   connectedCallback() {
@@ -371,8 +371,13 @@ class RdioDisplay extends HTMLElement {
       const replaying = currentCall && currentCall.id === previousCall.id ? ' class="replaying"' : '';
 
       // the history rows truncate like the display rows; the full text rides
-      // on the cell that clips it.
-      rows.push(`<tr${replaying}><td title="${time}"><span>${time}</span></td><td title="${system}"><span>${system}</span></td><td title="${talkgroup}"><span>${talkgroup}</span></td><td title="${name}"><span>${name}</span></td></tr>`);
+      // on the cell that clips it. the labels are free text the server
+      // carries, so it rides escaped and shows as the text it is.
+      const escSystem = escapeHtml(system);
+      const escTalkgroup = escapeHtml(talkgroup);
+      const escName = escapeHtml(name);
+
+      rows.push(`<tr${replaying}><td title="${time}"><span>${time}</span></td><td title="${escSystem}"><span>${escSystem}</span></td><td title="${escTalkgroup}"><span>${escTalkgroup}</span></td><td title="${escName}"><span>${escName}</span></td></tr>`);
     }
 
     this.el.historyBody.innerHTML = rows.join('');

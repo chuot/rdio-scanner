@@ -6,7 +6,7 @@ import { getAppContext } from '../../application/context.js';
 import { computeFilterOptions, resolveCallSearchCriteria } from '../../domain/search-filters.js';
 import { clientSlice, needsRefetch, serverOffset } from '../../../../common/frontend/domain/search-pagination.js';
 import { formatDuration, formatMonthDay, formatTime, toLocalInputValue } from '../../../../common/frontend/presentation/display-format.js';
-import { announce } from '../../../../common/frontend/presentation/ui/primitives.js';
+import { announce, escapeHtml } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 const SERVER_PAGE = 200;
 const CLIENT_PAGE = 10;
@@ -282,7 +282,7 @@ class RdioSearchPanel extends HTMLElement {
 
       const date = new Date(row.dateTime);
 
-      return `<tr><td>${control}</td><td><span>${formatMonthDay(date)}</span></td><td><span>${formatTime(date)}</span></td><td><span>${formatDuration(row.audioLength)}</span></td><td><span>${row.systemData?.label ?? row.system}</span></td><td><span>${row.talkgroupData?.label ?? row.talkgroup}</span></td><td><span>${row.talkgroupData?.name ?? ''}</span></td></tr>`;
+      return `<tr><td>${control}</td><td><span>${formatMonthDay(date)}</span></td><td><span>${formatTime(date)}</span></td><td><span>${formatDuration(row.audioLength)}</span></td><td><span>${escapeHtml(row.systemData?.label ?? row.system)}</span></td><td><span>${escapeHtml(row.talkgroupData?.label ?? row.talkgroup)}</span></td><td><span>${escapeHtml(row.talkgroupData?.name ?? '')}</span></td></tr>`;
     }).join('');
   }
 
