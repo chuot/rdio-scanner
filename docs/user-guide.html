@@ -981,6 +981,111 @@ the name lit up. Chapter 9 lists the usual fixes worth trying first.
 
 <section>
 <h2 id="ch-11-quick-reference">11. Quick reference</h2>
+<p>
+The tables here gather what the screen shows and the page prints, in one place. Each earlier chapter
+explains the same things at a slower pace.
+</p>
+<h3>The control bar</h3>
+<table>
+<caption>The control bar's buttons, and what each one does.</caption>
+<tr><th scope="col">Button</th><th scope="col">What it does</th></tr>
+<tr><th scope="row"><code>LIVE FEED</code></th><td>Turns the live feed off, and back on. Press it to leave a recording and return to live calls.</td></tr>
+<tr><th scope="row"><code>HOLD SYS</code></th><td>Keeps you hearing one system, and quiets the rest. Press again to let go.</td></tr>
+<tr><th scope="row"><code>HOLD TG</code></th><td>Keeps you hearing one talkgroup, and quiets the rest. Press again to let go.</td></tr>
+<tr><th scope="row"><code>REPLAY LAST</code></th><td>Plays the last call again. Press again within a second to step one call further back.</td></tr>
+<tr><th scope="row"><code>SKIP NEXT</code></th><td>Ends the call you are hearing and starts the next one in the queue.</td></tr>
+<tr><th scope="row"><code>AVOID</code></th><td>Stops you hearing the current call's talkgroup. Each press sets a longer break.</td></tr>
+<tr><th scope="row"><code>SEARCH CALL</code></th><td>Opens the search panel over the screen.</td></tr>
+<tr><th scope="row"><code>PAUSE</code></th><td>Stops the sound in the middle of a call. Press again to carry on from that point.</td></tr>
+<tr><th scope="row"><code>SELECT TG</code></th><td>Opens the panel that turns talkgroups on and off.</td></tr>
+</table>
+<h3>The display</h3>
+<p>
+The display keeps its rows after a call ends, and sits dimmed until the next call or a pressed
+button.
+</p>
+<table>
+<caption>The readings the display prints, and what each one shows.</caption>
+<tr><th scope="col">On the display</th><th scope="col">What it shows</th></tr>
+<tr><th scope="row"><code>NO LINK</code></th><td>The page has lost the server, and the sound has stopped.</td></tr>
+<tr><th scope="row"><code>L:</code></th><td>How many people are listening, when your operator shows that count.</td></tr>
+<tr><th scope="row"><code>Q:</code></th><td>How many calls are waiting in the queue.</td></tr>
+<tr><th scope="row"><code>F:</code></th><td>The frequency the call came in on.</td></tr>
+<tr><th scope="row"><code>TGID:</code></th><td>The talkgroup's number.</td></tr>
+<tr><th scope="row"><code>E:</code> and <code>S:</code></th><td>Two counts the server keeps about that frequency.</td></tr>
+<tr><th scope="row"><code>UID:</code></th><td>The id of the unit that is talking, when the call carries one.</td></tr>
+</table>
+<table>
+<caption>The flags the display can raise.</caption>
+<tr><th scope="col">Flag</th><th scope="col">What it means</th></tr>
+<tr><th scope="row"><code>AVOID</code></th><td>The server is holding this talkgroup away from your ear.</td></tr>
+<tr><th scope="row"><code>⧖</code></th><td>An avoid with a timer: the minutes it has left before it ends on its own.</td></tr>
+<tr><th scope="row"><code>PATCH</code></th><td>The talkgroup is joined with another, so you hear both. This flag appears only together with <code>AVOID</code>.</td></tr>
+<tr><th scope="row"><code>DELAYED</code></th><td>The server holds these calls back for a few minutes before playing them.</td></tr>
+</table>
+<h3>The search filters</h3>
+<table>
+<caption>The search panel's boxes, and what each one narrows.</caption>
+<tr><th scope="col">Box</th><th scope="col">What it narrows</th></tr>
+<tr><th scope="row"><code>Sort order</code></th><td>Which end of the list comes first: <code>Ascending</code> or <code>Descending</code>.</td></tr>
+<tr><th scope="row"><code>Date</code></th><td>Calls from around one moment you pick.</td></tr>
+<tr><th scope="row"><code>System</code></th><td>One system, or <code>All Systems</code>.</td></tr>
+<tr><th scope="row"><code>Talkgroup</code></th><td>One talkgroup, or <code>All Talkgroups</code>.</td></tr>
+<tr><th scope="row"><code>Group</code></th><td>One group, or <code>All Groups</code>.</td></tr>
+<tr><th scope="row"><code>Tag</code></th><td>One tag, or <code>All Tags</code>.</td></tr>
+<tr><th scope="row"><code>Reset</code></th><td>Starts every box over from its first choice.</td></tr>
+</table>
+<h3>The messages the page prints</h3>
+<table>
+<caption>The messages the page and your browser put up, and what each one means.</caption>
+<tr><th scope="col">Message</th><th scope="col">What it means</th></tr>
+<tr><th scope="row"><code>Live Feed is ON, do you really want to leave?</code></th><td>Your browser pauses you before you leave, because the live feed is still on.</td></tr>
+<tr><th scope="row"><code>No talkgroup configured!</code></th><td>The server has set up no talkgroups yet. Ask your operator.</td></tr>
+<tr><th scope="row"><code>This unlock code has expired</code></th><td>Your code has run out of date. Ask your operator for a new one.</td></tr>
+<tr><th scope="row"><code>Invalid unlock code</code></th><td>The server does not know that code. Check what you typed.</td></tr>
+<tr><th scope="row"><code>Too many connections</code></th><td>Too many people are using your code at once. Try again later.</td></tr>
+<tr><th scope="row"><code>New version available</code></th><td>A newer build is waiting. The dialog asks whether to reload the page.</td></tr>
+<tr><th scope="row"><code>For further assistance please contact</code></th><td>The notice that gives your operator's address for help.</td></tr>
+<tr><th scope="row"><code>0 of 0</code></th><td>The search answered with nothing. Widen the boxes and try again.</td></tr>
+</table>
+<h3>What your operator can change</h3>
+<p>
+The server keeps recordings for a set span of time, and the search reaches back that far. That span
+is called the retention. Your operator sets it, along with the few other things you see on the
+screen.
+</p>
+<table>
+<caption>What you see on the screen, and the setting behind each one.</caption>
+<tr><th scope="col">What you see</th><th scope="col">What your operator set</th></tr>
+<tr><th scope="row">The listener count beside the clock</th><td>The setting that shows the listener count.</td></tr>
+<tr><th scope="row">The help button and the address in its notice</th><td>The contact email for the site.</td></tr>
+<tr><th scope="row">The name beside the light</th><td>The branding text for the site.</td></tr>
+<tr><th scope="row">The systems, talkgroups, groups, and tags on the screen</th><td>The talkgroup data for the site.</td></tr>
+<tr><th scope="row">How far back searches reach</th><td>The recording retention setting.</td></tr>
+</table>
+<h3>The words the guide uses</h3>
+<table>
+<caption>The words the guide uses, said plainly.</caption>
+<tr><th scope="col">Word</th><th scope="col">What it means here</th></tr>
+<tr><th scope="row"><em>access code</em></th><td>The words or numbers your operator gives you to open the page.</td></tr>
+<tr><th scope="row"><em>avoid</em></th><td>To set a talkgroup aside for a while, so the page stays quiet about it.</td></tr>
+<tr><th scope="row"><em>branding line</em></th><td>The site's name at the top of the screen, beside the light.</td></tr>
+<tr><th scope="row"><em>flag</em></th><td>A small word on the display that marks something about a call.</td></tr>
+<tr><th scope="row"><em>group</em></th><td>A named bundle of talkgroups.</td></tr>
+<tr><th scope="row"><em>hold</em></th><td>To keep the page hearing one system or one talkgroup, and quiet about the rest.</td></tr>
+<tr><th scope="row"><em>light</em></th><td>The small mark beside the branding line that shows whether sound is playing.</td></tr>
+<tr><th scope="row"><em>live feed</em></th><td>The stream of calls arriving as they happen.</td></tr>
+<tr><th scope="row"><em>operator</em></th><td>The person who runs the server.</td></tr>
+<tr><th scope="row"><em>patched</em></th><td>Two talkgroups joined together, so you hear both as one.</td></tr>
+<tr><th scope="row"><em>queue</em></th><td>The calls waiting their turn behind the one you hear.</td></tr>
+<tr><th scope="row"><em>recording</em></th><td>A call the server saved so you can hear it again.</td></tr>
+<tr><th scope="row"><em>retention</em></th><td>How far back the server keeps recordings, and how far back searches can reach.</td></tr>
+<tr><th scope="row"><em>server</em></th><td>The computer that collects the calls and sends them to your page.</td></tr>
+<tr><th scope="row"><em>system</em></th><td>One radio network the server listens to.</td></tr>
+<tr><th scope="row"><em>tag</em></th><td>A short label that sorts talkgroups into kinds.</td></tr>
+<tr><th scope="row"><em>talkgroup</em></th><td>A channel of conversations you can turn on and off.</td></tr>
+<tr><th scope="row"><em>unit</em></th><td>A radio that talks on a system; its id can show as <code>UID:</code>.</td></tr>
+</table>
 </section>
 
 </main>
