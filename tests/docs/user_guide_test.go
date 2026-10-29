@@ -246,6 +246,46 @@ func TestTheContentsAndTheChaptersShareTheLayoutContainer(t *testing.T) {
 	}
 }
 
+// The contents aid carries the markup the stylesheet styles: a heading naming
+// it and one ordered list with one item per chapter. Bare anchors match none
+// of the list or heading rules, and the narrow-screen column rules for the
+// list do nothing.
+func TestTheContentsAidCarriesAHeadingAndOneOrderedList(t *testing.T) {
+	body := userGuidePath(t)
+
+	nav := regexp.MustCompile(`(?is)<nav\b[^>]*class="toc"[^>]*>(.*?)</nav>`).FindStringSubmatch(body)
+	if len(nav) < 2 {
+		t.Fatalf("the guide carries no contents aid built as a nav with class toc")
+	}
+
+	heading := regexp.MustCompile(`(?is)<h2\b[^>]*>(.*?)</h2>`).FindStringSubmatch(nav[1])
+	if len(heading) < 2 || strings.TrimSpace(stripTags(heading[1])) != "Contents" {
+		t.Errorf("the contents aid carries no h2 reading \"Contents\"")
+	}
+
+	lists := regexp.MustCompile(`(?is)<ol\b`).FindAllStringIndex(nav[1], -1)
+	if len(lists) != 1 {
+		t.Errorf("the contents aid carries %d ordered lists, want exactly 1", len(lists))
+		return
+	}
+
+	list := regexp.MustCompile(`(?is)<ol\b[^>]*>([\s\S]*?)</ol>`).FindStringSubmatch(nav[1])
+	if len(list) < 2 {
+		t.Fatalf("the contents aid's ordered list does not close")
+	}
+
+	items := regexp.MustCompile(`(?is)<li\b[^>]*>\s*<a\b[^>]*\bhref="#([^"]+)"[^>]*>\s*(.*?)\s*</a>\s*</li>`).FindAllStringSubmatch(list[1], -1)
+	if len(items) != len(userGuideChapters) {
+		t.Errorf("the contents list carries %d items, want %d", len(items), len(userGuideChapters))
+	}
+
+	for i, want := range userGuideChapters {
+		if i < len(items) && items[i][1] != want {
+			t.Errorf("the contents list aims at %q at position %d, want %q", items[i][1], i+1, want)
+		}
+	}
+}
+
 // A keyboard reader meets the skip link before anything else on the page, and
 // the link goes somewhere the page actually carries.
 func TestTheSkipLinkComesFirstAndAimsAtTheContents(t *testing.T) {
