@@ -231,17 +231,24 @@ func TestTheContentsAndTheChaptersShareTheLayoutContainer(t *testing.T) {
 		t.Fatalf("the guide is missing its contents nav or its main content")
 	}
 
-	sections := regexp.MustCompile(`(?is)<div\b[^>]*\bclass="layout"[^>]*>([\s\S]*?)</div>\s*(?=<footer|</body>)`).FindStringSubmatch(body)
-	if len(sections) < 2 {
+	open := regexp.MustCompile(`(?is)<div\b[^>]*\bclass="layout"[^>]*>`).FindStringIndex(body)
+	footer := strings.Index(body, "<footer")
+	if footer < 0 {
+		t.Fatalf("the guide carries no footer to close the content")
+	}
+
+	if open[1] >= footer || !strings.Contains(body[open[1]:footer], "</div>") {
 		t.Errorf("the layout container does not close after the content it wraps")
 		return
 	}
 
-	if !strings.Contains(sections[1], nav) {
+	inside := body[open[1]:footer]
+
+	if !strings.Contains(inside, nav) {
 		t.Errorf("the contents nav sits outside the layout container")
 	}
 
-	if !strings.Contains(sections[1], main) {
+	if !strings.Contains(inside, main) {
 		t.Errorf("the main content sits outside the layout container")
 	}
 }
