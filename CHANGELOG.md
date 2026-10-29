@@ -13,7 +13,7 @@ _Entry in progress: Version 8.0 is still being assembled, and this section names
 - The listener's web application is built to be operated with a keyboard and a screen reader, where the older application was built for a mouse: the current element is always visible, a skip link jumps past the navigation, announcements reach a screen reader as they happen, and every control — the player, the call list, the menus, the dialogs — is reachable without one. The [Scanner webapp guide](docs/user-guide.html), chapter 10, walks through it.
 - Numerous fixes and improvements across the server, the administration, and the listener's web application.
 
-## Version 7.0
+## Version 7.0 (never officially released)
 
 **Make sure to backup your config and your database before updating to Version 7.0.**
 
