@@ -12,7 +12,7 @@ You can listen on any modern browsers using the integrated scanner webapp.
 
 > **How the name is said**
 >
-> **Rdio Scanner** — /ˈreɪ.di.oʊ ˈskæn.ər/ — *RAY-dee-oh SCAN-er*
+> The name is written **Rdio Scanner** and pronounced *Raydio Scanner* — *RAY-dee-oh SCAN-er*.
 
 ## Recorders compatibility
 
