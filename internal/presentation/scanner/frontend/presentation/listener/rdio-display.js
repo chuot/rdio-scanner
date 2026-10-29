@@ -29,7 +29,7 @@ class RdioDisplay extends HTMLElement {
         <div><span class="link"></span></div>
         <div><span class="queue"></span></div>
       </div>
-      <div class="row small"></div>
+      <div class="row small"><span class="call-system-type"></span></div>
       <div class="row">
         <div><span class="call-system"></span></div>
         <div><span class="call-type"></span></div>
@@ -78,6 +78,7 @@ class RdioDisplay extends HTMLElement {
 
     this.el = {
       clock: q('.clock'), link: q('.link'), queue: q('.queue'),
+      systemType: q('.call-system-type'),
       system: q('.call-system'), type: q('.call-type'), tag: q('.call-tag'),
       talkgroup: q('.call-talkgroup'), date: q('.call-date'), progress: q('.call-progress'),
       name: q('.call-name'), frequency: q('.call-frequency'), tgid: q('.call-tgid'),
@@ -300,6 +301,15 @@ class RdioDisplay extends HTMLElement {
       this.write(this.el.system, call.systemData?.label ?? `${call.system}`);
       this.write(this.el.type, (call.talkgroupData?.type ?? call.systemData?.type ?? '').toUpperCase());
       this.write(this.el.tag, call.talkgroupData?.tag ?? '');
+
+      // the type is said once: the small line above the system row carries
+      // the system's type only when the talkgroup's own type hides it there.
+      const systemType = call.systemData?.type ?? '';
+      const talkgroupType = call.talkgroupData?.type ?? '';
+      const typeOverride = systemType && talkgroupType
+        && talkgroupType.toUpperCase() !== systemType.toUpperCase();
+
+      this.write(this.el.systemType, typeOverride ? systemType.toUpperCase() : '');
 
       this.write(this.el.talkgroup, call.talkgroupData?.label ?? `${isAfs ? formatAfs(call.talkgroup) : call.talkgroup}`);
       this.write(this.el.name, call.talkgroupData?.name ?? formatFrequency(call.frequency));
