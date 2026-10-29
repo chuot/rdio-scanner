@@ -214,6 +214,38 @@ func TestTheContentsAidListsEveryChapterInOrder(t *testing.T) {
 	}
 }
 
+// The contents aid and the chapters share one two-column layout container: the
+// stylesheet's sticky-sidebar rules select the nav inside it, and without the
+// container the contents fall out of the sidebar and stack above the chapters.
+func TestTheContentsAndTheChaptersShareTheLayoutContainer(t *testing.T) {
+	body := userGuidePath(t)
+
+	if !regexp.MustCompile(`(?is)<div\b[^>]*\bclass="layout"[^>]*>`).MatchString(body) {
+		t.Fatalf("the guide carries no div with class layout to hold the contents beside the chapters")
+	}
+
+	nav := regexp.MustCompile(`(?is)<nav\b[^>]*class="toc"[\s\S]*?</nav>`).FindString(body)
+	main := regexp.MustCompile(`(?is)<main\b[\s\S]*?</main>`).FindString(body)
+
+	if nav == "" || main == "" {
+		t.Fatalf("the guide is missing its contents nav or its main content")
+	}
+
+	sections := regexp.MustCompile(`(?is)<div\b[^>]*\bclass="layout"[^>]*>([\s\S]*?)</div>\s*(?=<footer|</body>)`).FindStringSubmatch(body)
+	if len(sections) < 2 {
+		t.Errorf("the layout container does not close after the content it wraps")
+		return
+	}
+
+	if !strings.Contains(sections[1], nav) {
+		t.Errorf("the contents nav sits outside the layout container")
+	}
+
+	if !strings.Contains(sections[1], main) {
+		t.Errorf("the main content sits outside the layout container")
+	}
+}
+
 // A keyboard reader meets the skip link before anything else on the page, and
 // the link goes somewhere the page actually carries.
 func TestTheSkipLinkComesFirstAndAimsAtTheContents(t *testing.T) {
