@@ -16,6 +16,7 @@
 package docs
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -152,14 +153,14 @@ func TestTheGuideCarriesTheChaptersItPromises(t *testing.T) {
 	}
 
 	for i, id := range userGuideChapters {
-		heading := regexp.MustCompile(`(?is)<h2\b[^>]*\bid="`+id+`"[^>]*>(.*?)</h2>`).FindStringSubmatch(body)
+		heading := regexp.MustCompile(`(?is)<h2\b[^>]*\bid="` + id + `"[^>]*>(.*?)</h2>`).FindStringSubmatch(body)
 		if len(heading) < 2 {
 			t.Errorf("chapter %q has no heading of its own", id)
 			continue
 		}
 
 		text := strings.TrimSpace(stripTags(heading[1]))
-		if !regexp.MustCompile(`^`+strconv.Itoa(i+1)+`\D`).MatchString(text) {
+		if !regexp.MustCompile(`^` + strconv.Itoa(i+1) + `\D`).MatchString(text) {
 			t.Errorf("chapter %q is headed %q, which does not carry its number %d", id, text, i+1)
 		}
 
@@ -535,4 +536,259 @@ func TestTheGuideCarriesNoAccessibilityOrVersionHistoryMaterial(t *testing.T) {
 			t.Errorf("the guide carries %q, which the reader was never promised", gone)
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Fact tests
+//
+// A fact is stated by the application's own printed name: the guide has to
+// carry each name the shipped application prints where the reader meets it,
+// and every name the guide prints has to be one the shipped application
+// prints. Neither check compares the guide to a sentence the guide writes.
+// ---------------------------------------------------------------------------
+
+// userGuideSpokenText is the guide with its markup removed and its runs of
+// whitespace collapsed, so a name the guide carries across a line break or a
+// tag still reads as one name.
+func userGuideSpokenText(t *testing.T, body string) string {
+	t.Helper()
+
+	return strings.Join(strings.Fields(stripTags(body)), " ")
+}
+
+// requireUserGuideFacts fails over every fact name the guide does not carry,
+// each name matched as a whole unit. A pin states the fact; how the guide
+// words it around the name is free. A name passed with a trailing space is
+// matched as a prefix: the application prints it followed by a live value.
+func requireUserGuideFacts(t *testing.T, text string, facts ...string) {
+	t.Helper()
+
+	for _, name := range facts {
+		units := `(^|[^A-Za-z0-9])` + regexp.QuoteMeta(strings.TrimSpace(name))
+
+		if !strings.HasSuffix(name, " ") {
+			units += `([^A-Za-z0-9]|$)`
+		}
+
+		if !regexp.MustCompile(`(?s)` + units).MatchString(text) {
+			t.Errorf("the guide never carries the name %q, which the shipped application prints", name)
+		}
+	}
+}
+
+// scannerFrontendRoot is the listener application's own folder: every name the
+// guide quotes is transcribed from the sources kept there.
+func scannerFrontendRoot(t *testing.T) string {
+	t.Helper()
+
+	root, err := filepath.Abs(filepath.Join("..", "..", "internal", "presentation", "scanner", "frontend"))
+	if err != nil {
+		t.Fatalf("the listener source path does not resolve: %v", err)
+	}
+
+	return root
+}
+
+// listenerPrintedText is the text the shipped listener application shows: the
+// words inside the markup its templates assemble, the values of the
+// attributes that name its controls, and the strings it assigns to the
+// display. The values the application computes at run time — the ${...} spans
+// in its sources — read as spaces, so a name the guide carries with a live
+// value still matches the source that prints it.
+func listenerPrintedText(t *testing.T) string {
+	t.Helper()
+
+	root := scannerFrontendRoot(t)
+
+	var texts []string
+
+	for _, name := range []string{"index.html", "main.js"} {
+		texts = append(texts, listenerSourceText(t, filepath.Join(root, name)))
+	}
+
+	err := fs.WalkDir(os.DirFS(root), "presentation", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !d.IsDir() && strings.HasSuffix(p, ".js") {
+			texts = append(texts, listenerSourceText(t, filepath.Join(root, p)))
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("the listener sources cannot be read: %v", err)
+	}
+
+	common := filepath.Join("..", "..", "internal", "presentation", "common", "frontend")
+
+	err = fs.WalkDir(os.DirFS(common), ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !d.IsDir() && strings.HasSuffix(p, ".js") {
+			texts = append(texts, listenerSourceText(t, filepath.Join(common, p)))
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("the shared listener sources cannot be read: %v", err)
+	}
+
+	return strings.Join(texts, " ")
+}
+
+func listenerSourceText(t *testing.T, file string) string {
+	t.Helper()
+
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("the listener source %s cannot be read: %v", file, err)
+	}
+
+	text := string(raw)
+
+	text = regexp.MustCompile(`\$\{[^{}]*\}`).ReplaceAllString(text, " ")
+
+	var named []string
+
+	for _, m := range regexp.MustCompile(`(?i)\b(?:aria-label|title|placeholder)="([^"]*)"`).FindAllStringSubmatch(text, -1) {
+		named = append(named, m[1])
+	}
+
+	// markup tags: a tag name letter sits right after the opening bracket,
+	// so the angle brackets of comparisons like i < len stay untouched.
+	text = regexp.MustCompile(`(?i)<[a-zA-Z][a-zA-Z0-9]*(\s[^>]*)?>`).ReplaceAllString(text, " ")
+
+	// any angle bracket left over is a glued edge of markup or a comparison:
+	// either way it is not part of a word the reader sees.
+	text = strings.NewReplacer("<", " ", ">", " ", "&nbsp;", " ").Replace(text)
+
+	// the application assembles its text inside quoted strings: the quotes
+	// are not part of what the reader sees, so they read as spaces here.
+	text = strings.NewReplacer("`", " ", "'", " ", "\"", " ").Replace(text)
+
+	return strings.Join(strings.Fields(strings.Join(named, " ")+" "+text), " ")
+}
+
+// Every name the guide prints in code type is a name the shipped application
+// prints: a caption, heading, label, message, or table header the reader can
+// find on the screen, transcribed from the application's own sources.
+func TestEveryQuotedNameIsPrintedByTheApplication(t *testing.T) {
+	body := userGuidePath(t)
+
+	printed := " " + listenerPrintedText(t) + " "
+
+	for _, m := range regexp.MustCompile(`(?is)<code\b[^>]*>(.*?)</code>`).FindAllStringSubmatch(body, -1) {
+		name := strings.Join(strings.Fields(stripTags(m[1])), " ")
+
+		if name == "" {
+			t.Errorf("the guide prints an empty code span, which names nothing")
+			continue
+		}
+
+		if !strings.Contains(printed, " "+name+" ") {
+			t.Errorf("the guide prints the name %q, which the shipped application never prints", name)
+		}
+	}
+}
+
+// The reader is told about every control the control bar carries, by the name
+// the bar prints, and about the panels, the fullscreen control, the light's
+// own name, and the prompt the page puts up when the reader leaves with the
+// feed on.
+func TestTheGuideCarriesThePageAndItsChrome(t *testing.T) {
+	body := userGuidePath(t)
+	text := userGuideSpokenText(t, body)
+
+	requireUserGuideFacts(t, text,
+		"LIVE FEED", "HOLD SYS", "HOLD TG", "REPLAY LAST", "SKIP NEXT", "AVOID", "SEARCH CALL", "PAUSE", "SELECT TG",
+		"Search", "Close search panel", "Select", "Close select panel",
+		"Fullscreen", "Exit fullscreen",
+		"Server status",
+		"Live Feed is ON, do you really want to leave?",
+	)
+}
+
+// The display at rest is described by the placeholder rows it actually shows,
+// and by the version line it carries until the first call arrives.
+func TestTheGuideCarriesTheDisplayAtRest(t *testing.T) {
+	body := userGuidePath(t)
+	text := userGuideSpokenText(t, body)
+
+	requireUserGuideFacts(t, text,
+		"System", "Tag", "Talkgroup", "TGID: 0", "E: 0 S: 0", "UID: 0", "00:00", "Rdio Scanner v",
+		"F: ", "Hz",
+	)
+}
+
+// The display during a call is described by the rows and readings it prints,
+// the flags it can raise, and the history table's own headers.
+func TestTheGuideCarriesTheDisplayDuringACall(t *testing.T) {
+	body := userGuidePath(t)
+	text := userGuideSpokenText(t, body)
+
+	requireUserGuideFacts(t, text,
+		"NO LINK", "L:", "Q:", "F:", "TGID:", "E:", "S:", "UID:",
+		"AVOID", "PATCH", "DELAYED", "⧖",
+		"Time", "System", "Talkgroup", "Name",
+	)
+}
+
+// The select panel is described by the small buttons it prints and by the
+// answer it gives when the server has configured nothing.
+func TestTheGuideCarriesTheSelectPanelFacts(t *testing.T) {
+	body := userGuidePath(t)
+	text := userGuideSpokenText(t, body)
+
+	requireUserGuideFacts(t, text,
+		"OFF", "ON", "No talkgroup configured!",
+	)
+}
+
+// The search panel is described by the filter form's own labels and starting
+// choices, the results table's own headers, and the names its row actions
+// carry.
+func TestTheGuideCarriesTheSearchPanelFacts(t *testing.T) {
+	body := userGuidePath(t)
+	text := userGuideSpokenText(t, body)
+
+	requireUserGuideFacts(t, text,
+		"Sort order", "Ascending", "Descending",
+		"Date", "System", "Talkgroup", "Group", "Tag",
+		"All Systems", "All Talkgroups", "All Groups", "All Tags",
+		"Reset", "Dur",
+		"Play", "Stop", "Download", "Loading",
+	)
+}
+
+// The access-code chapter carries the field's own label and the refusals the
+// application prints, word for word.
+func TestTheGuideCarriesTheAccessCodeFacts(t *testing.T) {
+	body := userGuidePath(t)
+	text := userGuideSpokenText(t, body)
+
+	requireUserGuideFacts(t, text,
+		"Unlock code",
+		"This unlock code has expired",
+		"Invalid unlock code",
+		"Too many connections",
+	)
+}
+
+// The phone chapter carries the update dialog's own title, question, and
+// actions, and the help chapter carries the help notice's own opening words.
+func TestTheGuideCarriesThePhoneAndUpdateFacts(t *testing.T) {
+	body := userGuidePath(t)
+	text := userGuideSpokenText(t, body)
+
+	requireUserGuideFacts(t, text,
+		"New version available",
+		"A new version of the scanner webapp is available. Would you like to reload the page?",
+		"No", "Yes",
+		"For further assistance please contact",
+	)
 }
