@@ -16,7 +16,7 @@ import {
 } from '../../domain/dashboard-status.js';
 import { createRefreshSchedule } from '../../domain/log-refresh.js';
 import { formatMonthDay, formatTime } from '../../../../common/frontend/presentation/display-format.js';
-import { announce } from '../../../../common/frontend/presentation/ui/primitives.js';
+import { announce, escapeHtml } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 // card state words, also carried as data-state for the stylesheet
 // the word is what the operator reads: colour is never the only signal
@@ -332,7 +332,7 @@ function busiestCard(snapshot) {
   }
 
   const rows = busiest
-    .map((row) => `<tr><td>${row.name || `T-${row.talkgroupRef}`}</td><td>${row.systemRef}</td><td>${row.count}</td></tr>`)
+    .map((row) => `<tr><td>${escapeHtml(row.name || `T-${row.talkgroupRef}`)}</td><td>${row.systemRef}</td><td>${row.count}</td></tr>`)
     .join('');
 
   return `

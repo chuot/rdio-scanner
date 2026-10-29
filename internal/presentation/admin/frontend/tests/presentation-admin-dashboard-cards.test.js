@@ -325,6 +325,39 @@ test('the busiest talkgroups are a table with named columns', () => {
   el.disconnectedCallback();
 });
 
+// the busiest card's talkgroup name is free text the server carries: the ingest
+// path writes it from call metadata, a weaker credential than an admin login
+// supplies, and it reaches this card verbatim. the name must render as the text
+// it is and plant no element in the administrator's own dashboard
+test('the busiest talkgroups card renders a name carrying markup as text, building no element', () => {
+  const MARKUP = 'Fire "><script>alert(1)</script><img src="x" onerror="arm()"> Station';
+
+  const poisoned = structuredClone(STATUS);
+
+  poisoned.activity.busiest = [{ systemRef: 1, talkgroupRef: 101, name: MARKUP, label: 'T-101', count: 41 }];
+
+  const el = openDashboard(poisoned);
+
+  const table = findAll(card(el, 'busiest'), (node) => node.tag === 'table')[0];
+
+  assert.ok(table, 'the busiest talkgroups are not a table');
+
+  const rows = findAll(table, (node) => node.tag === 'tr').filter((node) => findAll(node, (c) => c.tag === 'td').length);
+
+  assert.equal(rows.length, 1, `the table carries ${rows.length} talkgroup rows, wanting the 1 the snapshot named`);
+
+  const cell = findAll(rows[0], (c) => c.tag === 'td')[0];
+
+  assert.ok(text(cell).includes('Station'), 'the card dropped the name it was given');
+
+  const built = findAll(card(el, 'busiest'), (n) => n.tag === 'img' || n.tag === 'script' || n.attributes.onerror !== undefined)
+    .map((n) => (n.attributes.onerror !== undefined ? `${n.tag}[onerror]` : n.tag));
+
+  assert.deepEqual(built, [], 'a talkgroup name built an element or an attribute of its own into the dashboard');
+
+  el.disconnectedCallback();
+});
+
 // the chart is a list stating each hour and count; the bar is decoration
 test('the 24 hours are a list whose items say the hour and the count, with the bars hidden', () => {
   const el = openDashboard();
