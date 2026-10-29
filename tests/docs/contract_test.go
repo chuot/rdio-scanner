@@ -298,9 +298,9 @@ func TestTheContractDeclaresEveryEntryKeyTheAdministratorAnswersWrite(t *testing
 		{"System", dto.SystemListPayload([]domain.System{{
 			ID: 1, Alert: "emergency", AutoPopulate: true, Delay: 1000, Kind: "type25",
 			Label: "county", LED: "red", Order: 1, SystemRef: 7001,
-			Sites:        domain.Sites{fullyPopulatedSite},
-			Talkgroups:   domain.Talkgroups{fullyPopulatedTalkgroup},
-			Units:        domain.Units{fullyPopulatedUnit},
+			Sites:      domain.Sites{fullyPopulatedSite},
+			Talkgroups: domain.Talkgroups{fullyPopulatedTalkgroup},
+			Units:      domain.Units{fullyPopulatedUnit},
 		}})},
 		{"Site", dto.SiteListPayload(domain.Sites{fullyPopulatedSite})},
 		{"Talkgroup", dto.TalkgroupListPayload(domain.Talkgroups{fullyPopulatedTalkgroup})},
