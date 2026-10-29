@@ -451,6 +451,7 @@ func TestTheGuideStaysInsideItsSizeBudget(t *testing.T) {
 	if len(body) > 4<<20 {
 		t.Errorf("the guide is %d bytes, over the %d byte budget", len(body), 4<<20)
 	}
+	t.Logf("measured size: %d bytes, budget %d bytes", len(body), 4<<20)
 }
 
 // The one authored stylesheet is inlined, and it carries what the contract
