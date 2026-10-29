@@ -303,11 +303,16 @@ class RdioDisplay extends HTMLElement {
       this.write(this.el.tag, call.talkgroupData?.tag ?? '');
 
       // the type is said once: the small line above the system row carries
-      // the system's type only when the talkgroup's own type hides it there.
+      // the system's type only when the system row's own type cell hides
+      // it. The wire always names a talkgroup type, so an untyped
+      // talkgroup arrives as the empty string and hides the system type
+      // with nothing: that hides it just as surely as a different type
+      // does, while a talkgroup entry that omits the type entirely lets
+      // the cell's own fallback show it.
       const systemType = call.systemData?.type ?? '';
-      const talkgroupType = call.talkgroupData?.type ?? '';
-      const typeOverride = systemType && talkgroupType
-        && talkgroupType.toUpperCase() !== systemType.toUpperCase();
+      const cellType = call.talkgroupData?.type ?? systemType;
+      const typeOverride = systemType
+        && cellType.toUpperCase() !== systemType.toUpperCase();
 
       this.write(this.el.systemType, typeOverride ? systemType.toUpperCase() : '');
 

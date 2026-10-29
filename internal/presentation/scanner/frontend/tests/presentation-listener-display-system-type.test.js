@@ -1,7 +1,8 @@
 // the small line above the system row says the system's type exactly
-// when the system row would hide it: a talkgroup carrying its own
-// different type pushes the system type up to the small line, and in
-// every other case the type is said once, on the system row.
+// when the system row would hide it: a talkgroup carrying a different
+// type, or the empty type the wire sends for an untyped talkgroup,
+// pushes the system type up to the small line, and in every other case
+// the type is said once, on the system row.
 // see the display-system-type-line maintainer note.
 
 import './dom-shim.js';
@@ -73,6 +74,20 @@ describe('presentation/listener/rdio-display — the system type line', () => {
       'the small line does not show the system type the system row hides');
     assert.equal(cell, 'SMARTNET',
       'the system row no longer shows the talkgroup\'s own type');
+  });
+
+  it('shows the system type when the talkgroup type arrives empty on the wire', () => {
+    // the server names a type for every talkgroup, so an untyped one
+    // reaches the display as the empty string rather than as a missing
+    // entry: it hides the system type in the cell with nothing.
+    const call = { ...callWith('P25', null), talkgroupData: { label: 'Ground', name: 'Ground', type: '' } };
+
+    const { line, cell } = typesFor(call);
+
+    assert.equal(line, 'P25',
+      'the small line does not take the system type the empty talkgroup type hides');
+    assert.equal(cell, '',
+      'the system row\'s type cell changed what the wire gave it');
   });
 
   it('leaves the line empty while the system row shows the system type through its fallback', () => {
