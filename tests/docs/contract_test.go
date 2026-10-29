@@ -229,6 +229,119 @@ func TestTheContractDeclaresOnlyOptionsTheServerShows(t *testing.T) {
 	}
 }
 
+// TestTheContractDeclaresEveryEntryKeyTheAdministratorAnswersWrite holds the entry
+// schemas of the published contract to the entries the administrator endpoints actually
+// write. Each fixture fills every field of its type, so every key the server's own
+// payload code can write appears, and each written key has to be a property the schema
+// for that entry declares. A key the answers write without a declaration is a key no
+// client written from the contract knows to read.
+func TestTheContractDeclaresEveryEntryKeyTheAdministratorAnswersWrite(t *testing.T) {
+	fullyPopulatedAccess := domain.Access{
+		ID:         1,
+		Code:       "harbour-code",
+		Expiration: 1_800_000_000,
+		Ident:      "harbour",
+		Limit:      2,
+		Order:      1,
+		Scope:      domain.AccessScope{Present: true, Wildcard: true},
+	}
+	fullyPopulatedSite := domain.Site{ID: 1, Label: "downtown", Order: 1, SiteRef: 100, SystemID: 1}
+	fullyPopulatedTalkgroup := domain.Talkgroup{
+		ID:           1,
+		Alert:        "emergency",
+		Delay:        1000,
+		Frequency:    154_000_000,
+		GroupIDs:     []uint64{1},
+		Kind:         "radio",
+		Label:        "dispatch",
+		LED:          "red",
+		Name:         "dispatch main",
+		Order:        1,
+		TagID:        1,
+		TalkgroupRef: 101,
+	}
+	fullyPopulatedUnit := domain.Unit{ID: 1, Label: "car 1", Order: 1, SystemID: 1, UnitRef: 1001, UnitFrom: 1001, UnitTo: 1010}
+	fullyPopulatedDirwatch := domain.Dirwatch{
+		ID:          1,
+		DeleteAfter: true,
+		Delay:       1000,
+		Directory:   "/var/spool/recordings",
+		Disabled:    false,
+		Extension:   "mp3",
+		Frequency:   154_000_000,
+		Kind:        "radio",
+		Mask:        "*.mp3",
+		Order:       1,
+		SiteID:      1,
+		SystemID:    1,
+		TalkgroupID: 1,
+	}
+	fullyPopulatedDownstream := domain.Downstream{
+		ID:       1,
+		Apikey:   "upload-key",
+		Disabled: false,
+		Order:    1,
+		Scope:    domain.AccessScope{Present: true, Wildcard: true},
+		URL:      "https://other.example/api/trunk-recorder-call-upload",
+	}
+
+	answers := []struct {
+		schema  string
+		payload any
+	}{
+		{"Access", dto.AccessListPayload([]domain.Access{fullyPopulatedAccess})},
+		{"Apikey", dto.ApikeyListPayload([]domain.Apikey{{ID: 1, Ident: "recorder", Key: "upload-key", Order: 1, Scope: domain.AccessScope{Present: true, Wildcard: true}}})},
+		{"Dirwatch", dto.DirwatchListPayload([]domain.Dirwatch{fullyPopulatedDirwatch})},
+		{"Downstream", dto.DownstreamListPayload([]domain.Downstream{fullyPopulatedDownstream})},
+		{"Group", dto.GroupListPayload([]domain.Group{{ID: 1, Alert: "emergency", Label: "proc", LED: "red", Order: 1}})},
+		{"Tag", dto.TagListPayload([]domain.Tag{{ID: 1, Alert: "emergency", Label: "priority", LED: "red", Order: 1}})},
+		{"System", dto.SystemListPayload([]domain.System{{
+			ID: 1, Alert: "emergency", AutoPopulate: true, Delay: 1000, Kind: "type25",
+			Label: "county", LED: "red", Order: 1, SystemRef: 7001,
+			Sites:        domain.Sites{fullyPopulatedSite},
+			Talkgroups:   domain.Talkgroups{fullyPopulatedTalkgroup},
+			Units:        domain.Units{fullyPopulatedUnit},
+		}})},
+		{"Site", dto.SiteListPayload(domain.Sites{fullyPopulatedSite})},
+		{"Talkgroup", dto.TalkgroupListPayload(domain.Talkgroups{fullyPopulatedTalkgroup})},
+		{"Unit", dto.UnitListPayload(domain.Units{fullyPopulatedUnit})},
+	}
+
+	for _, answer := range answers {
+		body, err := json.Marshal(answer.payload)
+		if err != nil {
+			t.Fatalf("marshalling the server's own %s answer: %v", answer.schema, err)
+		}
+
+		entries := []map[string]any{}
+		if err := json.Unmarshal(body, &entries); err != nil {
+			t.Fatalf("reading back the server's own %s answer: %v", answer.schema, err)
+		}
+		if len(entries) != 1 {
+			t.Fatalf("the server's own %s answer writes %d entries, want 1", answer.schema, len(entries))
+		}
+
+		declared := contractSchema(t, answer.schema)
+		for _, key := range sortedKeys(entries[0]) {
+			if _, ok := declared[key]; !ok {
+				t.Errorf("the administrator answer for a %s writes the key %q, which the published contract never declares",
+					strings.ToLower(answer.schema), key)
+			}
+		}
+	}
+}
+
+// sortedKeys names one entry's keys in a stable order, so a failure lists them the
+// same way every run.
+func sortedKeys(entry map[string]any) []string {
+	keys := make([]string, 0, len(entry))
+	for key := range entry {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 // deadlineAnswerCodes reads the failure answers the composition root's own deadline
 // middleware writes, so the comparison below asks the server what it answers rather than
 // answering for it.

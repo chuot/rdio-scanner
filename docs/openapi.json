@@ -1828,6 +1828,10 @@
           "disabled": {
             "type": "boolean"
           },
+          "order": {
+            "type": "integer",
+            "description": "Display order, written by the administrator's answers only when it is above zero."
+          },
           "systemId": {
             "type": "integer"
           },
@@ -1855,6 +1859,10 @@
           },
           "disabled": {
             "type": "boolean"
+          },
+          "order": {
+            "type": "integer",
+            "description": "Display order, written by the administrator's answers only when it is above zero."
           },
           "systems": {
             "$ref": "#/components/schemas/SystemsScope"
@@ -2077,6 +2085,10 @@
           },
           "order": {
             "type": "integer"
+          },
+          "systemId": {
+            "type": "integer",
+            "description": "The system this site belongs to, written by the administrator's answers beside every site."
           }
         },
         "additionalProperties": true
@@ -2121,7 +2133,12 @@
             "type": "string"
           },
           "order": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Display order, the name a request body writes it under; the administrator's answers write it under talkgroup instead."
+          },
+          "talkgroup": {
+            "type": "integer",
+            "description": "Display order, the name the administrator's answers write it under, kept from the legacy server; only above zero is written, and request bodies name the same value order."
           }
         },
         "additionalProperties": true
@@ -2163,6 +2180,10 @@
           },
           "label": {
             "type": "string"
+          },
+          "order": {
+            "type": "integer",
+            "description": "Display order, written by the administrator's answers only when it is above zero."
           }
         },
         "additionalProperties": true
