@@ -131,6 +131,23 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	config.CommandArgs = fs.Args()
 	config.ServiceAction = *serviceAction
 
+	// The default base directory is deliberately empty for a program sitting in
+	// a Go build cache, and an empty base directory is not inert: every relative
+	// path is joined onto it, so the folder the server really writes its database
+	// file, its configuration file and its state into is the folder it was
+	// started in. Naming that folder here makes it the one folder the paths
+	// resolve against, the folder the write check below probes, and the folder the
+	// server reports as the one it is serving.
+	// see the base-dir-default-heuristic maintainer note.
+	if config.BaseDir == "" {
+		launchDir, err := os.Getwd()
+		if err != nil {
+			return nil, ModeExit, fmt.Errorf("the folder the server was started in cannot be read: %w", err)
+		}
+
+		config.BaseDir = launchDir
+	}
+
 	if !config.isBaseDirWritable() {
 		return nil, ModeExit, fmt.Errorf("no write permissions in %s", config.BaseDir)
 	}
