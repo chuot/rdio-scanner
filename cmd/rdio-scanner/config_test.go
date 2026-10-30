@@ -507,6 +507,64 @@ func TestConfigSaveDoesNotWriteAFileTheServerRefusesToStartFrom(t *testing.T) {
 	t.Errorf("config_save wrote an rdio-scanner.ini the next start refuses: %v\nsaved ini =\n%q", nextErr, string(saved))
 }
 
+// a server run from source has no base directory to be given: the default
+// refuses to call a Go build cache a deployment folder. The folder its database
+// file, its configuration file and its state actually land in is the folder the
+// operator started it in, because every relative path is joined onto the base
+// directory and an empty one leaves the operating system to resolve the path
+// from the working directory. So the configuration names that folder: the paths,
+// the start-up notice and the dashboard's serving folder figure all read the one
+// value, and a blank figure means the server does not know where it writes.
+func TestAnEmptyBaseDirectoryBecomesTheFolderTheServerWasStartedIn(t *testing.T) {
+	launch := t.TempDir()
+	t.Chdir(launch)
+
+	cfg, _, err := newConfig([]string{"-base_dir", ""}, "", &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("newConfig: %v", err)
+	}
+
+	if cfg.BaseDir != launch {
+		t.Errorf("the serving folder is %q, want %q: the folder the server was started in is the folder it writes into", cfg.BaseDir, launch)
+	}
+
+	dbFile := cfg.GetDbFilePath()
+	if filepath.Dir(dbFile) != launch {
+		t.Errorf("the database file resolves to %q, want it inside %q: the file the server opens and the folder it reports are the same folder", dbFile, launch)
+	}
+}
+
+// the guide says the base directory must be writable, and the start checks it
+// by writing a temporary file there. With no base directory named, that check
+// falls back to the system temporary directory and says nothing about the folder
+// the server really writes into, so the check runs against the folder in use:
+// an operator who starts the server somewhere they cannot write learns that at
+// the start, and learns which folder they cannot write.
+func TestALaunchFolderThatCannotBeWrittenStopsTheStartAndNamesTheFolder(t *testing.T) {
+	launch := t.TempDir()
+
+	if err := os.Chmod(launch, 0o500); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+
+	t.Cleanup(func() {
+		if err := os.Chmod(launch, 0o700); err != nil {
+			t.Errorf("chmod back: %v", err)
+		}
+	})
+
+	t.Chdir(launch)
+
+	_, _, err := newConfig([]string{"-base_dir", "", "-db_file", filepath.Join(t.TempDir(), "rdio-scanner.db")}, "", &bytes.Buffer{})
+	if err == nil {
+		t.Fatalf("newConfig started a server from a folder it cannot write: want the start refused")
+	}
+
+	if !strings.Contains(err.Error(), launch) {
+		t.Errorf("error = %q, want it to name %q: an operator told only that a folder is unwritable is not told which folder", err.Error(), launch)
+	}
+}
+
 // the admin guide says -config_save rewrites the file from what the server
 // currently holds, and the precedence it states puts the ini file between the
 // flags and the built-in defaults. The settings the file already held are part
