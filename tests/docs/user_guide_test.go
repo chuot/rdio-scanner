@@ -548,6 +548,110 @@ func TestTheStylesheetCarriesItsPromisedBlocks(t *testing.T) {
 	}
 }
 
+// The guide quotes whole messages the application prints, and one of them runs
+// longer than a narrow page is wide. Held to a single line, such a quote pushes the
+// page sideways, and the words past the edge of a sideways scroll are out of reach
+// for anyone reading with a magnifier or moving through the document with a
+// keyboard. A quoted message in a paragraph or a list item is therefore free to
+// wrap where its paragraph ends, at every width the page is read at.
+func TestAQuotedScreenMessageWrapsInsideItsParagraph(t *testing.T) {
+	body := userGuidePath(t)
+
+	longest := ""
+	prose := regexp.MustCompile(`(?is)<p\b[^>]*>.*?</p>|<li\b[^>]*>.*?</li>`).FindAllString(body, -1)
+	for _, passage := range prose {
+		for _, quote := range regexp.MustCompile(`(?is)<code\b[^>]*>(.*?)</code>`).FindAllStringSubmatch(passage, -1) {
+			if text := strings.TrimSpace(stripTags(quote[1])); len(text) > len(longest) {
+				longest = text
+			}
+		}
+	}
+
+	if len(longest) < 60 {
+		t.Fatalf("the guide quotes no message from the application inside a paragraph or a list item; "+
+			"the longest quote it carries there is %d characters", len(longest))
+	}
+
+	last := ""
+	for _, rule := range regexp.MustCompile(`(?is)([^{}]+)\{([^{}]*)\}`).FindAllStringSubmatch(userGuideBaseStylesheet(t), -1) {
+		if !ruleReachesCodeInProse(rule[1]) {
+			continue
+		}
+		for _, decl := range strings.Split(rule[2], ";") {
+			name, value, found := strings.Cut(decl, ":")
+			if !found || !strings.EqualFold(strings.TrimSpace(name), "white-space") {
+				continue
+			}
+			last = strings.ToLower(strings.TrimSpace(value))
+		}
+	}
+
+	// With nothing said about it, a code span wraps the way the words around it do.
+	if last == "nowrap" || last == "pre" {
+		t.Errorf("the guide holds a quoted message to one line: white-space is %q for a code span in a "+
+			"paragraph, and the %d character quote %q pushes the page sideways at narrow widths",
+			last, len(longest), longest)
+	}
+}
+
+// userGuideBaseStylesheet is the guide's one inlined stylesheet with every @media
+// block taken out: that is what the page is styled with before any narrow-width
+// exemption has a chance to speak, and it is what a wide reading of the page uses.
+func userGuideBaseStylesheet(t *testing.T) string {
+	t.Helper()
+
+	style := regexp.MustCompile(`(?is)<style\b[^>]*>(.*?)</style>`).FindStringSubmatch(userGuidePath(t))
+	if len(style) < 2 {
+		t.Fatalf("the guide carries no inlined stylesheet")
+	}
+
+	out := style[1]
+	for {
+		at := regexp.MustCompile(`(?is)@media[^{]*\{`).FindStringIndex(out)
+		if at == nil {
+			return out
+		}
+		end := stylesheetBlockEnd(out, at[1]-1)
+		if end < 0 {
+			t.Fatalf("the guide's stylesheet carries an @media block that never closes")
+		}
+		out = out[:at[0]] + out[end:]
+	}
+}
+
+// stylesheetBlockEnd returns the index just past the brace that closes the block
+// opened at open, or -1 when the block never closes.
+func stylesheetBlockEnd(stylesheet string, open int) int {
+	depth := 0
+	for i := open; i < len(stylesheet); i++ {
+		switch stylesheet[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i + 1
+			}
+		}
+	}
+	return -1
+}
+
+// ruleReachesCodeInProse reports whether a rule's selector list reaches a code span
+// sitting in a paragraph or a list item, which is where the guide quotes what the
+// application prints.
+func ruleReachesCodeInProse(selector string) bool {
+	for _, one := range strings.Split(selector, ",") {
+		one = strings.ReplaceAll(one, ">", " ")
+		one = strings.Join(strings.Fields(one), " ")
+		if one == "p code" || one == "li code" ||
+			strings.HasSuffix(one, " p code") || strings.HasSuffix(one, " li code") {
+			return true
+		}
+	}
+	return false
+}
+
 // Every list of screen facts is a table the reader can follow: captioned, with
 // a header row, and with the first column naming each row.
 func TestEveryTableIsACaptionedTranscription(t *testing.T) {

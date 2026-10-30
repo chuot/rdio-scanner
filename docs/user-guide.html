@@ -209,6 +209,13 @@ td code, th code, li code, p code {
   border-radius: 3px;
   white-space: nowrap;
 }
+/* A whole message the application prints is quoted as one code span, and the longest of
+   those quotes runs wider than a narrow page. Held to one line it pushes the page sideways,
+   and the words past the edge of a sideways scroll are out of reach for anyone reading with
+   a magnifier or moving through the document with a keyboard. A quote in prose is allowed to
+   break where its paragraph ends. A name in a table column keeps its one line, and the page's
+   own table rules divide the columns instead. */
+li code, p code { white-space: normal; overflow-wrap: anywhere; }
 
 /* names the application puts on the screen, and the few things typed */
 pre {
@@ -339,7 +346,6 @@ footer.site .signoff {
      layout divides the page between the columns instead, and the table stays a table for whatever
      is reading it. */
   table { table-layout: fixed; }
-  p code, li code { white-space: normal; overflow-wrap: anywhere; }
   /* A name in a column has to break where the column ends. Left unbreakable it pushes the table wider than
      the page, and the words past the edge of a sideways scroll are out of reach for anyone who moves through
      the document with a keyboard. */
