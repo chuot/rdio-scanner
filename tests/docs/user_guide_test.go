@@ -818,6 +818,40 @@ func TestTheGuideCarriesTheDisplayDuringACall(t *testing.T) {
 	)
 }
 
+// The display prints a short type name, and the reader who has never held a
+// radio has to be told what it is. The chapter that walks the screen says what
+// the system type is and names every type the server can write; the quick-
+// reference word list carries the same term for the reader who goes straight
+// to the back of the guide.
+func TestTheGuideExplainsTheSystemType(t *testing.T) {
+	body := userGuidePath(t)
+
+	display := userGuideSpokenText(t, userGuideChapter(t, body, "ch-06-the-screen"))
+	requireUserGuideFacts(t, display,
+		"system type", "modulation",
+		"AM", "DMR", "FM", "NFM", "NXDN", "P25", "Provoice", "SmartNet", "Tetra",
+	)
+
+	glossary := userGuideChapter(t, body, "ch-11-quick-reference")
+	if !regexp.MustCompile(`(?is)<th scope="row">\s*<em>\s*system type\b`).MatchString(glossary) {
+		t.Errorf("the quick-reference word list carries no row for the system type")
+	}
+}
+
+// The name's spoken form is the one the operator's guide teaches: the written
+// name, its pronunciation spelling, and its syllable reading. The guide teaches
+// that form and never teaches another.
+func TestTheGuideCarriesTheSpokenFormOfTheName(t *testing.T) {
+	body := userGuidePath(t)
+	text := userGuideSpokenText(t, body)
+
+	requireUserGuideFacts(t, text, "/ˈreɪ.di.oʊ ˈskæn.ər/", "RAY-dee-oh SCAN-er")
+
+	if at := strings.Index(strings.ToLower(text), "raydio"); at >= 0 {
+		t.Errorf("the guide teaches a spoken form the project does not use: %s", text[max(0, at-60):at+60])
+	}
+}
+
 // The select panel is described by the small buttons it prints and by the
 // answer it gives when the server has configured nothing.
 func TestTheGuideCarriesTheSelectPanelFacts(t *testing.T) {
