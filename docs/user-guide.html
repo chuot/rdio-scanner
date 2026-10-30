@@ -444,11 +444,14 @@ address. Open that address in your browser, and the page appears. If the page as
 <em>access code</em>, type in the code your operator gave you. This code is how the operator decides
 who may listen. Nothing else is asked for, and nothing needs to be installed.
 </p>
-<p>
-The name is written <em>Rdio Scanner</em> and pronounced <em>Raydio Scanner</em>, said as three
-syllables: ray-dee-oh. People who talk about it often spell it the way they say it, so a search for
-the written form finds the right place.
+<aside class="note">
+<span class="label">Note: How the name is said</span>
+<p class="pron">
+<strong>Rdio Scanner</strong>
+<span class="ipa">/ˈreɪ.di.oʊ ˈskæn.ər/</span>
+<span class="syllables">RAY-dee-oh SCAN-er</span>
 </p>
+</aside>
 <p>
 The machine behind the page, and the choices your operator makes on it, are written down elsewhere, in
 a guide for operators. Some operators also offer applications for phones and tablets; they work
@@ -694,12 +697,21 @@ The top line carries the clock, shown as hours and minutes. Chapter 4 explained 
 this line.
 </p>
 <p>
-The next lines name where the call comes from. First the system, then the talkgroup's type and tag
-when it has them, and then the talkgroup's name or number. When the talkgroup's type differs from
-the system's, the system's type shows on the small line just above, so both are named; when the
-talkgroup has no type, the system's type shows on that line and the type is said once; when the two
-agree, the type is said once, beside the system. The line under that shows the call's
-date only when the call is not from today, beside a clock that counts the call's minutes.
+The next lines name where the call comes from. The first is a small line that can hold the system
+type. Then the system row gives the system's name, then the talkgroup's type and tag when it has
+them, then the talkgroup's name or number. The line under that shows the call's date only when the
+call is not from today, beside a clock that counts the call's minutes.
+</p>
+<p>
+The system type is the system's modulation or trunking standard. Nine names are possible: <em>AM</em>,
+<em>DMR</em>, <em>FM</em>, <em>NFM</em>, <em>NXDN</em>, <em>P25</em>, <em>Provoice</em>,
+<em>SmartNet</em>, <em>Tetra</em>. A system can also have no type.
+</p>
+<p>
+The display says the type once when it can. When the talkgroup's type differs from the system's, the
+system's type shows on the small line just above, so both are named. When the talkgroup has no type,
+that line carries the system's type, and the type is said once. When the two agree, the type is said
+once, beside the system.
 </p>
 <p>
 The large line in the middle shows the talkgroup's name. When the talkgroup has no name, this line
@@ -1014,7 +1026,7 @@ explains the same things at a slower pace.
 <h3>The display</h3>
 <p>
 The display keeps its rows after a call ends, and sits dimmed until the next call or a pressed
-button.
+button. The small line above the system row can hold the system type.
 </p>
 <table>
 <caption>The readings the display prints, and what each one shows.</caption>
@@ -1094,6 +1106,7 @@ screen.
 <tr><th scope="row"><em>retention</em></th><td>How far back the server keeps recordings, and how far back searches can reach.</td></tr>
 <tr><th scope="row"><em>server</em></th><td>The computer that collects the calls and sends them to your page.</td></tr>
 <tr><th scope="row"><em>system</em></th><td>One radio network the server listens to.</td></tr>
+<tr><th scope="row"><em>system type</em></th><td>The modulation or trunking standard a system uses.</td></tr>
 <tr><th scope="row"><em>tag</em></th><td>A short label that sorts talkgroups into kinds.</td></tr>
 <tr><th scope="row"><em>talkgroup</em></th><td>A channel of conversations you can turn on and off.</td></tr>
 <tr><th scope="row"><em>unit</em></th><td>A radio that talks on a system; its id can show as <code>UID:</code>.</td></tr>
