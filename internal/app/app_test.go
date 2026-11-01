@@ -337,3 +337,27 @@ func TestANewServerStartsAfterTheDeploymentIsClosed(t *testing.T) {
 		}
 	}()
 }
+
+// TestNoLockFileRemainsAfterTheServerCloses looks at the deployment
+// folder when the server stops: a clean release leaves no lock file
+// naming a dead process for an administrator to find.
+func TestNoLockFileRemainsAfterTheServerCloses(t *testing.T) {
+	base := t.TempDir()
+
+	srv, err := New(testConfigIn(base, io.Discard))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(base, "rdio-scanner.lock")); err != nil {
+		t.Fatalf("the running server holds no deployment lock where the base directory says: %v", err)
+	}
+
+	if err := srv.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(base, "rdio-scanner.lock")); !os.IsNotExist(err) {
+		t.Errorf("stat rdio-scanner.lock after Close = %v, want not exists: the stop removes the lock file", err)
+	}
+}
