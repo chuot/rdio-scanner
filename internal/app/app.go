@@ -18,6 +18,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -27,6 +28,7 @@ import (
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
+	"rdio-scanner/internal/infrastructure/persistence"
 )
 
 const (
@@ -169,6 +171,23 @@ func (s *Server) ChangeAdminPassword(ctx context.Context, password string) error
 		Source:   domain.LogSourceAdmin,
 		Message:  "the administrator password was changed",
 	})
+}
+
+// Vacuum compacts the sqlite file the deployment lives in, in place, and
+// returns the page measurements taken on either side of the statement: the
+// -vacuum mode, run instead of starting the server. Only sqlite stores its
+// whole database in one file the server can rewrite; the config layer
+// refuses the mode for any other backend before this method is reached, and
+// the check here keeps the composition root honest when the operation is
+// called directly.
+// see the sqlite-vacuum maintainer note.
+func (s *Server) Vacuum(ctx context.Context) (persistence.VacuumMeasurements, persistence.VacuumMeasurements, error) {
+	if s.dialect != persistence.DialectSqlite {
+		return persistence.VacuumMeasurements{}, persistence.VacuumMeasurements{},
+			fmt.Errorf("the vacuum task needs the sqlite database, not %s", string(s.dialect))
+	}
+
+	return persistence.Vacuum(ctx, s.db)
 }
 
 // serviceLog is the copy of the server's log entries a service manager

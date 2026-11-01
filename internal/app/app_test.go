@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"rdio-scanner/internal/domain"
@@ -137,6 +138,100 @@ func TestChangeAdminPasswordStoresTheCredentialAndSaysSoInTheLogView(t *testing.
 
 	if !options.AdminPasswordNeedChange {
 		t.Error("the credential the server ships with is not marked as needing replacement")
+	}
+}
+
+// TestVacuumCompactsTheDeploymentThroughTheCompositionRoot runs the task the
+// operator asks for from the composition root: the sqlite file the server
+// holds is compacted in place, the free pages measured before the statement
+// are gone after it, and the rows that were not deleted read back unchanged.
+func TestVacuumCompactsTheDeploymentThroughTheCompositionRoot(t *testing.T) {
+	ctx := context.Background()
+
+	srv, err := New(testConfigIn(t.TempDir(), io.Discard))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	defer func() {
+		if err := srv.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
+
+	if _, err := srv.db.Exec(`CREATE TABLE vacuum_probe (id INTEGER PRIMARY KEY, body TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+
+	for i := range 500 {
+		body := strings.Repeat("x", 200)
+
+		if _, err := srv.db.Exec(`INSERT INTO vacuum_probe (body) VALUES (?)`, body); err != nil {
+			t.Fatalf("insert row %d: %v", i, err)
+		}
+	}
+
+	if _, err := srv.db.Exec(`DELETE FROM vacuum_probe WHERE id % 2 = 0`); err != nil {
+		t.Fatalf("delete every other row: %v", err)
+	}
+
+	before, after, err := srv.Vacuum(ctx)
+	if err != nil {
+		t.Fatalf("Vacuum: %v", err)
+	}
+
+	if before.FreelistCount == 0 {
+		t.Error("the vacuum reports no free pages before the statement, want the deleted rows' pages on record")
+	}
+
+	if after.FreelistCount != 0 {
+		t.Errorf("the vacuum reports %d free pages after the statement, want them all reclaimed", after.FreelistCount)
+	}
+
+	if after.PageCount >= before.PageCount {
+		t.Errorf("the vacuum reports %d pages after and %d before, want the file shrink", after.PageCount, before.PageCount)
+	}
+
+	if after.PageSize != before.PageSize || after.PageSize == 0 {
+		t.Errorf("the vacuum reports page size %d after and %d before, want the file's own page size on both sides", after.PageSize, before.PageSize)
+	}
+
+	var kept int
+
+	if err := srv.db.QueryRow(`SELECT COUNT(*) FROM vacuum_probe`).Scan(&kept); err != nil {
+		t.Fatalf("count the kept rows: %v", err)
+	}
+
+	if kept != 250 {
+		t.Errorf("the compacted file holds %d rows, want the 250 that were not deleted", kept)
+	}
+}
+
+// TestVacuumRefusesADatabaseTheServerDoesNotCompact keeps the composition
+// root honest when the operation is called directly: a server wired to a
+// backend it cannot compact is refused by name, and the database is not
+// touched — the pool behind a non-sqlite server stays nil, and the refusal
+// never reaches for it.
+func TestVacuumRefusesADatabaseTheServerDoesNotCompact(t *testing.T) {
+	ctx := context.Background()
+
+	for _, dialect := range []persistence.Dialect{
+		persistence.DialectMariadb,
+		persistence.DialectMysql,
+		persistence.DialectPostgresql,
+	} {
+		srv := &Server{dialect: dialect}
+
+		_, _, err := srv.Vacuum(ctx)
+		if err == nil {
+			t.Errorf("%s: the vacuum ran against a backend it cannot compact, want a refusal", dialect)
+
+			continue
+		}
+
+		if !strings.Contains(err.Error(), string(dialect)) {
+			t.Errorf("%s: the refusal says %q, want it to name the backend the server is wired to", dialect, err)
+		}
 	}
 }
 
