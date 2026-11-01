@@ -114,12 +114,24 @@ func Acquire(dbPath string) (*Handle, error) {
 	return &Handle{file: file}, nil
 }
 
-// Close releases the lock. The lock file stays where it is — deleting it would
-// hand the next acquirer a file this one still owns — and a later Acquire over
-// the leftover file is what rewrites it.
+// Close releases the lock: it removes the lock file by name first, then
+// releases the OS lock, then closes the descriptor. The removal comes before
+// the unlock so that an acquirer racing the release can never lock this file
+// and pass the identity check under a name the holder still owns — an
+// acquirer that ends up holding the lock holds the file the path names. A
+// failed removal does not stop the release: a stale file is cosmetic, a lock
+// that outlives the process is not, so the error is reported after the lock
+// is gone.
 func (h *Handle) Close() error {
 	if h.file == nil {
 		return nil
+	}
+
+	removeErr := os.Remove(h.file.Name())
+	if removeErr != nil && !os.IsNotExist(removeErr) {
+		removeErr = fmt.Errorf("dblock.close: %w", removeErr)
+	} else {
+		removeErr = nil
 	}
 
 	unlockErr := unlock(h.file)
@@ -135,7 +147,7 @@ func (h *Handle) Close() error {
 		return fmt.Errorf("dblock.close: %w", closeErr)
 	}
 
-	return nil
+	return removeErr
 }
 
 // writeHolder records the holding process for an operator to read. It starts

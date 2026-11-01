@@ -156,9 +156,10 @@ func TestCloseReleasesTheLock(t *testing.T) {
 	defer released.Close()
 }
 
-// The lock file outlives the hold: deleting it on release would let a waiting
-// process lock a file the holder no longer owns, so Close leaves it behind.
-func TestCloseLeavesTheLockFileBehind(t *testing.T) {
+// A clean release removes the lock file: an administrator listing the
+// deployment directory after the server stopped must not find a file naming a
+// dead process. A later Acquire creates a fresh file.
+func TestCloseRemovesTheLockFile(t *testing.T) {
 	dir := t.TempDir()
 
 	handle, err := Acquire(filepath.Join(dir, "rdio-scanner.db"))
@@ -170,8 +171,19 @@ func TestCloseLeavesTheLockFileBehind(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
+	if _, err := os.Stat(filepath.Join(dir, "rdio-scanner.lock")); !os.IsNotExist(err) {
+		t.Errorf("stat rdio-scanner.lock after Close = %v, want not exists: the release removes the file", err)
+	}
+
+	released, err := Acquire(filepath.Join(dir, "rdio-scanner.db"))
+	if err != nil {
+		t.Fatalf("Acquire after Close: %v", err)
+	}
+
+	defer released.Close()
+
 	if _, err := os.Stat(filepath.Join(dir, "rdio-scanner.lock")); err != nil {
-		t.Errorf("stat rdio-scanner.lock after Close: %v: the lock file stays where it was", err)
+		t.Errorf("stat rdio-scanner.lock after a fresh Acquire: %v: a new hold creates a new file", err)
 	}
 }
 
