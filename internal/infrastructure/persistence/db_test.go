@@ -500,3 +500,69 @@ func TestVacuumReportsZeroForADatabaseWithNoFreePages(t *testing.T) {
 		t.Errorf("before.PageSize = 0, want the file's page size even when nothing is reclaimed")
 	}
 }
+
+// A writer outside the deployment's own lock — an operator's sqlite3 session,
+// for one — still cannot have the file rewritten under it: VACUUM waits for the
+// write lock and fails with sqlite's own lock error once the busy timeout
+// expires, and the failure reaches the caller as an error.
+func TestVacuumFailsWithSqlitesLockErrorAgainstABusyDatabase(t *testing.T) {
+	dir := t.TempDir()
+
+	// Two connections with a short busy timeout each stand in for the task's
+	// own pair: the server's DSN waits ten seconds, a test waits half a
+	// second, and both fail the same way when the wait runs out.
+	dsn := "file:" + filepath.Join(dir, "rdio-scanner.db") + "?_pragma=foreign_keys=on&_pragma=busy_timeout=500&_txlock=immediate"
+
+	holder, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatalf("open the holding connection: %v", err)
+	}
+
+	defer holder.Close()
+
+	if _, err := holder.Exec(`CREATE TABLE calls (id INTEGER PRIMARY KEY, body TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+
+	// One connection, so the write transaction sits on a connection that
+	// carries the short timeout, and the vacuum's own connection cannot be
+	// the one holding the transaction.
+	holder.SetMaxOpenConns(1)
+
+	vacuuming, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		t.Fatalf("open the vacuuming connection: %v", err)
+	}
+
+	defer vacuuming.Close()
+
+	tx, err := holder.Begin()
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+
+	if _, err := tx.Exec(`INSERT INTO calls (body) VALUES ('in flight')`); err != nil {
+		tx.Rollback()
+		t.Fatalf("insert inside the transaction: %v", err)
+	}
+
+	start := time.Now()
+
+	_, _, err = Vacuum(context.Background(), vacuuming)
+
+	elapsed := time.Since(start)
+
+	tx.Rollback()
+
+	if err == nil {
+		t.Fatal("Vacuum against a held write lock: want a failure, got none")
+	}
+
+	if !strings.Contains(err.Error(), "database is locked") {
+		t.Errorf("Vacuum error = %q, want it to name sqlite's lock: the operator's message is worked out from this failure", err)
+	}
+
+	if elapsed < 400*time.Millisecond {
+		t.Errorf("Vacuum failed after %v, want the busy timeout waited out before the failure: a held database is waited for, not skipped", elapsed)
+	}
+}
