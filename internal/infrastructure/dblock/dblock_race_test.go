@@ -120,3 +120,41 @@ func TestOpenLockFileLeavesTheFileRemovableWhileHeld(t *testing.T) {
 		t.Errorf("Remove while the handle is open = %v, want nil: the lock open allows the removal", err)
 	}
 }
+
+// A deployment directory that refuses the removal — read-only — makes the
+// release report the failure, but the lock must be released anyway: a stale
+// file is cosmetic, a lock that outlives the process is not. The fresh
+// acquirer over the surviving file is what proves the release did not stop at
+// the removal error.
+func TestCloseReleasesTheLockWhenTheRemovalFails(t *testing.T) {
+	dir := t.TempDir()
+
+	defer os.Chmod(dir, 0o755)
+
+	dbPath := filepath.Join(dir, "rdio-scanner.db")
+
+	handle, err := Acquire(dbPath)
+	if err != nil {
+		t.Fatalf("Acquire: %v", err)
+	}
+
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatalf("chmod the deployment directory read-only: %v", err)
+	}
+
+	if err := handle.Close(); err == nil {
+		t.Error("Close = nil, want an error: the deployment directory refused the removal")
+	}
+
+	lockPath := filepath.Join(dir, "rdio-scanner.lock")
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Errorf("stat rdio-scanner.lock after the failed removal = %v, want the file to survive", err)
+	}
+
+	released, err := Acquire(dbPath)
+	if err != nil {
+		t.Fatalf("Acquire over the surviving file = %v, want success: the lock was left held", err)
+	}
+
+	released.Close()
+}
