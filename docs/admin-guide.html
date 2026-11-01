@@ -1143,6 +1143,7 @@ disagree.</p>
       <tr><td><code>-cmd</code></td><td class="default">none</td><td>Drive a server that is already running: log in, read and write the configuration, change the credential, add and remove listener accesses. It is a client of the public administration endpoints. See <a href="#ch-18-command-line-client">the command line client</a>.</td></tr>
       <tr><td><code>-config_save</code></td><td class="default"><code>false</code></td><td>Write the configuration file and stop.</td></tr>
       <tr><td><code>-service</code></td><td class="default">none</td><td>Run under the operating system's service manager: <code>install</code>, <code>uninstall</code>, <code>start</code>, <code>stop</code>, <code>restart</code>, and <code>run</code> as the service's own command. See <a href="#ch-21-running-as-a-service">Running as a service</a>.</td></tr>
+      <tr><td><code>-vacuum</code></td><td class="default"><code>false</code></td><td>Rewrite the sqlite database file in a compacted form and stop without starting a server. It refuses to run while another server holds the deployment. See <a href="#ch-07-database">the database</a>.</td></tr>
       <tr><td><code>-version</code></td><td class="default"><code>false</code></td><td>Print the version and stop.</td></tr>
     </tbody>
   </table>
@@ -4484,6 +4485,7 @@ $ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
       <tr><td><code>-ssl_key_file &lt;file&gt;</code></td><td class="default">—</td><td>The PEM key that matches it. <a href="#ch-19-tls">19</a></td></tr>
       <tr><td><code>-ssl_listen &lt;address&gt;</code></td><td class="default">—</td><td>The https address. No port means 3000, so name <code>:443</code>. <a href="#ch-19-tls">19</a></td></tr>
       <tr><td><code>-trusted_proxies &lt;list&gt;</code></td><td class="default">—</td><td>The proxy addresses whose <code>X-Forwarded-For</code> the server believes, comma-separated, CIDR or bare. <a href="#ch-20-reverse-proxies">20</a></td></tr>
+      <tr><td><code>-vacuum</code></td><td class="default">off</td><td>Rewrites the sqlite database file in a compacted form and stops, refusing a deployment another server holds. <a href="#ch-07-database">7</a></td></tr>
       <tr><td><code>-version</code></td><td class="default">off</td><td>Prints the version and stops. <a href="#ch-18-command-line-client">18</a></td></tr>
     </tbody>
   </table>

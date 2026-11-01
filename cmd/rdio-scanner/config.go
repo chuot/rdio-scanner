@@ -80,6 +80,10 @@ type Config struct {
 
 	ServiceAction    string
 	NewAdminPassword string
+
+	// Vacuum asks for the one-shot compacting task: the composition root
+	// runs it and exits, so it never reaches the ini file.
+	Vacuum bool
 }
 
 // newConfig parses the command line and overlays the ini file. exePath is
@@ -116,6 +120,7 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	fs.StringVar(&config.DbUsername, "db_user", "", "database user name")
 	fs.StringVar(&config.Listen, "listen", defaultListen, "listening address")
 	fs.StringVar(&config.NewAdminPassword, "admin_password", "", "change admin password")
+	fs.BoolVar(&config.Vacuum, "vacuum", false, "compact the sqlite database and exit, refusing while another instance holds the deployment")
 	fs.StringVar(&config.SslAutoCert, "ssl_auto_cert", "", "domain name for Let's Encrypt automatic certificate")
 	fs.StringVar(&config.SslCertFile, "ssl_cert_file", "", "ssl PEM formated certificate")
 	fs.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")

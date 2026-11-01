@@ -593,3 +593,35 @@ func TestConfigSaveKeepsTheSettingsTheIniFileAlreadyHolds(t *testing.T) {
 		}
 	}
 }
+
+// -vacuum asks for the one-shot compacting task: the flag turns it on, and
+// nothing turns it on by itself — an ini file has no key for it, because a
+// saved deployment that vacuumed once must not vacuum on every start.
+func TestTheVacuumFlagAsksForTheOneShotTask(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+
+	if cfg.Vacuum {
+		t.Errorf("Vacuum = %v, want off: the task runs only when the operator asks for it", cfg.Vacuum)
+	}
+
+	cfg, _ = newTestConfig(t, "-vacuum")
+
+	if !cfg.Vacuum {
+		t.Errorf("Vacuum = %v, want on: -vacuum asked for the task", cfg.Vacuum)
+	}
+}
+
+// -config_save writes no vacuum key: the task is an action the operator takes,
+// not a setting the deployment carries, like -admin_password and -cmd before it.
+func TestConfigSaveWritesNoVacuumKey(t *testing.T) {
+	cfg, _ := newTestConfig(t, "-vacuum", "-config_save")
+
+	saved, err := os.ReadFile(filepath.Join(cfg.BaseDir, "rdio-scanner.ini"))
+	if err != nil {
+		t.Fatalf("read saved ini: %v", err)
+	}
+
+	if strings.Contains(string(saved), "vacuum") {
+		t.Errorf("saved ini =\n%q\nwant no vacuum line: a deployment that vacuumed once must not vacuum on every start", string(saved))
+	}
+}
