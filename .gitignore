@@ -11,6 +11,7 @@ internal/presentation/node_modules
 # server build outputs and the local state a running server writes
 /*.db
 /*.db-journal
+/*.lock
 /*.crt
 /*.json
 /*.key
