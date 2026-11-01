@@ -361,3 +361,49 @@ func TestNoLockFileRemainsAfterTheServerCloses(t *testing.T) {
 		t.Errorf("stat rdio-scanner.lock after Close = %v, want not exists: the stop removes the lock file", err)
 	}
 }
+
+// TestTheStopReportsAClaimItCouldNotRelease stops a server whose
+// deployment directory refuses the lock file's removal: the console
+// says the release failed, and the deployment is still acquirable —
+// the claim was let go even though the file stayed behind.
+func TestTheStopReportsAClaimItCouldNotRelease(t *testing.T) {
+	base := t.TempDir()
+
+	defer os.Chmod(base, 0o755)
+
+	var out strings.Builder
+
+	srv, err := New(testConfigIn(base, &out))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := os.Chmod(base, 0o555); err != nil {
+		t.Fatalf("chmod the deployment directory read-only: %v", err)
+	}
+
+	_ = srv.Close()
+
+	if !strings.Contains(out.String(), "the server could not release its claim on the deployment") {
+		t.Errorf("the stop console = %q, want the failed release named", out.String())
+	}
+
+	if _, err := os.Stat(filepath.Join(base, "rdio-scanner.lock")); err != nil {
+		t.Errorf("stat rdio-scanner.lock after the failed removal = %v, want the file to survive", err)
+	}
+
+	if err := os.Chmod(base, 0o755); err != nil {
+		t.Fatalf("chmod the deployment directory writable again: %v", err)
+	}
+
+	second, err := New(testConfigIn(base, io.Discard))
+	if err != nil {
+		t.Fatalf("New over the surviving lock file = %v, want success: the claim was let go", err)
+	}
+
+	defer func() {
+		if err := second.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
+}
