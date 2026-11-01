@@ -19,7 +19,10 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -29,6 +32,7 @@ import (
 
 	"rdio-scanner/internal/app"
 	"rdio-scanner/internal/application/ports"
+	"rdio-scanner/internal/infrastructure/dblock"
 	"rdio-scanner/internal/infrastructure/ffmpeg"
 	"rdio-scanner/internal/infrastructure/persistence"
 )
@@ -185,6 +189,163 @@ func TestAdminPasswordModeIsTheCredentialTheServerAccepts(t *testing.T) {
 	if rec := postTo(srv, "/api/admin/login", `{"password":"a-chosen-one"}`); rec.Code != http.StatusOK {
 		t.Errorf("the credential the administrator chose was answered %d, want it accepted: %s",
 			rec.Code, rec.Body.String())
+	}
+}
+
+// The -vacuum mode compacts the deployment in place and stops: the run exits 0,
+// reports the free pages it reclaimed, keeps the database file at its path, and
+// never binds the listen address a server would use — the port stays free for
+// whoever holds it while the task runs.
+func TestVacuumModeCompactsTheDeploymentAndStops(t *testing.T) {
+	base := t.TempDir()
+
+	// a server run migrates the deployment, then a direct connection seeds the
+	// probe table and deletes half of its rows, so the file carries a freelist
+	// the task can reclaim
+	srv, err := app.New(testConfigIn(base))
+	if err != nil {
+		t.Fatalf("app.New: %v", err)
+	}
+
+	if err := srv.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	db := openTestDatabase(t, base)
+
+	if _, err := db.Exec(`CREATE TABLE vacuum_probe (id INTEGER PRIMARY KEY, body TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+
+	for i := range 500 {
+		if _, err := db.Exec(`INSERT INTO vacuum_probe (body) VALUES (?)`, strings.Repeat("x", 200)); err != nil {
+			t.Fatalf("insert row %d: %v", i, err)
+		}
+	}
+
+	if _, err := db.Exec(`DELETE FROM vacuum_probe WHERE id % 2 = 0`); err != nil {
+		t.Fatalf("delete every other row: %v", err)
+	}
+
+	// a held port stands in for a running server on the configured address: the
+	// task never reaches for it, so the run succeeds over it
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("hold a port: %v", err)
+	}
+
+	defer ln.Close()
+
+	out := &bytes.Buffer{}
+
+	code := run([]string{"-base_dir", base, "-listen", ln.Addr().String(), "-vacuum"}, out, noBundlesUnbuilt)
+	if code != 0 {
+		t.Fatalf("the vacuum mode exited %d, want 0: %s", code, out.String())
+	}
+
+	text := out.String()
+
+	dbPath := filepath.Join(base, "rdio-scanner.db")
+
+	if !strings.Contains(text, "vacuuming "+dbPath) {
+		t.Errorf("the output does not name the database file being compacted:\n%s", text)
+	}
+
+	var before, after, reclaimed int
+
+	reportLine := ""
+
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(line, "vacuumed:") {
+			reportLine = line
+			break
+		}
+	}
+
+	if reportLine == "" {
+		t.Fatalf("the output does not carry the report line:\n%s", text)
+	}
+
+	if _, err := fmt.Sscanf(reportLine, "vacuumed: %d free pages, %d free pages, %d bytes reclaimed", &before, &after, &reclaimed); err != nil {
+		t.Fatalf("the report line does not match the report format (%v):\n%s", err, text)
+	}
+
+	if before == 0 {
+		t.Errorf("the report says 0 free pages before the task, want the deleted rows' pages on record:\n%s", text)
+	}
+
+	if after != 0 {
+		t.Errorf("the report says %d free pages after the task, want them all reclaimed:\n%s", after, text)
+	}
+
+	if reclaimed <= 0 {
+		t.Errorf("the report says %d bytes reclaimed, want a positive figure for the pages taken back:\n%s", reclaimed, text)
+	}
+
+	if _, err := os.Stat(dbPath); err != nil {
+		t.Errorf("the database file is not at its path after the task: %v", err)
+	}
+
+	check := openTestDatabase(t, base)
+
+	var kept int
+	if err := check.QueryRow(`SELECT COUNT(*) FROM vacuum_probe`).Scan(&kept); err != nil {
+		t.Fatalf("count the kept rows: %v", err)
+	}
+
+	if kept != 250 {
+		t.Errorf("the compacted file holds %d rows, want the 250 that were not deleted", kept)
+	}
+
+	var freelist int
+	if err := check.QueryRow(`PRAGMA freelist_count`).Scan(&freelist); err != nil {
+		t.Fatalf("read the freelist back: %v", err)
+	}
+
+	if freelist != 0 {
+		t.Errorf("the file still carries %d free pages after the task, want them reclaimed", freelist)
+	}
+}
+
+// The vacuum mode refuses a deployment another process holds: the run prints
+// the in-use error and exits 1 without opening the database — the file is not
+// even created for a fresh base directory whose lock the test already holds.
+func TestVacuumModeRefusesADeploymentAnotherProcessHolds(t *testing.T) {
+	base := t.TempDir()
+
+	handle, err := dblock.Acquire(filepath.Join(base, "rdio-scanner.db"))
+	if err != nil {
+		t.Fatalf("dblock.Acquire: %v", err)
+	}
+
+	defer func() {
+		if err := handle.Close(); err != nil {
+			t.Errorf("release the held lock: %v", err)
+		}
+	}()
+
+	// the refusal is said through the standard logger, so the test watches
+	// where that logger writes for the duration of the run
+	logOut := &bytes.Buffer{}
+
+	previous := log.Writer()
+	log.SetOutput(logOut)
+
+	defer log.SetOutput(previous)
+
+	code := run([]string{"-base_dir", base, "-vacuum"}, io.Discard, noBundlesUnbuilt)
+	if code != 1 {
+		t.Fatalf("the vacuum mode against a held deployment exited %d, want 1", code)
+	}
+
+	text := logOut.String()
+
+	if !strings.Contains(text, "the database is in use — stop the server before vacuuming") {
+		t.Errorf("the failure output does not refuse the held deployment:\n%s", text)
+	}
+
+	if _, err := os.Stat(filepath.Join(base, "rdio-scanner.db")); !os.IsNotExist(err) {
+		t.Errorf("the run opened a database behind the held lock: stat says %v", err)
 	}
 }
 

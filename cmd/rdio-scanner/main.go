@@ -99,6 +99,14 @@ func run(args []string, stdout io.Writer, unbuilt func() []string) int {
 		return controlService(config.ServiceAction)
 	}
 
+	// the vacuum mode is a one-shot that compacts the database and stops: it
+	// needs the deployment open and locked like the password mode, and nothing
+	// else, so it outranks it the same way
+	// see the sqlite-vacuum maintainer note.
+	if config.Vacuum {
+		return vacuumDatabase(config, stdout)
+	}
+
 	// the administrator password mode is a one-shot that needs the database and
 	// nothing else: the way a deployment sets its credential from a script, or an
 	if config.NewAdminPassword != "" {
@@ -192,6 +200,43 @@ func serverConfig(config *Config, out io.Writer, echo app.LogEcho) app.Config {
 			return choice.converter(), choice.prober(dir), choice.Notice
 		},
 	}
+}
+
+// vacuumDatabase is the -vacuum mode: open the deployment the same way the
+// server does, so the in-use refusal covers it, compact the sqlite file in
+// place, report what came back, and stop without serving.
+// see the sqlite-vacuum maintainer note.
+func vacuumDatabase(config *Config, stdout io.Writer) int {
+	ctx := context.Background()
+
+	srv, err := app.New(serverConfig(config, os.Stderr, nil))
+	if err != nil {
+		if errors.Is(err, app.ErrInUse) {
+			return exitWithError(errors.New("the database is in use — stop the server before vacuuming"))
+		}
+
+		return exitWithError(err)
+	}
+
+	fmt.Fprintf(stdout, "vacuuming %s\n", config.GetDbFilePath())
+
+	before, after, err := srv.Vacuum(ctx)
+	if err != nil {
+		srv.Close()
+
+		return exitWithError(err)
+	}
+
+	if err := srv.Close(); err != nil {
+		return exitWithError(err)
+	}
+
+	reclaimed := (before.FreelistCount - after.FreelistCount) * before.PageSize
+
+	fmt.Fprintf(stdout, "vacuumed: %d free pages, %d free pages, %d bytes reclaimed\n",
+		before.FreelistCount, after.FreelistCount, reclaimed)
+
+	return 0
 }
 
 // changeAdminPassword is the -admin_password mode: store the credential the
