@@ -24,6 +24,35 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// openLockFile opens the sidecar for the lock cycle: read-write, created if
+// missing, never truncated — the lock, not the file's contents, is what
+// decides, and truncating before holding it would rewrite a file another
+// process is standing on. The open goes through CreateFile rather than the
+// runtime's own because of one share flag: FILE_SHARE_DELETE is what lets the
+// holder remove the file's name while this very handle stays open, and the
+// release depends on that removal. Without it Windows refuses the removal of
+// a file any handle stands on, and the lock file would outlive every clean
+// stop.
+func openLockFile(path string) (*os.File, error) {
+	handle, err := windows.CreateFile(
+		windows.StringToUTF16Ptr(path),
+		windows.GENERIC_READ|windows.GENERIC_WRITE,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		nil,
+		windows.OPEN_ALWAYS,
+		windows.FILE_ATTRIBUTE_NORMAL,
+		0,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// A raw handle carries no name of its own the way a unix descriptor can
+	// recover one, so the handle keeps the path it opened: the release removes
+	// the file by that name.
+	return os.NewFile(uintptr(handle), path), nil
+}
+
 // tryLock takes the exclusive lock without waiting. Windows locks a byte range
 // rather than the whole file, and one byte at the start is enough: the file is
 // a sidecar nobody reads or writes for any other reason, so whoever holds that

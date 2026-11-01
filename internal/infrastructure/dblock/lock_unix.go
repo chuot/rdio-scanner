@@ -24,6 +24,15 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// openLockFile opens the sidecar for the lock cycle: read-write, created if
+// missing, never truncated — the lock, not the file's contents, is what
+// decides, and truncating before holding it would rewrite a file another
+// process is standing on. A plain os.OpenFile is all unix needs: an open
+// descriptor never stands in the way of removing the file's name.
+func openLockFile(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o644)
+}
+
 // tryLock takes the exclusive lock without waiting: an flock held by another
 // open file description answers EWOULDBLOCK, which is the deployment being in
 // use. The lock belongs to the open file description rather than to the

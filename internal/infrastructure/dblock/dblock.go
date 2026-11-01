@@ -101,10 +101,7 @@ func Acquire(dbPath string) (*Handle, error) {
 	lockPath := lockPathFor(dbPath)
 
 	for attempt := 0; attempt < 4; attempt++ {
-		// The file is opened read-write and never truncated on open: the lock,
-		// not the file's contents, is what decides, and truncating before
-		// holding it would rewrite a file another process is standing on.
-		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+		file, err := openLockFile(lockPath)
 		if err != nil {
 			return nil, fmt.Errorf("dblock.acquire: %w", err)
 		}

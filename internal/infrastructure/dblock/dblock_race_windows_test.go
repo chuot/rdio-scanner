@@ -99,3 +99,24 @@ func TestSameFileAcceptsTheFileThePathNames(t *testing.T) {
 		t.Errorf("sameFile(handle, its own path) = false, want true: an ordinary hold matches")
 	}
 }
+
+// The platform open is what makes the removal possible: on Windows a file
+// cannot be removed while a handle without FILE_SHARE_DELETE stands on it, so
+// the lock open must carry that permission. The handle the open returns is the
+// one the lock and the identity check use.
+func TestOpenLockFileLeavesTheFileRemovableWhileHeld(t *testing.T) {
+	dir := t.TempDir()
+
+	lockPath := filepath.Join(dir, "rdio-scanner.lock")
+
+	file, err := openLockFile(lockPath)
+	if err != nil {
+		t.Fatalf("openLockFile: %v", err)
+	}
+
+	defer file.Close()
+
+	if err := os.Remove(lockPath); err != nil {
+		t.Errorf("Remove while the handle is open = %v, want nil: the lock open allows the removal", err)
+	}
+}
