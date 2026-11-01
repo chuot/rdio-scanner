@@ -16,6 +16,7 @@
 package persistence
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/url"
@@ -96,6 +97,56 @@ func Open(settings Settings) (*sql.DB, error) {
 	db.SetMaxOpenConns(25)
 
 	return db, nil
+}
+
+// VacuumMeasurements are the sqlite file's page facts read around the VACUUM
+// statement: how wide a page is, how many pages the file holds, and how many
+// of them sit on the freelist waiting to be reclaimed. The pair of readings is
+// what the operator's report is worked out from.
+type VacuumMeasurements struct {
+	PageSize      int
+	PageCount     int
+	FreelistCount int
+}
+
+// Vacuum runs sqlite's VACUUM statement — the file is rewritten in a compacted
+// form under the same name — and measures the freelist before and after so the
+// caller can report what was reclaimed. It belongs to the sqlite dialect; the
+// caller decides which databases it is asked to run against. A database another
+// writer holds fails once the DSN's busy timeout expires, carrying sqlite's own
+// "database is locked" wording.
+func Vacuum(ctx context.Context, db *sql.DB) (before, after VacuumMeasurements, err error) {
+	if before, err = measureSqlitePages(ctx, db); err != nil {
+		return before, after, err
+	}
+
+	if _, err = db.ExecContext(ctx, `VACUUM`); err != nil {
+		return before, after, fmt.Errorf("database.vacuum: %w", err)
+	}
+
+	if after, err = measureSqlitePages(ctx, db); err != nil {
+		return before, after, err
+	}
+
+	return before, after, nil
+}
+
+// measureSqlitePages reads the three pragmas the report needs. Pragma reads are
+// statement-level, so they need no transaction.
+func measureSqlitePages(ctx context.Context, db *sql.DB) (m VacuumMeasurements, err error) {
+	if err = db.QueryRowContext(ctx, `PRAGMA page_size`).Scan(&m.PageSize); err != nil {
+		return m, fmt.Errorf("database.vacuum.page_size: %w", err)
+	}
+
+	if err = db.QueryRowContext(ctx, `PRAGMA page_count`).Scan(&m.PageCount); err != nil {
+		return m, fmt.Errorf("database.vacuum.page_count: %w", err)
+	}
+
+	if err = db.QueryRowContext(ctx, `PRAGMA freelist_count`).Scan(&m.FreelistCount); err != nil {
+		return m, fmt.Errorf("database.vacuum.freelist_count: %w", err)
+	}
+
+	return m, nil
 }
 
 // dataSourceName picks the driver and the connection string for a dialect. The

@@ -368,3 +368,135 @@ func TestPostgresqlDataSourceEscapesCredentialsTheOperatorNames(t *testing.T) {
 		t.Errorf("the driver reads the host %q, want db.internal:5432", parsed.Host)
 	}
 }
+
+// openTestSqlite opens a fresh sqlite file for a persistence test.
+func openTestSqlite(t *testing.T) *sql.DB {
+	t.Helper()
+
+	return openTestSqliteAt(t, filepath.Join(t.TempDir(), "rdio-scanner.db"))
+}
+
+// openTestSqliteAt opens a fresh sqlite file at a named path, for the tests
+// that need the path itself — to hold it open from a second connection, or to
+// show the vacuum leaves it where it found it.
+func openTestSqliteAt(t *testing.T, filePath string) *sql.DB {
+	t.Helper()
+
+	db, err := Open(Settings{
+		Dialect:  DialectSqlite,
+		FilePath: filePath,
+	})
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	t.Cleanup(func() { db.Close() })
+
+	return db
+}
+
+// Vacuum compacts the sqlite file in place: the free pages measured before the
+// statement are gone after it, the file keeps its path, and the rows that were
+// not deleted read back unchanged.
+func TestVacuumCompactsTheSqliteFileInPlace(t *testing.T) {
+	db := openTestSqlite(t)
+
+	if _, err := db.Exec(`CREATE TABLE calls (id INTEGER PRIMARY KEY, body TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+
+	const rows = 500
+
+	for i := range rows {
+		body := strings.Repeat("x", 200)
+		if _, err := db.Exec(`INSERT INTO calls (body) VALUES (?)`, body); err != nil {
+			t.Fatalf("insert %d: %v", i, err)
+		}
+	}
+
+	// Deleting half the rows leaves pages on the freelist: the file keeps its
+	// size, and that is exactly what the task reclaims.
+	if _, err := db.Exec(`DELETE FROM calls WHERE id % 2 = 0`); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	before, after, err := Vacuum(context.Background(), db)
+	if err != nil {
+		t.Fatalf("Vacuum: %v", err)
+	}
+
+	if before.FreelistCount == 0 {
+		t.Fatalf("before.FreelistCount = 0, want free pages: the deleted rows should have left the freelist the task reclaims")
+	}
+
+	if before.PageSize == 0 {
+		t.Errorf("before.PageSize = 0, want the file's page size: the report works out reclaimed bytes from it")
+	}
+
+	if after.FreelistCount != 0 {
+		t.Errorf("after.FreelistCount = %d, want 0: the vacuum rewrites the file without the freelist", after.FreelistCount)
+	}
+
+	if after.PageCount >= before.PageCount {
+		t.Errorf("after.PageCount = %d, want fewer than the %d pages before the vacuum: the reclaimed pages leave the file", after.PageCount, before.PageCount)
+	}
+
+	if after.PageSize != before.PageSize {
+		t.Errorf("after.PageSize = %d, want the same %d: the compacted file keeps the page size it had", after.PageSize, before.PageSize)
+	}
+
+	var remaining int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM calls`).Scan(&remaining); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+
+	if remaining != rows/2 {
+		t.Errorf("remaining rows = %d, want %d: the vacuum must not touch the rows that were left", remaining, rows/2)
+	}
+
+	var body string
+	if err := db.QueryRow(`SELECT body FROM calls WHERE id = 1`).Scan(&body); err != nil {
+		t.Fatalf("read a surviving row: %v", err)
+	}
+
+	if body != strings.Repeat("x", 200) {
+		t.Errorf("the surviving row reads back %q, want its 200 x characters unchanged", body)
+	}
+}
+
+// A database with no free pages reports zero before and after: the operator
+// sees the task ran and reclaimed nothing, not a run that failed.
+func TestVacuumReportsZeroForADatabaseWithNoFreePages(t *testing.T) {
+	db := openTestSqlite(t)
+
+	if _, err := db.Exec(`CREATE TABLE calls (id INTEGER PRIMARY KEY, body TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+
+	for i := range 20 {
+		if _, err := db.Exec(`INSERT INTO calls (body) VALUES (?)`, "call"); err != nil {
+			t.Fatalf("insert %d: %v", i, err)
+		}
+	}
+
+	if _, _, err := Vacuum(context.Background(), db); err != nil {
+		t.Fatalf("first Vacuum: %v", err)
+	}
+
+	before, after, err := Vacuum(context.Background(), db)
+	if err != nil {
+		t.Fatalf("second Vacuum: %v", err)
+	}
+
+	if before.FreelistCount != 0 {
+		t.Errorf("before.FreelistCount = %d, want 0: the first vacuum left no freelist to reclaim", before.FreelistCount)
+	}
+
+	if after.FreelistCount != 0 {
+		t.Errorf("after.FreelistCount = %d, want 0", after.FreelistCount)
+	}
+
+	if before.PageSize == 0 {
+		t.Errorf("before.PageSize = 0, want the file's page size even when nothing is reclaimed")
+	}
+}
