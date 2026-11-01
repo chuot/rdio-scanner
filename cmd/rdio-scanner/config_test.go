@@ -17,6 +17,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -624,4 +625,69 @@ func TestConfigSaveWritesNoVacuumKey(t *testing.T) {
 	if strings.Contains(string(saved), "vacuum") {
 		t.Errorf("saved ini =\n%q\nwant no vacuum line: a deployment that vacuumed once must not vacuum on every start", string(saved))
 	}
+}
+
+// the task rewrites one sqlite file, so a deployment on another database has
+// nothing for it to compact: the run is refused, naming the type, before any
+// connection opens. The decision waits for the ini overlay, because the type
+// the server would use can come from the operator's file rather than the
+// command line.
+func TestVacuumIsRefusedOnANonSqliteDatabase(t *testing.T) {
+	for _, dbType := range []string{DbTypeMariadb, DbTypeMysql, DbTypePostgresql} {
+		t.Run(dbType+" named on the command line", func(t *testing.T) {
+			_, _, err := newConfig([]string{"-base_dir", t.TempDir(), "-vacuum", "-db_type", dbType}, "", &bytes.Buffer{})
+			if err == nil {
+				t.Fatalf("newConfig with -vacuum -db_type %s: want a refusal, got none", dbType)
+			}
+
+			want := fmt.Sprintf("the vacuum task needs the sqlite database, not %s", dbType)
+			if err.Error() != want {
+				t.Errorf("refusal = %q, want %q", err.Error(), want)
+			}
+		})
+	}
+
+	t.Run("the ini file names the other type", func(t *testing.T) {
+		baseDir := t.TempDir()
+		writeFile(t, filepath.Join(baseDir, "rdio-scanner.ini"), "db_type = mysql\ndb_host = db.internal\ndb_name = rdio\n")
+
+		_, _, err := newConfig([]string{"-base_dir", baseDir, "-vacuum"}, "", &bytes.Buffer{})
+		if err == nil {
+			t.Fatal("newConfig with -vacuum over an ini file that says db_type = mysql: want a refusal, got none")
+		}
+
+		want := "the vacuum task needs the sqlite database, not mysql"
+		if err.Error() != want {
+			t.Errorf("refusal = %q, want %q", err.Error(), want)
+		}
+	})
+
+	t.Run("the command line cannot outvote the ini file", func(t *testing.T) {
+		baseDir := t.TempDir()
+		writeFile(t, filepath.Join(baseDir, "rdio-scanner.ini"), "db_type = postgresql\n")
+
+		_, _, err := newConfig([]string{"-base_dir", baseDir, "-vacuum", "-db_type", DbTypeSqlite}, "", &bytes.Buffer{})
+		if err == nil {
+			t.Fatal("newConfig with -vacuum -db_type sqlite over an ini file that says db_type = postgresql: want a refusal, got none: the operator's file outranks the flag, so this deployment is postgresql")
+		}
+
+		want := "the vacuum task needs the sqlite database, not postgresql"
+		if err.Error() != want {
+			t.Errorf("refusal = %q, want %q", err.Error(), want)
+		}
+	})
+
+	t.Run("an sqlite deployment the ini file names is accepted", func(t *testing.T) {
+		baseDir := t.TempDir()
+		writeFile(t, filepath.Join(baseDir, "rdio-scanner.ini"), "db_type = sqlite\ndb_file = custom.db\n")
+
+		cfg, _, err := newConfig([]string{"-base_dir", baseDir, "-vacuum"}, "", &bytes.Buffer{})
+		if err != nil {
+			t.Fatalf("newConfig with -vacuum over an ini file that says db_type = sqlite: %v", err)
+		}
+
+		if !cfg.Vacuum {
+			t.Errorf("Vacuum = %v, want on", cfg.Vacuum)
+		}
+	})
 }

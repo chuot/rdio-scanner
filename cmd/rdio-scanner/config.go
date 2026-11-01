@@ -179,6 +179,16 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 		return nil, ModeExit, fmt.Errorf("unknown database type %s", config.DbType)
 	}
 
+	// The task rewrites one sqlite file, so a deployment on another database
+	// has nothing for it to compact, and connecting to that database to find
+	// that out is a connection the run never needed. The decision sits after
+	// the ini overlay because the type the server would use can come from the
+	// operator's file, and it outranks -cmd because the operator who typed
+	// -vacuum asked for the task, not a command.
+	if config.Vacuum && config.DbType != DbTypeSqlite {
+		return nil, ModeExit, fmt.Errorf("the vacuum task needs the sqlite database, not %s", config.DbType)
+	}
+
 	// A bcrypt cost outside 10 to 14 is a typo, and a typo here would hash
 	// the administrator credential at a cost the operator never asked for.
 	// The connect timeout must parse as a duration, or the server would
