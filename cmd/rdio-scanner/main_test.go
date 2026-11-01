@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"rdio-scanner/internal/app"
 	"rdio-scanner/internal/application/ports"
@@ -346,6 +347,175 @@ func TestVacuumModeRefusesADeploymentAnotherProcessHolds(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(base, "rdio-scanner.db")); !os.IsNotExist(err) {
 		t.Errorf("the run opened a database behind the held lock: stat says %v", err)
+	}
+}
+
+// A busy database reaches the operator through the shared one-shot error
+// path: with a second connection holding the write lock, the run waits out
+// the busy timeout, prints sqlite's own lock message, and exits 1. The
+// migration pass is the first writer the run sends at the deployment, so the
+// held lock surfaces there before the compaction statement is reached; the
+// failure the operator sees names sqlite's lock either way.
+func TestVacuumModeReportsABusyDatabaseThroughTheErrorPath(t *testing.T) {
+	base := t.TempDir()
+
+	dbPath := filepath.Join(base, "rdio-scanner.db")
+
+	// the holding connection stands in for the operator's sqlite3 session:
+	// its own busy timeout is short, but the write lock it holds is what
+	// the run has to wait out
+	holder, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=foreign_keys=on&_pragma=busy_timeout=500&_txlock=immediate")
+	if err != nil {
+		t.Fatalf("open the holding connection: %v", err)
+	}
+
+	defer holder.Close()
+
+	// one connection, so the write transaction sits on the connection that
+	// carries the short timeout
+	holder.SetMaxOpenConns(1)
+
+	if _, err := holder.Exec(`CREATE TABLE vacuum_probe (id INTEGER PRIMARY KEY, body TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+
+	tx, err := holder.Begin()
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+
+	if _, err := tx.Exec(`INSERT INTO vacuum_probe (body) VALUES ('in flight')`); err != nil {
+		tx.Rollback()
+		t.Fatalf("insert inside the transaction: %v", err)
+	}
+
+	defer tx.Rollback()
+
+	// the failure is said through the standard logger, so the test watches
+	// where that logger writes for the duration of the run
+	logOut := &bytes.Buffer{}
+
+	previous := log.Writer()
+	log.SetOutput(logOut)
+
+	defer log.SetOutput(previous)
+
+	start := time.Now()
+
+	code := run([]string{"-base_dir", base, "-vacuum"}, io.Discard, noBundlesUnbuilt)
+
+	elapsed := time.Since(start)
+
+	if code != 1 {
+		t.Fatalf("the vacuum mode against a busy database exited %d, want 1:\n%s", code, logOut.String())
+	}
+
+	if !strings.Contains(logOut.String(), "database is locked") {
+		t.Errorf("the failure output does not name sqlite's lock:\n%s", logOut.String())
+	}
+
+	// the run's own ten second wait is what expires here: the failure lands
+	// with the busy timeout waited out, not before it and not past it
+	if elapsed < time.Second {
+		t.Errorf("the run failed after %v, want the busy database waited out first", elapsed)
+	}
+
+	if elapsed > 30*time.Second {
+		t.Errorf("the run failed after %v, want the failure inside the ten second busy timeout", elapsed)
+	}
+}
+
+// The task holds the deployment lock for its own whole run, so a second
+// vacuum run beside the first is refused the way a server-held deployment
+// is: the first run stalls waiting out the busy timeout against a held write
+// transaction while it holds the lock, and the second run meets the refusal
+// while that wait is still running.
+func TestVacuumModeRefusesASecondRunWhileTheFirstHoldsTheLock(t *testing.T) {
+	base := t.TempDir()
+
+	dbPath := filepath.Join(base, "rdio-scanner.db")
+
+	// the held write transaction keeps the first run inside its busy wait —
+	// and so inside the deployment lock it took before opening the database
+	holder, err := sql.Open("sqlite", "file:"+dbPath+"?_pragma=foreign_keys=on&_pragma=busy_timeout=500&_txlock=immediate")
+	if err != nil {
+		t.Fatalf("open the holding connection: %v", err)
+	}
+
+	defer holder.Close()
+
+	holder.SetMaxOpenConns(1)
+
+	if _, err := holder.Exec(`CREATE TABLE vacuum_probe (id INTEGER PRIMARY KEY, body TEXT NOT NULL)`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+
+	tx, err := holder.Begin()
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+
+	if _, err := tx.Exec(`INSERT INTO vacuum_probe (body) VALUES ('in flight')`); err != nil {
+		tx.Rollback()
+		t.Fatalf("insert inside the transaction: %v", err)
+	}
+
+	defer tx.Rollback()
+
+	firstOut := &bytes.Buffer{}
+
+	firstDone := make(chan int, 1)
+
+	go func() {
+		firstDone <- run([]string{"-base_dir", base, "-vacuum"}, firstOut, noBundlesUnbuilt)
+	}()
+
+	// the second run waits its place: the first takes the lock just before
+	// it opens the database, so the lock is watched for until it is seen held
+	deadline := time.Now().Add(30 * time.Second)
+
+	for {
+		probe, err := dblock.Acquire(dbPath)
+		if err != nil {
+			break
+		}
+
+		probe.Close()
+
+		if time.Now().After(deadline) {
+			t.Fatal("the first vacuum run never took the deployment lock")
+		}
+
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// the standard logger carries both runs' failures, so it is watched once
+	logOut := &bytes.Buffer{}
+
+	previous := log.Writer()
+	log.SetOutput(logOut)
+
+	defer log.SetOutput(previous)
+
+	if code := run([]string{"-base_dir", base, "-vacuum"}, io.Discard, noBundlesUnbuilt); code != 1 {
+		t.Fatalf("the second vacuum run exited %d, want 1", code)
+	}
+
+	if !strings.Contains(logOut.String(), "the database is in use — stop the server before vacuuming") {
+		t.Errorf("the second run was not refused as in use:\n%s", logOut.String())
+	}
+
+	if strings.Contains(firstOut.String(), "vacuumed:") {
+		t.Errorf("the first run reported a compaction it never finished:\n%s", firstOut.String())
+	}
+
+	select {
+	case code := <-firstDone:
+		if code != 1 {
+			t.Errorf("the first vacuum run exited %d, want 1 against the busy database", code)
+		}
+	case <-time.After(time.Minute):
+		t.Fatal("the first vacuum run never finished")
 	}
 }
 
