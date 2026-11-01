@@ -49,3 +49,23 @@ func tryLock(file *os.File) error {
 func unlock(file *os.File) error {
 	return unix.Flock(int(file.Fd()), unix.LOCK_UN)
 }
+
+// sameFile reports whether the path names the very file the descriptor stands
+// on, comparing device and inode numbers. An acquirer that opened the lock
+// file before the holder removed it ends up standing on an unlinked inode; the
+// path names a different file by then, and the comparison says so. A live
+// inode is never reused while a descriptor still stands on it, so a match on
+// an ordinary hold is trustworthy.
+func sameFile(file *os.File, path string) bool {
+	fi, err := file.Stat()
+	if err != nil {
+		return false
+	}
+
+	st, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+
+	return os.SameFile(fi, st)
+}

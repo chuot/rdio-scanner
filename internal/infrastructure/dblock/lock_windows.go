@@ -59,3 +59,24 @@ func unlock(file *os.File) error {
 
 	return windows.UnlockFileEx(windows.Handle(file.Fd()), 0, 1, 0, &overlapped)
 }
+
+// sameFile reports whether the path names the very file the handle stands on.
+// The comparison is the operating system's own: on Windows it answers with the
+// volume serial number and the file index, which name the file on that volume
+// and no other. A handle opened before the holder removed the file stands on a
+// file the path no longer names, and a file created later under the same name
+// carries a different index, so the comparison tells the stale handle from the
+// current one.
+func sameFile(file *os.File, path string) bool {
+	fi, err := file.Stat()
+	if err != nil {
+		return false
+	}
+
+	st, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+
+	return os.SameFile(fi, st)
+}

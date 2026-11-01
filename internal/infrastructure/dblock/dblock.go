@@ -87,31 +87,50 @@ type Handle struct {
 // the server was configured with — and records this process in the lock file.
 // A deployment another process holds fails as ErrInUse; anything else that
 // went wrong, an unreadable directory, is a plain error.
+//
+// The release removes the lock file, which opens the window the identity check
+// closes: a process that opened the file before the holder removed it can lock
+// the unlinked file after the holder lets go, while a later process creates a
+// fresh file of the same name. After taking the lock, the acquirer compares the
+// locked file with the file the path names now; when they differ, the lock is
+// on a file nothing names, so it lets go and retries the whole cycle against
+// the replacement. The retries are bounded: churn this deep only happens while
+// several processes race the same release, and giving up reports the
+// deployment busy rather than spinning.
 func Acquire(dbPath string) (*Handle, error) {
 	lockPath := lockPathFor(dbPath)
 
-	// The file is opened read-write and never truncated on open: the lock, not
-	// the file's contents, is what decides, and truncating before holding it
-	// would rewrite a file another process is standing on.
-	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
-	if err != nil {
-		return nil, fmt.Errorf("dblock.acquire: %w", err)
-	}
+	for attempt := 0; attempt < 4; attempt++ {
+		// The file is opened read-write and never truncated on open: the lock,
+		// not the file's contents, is what decides, and truncating before
+		// holding it would rewrite a file another process is standing on.
+		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+		if err != nil {
+			return nil, fmt.Errorf("dblock.acquire: %w", err)
+		}
 
-	if err := tryLock(file); err != nil {
-		file.Close()
+		if err := tryLock(file); err != nil {
+			file.Close()
 
-		return nil, err
-	}
+			return nil, err
+		}
 
-	if err := writeHolder(file); err != nil {
+		if sameFile(file, lockPath) {
+			if err := writeHolder(file); err != nil {
+				unlock(file)
+				file.Close()
+
+				return nil, fmt.Errorf("dblock.acquire: %w", err)
+			}
+
+			return &Handle{file: file}, nil
+		}
+
 		unlock(file)
 		file.Close()
-
-		return nil, fmt.Errorf("dblock.acquire: %w", err)
 	}
 
-	return &Handle{file: file}, nil
+	return nil, ErrInUse
 }
 
 // Close releases the lock: it removes the lock file by name first, then
