@@ -17,6 +17,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -162,4 +163,82 @@ func TestAServerPointedAtAFreshDirectoryPutsItsFilesWhereTheBaseDirectorySays(t 
 	if _, err := (os.Stat(filepath.Join(base, "rdio-scanner.db"))); err != nil {
 		t.Errorf("the database the server opened is not the file the configuration names: %v", err)
 	}
+}
+
+// TestASecondServerAgainstALiveDeploymentIsRefused claims the
+// deployment before the database is opened: a second composition root
+// pointed at the same files is refused as in use, and the refusal
+// opens no database and writes nothing into the deployment.
+func TestASecondServerAgainstALiveDeploymentIsRefused(t *testing.T) {
+	base := t.TempDir()
+
+	srv, err := New(testConfigIn(base, io.Discard))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	defer func() {
+		if err := srv.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
+
+	if _, err := os.Stat(filepath.Join(base, "rdio-scanner.lock")); err != nil {
+		t.Errorf("the running server holds no deployment lock where the base directory says: %v", err)
+	}
+
+	before, err := os.ReadDir(base)
+	if err != nil {
+		t.Fatalf("reading the deployment folder: %v", err)
+	}
+
+	second, err := New(testConfigIn(base, io.Discard))
+	if err == nil {
+		_ = second.Close()
+		t.Fatal("a second server against a live deployment started, want it refused as in use")
+	}
+
+	if !errors.Is(err, ErrInUse) {
+		t.Errorf("the refusal is %v, want it to say the deployment is in use", err)
+	}
+
+	if second != nil {
+		t.Error("the refused server came back assembled, want nothing assembled")
+	}
+
+	after, err := os.ReadDir(base)
+	if err != nil {
+		t.Fatalf("reading the deployment folder after the refusal: %v", err)
+	}
+
+	if len(after) != len(before) {
+		t.Errorf("the refused server left %d files in the deployment where it found %d, want it to open no database of its own", len(after), len(before))
+	}
+}
+
+// TestANewServerStartsAfterTheDeploymentIsClosed releases the claim
+// when the server closes: a new server over the same files starts, so
+// the lock belongs to the running server and not to the folder.
+func TestANewServerStartsAfterTheDeploymentIsClosed(t *testing.T) {
+	base := t.TempDir()
+
+	srv, err := New(testConfigIn(base, io.Discard))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := srv.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	second, err := New(testConfigIn(base, io.Discard))
+	if err != nil {
+		t.Fatalf("New after Close: %v", err)
+	}
+
+	defer func() {
+		if err := second.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
 }

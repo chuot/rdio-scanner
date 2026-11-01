@@ -17,6 +17,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path"
@@ -34,6 +35,13 @@ const (
 	DbTypePostgresql string = "postgresql"
 	DbTypeSqlite     string = "sqlite"
 )
+
+// ErrInUse says the deployment is already claimed by a running server:
+// its database is open and its files are being written, and opening
+// them a second time could cost an operator their data. Every mode
+// that opens the database — the server, the credential script, the
+// vacuum task — refuses with this sentinel rather than sharing one.
+var ErrInUse = errors.New("the database is in use")
 
 type Config struct {
 	BaseDir string

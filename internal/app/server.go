@@ -36,6 +36,7 @@ import (
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/infrastructure/clock"
+	"rdio-scanner/internal/infrastructure/dblock"
 	"rdio-scanner/internal/infrastructure/delayer"
 	"rdio-scanner/internal/infrastructure/dirwatch"
 	"rdio-scanner/internal/infrastructure/dirwatch/parsers"
@@ -70,6 +71,12 @@ type Server struct {
 
 	db      *sql.DB
 	dialect persistence.Dialect
+
+	// dbLock is the claim this process holds on the deployment while its
+	// database is open. It is taken before the database is opened and
+	// released after the database is closed, so nothing else can open the
+	// same files while this server is writing them.
+	dbLock *dblock.Handle
 
 	repos application.ConfigurationRepositories
 
@@ -180,6 +187,17 @@ func New(config Config) (*Server, error) {
 
 	srv.dialect = dialect
 
+	// The deployment is claimed before its database is opened: a second
+	// rdio-scanner process pointed at the same files is refused here rather
+	// than sharing the database and risking what an operator has recorded.
+	// The claim is released with the database in the stop.
+	lock, err := dblock.Acquire(config.GetDbFilePath())
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInUse, err)
+	}
+
+	srv.dbLock = lock
+
 	db, err := persistence.Open(persistence.Settings{
 		Dialect:        dialect,
 		FilePath:       config.GetDbFilePath(),
@@ -193,6 +211,7 @@ func New(config Config) (*Server, error) {
 		ConnectTimeout: config.DbConnectTimeout,
 	})
 	if err != nil {
+		_ = lock.Close()
 		return nil, err
 	}
 
@@ -212,14 +231,17 @@ func New(config Config) (*Server, error) {
 
 		migrationLines = append(migrationLines, domain.LogEntry{Level: level, Message: message})
 	}); err != nil {
+		_ = lock.Close()
 		return nil, err
 	}
 
 	if err := persistence.Seed(ctx, db, dialect); err != nil {
+		_ = lock.Close()
 		return nil, err
 	}
 
 	if err := srv.wire(migrationLines); err != nil {
+		_ = lock.Close()
 		return nil, err
 	}
 
@@ -791,6 +813,20 @@ func (s *Server) stop(ctx context.Context) {
 
 				s.stopFailed = err
 			}
+		}
+
+		// The deployment is let go last: the database it protects is already
+		// closed, so the next rdio-scanner process to claim it finds the files
+		// idle rather than mid-write.
+		if s.dbLock != nil {
+			if err := s.dbLock.Close(); err != nil {
+				s.console.println(renderLogEntry(domain.LogLevelError, domain.LogSourceDatabase,
+					fmt.Sprintf("the server could not release its claim on the deployment: %v", err)))
+
+				s.stopFailed = err
+			}
+
+			s.dbLock = nil
 		}
 	})
 }
