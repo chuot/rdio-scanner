@@ -27,11 +27,12 @@
 //
 // The lock is an advisory operating-system lock on a sidecar file beside the
 // database, carrying the database file's name with a .lock extension. It is
-// held for the whole life of the process that takes it, and it is taken before
-// the database is opened, so every mode that reaches the database passes
-// through it. A crashed holder costs nothing: the operating system drops an
-// advisory lock when its file descriptor goes away with the process, so the
-// file left behind is lockable again on its own.
+// taken before the database is opened, so every mode that reaches the database
+// passes through it, and a clean release removes the file: a stopped server
+// leaves nothing naming a dead process for an operator to find. A crashed
+// holder does leave the file behind, and that costs nothing: the operating
+// system drops an advisory lock when its file descriptor goes away with the
+// process, so a fresh acquirer over the leftover takes the lock again.
 //
 // What the file's contents say is never consulted. It names the holding
 // process, which is what an operator inspects when a deployment refuses to
