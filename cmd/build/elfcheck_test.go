@@ -464,6 +464,10 @@ func TestAProgramWithNoProgramHeadersSaysNothingAboutHowItWasLinked(t *testing.T
 	}
 }
 
+// theContainerMachineHasTheseCores is what the container-engine stand-in in the harness below reports for
+// the machine it runs compiles on: a count of its own, deliberately not this process's own core count.
+const theContainerMachineHasTheseCores = "4"
+
 // aBuildCompilingInAContainer stands the ffmpeg phase on a host with the container program:
 // the steps write the test's pair into the mounted directory, and the build's own read then
 // reaches real files.
@@ -488,6 +492,11 @@ func aBuildCompilingInAContainer(t *testing.T, repo string, target string, produ
 			return name, nil
 		},
 		machine: func() host { return theReleaseHost },
+		theRun: func(argv []string, stdin []byte) ([]byte, error) {
+			// The harness stands in for the container engine, and answers the CPU-count question the run
+			// asks before planning a compile in that engine's machine.
+			return []byte(theContainerMachineHasTheseCores + "\n"), nil
+		},
 		source: func(ffmpegSource, bundle.Manifest) error {
 			return nil
 		},

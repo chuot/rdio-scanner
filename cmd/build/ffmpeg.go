@@ -72,6 +72,38 @@ type ffmpegState struct {
 	// recorded. It is read only for a tree that was found, and a tree whose recorded digest is not the digest the
 	// record pins is a tree this build does not compile against.
 	sysrootDigest string
+
+	// compileCores is how many jobs the compile this plan describes may put to work at once, and compileCoreHost
+	// names the machine that count is the count of: the container machine for a compile that runs in a container,
+	// this machine for one that runs on the host's own toolchain. The run asks once, before the plan is made, so
+	// that the plan's compile and the machine it runs on cannot disagree about how many cores there are.
+	//
+	// An empty count beside a named machine is a machine that reports nothing, and a plan for it is refused rather
+	// than the tool guessing. Both empty is a plan made without asking, which is a compile on this machine, and it
+	// uses this machine's own count.
+	compileCores    string
+	compileCoreHost string
+}
+
+// theCompileCanCheckOutHowManyCores is the job count for the compile this plan describes: the count named with
+// the machine, when the run named one; this machine's own count otherwise. An empty answer is the case with no
+// count to use, and the plan that asks for it refuses.
+func (s ffmpegState) theCompileCanCheckOutHowManyCores() string {
+	if s.compileCoreHost != "" || s.compileCores != "" {
+		return s.compileCores
+	}
+
+	return strconv.Itoa(runtime.NumCPU())
+}
+
+// refusesToPlanACompileOnAMachineThatNamesNoCores is that refusal: a run that named the machine the compile runs
+// on, and got no count from it, has no job count to plan with.
+func (s ffmpegState) refusesToPlanACompileOnAMachineThatNamesNoCores() (string, bool) {
+	if s.compileCoreHost != "" && s.compileCores == "" {
+		return "the " + s.compileCoreHost + " reports no CPU count to compile with", true
+	}
+
+	return "", false
 }
 
 // host is the platform the machine running the build is on, named the way the release names a platform: the
@@ -80,11 +112,70 @@ type ffmpegState struct {
 type host struct {
 	goos   string
 	goarch string
+
+	// cpus is how many cores this machine has to compile on, as it reports them. A machine that reports no
+	// count leaves it 0, and a compile planned for that machine is told so rather than the tool choosing a
+	// job count of its own.
+	cpus int
 }
 
-// thisMachine is the platform the build is running on.
+// thisMachine is the platform the build is running on, with the core count of the machine this process runs on.
 func thisMachine() host {
-	return host{goos: runtime.GOOS, goarch: runtime.GOARCH}
+	return host{goos: runtime.GOOS, goarch: runtime.GOARCH, cpus: runtime.NumCPU()}
+}
+
+// howManyCoresCanACompileOnMeCheckOut is the number of jobs a compile that runs on this machine's own toolchain
+// may put to work at once, as this machine reports them. A description of a machine that names no count is this
+// process's own machine, and its count is the count a compile on it can use.
+func (h host) howManyCoresCanACompileOnMeCheckOut() string {
+	if h.cpus <= 0 {
+		return strconv.Itoa(runtime.NumCPU())
+	}
+
+	return strconv.Itoa(h.cpus)
+}
+
+// thisBuildsOwnMachine is how the run names the machine the tool process itself runs on, when it says which
+// machine a job count is the count of.
+const thisBuildsOwnMachine = "this build's own machine"
+
+// theContainerMachineNamedBy is how the run names the machine the container a compile runs in runs on: the
+// machine the container program talks to, which is a different machine from this one whenever the container
+// engine runs in a VM.
+func theContainerMachineNamedBy(program string) string {
+	return program + " machine"
+}
+
+// howManyCoresCanTheMachineCompilingHereCheckOut is how many cores the machine that compiles this target's ffmpeg
+// has to put to work, and which machine that count is the count of. A compile in a container is counted by the
+// container machine, asked once through the engine that runs it; a compile on the host's own toolchain is counted
+// by this machine, which is the machine that runs that toolchain.
+//
+// Asking the engine, and not this process, is the point: the container machine is a different machine from this
+// one, and a job count taken from this one oversubscribes it. An engine that reports nothing leaves the count
+// empty for the plan to refuse; there is no fallback to this machine's count.
+func (t tool) howManyCoresCanTheMachineCompilingHereCheckOut(target string, program string, machine host) (string, string) {
+	if machine.canCompile(target) {
+		return machine.howManyCoresCanACompileOnMeCheckOut(), thisBuildsOwnMachine
+	}
+
+	named := theContainerMachineNamedBy(program)
+
+	if program == "" {
+		return "", named
+	}
+
+	report, err := t.theRun([]string{program, "info", "--format", "{{.NCPU}}"}, nil)
+	if err != nil {
+		return "", named
+	}
+
+	cpus, err := strconv.Atoi(strings.TrimSpace(string(report)))
+	if err != nil || cpus <= 0 {
+		return "", named
+	}
+
+	return strconv.Itoa(cpus), named
 }
 
 // canCompile says whether this machine can build a target's ffmpeg with its
@@ -517,6 +608,14 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 			target, podmanProgram, dockerProgram)
 	}
 
+	// The compile puts as many jobs to work as the machine it runs on has cores, and the run asked that machine
+	// before planning. A machine that answers with no count is a machine this build cannot size its compile to,
+	// and counting the cores of the machine running the tool instead is how the container ends up with more jobs
+	// than it has cores.
+	if refusal, refuses := state.refusesToPlanACompileOnAMachineThatNamesNoCores(); refuses {
+		return ffmpegPlan{}, fmt.Errorf("compiling the ffmpeg for %s needs the CPU count of the machine its container runs on: %s", target, refusal)
+	}
+
 	// A record that pins an SDK names a tree this machine has to have prepared, and the plan is where that is
 	// found out. A run that carried on reached configure with nothing mounted at the path its own flags name, and
 	// what it reported was clang's complaint about being unable to create an executable file — a compiler's own
@@ -625,7 +724,9 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 	makeArgs = append(makeArgs,
 		"-w", "/work/"+sourceDir(manifest),
 		image,
-		"make", "-j", strconv.Itoa(runtime.NumCPU()),
+		// The job count is the container machine's core count, which the run asked the engine for: this
+		// process's own core count belongs to a different machine whenever the engine runs in a VM.
+		"make", "-j", state.theCompileCanCheckOutHowManyCores(),
 	)
 
 	plan.Steps = append(plan.Steps, step{
@@ -783,7 +884,8 @@ func planNativeFFmpeg(repo string, manifest bundle.Manifest, target string, reco
 		result: "ffmpeg and ffprobe for " + target,
 		dir:    work,
 		name:   makeProgram(record),
-		args:   []string{"-j", strconv.Itoa(runtime.NumCPU())},
+		// This compile runs on the machine planning it, so its own core count is the right one to put to work.
+		args: []string{"-j", machine.howManyCoresCanACompileOnMeCheckOut()},
 	})
 
 	plan.Steps = append(plan.Steps, step{
@@ -1277,6 +1379,15 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 		sysrootTree, sysrootLookedIn = thePreparedSysrootFor(record, os.LookupEnv, homeDir)
 	}
 
+	// The machine the compile runs on is asked how many cores it has, once, here: the plan it is planning is made
+	// from that answer, and asking after the compile has started is a question answered too late to plan with. A
+	// target whose pair is already cached compiles nothing, and is asked for nothing.
+	compileCores, compileCoreHost := "", ""
+
+	if covered && !bundleIsCached {
+		compileCores, compileCoreHost = t.howManyCoresCanTheMachineCompilingHereCheckOut(target, program, machine)
+	}
+
 	state := ffmpegState{
 		program:         program,
 		sourceIsCached:  aFileIsThere(paths.source),
@@ -1285,6 +1396,13 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 		nativeTools:     nativeTools,
 		sysrootTree:     sysrootTree,
 		sysrootLookedIn: sysrootLookedIn,
+
+		// The job count the compile plans with is the count of the machine the compile runs on, asked once here so
+		// the plan and that machine cannot disagree about how many cores there are: the container machine for a
+		// compile in a container, this machine for one on the host's own toolchain. A target whose pair is already
+		// cached compiles nothing, and is asked for nothing.
+		compileCores:    compileCores,
+		compileCoreHost: compileCoreHost,
 
 		// A tree that was found is asked what its preparation recorded for it, in the same breath: the directory
 		// carrying the library a Darwin link reads is half of being the pinned tree, and the digest recorded beside

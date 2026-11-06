@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -607,6 +608,155 @@ func TestARecordNamingNoToolchainPlatformIsRefused(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "freebsd-amd64") || !strings.Contains(err.Error(), "compile_platform") {
 		t.Errorf("the refusal %q does not name the target and the field that is missing", err.Error())
+	}
+}
+
+// TestTheContainerCompileJobsAreTheContainerCores, TestTheContainerCompileWithNoCpuCountIsRefused, and
+// TestAHostCompileUsesTheHostsOwnCoreCount are CA-093-18 and CA-093-19 of FEAT-093: the compile in the tool's own
+// container asks the container machine how many cores it has rather than counting the cores of the machine running
+// the tool, a container machine that reports no count is refused instead of guessed for, and the host route keeps
+// the count of the host that runs its own toolchain.
+
+// withTheCompileMachineAsked is what the run read about the machine its compile runs on: the count it reported
+// and which machine that count is the count of. An empty count is a machine that reported nothing.
+func (s ffmpegState) withTheCompileMachineAsked(machine string, cores string) ffmpegState {
+	s.compileCoreHost = machine
+	s.compileCores = cores
+
+	return s
+}
+
+// aTreeWhoseCompileMachineWasAsked is a container tree where the run has read how many cores the machine its
+// compile runs on has.
+func aTreeWhoseCompileMachineWasAsked(machine string, cores string) ffmpegState {
+	return anUncompiledTree().withTheCompileMachineAsked(machine, cores)
+}
+
+// theJobCountOf is the count the plan's compile puts to work: the argument following the -j its make step names,
+// and empty when the plan has no compile step.
+func theJobCountOf(plan ffmpegPlan) string {
+	for _, s := range plan.Steps {
+		if s.label != "make" {
+			continue
+		}
+
+		for i, arg := range s.args {
+			if arg == "-j" && i+1 < len(s.args) {
+				return s.args[i+1]
+			}
+		}
+	}
+
+	return ""
+}
+
+func TestTheContainerCompileJobsAreTheContainerCores(t *testing.T) {
+	ownCores := runtime.NumCPU()
+	containerCores := 3
+	if containerCores == ownCores {
+		t.Skipf("this machine has %d cores, the number the fake container machine reports", ownCores)
+	}
+
+	plan, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", bundle.ReadManifest(),
+		aTreeWhoseCompileMachineWasAsked(theContainerMachineNamedBy(podmanProgram), strconv.Itoa(containerCores)), theReleaseHost)
+	if err != nil {
+		t.Fatalf("planFFmpeg: %v", err)
+	}
+
+	if got := theJobCountOf(plan); got != strconv.Itoa(containerCores) {
+		t.Errorf("the compile puts %q jobs to work, want %d: the container machine has %d cores and the machine running this build has %d",
+			got, containerCores, containerCores, ownCores)
+	}
+}
+
+func TestTheContainerCompileWithNoCpuCountIsRefused(t *testing.T) {
+	machine := theContainerMachineNamedBy(podmanProgram)
+
+	_, err := planFFmpeg(options{target: "linux-arm64"}, "/repo", bundle.ReadManifest(), aTreeWhoseCompileMachineWasAsked(machine, ""), theReleaseHost)
+	if err == nil {
+		t.Fatalf("a %s reporting no CPU count planned a compile anyway", machine)
+	}
+
+	if !strings.Contains(err.Error(), machine) || !strings.Contains(err.Error(), "CPU count") {
+		t.Errorf("the refusal %q does not name the machine that reported no CPU count", err.Error())
+	}
+}
+
+func TestAHostCompileUsesTheHostsOwnCoreCount(t *testing.T) {
+	own := host{goos: "darwin", goarch: "arm64", cpus: 7}
+
+	// The count is the host's own, so the run names the machine it came from with that answer.
+	tree := aNativeTree("macos-arm64").withTheCompileMachineAsked(thisBuildsOwnMachine, own.howManyCoresCanACompileOnMeCheckOut())
+
+	plan, err := planFFmpeg(options{target: "macos-arm64"}, t.TempDir(), bundle.ReadManifest(), tree, own)
+	if err != nil {
+		t.Fatalf("planFFmpeg: %v", err)
+	}
+
+	if got := theJobCountOf(plan); got != "7" {
+		t.Errorf("the compile puts %q jobs to work, want 7: the host route counts the host it runs its own toolchain on", got)
+	}
+}
+
+// TestTheToolAsksTheContainerEngineForItsCores and TestTheHostCompileTakesTheCountOfTheMachineRunningIt are the
+// asking behind CA-093-18 and CA-093-19: the count comes from the machine the compile runs on, asked through the
+// engine that runs the container, and an answer that is not a count leaves nothing for the plan to use.
+func TestTheToolAsksTheContainerEngineForItsCores(t *testing.T) {
+	asked := []string{}
+	tl := tool{
+		theRun: func(argv []string, stdin []byte) ([]byte, error) {
+			asked = append(asked, strings.Join(argv, " "))
+			return []byte("12\n"), nil
+		},
+	}
+
+	cpus, machine := tl.howManyCoresCanTheMachineCompilingHereCheckOut("freebsd-amd64", dockerProgram, theReleaseHost)
+	if cpus != "12" {
+		t.Errorf("the tool reported %q, want 12", cpus)
+	}
+
+	if machine != theContainerMachineNamedBy(dockerProgram) {
+		t.Errorf("the count came from %q, want it attributed to the %s", machine, theContainerMachineNamedBy(dockerProgram))
+	}
+
+	if len(asked) != 1 || !strings.Contains(asked[0], "info --format {{.NCPU}}") {
+		t.Errorf("the tool asked %v, want it to ask the engine for its CPU count", asked)
+	}
+
+	tl = tool{
+		theRun: func(argv []string, stdin []byte) ([]byte, error) { return []byte("not a count\n"), nil },
+	}
+
+	cpus, machine = tl.howManyCoresCanTheMachineCompilingHereCheckOut("freebsd-amd64", dockerProgram, theReleaseHost)
+	if cpus != "" {
+		t.Errorf("an engine answering %q reported %q; the plan should be left to refuse", "not a count", cpus)
+	}
+
+	if machine != theContainerMachineNamedBy(dockerProgram) {
+		t.Errorf("the empty count was attributed to %q, want the %s", machine, theContainerMachineNamedBy(dockerProgram))
+	}
+}
+
+func TestTheHostCompileTakesTheCountOfTheMachineRunningIt(t *testing.T) {
+	asked := []string{}
+	tl := tool{
+		theRun: func(argv []string, stdin []byte) ([]byte, error) {
+			asked = append(asked, strings.Join(argv, " "))
+			return []byte("12\n"), nil
+		},
+	}
+
+	cpus, machine := tl.howManyCoresCanTheMachineCompilingHereCheckOut("macos-arm64", dockerProgram, host{goos: "darwin", goarch: "arm64", cpus: 7})
+	if cpus != "7" {
+		t.Errorf("the tool reported %q, want 7: the machine that compiles this pair is the Mac", cpus)
+	}
+
+	if machine != thisBuildsOwnMachine {
+		t.Errorf("the count came from %q, want %s", machine, thisBuildsOwnMachine)
+	}
+
+	if len(asked) != 0 {
+		t.Errorf("the tool asked %v; a compile on the host's own toolchain is counted by that host", asked)
 	}
 }
 

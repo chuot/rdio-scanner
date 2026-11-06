@@ -368,7 +368,7 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 		ready = append(ready, tr)
 	}
 
-	workers, err := distWorkers(len(ready), os.LookupEnv)
+	workers, err := distWorkers(len(ready), t.theMachine(), os.LookupEnv)
 	if err != nil {
 		return fail(t.errout, err)
 	}
@@ -509,16 +509,21 @@ func (l *theReleaseLog) Write(p []byte) (int, error) {
 // buildJobsEnv names the bound an operator sets on the server compiles of a release run.
 const buildJobsEnv = "RDIO_BUILD_JOBS"
 
-// distWorkers is how many server compiles a release run runs at once: cores,
-// ready targets, and the operator's bound, whichever is fewest. A bound that
-// is not a count of work is refused; an empty variable leaves the machine's bound standing.
+// distWorkers is how many server compiles a release run runs at once: the cores of the machine the run names,
+// ready targets, and the operator's bound, whichever is fewest. The cores come from the machine description the
+// run already carries for deciding which targets it can build: the server compiles of a release run run on that
+// machine, so its own count is the one to size them with, and the ffmpeg compile's job count comes from the same
+// place. A bound that is not a count of work is refused; an empty variable leaves the machine's bound standing.
 // see the dist-run-scheduling maintainer note.
-func distWorkers(ready int, lookup func(string) (string, bool)) (int, error) {
+func distWorkers(ready int, machine host, lookup func(string) (string, bool)) (int, error) {
 	if ready == 0 {
 		return 0, nil
 	}
 
-	workers := runtime.NumCPU()
+	workers, err := strconv.Atoi(machine.howManyCoresCanACompileOnMeCheckOut())
+	if err != nil {
+		return 0, err
+	}
 
 	if value, ok := lookup(buildJobsEnv); ok && value != "" {
 		named, err := strconv.Atoi(value)

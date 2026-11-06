@@ -395,14 +395,23 @@ func carriesAPath(paths []string, want string) bool {
 	return false
 }
 
+// aMachineReportingTheseCores is a description of a machine that reports the core count named, for a test that
+// needs a machine's own count to be different from the count of the process running the test.
+func aMachineReportingTheseCores(cpus int) host {
+	return host{goos: "linux", goarch: "amd64", cpus: cpus}
+}
+
 // the bound on a release run's independent server compiles is about the machine's
 // memory and the log's readability, not correctness: too many at once stalls a
 // small machine, and a value that is not a count of work is refused.
 func TestTheReleaseRunBoundsItsServerCompiles(t *testing.T) {
-	cpus := runtime.NumCPU()
+	// A core count the machine reports, deliberately not this process's own, so the run's bound cannot
+	// pass by reading the process that started the build.
+	cpus := runtime.NumCPU() + 5
+	machine := aMachineReportingTheseCores(cpus)
 
 	// More ready targets than cores: the bound is the cores.
-	workers, err := distWorkers(cpus+3, noEnvironment)
+	workers, err := distWorkers(cpus+3, machine, noEnvironment)
 	if err != nil {
 		t.Fatalf("distWorkers: %v", err)
 	}
@@ -411,9 +420,13 @@ func TestTheReleaseRunBoundsItsServerCompiles(t *testing.T) {
 		t.Errorf("%d workers for %d ready targets on %d cores, want the cores", workers, cpus+3, cpus)
 	}
 
+	if workers == runtime.NumCPU() {
+		t.Errorf("%d workers on a machine naming %d cores: the bound is the count of the process running the build", workers, cpus)
+	}
+
 	// fewer ready targets than cores: the bound is the targets,
 	// a worker with nothing to do does nothing
-	workers, err = distWorkers(2, noEnvironment)
+	workers, err = distWorkers(2, machine, noEnvironment)
 	if err != nil {
 		t.Fatalf("distWorkers: %v", err)
 	}
@@ -423,7 +436,7 @@ func TestTheReleaseRunBoundsItsServerCompiles(t *testing.T) {
 	}
 
 	// The operator's bound, when it is lower than the cores, is the bound.
-	workers, err = distWorkers(8, anEnvironment(map[string]string{buildJobsEnv: "2"}))
+	workers, err = distWorkers(8, machine, anEnvironment(map[string]string{buildJobsEnv: "2"}))
 	if err != nil {
 		t.Fatalf("distWorkers: %v", err)
 	}
@@ -433,7 +446,7 @@ func TestTheReleaseRunBoundsItsServerCompiles(t *testing.T) {
 	}
 
 	// The operator's bound, when it is higher than the cores, is the cores.
-	workers, err = distWorkers(cpus+3, anEnvironment(map[string]string{buildJobsEnv: "9999"}))
+	workers, err = distWorkers(cpus+3, machine, anEnvironment(map[string]string{buildJobsEnv: "9999"}))
 	if err != nil {
 		t.Fatalf("distWorkers: %v", err)
 	}
@@ -443,7 +456,7 @@ func TestTheReleaseRunBoundsItsServerCompiles(t *testing.T) {
 	}
 
 	// A variable set to nothing says nothing: it is the machine's own bound.
-	workers, err = distWorkers(2, anEnvironment(map[string]string{buildJobsEnv: ""}))
+	workers, err = distWorkers(2, machine, anEnvironment(map[string]string{buildJobsEnv: ""}))
 	if err != nil {
 		t.Fatalf("distWorkers: %v", err)
 	}
@@ -454,13 +467,13 @@ func TestTheReleaseRunBoundsItsServerCompiles(t *testing.T) {
 
 	// A value that is not a count of work is refused.
 	for _, value := range []string{"four", "0", "-2", "2.5"} {
-		if _, err := distWorkers(2, anEnvironment(map[string]string{buildJobsEnv: value})); err == nil {
+		if _, err := distWorkers(2, machine, anEnvironment(map[string]string{buildJobsEnv: value})); err == nil {
 			t.Errorf("%s=%s was accepted, and it is not a count of work", buildJobsEnv, value)
 		}
 	}
 
 	// Nothing ready, nothing to bound: the run that writes no archives reads no count of work.
-	workers, err = distWorkers(0, anEnvironment(map[string]string{buildJobsEnv: "four"}))
+	workers, err = distWorkers(0, machine, anEnvironment(map[string]string{buildJobsEnv: "four"}))
 	if err != nil {
 		t.Fatalf("distWorkers: %v", err)
 	}

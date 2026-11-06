@@ -67,6 +67,12 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 			return true
 		},
 
+		// The stand-in answers the CPU-count question the ffmpeg phase asks the container engine before it
+		// plans a compile in that engine's machine, and names the machine it asked by the engine's own name.
+		theRun: func(argv []string, stdin []byte) ([]byte, error) {
+			return []byte(theContainerMachineHasTheseCores + "\n"), nil
+		},
+
 		// A test that reads the run's own lines names the stream it wants failures
 		// written to, because it is not the operator.
 		errout: io.Discard,
