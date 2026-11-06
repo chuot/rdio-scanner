@@ -63,9 +63,10 @@ type Source struct {
 // Target is how one architecture's ffmpeg comes to be.
 //
 // Every record names a toolchain: the container that holds it, the Containerfile that builds it, the packages
-// to install in it, and the configure arguments that make the compile cross to it. This build compiles that
-// target's ffmpeg and proves the pair it produced the way its `conformance` says to: by running it, or, when no
-// host this build runs on can start it, by reading out of the files what the record names.
+// to install in it, the machine those packages were built to run on, and the configure arguments that make
+// the compile cross to it. This build compiles that target's ffmpeg and proves the pair it produced the way
+// its `conformance` says to: by running it, or, when no host this build runs on can start it, by reading out
+// of the files what the record names.
 //
 // A macOS record names a second compile as well: the one a Mac runs with its own compiler, linker, and signer.
 // The top-level `cflags` and `ldflags` belong to the container compile, and `host` holds the other one's flags
@@ -86,6 +87,13 @@ type Target struct {
 	ContainerDigest string   `json:"container_digest"`
 	Packages        []string `json:"packages"`
 	Cross           []string `json:"cross"`
+
+	// CompilePlatform is the machine the record's toolchain runs on, in the words a container runtime
+	// names a platform: "linux/amd64" asks for the amd64 build of the container image. The packages a record
+	// names are the distribution's own builds, and Debian's arm64 archive carries no gcc-multilib or
+	// libc6-dev-i386 and its binutils cannot read the object files an amd64-hosted cross compiler writes, so a
+	// compile that runs in a container on another machine is given this platform rather than that machine's.
+	CompilePlatform string `json:"compile_platform"`
 
 	// CC is the answer configure passes on to the `--cc=` it was given, which is where a compile that
 	// crosses to another operating system names the invocation that produces binaries for it: the compiler,

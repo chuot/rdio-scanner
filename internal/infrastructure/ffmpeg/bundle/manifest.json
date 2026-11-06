@@ -40,6 +40,7 @@
     "linux-amd64": {
       "container": "docker.io/debian:stable",
       "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
+      "compile_platform": "linux/amd64",
       "packages": [
         "build-essential"
       ],
@@ -55,6 +56,7 @@
     "linux-arm64": {
       "container": "docker.io/debian:stable",
       "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
+      "compile_platform": "linux/amd64",
       "packages": [
         "build-essential",
         "gcc-aarch64-linux-gnu",
@@ -82,6 +84,7 @@
     "linux-arm": {
       "container": "docker.io/debian:stable",
       "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
+      "compile_platform": "linux/amd64",
       "packages": [
         "build-essential",
         "gcc-arm-linux-gnueabihf",
@@ -109,6 +112,7 @@
     "linux-386": {
       "container": "docker.io/debian:stable",
       "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
+      "compile_platform": "linux/amd64",
       "packages": [
         "build-essential",
         "gcc-multilib",
@@ -134,6 +138,7 @@
     "windows-amd64": {
       "container": "docker.io/alpine:latest",
       "container_digest": "sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6",
+      "compile_platform": "linux/amd64",
       "packages": [
         "build-base",
         "mingw-w64-gcc"
@@ -162,6 +167,7 @@
     "macos-amd64": {
       "container": "docker.io/debian:stable",
       "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
+      "compile_platform": "linux/amd64",
       "packages": [
         "build-essential",
         "clang",
@@ -217,6 +223,7 @@
     "macos-arm64": {
       "container": "docker.io/debian:stable",
       "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
+      "compile_platform": "linux/amd64",
       "packages": [
         "build-essential",
         "clang",
@@ -273,6 +280,7 @@
     "freebsd-amd64": {
       "container": "docker.io/debian:stable",
       "container_digest": "sha256:defb09e17b8c7326f9a3b63ecf0797f34674691f5c270d63987b955ff0168bd8",
+      "compile_platform": "linux/amd64",
       "containerfile": "Containerfile.ffmpeg.freebsd",
       "packages": [
         "build-essential",

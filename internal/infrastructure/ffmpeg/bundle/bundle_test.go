@@ -149,6 +149,43 @@ func TestTheManifestNamesThePinnedFfmpegAndTheCompiledTargets(t *testing.T) {
 	}
 }
 
+// A record's toolchain is a list of packages the container's distribution installs, and every one of those
+// packages was built by the distribution for one machine. Debian carries gcc-multilib and libc6-dev-i386 in its
+// amd64 archive and not in its arm64 one, and the cross compilers the other records install are amd64-hosted
+// builds of GCC. So a record that names no platform for its toolchain is compiled on whatever machine the
+// container host happens to be, and installs a different toolchain there: Debian's binutils is built for the
+// machine it runs on, and the arm64 build answers that it cannot recognise the format of the x86-64 FreeBSD
+// object an amd64 cross compiler wrote. A record therefore names the platform its toolchain runs on in the words
+// the container runtime uses, and the build asks that runtime for the platform when it builds the toolchain image
+// and when it starts the compile inside it.
+func TestEveryCompiledTargetNamesThePlatformItsToolchainRunsOn(t *testing.T) {
+	manifest := ReadManifest()
+
+	for _, target := range []string{"linux-amd64", "linux-arm64", "linux-arm", "linux-386", "windows-amd64", "freebsd-amd64", "macos-amd64", "macos-arm64"} {
+		record, ok := manifest.Targets[target]
+		if !ok {
+			t.Errorf("the manifest has no record for %s", target)
+			continue
+		}
+
+		if record.CompilePlatform == "" {
+			t.Errorf("%s names no platform for its toolchain: the packages its record installs were built by the distribution for one machine, and the compile that runs on another machine installs whatever toolchain that one carries", target)
+			continue
+		}
+
+		runtimeOS, arch, found := strings.Cut(record.CompilePlatform, "/")
+		if !found || runtimeOS == "" || arch == "" {
+			t.Errorf("%s names toolchain platform %q, want os/arch as the container runtime names it", target, record.CompilePlatform)
+		}
+
+		// The eight records all name the same platform today because all eight install an amd64-hosted
+		// cross toolchain; a record that ever moves to another one has to say why its packages exist there.
+		if record.CompilePlatform != "linux/amd64" {
+			t.Errorf("%s compiles its toolchain on %s, want linux/amd64: the cross compilers and multilib packages the records name are the amd64 archive's", target, record.CompilePlatform)
+		}
+	}
+}
+
 // `produced` is how a record used to say that this build compiles nothing for its target and takes the binaries
 // from wherever they come from. No target is produced that way any more, and the manifest is where that is
 // settled: the field is out of both the record and the struct that reads it, so a manifest that grew one again
