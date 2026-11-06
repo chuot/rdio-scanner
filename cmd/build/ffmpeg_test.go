@@ -16,6 +16,7 @@
 package main
 
 import (
+	"bytes"
 	"compress/gzip"
 	"io"
 	"os"
@@ -1027,6 +1028,138 @@ func TestAFfmpegAlreadyCompiledForTheSameRecipeIsNotCompiledAgain(t *testing.T) 
 
 	if plan.Says == "" {
 		t.Error("the build reuses a compiled ffmpeg and says nothing about it")
+	}
+
+	if !plan.Reuses {
+		t.Error("the plan that compiles nothing from a cache entry does not say that it reuses one")
+	}
+}
+
+// A cache entry is only as good as the record of how its binaries were proved. The pair and a
+// licence written by a run that never looked at them are not a proof: the entry is left alone and
+// the pair is compiled again.
+func TestACachedPairWithNoLicenceWrittenByItsOwnRunIsNotReused(t *testing.T) {
+	repo := t.TempDir()
+
+	aCacheEntryFor(t, repo, "freebsd-amd64", "")
+
+	compiled := false
+
+	tl, out := aBuildCompilingInAContainer(t, repo, "freebsd-amd64", func(t *testing.T, dir string, name string) {
+		compiled = true
+		anELFProgramWrittenTo(t, dir, name, theMeasuredFreeBSDPair)
+	})
+
+	if _, err := tl.runFFmpeg(options{target: "freebsd-amd64"}, out); err != nil {
+		t.Fatalf("the build refused the target: %v\n%s", err, out.String())
+	}
+
+	if !compiled {
+		t.Error("the build reused a cache entry that names no proof of the pair it holds")
+	}
+
+	said := out.String()
+
+	if strings.Contains(said, "reusing") {
+		t.Errorf("the build reused a cache entry that names no proof of the pair it holds:\n%s", said)
+	}
+
+	if !strings.Contains(said, "no proof") {
+		t.Errorf("the build did not say the cache entry names no proof of the pair it holds:\n%s", said)
+	}
+}
+
+// When an entry does carry the licence the compiling run wrote, that text is what the release
+// publishes: the run that only reused the pair composes nothing of its own.
+func TestTheLicencePublishedForAReusedPairIsTheTextStoredWithThatPair(t *testing.T) {
+	repo := t.TempDir()
+
+	const proved = "proved on the machine that compiled this pair, and nobody else"
+
+	aCacheEntryFor(t, repo, "freebsd-amd64", proved)
+
+	tl, out := aBuildCompilingInAContainer(t, repo, "freebsd-amd64", func(t *testing.T, dir string, name string) {
+		anELFProgramWrittenTo(t, dir, name, theMeasuredFreeBSDPair)
+	})
+
+	if _, err := tl.runFFmpeg(options{target: "freebsd-amd64"}, out); err != nil {
+		t.Fatalf("the build refused the target: %v\n%s", err, out.String())
+	}
+
+	body, err := os.ReadFile(filepath.Join(ffmpegPathsFor(repo, bundle.ReadManifest(), "freebsd-amd64").bundle, "LICENCE.md"))
+	if err != nil {
+		t.Fatalf("reading the licence the build published: %v\n%s", err, out.String())
+	}
+
+	if string(body) != proved {
+		t.Errorf("the published licence is not the text stored beside the pair:\n%s", body)
+	}
+}
+
+// A run that reaches an entry whose licence text has gone cannot compose words about a compile it
+// did not see, so the entry is named and the run stops.
+func TestACacheEntryWithNoLicenceStoredCannotSayHowItsPairWasProved(t *testing.T) {
+	repo := t.TempDir()
+
+	aCacheEntryFor(t, repo, "freebsd-amd64", "")
+
+	paths := ffmpegPathsFor(repo, bundle.ReadManifest(), "freebsd-amd64")
+
+	_, err := theLicenceInTheCache(paths, "freebsd-amd64")
+	if err == nil {
+		t.Fatal("a run read a cache entry that stores no proof of its pair and said nothing")
+	}
+
+	if !strings.Contains(err.Error(), paths.cached) {
+		t.Errorf("the refusal %q does not name the entry it found", err.Error())
+	}
+
+	if !strings.Contains(err.Error(), "no licence") {
+		t.Errorf("the refusal %q does not say the entry stores no licence text", err.Error())
+	}
+}
+
+// aCacheEntryFor seeds the cache entry one target's recipe keys: the gzipped pair, and the licence
+// text the run that compiled them wrote beside those binaries. An empty licence leaves the entry
+// holding the pair with nothing that says how those binaries were proved.
+func aCacheEntryFor(t *testing.T, repo string, target string, licence string) {
+	t.Helper()
+
+	manifest := bundle.ReadManifest()
+
+	paths := ffmpegPathsFor(repo, manifest, target)
+
+	if err := os.MkdirAll(paths.cached, 0o755); err != nil {
+		t.Fatalf("making the cache entry for %s: %v", target, err)
+	}
+
+	fixture := thePairThisBuildCompilesForLinux
+	if manifest.Targets[target].Sysroot != (bundle.Sysroot{}) {
+		fixture = theMeasuredFreeBSDPair
+	}
+
+	raw := theELFProgramBytes(fixture)
+
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		gzipped := &bytes.Buffer{}
+
+		writer := gzip.NewWriter(gzipped)
+		if _, err := writer.Write(raw); err != nil {
+			t.Fatalf("gzipping the cached %s: %v", name, err)
+		}
+		if err := writer.Close(); err != nil {
+			t.Fatalf("closing the gzip of the cached %s: %v", name, err)
+		}
+
+		if err := os.WriteFile(paths.cachedProgram(name+".gz"), gzipped.Bytes(), 0o644); err != nil {
+			t.Fatalf("writing the cached %s: %v", name, err)
+		}
+	}
+
+	if licence != "" {
+		if err := os.WriteFile(filepath.Join(paths.cached, "LICENCE.md"), []byte(licence), 0o644); err != nil {
+			t.Fatalf("writing the licence beside the cached pair: %v", err)
+		}
 	}
 }
 

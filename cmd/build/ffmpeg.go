@@ -47,7 +47,13 @@ type ffmpegState struct {
 	// neither: a plan made from an empty program is refused before a source is fetched.
 	program        string
 	sourceIsCached bool
+
+	// bundleIsCached is a cache entry this run may reuse: the gzipped pair its recipe keys, and beside
+	// that pair the licence text the run that compiled them wrote. The text is what says how those
+	// binaries were proved, so an entry holding the pair without it is not reusable. pairIsCached says
+	// separately that such a pair is there: the run that leaves it alone names what it found.
 	bundleIsCached bool
+	pairIsCached   bool
 
 	// nativeTools is the host's own build tools, resolved: the program name mapped to where it was found,
 	// and no entry for a program that is not there. Only a Mac compiling a macOS pair uses it, and it is read
@@ -175,6 +181,11 @@ type ffmpegPlan struct {
 	// rather than compiling them. The run that adopts them runs them first, through the same gate a
 	// compile runs its own binaries through.
 	Adopts bool
+
+	// Reuses says the plan is taking the gzipped pair a previous run left in this manifest's cache
+	// entry for the target. Nothing in such a plan compiles or runs anything, so what the release says
+	// about those binaries is the text the run that compiled them left in that entry.
+	Reuses bool
 
 	// WritesNone says this plan produces no ffmpeg binaries for its target:
 	// an input the record pins is not there to read. Says carries the sentence
@@ -430,6 +441,17 @@ func ffmpegTarget(o options) string {
 	return runtimeTarget()
 }
 
+// theCacheEntryNamingNoProofOfItsPair is what the run says when the cache holds one target's pair and
+// nothing that says how those binaries were proved. Such an entry is left where it is and the pair is
+// compiled again: a release that carries binaries cannot stay silent about nobody having proved them.
+func theCacheEntryNamingNoProofOfItsPair(target string, state ffmpegState) string {
+	if state.pairIsCached && !state.bundleIsCached {
+		return "the cache entry for " + target + " names no proof of the pair it holds, so that pair is compiled again"
+	}
+
+	return ""
+}
+
 // planFFmpeg decides what the ffmpeg phase does for one target: a target
 // with no record is not a failure, and one with a record is a promise a
 // build that cannot keep it says so about.
@@ -467,7 +489,13 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 	// is not what decides: a macOS target is compiled in a container on the machine that produces the releases,
 	// and with a Mac's own compiler, linker, and signer on a Mac.
 	if machine.canCompile(target) {
-		return planHostFFmpeg(repo, manifest, target, record, paths, state, machine)
+		plan, err := planHostFFmpeg(repo, manifest, target, record, paths, state, machine)
+
+		if err == nil && plan.Says == "" {
+			plan.Says = theCacheEntryNamingNoProofOfItsPair(target, state)
+		}
+
+		return plan, err
 	}
 
 	source := ffmpegSource{Path: paths.source, URL: manifest.Source.URL}
@@ -478,6 +506,7 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		return ffmpegPlan{
 			Target: target,
 			Says:   "reusing the ffmpeg compiled for " + target,
+			Reuses: true,
 			Source: source,
 			Paths:  paths,
 		}, nil
@@ -520,6 +549,7 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 
 	plan := ffmpegPlan{
 		Target: target,
+		Says:   theCacheEntryNamingNoProofOfItsPair(target, state),
 		Source: source,
 		Paths:  paths,
 		Image:  image,
@@ -638,6 +668,7 @@ func planHostFFmpeg(repo string, manifest bundle.Manifest, target string, record
 			Target: target,
 			Says:   "reusing the ffmpeg built for " + target,
 			Host:   true,
+			Reuses: true,
 			Paths:  paths,
 		}, nil
 	}
@@ -863,10 +894,11 @@ func adoptSuppliedFFmpeg(paths ffmpegPaths, target string, licence string) error
 	return nil
 }
 
-// theLicenceInTheCache is the licence text the run that produced one cache entry wrote. An entry older
-// than that habit says only what the manifest says, and names this machine's cache as where the binaries
-// came from.
-func theLicenceInTheCache(paths ffmpegPaths, manifest bundle.Manifest, target string) (string, error) {
+// theLicenceInTheCache is the licence text the run that compiled one cache entry's pair wrote beside
+// those binaries. It is the only thing in the entry that says how they were proved, so an entry
+// without it is named and refused: the run that reuses binaries cannot compose a statement about a
+// compile it did not see.
+func theLicenceInTheCache(paths ffmpegPaths, target string) (string, error) {
 	body, err := os.ReadFile(filepath.Join(paths.cached, "LICENCE.md"))
 	if err == nil {
 		return string(body), nil
@@ -876,7 +908,7 @@ func theLicenceInTheCache(paths ffmpegPaths, manifest bundle.Manifest, target st
 		return "", fmt.Errorf("the licence text in %s cannot be read: %w", paths.cached, err)
 	}
 
-	return suppliedFFMpegLicence(manifest, target, theRunOfTheBinaries{}), nil
+	return "", fmt.Errorf("the cache entry %s holds the ffmpeg pair for %s with no licence text beside it: nothing there says how those binaries were proved, and this run did not compile them", paths.cached, target)
 }
 
 // buildImageArgs prepares the container one target is compiled or checked
@@ -1204,7 +1236,13 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 
 	record, covered := manifest.Targets[target]
 
-	bundleIsCached := covered && aFileIsThere(paths.cachedProgram("ffmpeg.gz")) && aFileIsThere(paths.cachedProgram("ffprobe.gz"))
+	// The pair and the proof of the pair are looked for together, and the entry is reusable only when
+	// the run that compiled them left its own licence text beside them.
+	pairIsCached := covered && aFileIsThere(paths.cachedProgram("ffmpeg.gz")) && aFileIsThere(paths.cachedProgram("ffprobe.gz"))
+
+	licenceIsCached := pairIsCached && aFileIsThere(filepath.Join(paths.cached, "LICENCE.md"))
+
+	bundleIsCached := pairIsCached && licenceIsCached
 
 	// The tools of the compile a Mac runs for a macOS pair are resolved the way the container program is, and
 	// for the same reason: the plan is made from what this machine has, and a host missing one of them is told
@@ -1243,6 +1281,7 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 		program:         program,
 		sourceIsCached:  aFileIsThere(paths.source),
 		bundleIsCached:  bundleIsCached,
+		pairIsCached:    pairIsCached,
 		nativeTools:     nativeTools,
 		sysrootTree:     sysrootTree,
 		sysrootLookedIn: sysrootLookedIn,
@@ -1328,9 +1367,21 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	}
 
 	// A compiled ffmpeg and a reused one end the same way, so the server
-	// embed and the release archive do not depend on a warm cache.
+	// embed and the release archive do not depend on a warm cache. What the
+	// archive says about the pair comes from whoever compiled them: this
+	// run's own words when it compiled them, and the words it left in the
+	// cache entry beside them when it did not.
 	if covered {
-		if err := publishFFmpeg(plan.Paths, manifest, target, ffmpegLicence(manifest, target)); err != nil {
+		licence := ffmpegLicence(manifest, target)
+
+		if plan.Reuses {
+			licence, err = theLicenceInTheCache(plan.Paths, target)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		if err := publishFFmpeg(plan.Paths, manifest, target, licence); err != nil {
 			return false, err
 		}
 
@@ -1401,7 +1452,7 @@ func (t tool) runFFmpegOnHost(plan ffmpegPlan, manifest bundle.Manifest, target 
 	// The cache entry holds the binaries this machine's own run produced, and
 	// the licence text that run wrote is in the entry beside them: the archive
 	// carries the words the run said, not words this run composes.
-	licence, err := theLicenceInTheCache(plan.Paths, manifest, target)
+	licence, err := theLicenceInTheCache(plan.Paths, target)
 	if err != nil {
 		return false, err
 	}
