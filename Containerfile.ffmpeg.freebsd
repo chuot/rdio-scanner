@@ -8,9 +8,14 @@
 #
 # Both starting images are named by arguments rather than written into the file, because both are recorded
 # in the target's entry in the bundle manifest and the build passes what that record pins. The values here
-# are what a person building this file by hand gets. An argument a FROM line reads has to be declared
-# before the first FROM, which is why these two sit ahead of both stages.
+# are what a person building this file by hand gets. An argument a FROM line reads has to be declared before
+# the first FROM, which is why these three sit ahead of both stages. The compile platform is declared here too
+# because the base below is a multi-architecture image: a stage that names no machine is built for whatever
+# machine the container host's daemon runs on, and Debian's packages are that machine's builds, down to a
+# binutils that reads only that machine's object files. The build passes the platform the target's record
+# names; the default is what every shipped record names today.
 
+ARG compile_platform=linux/amd64
 ARG sysroot_image=docker.io/freebsd/freebsd-toolchain:15.1
 ARG base=docker.io/debian:stable
 
@@ -23,7 +28,7 @@ ENV SYSROOT_SOURCE=freebsd-project-oci-image
 # The compiler has to run on Linux, so it is clang told to target FreeBSD rather than a FreeBSD compiler.
 # The link goes through lld because Debian's own ld.bfd stamps what it links with the GNU operating-system
 # ABI, and a program carrying that stamp is not the FreeBSD program this target's proof reads back.
-FROM ${base}
+FROM --platform=${compile_platform} ${base}
 
 LABEL maintainer="Chrystian Huot <chrystian.huot@saubeo.solutions>"
 

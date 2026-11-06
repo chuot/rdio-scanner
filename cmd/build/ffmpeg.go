@@ -314,7 +314,8 @@ func pruneFFMpegCache(repo string) ([]string, error) {
 
 // cacheKey is what has to be the same for a compiled ffmpeg to be reused:
 // the release, the pinned source, the target, the configure recipe, and
-// that target's toolchain and check environment as its record names them.
+// that target's toolchain and check environment as its record names them,
+// including the machine that toolchain is a set of packages for.
 // see the ffmpeg-cache-key-inputs maintainer note.
 func cacheKey(manifest bundle.Manifest, target string) string {
 	record := manifest.Targets[target]
@@ -326,6 +327,9 @@ func cacheKey(manifest bundle.Manifest, target string) string {
 		target,
 		strings.Join(manifest.Recipe, "\n"),
 		record.Container,
+		// The machine the container's toolchain runs on: a distribution's cross compilers are packages of one
+		// machine, so the same image name and package list installed on another machine is another toolchain.
+		record.CompilePlatform,
 		strings.Join(record.Packages, " "),
 		strings.Join(record.Cross, " "),
 		strings.Join(record.CFlags, " "),
@@ -533,7 +537,7 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 		result: image,
 		dir:    repo,
 		name:   program.name,
-		args:   buildImageArgs(image, theContainerfileFor(record), theImageTheRecordNames(record.Container, record.ContainerDigest), theImageTheRecordNames(record.SysrootImage, record.SysrootDigest), packages),
+		args:   buildImageArgs(image, theContainerfileFor(record), theImageTheRecordNames(record.Container, record.ContainerDigest), record.CompilePlatform, theImageTheRecordNames(record.SysrootImage, record.SysrootDigest), packages),
 	})
 
 	if runner != image {
@@ -546,7 +550,7 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 			result: runner,
 			dir:    repo,
 			name:   program.name,
-			args:   buildImageArgs(runner, sharedContainerfile, theImageTheRecordNames(record.Conformance.Container, record.Conformance.Digest), "", record.Conformance.Packages),
+			args:   buildImageArgs(runner, sharedContainerfile, theImageTheRecordNames(record.Conformance.Container, record.Conformance.Digest), record.CompilePlatform, "", record.Conformance.Packages),
 		})
 	}
 
@@ -879,11 +883,14 @@ func theLicenceInTheCache(paths ffmpegPaths, manifest bundle.Manifest, target st
 // in, from an empty context: the image is a toolchain, and nothing of this
 // repository belongs in it.
 // see the container-image-build-contract maintainer note.
-func buildImageArgs(image string, file string, base string, sysrootImage string, packages []string) []string {
+func buildImageArgs(image string, file string, base string, platform string, sysrootImage string, packages []string) []string {
 	args := []string{
 		"build",
 		"-t", image,
 		"-f", file,
+		// The base is a multi-architecture image, and a stage that names no machine is resolved by the
+		// container host to its own. A cross toolchain is a package of one machine, so the machine is named.
+		"--build-arg", "compile_platform=" + platform,
 		"--build-arg", "base=" + base,
 	}
 

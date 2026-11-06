@@ -10,8 +10,14 @@
 #
 # The build context is an empty directory on purpose: this image is a toolchain, and nothing of this
 # repository belongs in it.
+#
+# The base is a multi-architecture image, so a stage that names no machine is built for whatever machine the
+# container host's daemon runs on. The distribution's packages are that machine's builds: its arm64 archive
+# carries no gcc-multilib or libc6-dev-i386, and its binutils reads only that machine's object files. The build
+# passes the platform the target's record names; the default is what every shipped record names today.
+ARG compile_platform=linux/amd64
 ARG base=docker.io/debian:stable
-FROM ${base}
+FROM --platform=${compile_platform} ${base}
 
 LABEL maintainer="Chrystian Huot <chrystian.huot@saubeo.solutions>"
 

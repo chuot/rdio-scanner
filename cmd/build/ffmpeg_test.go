@@ -609,6 +609,89 @@ func TestARecordNamingNoToolchainPlatformIsRefused(t *testing.T) {
 	}
 }
 
+// A record's toolchain is the distribution's builds for one machine, so the image that carries them has to be
+// built on that machine and not on whatever machine the container host's daemon happens to be. The build hands
+// the record's platform to the image build; a build that does not is at the mercy of the host's default.
+func TestTheToolchainImageIsBuiltOnThePlatformTheRecordNames(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	for _, target := range theContainerCompiledTargets {
+		record := manifest.Targets[target]
+
+		plan, err := planFFmpeg(options{target: target}, "/repo", manifest, aTreeReadyFor(t, manifest, target), theReleaseHost)
+		if err != nil {
+			t.Fatalf("%s: the build refused its container target: %v", target, err)
+		}
+
+		image, ok := stepNamed(plan, "image")
+		if !ok {
+			t.Fatalf("%s: the build has no step that prepares the build container", target)
+		}
+
+		if got := containerBuildArgs(image.args)["compile_platform"]; got != record.CompilePlatform {
+			t.Errorf("%s: the toolchain image is built with compile_platform %q, want the %s record's %q: %v",
+				target, got, target, record.CompilePlatform, image.args)
+		}
+
+		if runner, ok := stepNamed(plan, "runner"); ok {
+			if got := containerBuildArgs(runner.args)["compile_platform"]; got != record.CompilePlatform {
+				t.Errorf("%s: the container that checks the compiled pair is built with compile_platform %q, want the %s record's %q: %v",
+					target, got, target, record.CompilePlatform, runner.args)
+			}
+		}
+	}
+}
+
+// the container-compiled targets of the shipped manifest: every one of them compiles in a container on the
+// release host, which is the host the release runs on.
+var theContainerCompiledTargets = []string{
+	"freebsd-amd64",
+	"linux-386",
+	"linux-amd64",
+	"linux-arm",
+	"linux-arm64",
+	"macos-amd64",
+	"macos-arm64",
+	"windows-amd64",
+}
+
+// Two containerfiles compile the shipped targets today. A stage that names no platform is built for the machine
+// the container host is, which is a different toolchain wearing the same target's name, so each of these files
+// has to take the platform from the build the same way it takes the base image and the packages.
+func TestEveryFfmpegContainerfileNamesThePlatformItsCompileRunsOn(t *testing.T) {
+	for _, file := range []string{"Containerfile.ffmpeg", "Containerfile.ffmpeg.freebsd"} {
+		text, err := os.ReadFile(filepath.Join("..", "..", file))
+		if err != nil {
+			t.Fatalf("reading %s: %v", file, err)
+		}
+
+		contents := string(text)
+
+		if !strings.Contains(contents, "ARG compile_platform=") {
+			t.Errorf("%s declares no compile_platform build argument, so the build cannot tell it which machine to compile on", file)
+		}
+
+		for _, line := range strings.Split(contents, "\n") {
+			stage := strings.TrimSpace(line)
+			if !strings.HasPrefix(stage, "FROM ") {
+				continue
+			}
+
+			if strings.Contains(stage, "${base}") && !strings.Contains(stage, "--platform=${compile_platform}") {
+				t.Errorf("%s starts a stage on the base image with no platform: %q. The base is a multi-architecture "+
+					"image, so that stage is built for the container host's own machine, and its distribution's packages "+
+					"are that machine's builds", file, stage)
+			}
+		}
+
+		// The FreeBSD sysroot stage is the one stage whose platform is not the compile's: it is the operating
+		// system the compile produces, and it reaches the compile as files, never as a machine that runs.
+		if file == "Containerfile.ffmpeg.freebsd" && !strings.Contains(contents, "FROM --platform=freebsd/amd64 ${sysroot_image}") {
+			t.Errorf("%s no longer takes its sysroot from the operating system the compile is for", file)
+		}
+	}
+}
+
 // containerBuildArgs is the --build-arg of a step that prepares a container, keyed by what it sets.
 func containerBuildArgs(args []string) map[string]string {
 	out := map[string]string{}
@@ -762,6 +845,16 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 		t.Error("a FreeBSD compile asked of the shared Containerfile reuses the cache of the one asked of the file that carries a FreeBSD sysroot")
 	}
 
+	// The machine the toolchain runs on is one of the things the compile reads, because a distribution's cross
+	// compilers are packages of one machine: a record naming another machine describes compilers that install,
+	// or do not install, and an entry warmed under the old one holds binaries built with toolchains nobody named.
+	record = manifest.Targets["freebsd-amd64"]
+	record.CompilePlatform = "linux/arm64"
+
+	if cacheKey(aManifestWithOtherTarget("freebsd-amd64", record), "freebsd-amd64") == freebsd {
+		t.Error("a record naming another machine for its toolchain reuses the cache of the pair the old machine's toolchain built")
+	}
+
 	record = manifest.Targets["freebsd-amd64"]
 	record.SysrootImage = "docker.io/freebsd/freebsd-toolchain:15.0"
 
@@ -898,14 +991,14 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 	// drop the entries an unchanged compile produced.
 	// see the ffmpeg-cache-key-inputs maintainer note.
 	want := map[string]string{
-		"freebsd-amd64": "6a24ce46b1a94ae369f59356cb0694fdc78d3ec6ba7a366fcac3008d073128ea",
-		"linux-386":     "b461ab25eae7520a8b422b81a216fb7656894f976008d4e53f06ecbca48d695f",
-		"linux-amd64":   "0874a444ae98b7095e2ee1cc4120419339a70c2bbff37a558a8c5b51028f27c3",
-		"linux-arm":     "880e28925f5d09562a5a3f8d58598f6e29128e2e86ff3c8f9e62a6863b442013",
-		"linux-arm64":   "8191418631f748a0e548d07543b04e9f7577f70636fb157f8cb5b76b83ecc229",
-		"macos-amd64":   "a011a701e79d02d3fd275c69d11847e75dbaf4b33fd3d808299814e3d3f01b3d",
-		"macos-arm64":   "73ab680430c9d1ff43628a6a2433fca0789823eabff633dbf9524ef8762cd8f6",
-		"windows-amd64": "2bfd58046b5dcff72082aab48bfc76b9bfb173ec7def4247130cf909ffb141b0",
+		"freebsd-amd64": "0c3fe1cc043cf2e23badfc2e2cd27fb2ff45799a41e83585e625d9d88ab2cfdb",
+		"linux-386":     "4fa360ed32fc35aac0bdf1c71af8c0c91b5bacef74f21fc63621860ba2cb26f2",
+		"linux-amd64":   "ee9978d311d5295b68bf9f127e46f57d4bd09718ea825d9e23af501fe7e618f4",
+		"linux-arm":     "b930c19847ec5113a62b6c586dd4ba6fcf024991bb49eb1a5e0041a957635a0e",
+		"linux-arm64":   "54502ed7df6cb70c8e62b0846194e9a3a22228b37cb1008bde0feb8cc7bb2c4f",
+		"macos-amd64":   "4589b1ae72c2119c0d5b22ecac97db6a534442b5b1c8af0dd481becd2748372e",
+		"macos-arm64":   "24dce1ba6cec79937d8e8943ef1706b869086351c127e387c54789faa3823a4a",
+		"windows-amd64": "3b080ebdd130d75caf4a3414213b2cddc12a0bf248ae7069983dd866a3a6d105",
 	}
 
 	for _, target := range []string{"freebsd-amd64", "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "macos-amd64", "macos-arm64", "windows-amd64"} {
