@@ -589,6 +589,26 @@ func TestARecordNamingBothARunAndAReadIsRefused(t *testing.T) {
 	}
 }
 
+// A record's packages are the container distribution's own builds, so a record that names no machine for them
+// is compiled with whatever that distribution happens to carry on the container host: no gcc-multilib, no
+// libc6-dev-i386, and a binutils that cannot read what the cross compiler wrote. The build finds that out at
+// the end of a compile that has already spent its time, so it asks the question before planning anything.
+func TestARecordNamingNoToolchainPlatformIsRefused(t *testing.T) {
+	record := bundle.ReadManifest().Targets["freebsd-amd64"]
+	record.CompilePlatform = ""
+
+	manifest := aManifestWithOtherTarget("freebsd-amd64", record)
+
+	_, err := planFFmpeg(options{target: "freebsd-amd64"}, "/repo", manifest, anUncompiledTree(), theReleaseHost)
+	if err == nil {
+		t.Fatal("the build planned a target whose record names no platform for its toolchain")
+	}
+
+	if !strings.Contains(err.Error(), "freebsd-amd64") || !strings.Contains(err.Error(), "compile_platform") {
+		t.Errorf("the refusal %q does not name the target and the field that is missing", err.Error())
+	}
+}
+
 // containerBuildArgs is the --build-arg of a step that prepares a container, keyed by what it sets.
 func containerBuildArgs(args []string) map[string]string {
 	out := map[string]string{}

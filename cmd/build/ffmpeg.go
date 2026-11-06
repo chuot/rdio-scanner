@@ -447,6 +447,16 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 			target, strings.Join(record.Conformance.Run, " "), record.Conformance.Container, strings.Join(record.Conformance.Reads, " "), target)
 	}
 
+	// A record's packages are the container distribution's own builds, which means they were built to run on
+	// one machine: Debian's arm64 archive carries no gcc-multilib or libc6-dev-i386, and its binutils cannot
+	// read the object files an amd64-hosted cross compiler writes. Without a platform the compile runs on the
+	// container host's own machine and installs whatever toolchain that one carries, and the build finds that
+	// out only after the compile has spent its time.
+	if record.CompilePlatform == "" {
+		return ffmpegPlan{}, fmt.Errorf("the %s record names no compile_platform: the packages it installs are the container distribution's builds for one machine, and this build will not compile %s with whatever toolchain the container host happens to carry",
+			target, target)
+	}
+
 	paths := ffmpegPathsFor(repo, manifest, target)
 
 	// The one host that compiles a target's ffmpeg with its own toolchain takes the host route, and the record
