@@ -1,6 +1,5 @@
 // Application store: slice-based subscriptions with structural diffing,
 // replacing the legacy RdioScannerService EventEmitter.
-// see the store-slice-subscriptions maintainer note.
 
 export function createStore(initialState = {}) {
   const state = { ...initialState };
@@ -24,8 +23,7 @@ export function createStore(initialState = {}) {
       if (Object.keys(changed).length === 0) return;
 
       // Notify a snapshot of the subscriptions as this notification started,
-      // skipping the ones released on the way:
-      // see the store-slice-subscriptions maintainer note.
+      // skipping the ones released on the way.
       for (const subscription of [...subscriptions]) {
         if (!subscriptions.has(subscription)) continue;
 

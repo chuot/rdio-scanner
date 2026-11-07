@@ -17,7 +17,6 @@
 
 // Integration tier for the converter: runs the ffmpeg this binary
 // carries, the programs written out of it, and the converter over them.
-// see the ffmpeg-bundle-provenance maintainer note.
 
 package main
 

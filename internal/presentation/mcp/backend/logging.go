@@ -29,13 +29,11 @@ import (
 
 // This adapter files the surface's slog lines in the server log view the
 // operator already reads: subsystem, severity, and attributes folded into
-// the entry's text; see the surface-lines-land-in-the-operator-log-view
-// maintainer note.
+// the entry's text.
 
 // NewLogViewHandler files the surface's lines under the surface's
 // subsystem, so the assistant's work lands in the same view every other
-// writer files into; see the surface-lines-land-in-the-operator-log-view
-// maintainer note.
+// writer files into.
 func NewLogViewHandler(logs ports.LogRepository, clock ports.Clock) slog.Handler {
 	return &logViewHandler{logs: logs, clock: clock}
 }
@@ -59,8 +57,7 @@ func (handler *logViewHandler) Enabled(_ context.Context, level slog.Level) bool
 
 // Handle files one line as one entry: filed under the surface's
 // subsystem, at the record's severity, at the server clock's instant, and
-// with the attributes appended to the text; see the surface-lines-land-
-// in-the-operator-log-view maintainer note.
+// with the attributes appended to the text.
 func (handler *logViewHandler) Handle(_ context.Context, record slog.Record) error {
 	if handler.logs == nil {
 		return nil
@@ -134,8 +131,7 @@ func logViewLevelOf(level slog.Level) string {
 
 // withActivityLog files what the operator asks about after the fact: a
 // refused caller and a capability that changed the deployment. A
-// capability that changed nothing files nothing; see the surface-lines-
-// land-in-the-operator-log-view maintainer note.
+// capability that changed nothing files nothing.
 func withActivityLog(log *slog.Logger, changes map[string]bool) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {

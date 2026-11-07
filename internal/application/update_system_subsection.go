@@ -114,8 +114,7 @@ func (handler *UpdateSystemSubSectionHandler) Handle(ctx context.Context, cmd Up
 	if err := handler.saver.publish(ctx); err != nil {
 		// The level reached the system repository and the read-back failed, so the level is named as
 		// stored and the outcome says the save as a whole did not complete; that pairing is what an
-		// operator needs to avoid re-editing a saved level, and it lives in the system-subsection
-		// maintainer note.
+		// operator needs to avoid re-editing a saved level.
 		result.Outcome = ConfigurationSaveFailed
 
 		handler.saver.reportFailure(ctx, err)

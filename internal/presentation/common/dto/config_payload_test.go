@@ -60,7 +60,6 @@ func TestConfigPayloadMatchesTheCapturedScopedConfig(t *testing.T) {
 
 // TestConfigPayloadOrdersTalkgroupsByTheOptionAndNotByTheServer proves the
 // talkgroups option decides talkgroup order and numbering.
-// see the configuration-payload-field-order maintainer note.
 func TestConfigPayloadOrdersTalkgroupsByTheOptionAndNotByTheServer(t *testing.T) {
 	snapshot := captureSnapshot()
 
@@ -87,7 +86,6 @@ func TestConfigPayloadOrdersTalkgroupsByTheOptionAndNotByTheServer(t *testing.T)
 
 // TestConfigPayloadKeepsASystemWhoseTalkgroupsAllLoseTheirTags shows a
 // system still shows when all its talkgroups lose their tags.
-// see the configuration-payload-field-order maintainer note.
 func TestConfigPayloadKeepsASystemWhoseTalkgroupsAllLoseTheirTags(t *testing.T) {
 	snapshot := captureSnapshot()
 
@@ -113,7 +111,7 @@ func TestConfigPayloadKeepsASystemWhoseTalkgroupsAllLoseTheirTags(t *testing.T) 
 }
 
 // TestConfigPayloadGivesOnlyTheGroupsAndTagsThisListenerCanSee proves scoped
-// group and tag lists. see the configuration-payload-field-order maintainer note.
+// group and tag lists.
 func TestConfigPayloadGivesOnlyTheGroupsAndTagsThisListenerCanSee(t *testing.T) {
 	scope, _ := domain.ParseAccessScope([]any{
 		map[string]any{"id": float64(10002), "talkgroups": "*"},
@@ -172,8 +170,7 @@ func TestConfigPayloadListsEveryGroupATalkgroupBelongsTo(t *testing.T) {
 }
 
 // TestConfigPayloadCarriesTheToneTablesTheServerOwns proves the server owns
-// the tone tables and unknown brands get empty lists. see the
-// tones-fixtures-and-the-golden-capture-contract maintainer note.
+// the tone tables and unknown brands get empty lists.
 func TestConfigPayloadCarriesTheToneTablesTheServerOwns(t *testing.T) {
 	snapshot := captureSnapshot()
 
@@ -195,8 +192,7 @@ func TestConfigPayloadCarriesTheToneTablesTheServerOwns(t *testing.T) {
 }
 
 // TestConfigPayloadCarriesOnlyTheOptionsAListenerIsTold proves the payload
-// leaves out options that decide server behavior. see the
-// two-configuration-payload-shapes maintainer note.
+// leaves out options that decide server behavior.
 func TestConfigPayloadCarriesOnlyTheOptionsAListenerIsTold(t *testing.T) {
 	snapshot := captureSnapshot()
 	snapshot.Options.Secret = "a-secret"

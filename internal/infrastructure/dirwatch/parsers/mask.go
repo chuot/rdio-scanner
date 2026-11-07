@@ -37,8 +37,7 @@ type maskToken struct {
 }
 
 // maskTokens is the table of mask tokens, applied longest-first so a
-// prefix token never eats a longer one; see the watch-mask maintainer
-// note.
+// prefix token never eats a longer one.
 var maskTokens = []maskToken{
 	{Name: "date", Text: "#DATE", Pattern: `\d{4}[-_]{0,1}\d{2}[-_]{0,1}\d{2}`},
 	{Name: "group", Text: "#GROUP", Pattern: `[a-zA-Z0-9\.\ -]+`},
@@ -63,8 +62,7 @@ var maskTokens = []maskToken{
 }
 
 // The table is ordered longest-first at init, keeping the relative order
-// of same-length tokens as the legacy declared them; see the watch-mask
-// maintainer note.
+// of same-length tokens as the legacy declared them.
 func init() {
 	sort.SliceStable(maskTokens, func(i, j int) bool {
 		return len(maskTokens[i].Text) > len(maskTokens[j].Text)
@@ -80,7 +78,7 @@ type maskPosition struct {
 
 // MaskWarning reports the mismatch a mask's own regex shows: more
 // captured groups than the tokens it names - the call reads the wrong
-// pieces; see the watch-mask maintainer note.
+// pieces.
 func MaskWarning(mask string) string {
 	if len(mask) == 0 {
 		return ""
@@ -115,7 +113,7 @@ func MaskWarning(mask string) string {
 
 // applyMask reads the call's metadata out of its filename, at the places
 // the watch's mask says each piece sits; a watch with no mask reads
-// nothing from the filename; see the watch-mask maintainer note.
+// nothing from the filename.
 func (parsers *Parsers) applyMask(ctx context.Context, watch domain.Dirwatch, call *domain.Call) error {
 	if len(watch.Mask) == 0 {
 		return nil
@@ -170,8 +168,7 @@ func (parsers *Parsers) applyMask(ctx context.Context, watch domain.Dirwatch, ca
 
 // applyMaskTimestamps reads the instant the call happened, from
 // whichever of the three shapes the mask offers; a mask naming #DATE
-// and neither time token records a call in 1970; see the watch-mask
-// maintainer note.
+// and neither time token records a call in 1970.
 func (parsers *Parsers) applyMaskTimestamps(values map[string]string, call *domain.Call) error {
 	value, ok := values["date"]
 	if !ok {
@@ -211,8 +208,7 @@ func (parsers *Parsers) applyMaskTimestamps(values map[string]string, call *doma
 
 // applyMaskSystem reads the system the call belongs to, by reference or
 // by name: a name matching no configured system claims the next free
-// reference, and a matching name attaches the stored system; see the
-// watch-mask maintainer note.
+// reference, and a matching name attaches the stored system.
 func (parsers *Parsers) applyMaskSystem(ctx context.Context, values map[string]string, call *domain.Call) error {
 	if value, ok := values["sys"]; ok {
 		if ref, err := strconv.Atoi(value); err == nil {
@@ -295,8 +291,7 @@ func applyMaskFrequencies(values map[string]string, call *domain.Call) {
 
 // applyMaskSites reads the site the call was heard at; both tokens only
 // do anything when the call already has a system attached, because a
-// site has nowhere to be looked up without one; see the watch-mask
-// maintainer note.
+// site has nowhere to be looked up without one.
 func applyMaskSites(values map[string]string, call *domain.Call) {
 	if value, ok := values["site"]; ok {
 		ref, err := strconv.Atoi(value)
@@ -332,7 +327,7 @@ func applyMaskSites(values map[string]string, call *domain.Call) {
 // applyMaskTalkgroup reads the talkgroup the call was on, in whichever
 // of the five shapes the mask names, and its name and tag: the three
 // frequency-shaped tokens each name a carrier and derive the talkgroup
-// reference from it; see the watch-mask maintainer note.
+// reference from it.
 func applyMaskTalkgroup(values map[string]string, call *domain.Call) {
 	if value, ok := values["tag"]; ok {
 		if len(value) > 0 && value != "-" {
@@ -393,8 +388,7 @@ func applyMaskTalkgroup(values map[string]string, call *domain.Call) {
 }
 
 // applyMaskUnits reads the radio that spoke, and its name: the name
-// only lands when the mask also named the radio itself; see the
-// watch-mask maintainer note.
+// only lands when the mask also named the radio itself.
 func applyMaskUnits(values map[string]string, call *domain.Call) {
 	if value, ok := values["unit"]; ok {
 		if ref, err := strconv.Atoi(value); err == nil {

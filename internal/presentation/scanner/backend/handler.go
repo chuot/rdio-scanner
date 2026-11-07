@@ -78,8 +78,7 @@ type Deps struct {
 
 // Handler is the listener endpoint: it takes over an upgraded connection, hands each
 // arriving frame to the use case that answers that command, and has nothing to do
-// with the connection afterwards; see the handler-seam-with-the-use-cases maintainer
-// note.
+// with the connection afterwards.
 type Handler struct {
 	access   *application.AuthenticateAccessHandler
 	call     *application.GetCallQueryHandler
@@ -117,9 +116,8 @@ func NewHandler(deps Deps) *Handler {
 
 // ServeHTTP takes over one listener connection. Any path answers a websocket request,
 // and the origin check lets through a connection that names no origin and a browser
-// only from the address the page was served from; see the any-path-upgrade-and-origin
-// maintainer note. The hub holds the connection from here on, and this handler is
-// called back for each frame that arrives.
+// only from the address the page was served from. The hub holds the connection from
+// here on, and this handler is called back for each frame that arrives.
 func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -155,8 +153,7 @@ func (handler *Handler) logf(level string, format string, args ...any) {
 
 // dispatch decides which use case answers one frame, and hands a failure back to the
 // hub, which files it and carries on. The version report is answered before the
-// access gate and everything else is gated, including an unknown command; see the
-// gate-order-before-the-use-cases maintainer note.
+// access gate and everything else is gated, including an unknown command.
 func (handler *Handler) dispatch(ctx context.Context, clientID string, frame Message) error {
 	if frame.Command == CommandVersion {
 		handler.hub.SendVersion(clientID, handler.version)
@@ -199,8 +196,8 @@ func (handler *Handler) dispatch(ctx context.Context, clientID string, frame Mes
 
 // authenticate hands the access code a listener presented to the use case that decides
 // about it. An undecodable code is reported to the console and spends none of the
-// attempts this session is allowed; see the undecodable-access-codes-cost-nothing
-// maintainer note. Every reply the listener gets is the use case's own.
+// attempts this session is allowed. Every reply the listener gets is the use case's
+// own.
 func (handler *Handler) authenticate(ctx context.Context, clientID string, frame Message) error {
 	code, ok := frame.Payload.(string)
 	if !ok {
@@ -223,8 +220,7 @@ func (handler *Handler) authenticate(ctx context.Context, clientID string, frame
 // fetchCall answers a listener's request for one recorded call: the identifier arrives
 // as a number or as text, a non-number is reported rather than treated as a missing
 // call, the flag is echoed unchanged, and a call the listener's access does not name
-// is answered with nothing at all; see the uniform-not-there-refusals maintainer
-// note.
+// is answered with nothing at all.
 func (handler *Handler) fetchCall(ctx context.Context, clientID string, frame Message) error {
 	var id uint64
 
@@ -263,8 +259,7 @@ func (handler *Handler) fetchCall(ctx context.Context, clientID string, frame Me
 }
 
 // searchCalls answers a listener's history request with the page and with the criteria
-// echoed from the frame as it arrived, not from the search the query ran; see the
-// search-criteria-echoed-from-the-frame maintainer note.
+// echoed from the frame as it arrived, not from the search the query ran.
 func (handler *Handler) searchCalls(ctx context.Context, clientID string, frame Message) error {
 	criteria, ok := frame.Payload.(map[string]any)
 	if !ok {

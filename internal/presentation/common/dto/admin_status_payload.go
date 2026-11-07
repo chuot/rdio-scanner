@@ -23,7 +23,6 @@ import (
 
 // AdminStatusPayload is the administrator's status view: it
 // names the deployment facts beside the measured snapshot.
-// see the administrator-status-payload-shape maintainer note.
 type AdminStatusPayload struct {
 	Server   adminStatusServer   `json:"server"`
 	Live     adminStatusLive     `json:"live"`
@@ -39,7 +38,6 @@ type adminStatusServer struct {
 	Now       time.Time `json:"now"`
 
 	// UptimeSeconds is whole seconds, 0 with no start.
-	// see the administrator-status-payload-shape maintainer note.
 	UptimeSeconds int64 `json:"uptimeSeconds"`
 
 	BaseDir string `json:"baseDir"`
@@ -69,7 +67,6 @@ type adminStatusActivity struct {
 	CallsLastHour uint64 `json:"callsLastHour"`
 
 	// LastCallAt is absent when the history has no calls.
-	// see the administrator-status-payload-shape maintainer note.
 	LastCallAt *time.Time `json:"lastCallAt,omitempty"`
 
 	Hours   []adminStatusHour      `json:"hours"`

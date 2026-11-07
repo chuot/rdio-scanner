@@ -29,8 +29,7 @@ import (
 // history's page: the history pages calls for a scoped caller, the status view counts
 // for the operator of the whole server, and neither depends on the other. Every query
 // here joins the `delayed` table with its `d."callId" IS NULL` filter so calls still
-// held are absent from the status view; why the two stay apart is in the status-view-
-// tallies maintainer note.
+// held are absent from the status view.
 
 var _ ports.CallActivityRepository = (*Calls)(nil)
 
@@ -227,8 +226,7 @@ func (calls *Calls) RecentCalls(ctx context.Context, limit uint) ([]ports.CallSu
 }
 
 // hourBucketExpression is the hour bucket written for the dialect it is asked for:
-// MySQL and MariaDB need `DIV` to truncate, SQLite and PostgreSQL truncate `/`.
-// Why the operators differ is in the hour-bucket-dialect-divide maintainer note, and
+// MySQL and MariaDB need `DIV` to truncate, SQLite and PostgreSQL truncate `/`. and
 // the divisor is the same hour `hourOfBucket` and `bucketOfHour` divide by on the Go
 // side, which the test that names both holds.
 func hourBucketExpression(dialect Dialect, column string) string {

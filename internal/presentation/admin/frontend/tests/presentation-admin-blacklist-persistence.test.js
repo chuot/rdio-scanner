@@ -1,6 +1,5 @@
-// blacklisting is two stored halves meant as one: row removed, ref refused
-// the entry names the talkgroup reference the server compares, not the store's id
-// see the blacklist-row-ref maintainer note.
+// blacklisting is two stored halves meant as one: row removed, ref refused the
+// entry names the talkgroup reference the server compares, not the store's id.
 
 import './dom-shim.js';
 
@@ -15,8 +14,8 @@ import { sectionWorking } from '../presentation/admin/section-shell.js';
 
 import { findAll, keystroke, reachField } from './dom-shim.js';
 
-// the test records the request the page's own api adapter sends; no server
-// see the level-endpoint-echo-fixture maintainer note.
+// the test records the request the page's own api adapter sends; no
+// server.
 const requests = [];
 
 globalThis.fetch = async (url, options = {}) => {

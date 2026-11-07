@@ -1,6 +1,5 @@
 // the blacklist is one field of the system row: the section saves what it holds
-// after a Blacklist stores an entry, the section must adopt it or overwrite it
-// see the blacklist-slice-coupling maintainer note.
+// after a Blacklist stores an entry, the section must adopt it or overwrite it.
 
 import './dom-shim.js';
 
@@ -14,8 +13,8 @@ import '../presentation/admin/rdio-admin-systems.js';
 
 import { findAll, keystroke, reachField } from './dom-shim.js';
 
-// the test records both requests through the page's api adapter; no server
-// see the level-endpoint-echo-fixture maintainer note.
+// the test records both requests through the page's api adapter; no
+// server.
 const requests = [];
 
 globalThis.fetch = async (url, options = {}) => {

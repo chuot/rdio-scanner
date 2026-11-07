@@ -1,8 +1,7 @@
-// the search and unlock fields' keyboard focus: the visible field is
-// the box, the control inside it is inset, and a ring drawn on the
-// control frames the control, not the field; the ring belongs on the
-// box — around it for the filter fields, inside it for the unlock field.
-// see the field-focus-ring-on-box maintainer note.
+// the search and unlock fields' keyboard focus: the visible field is the
+// box, the control inside it is inset, and a ring drawn on the control
+// frames the control, not the field; the ring belongs on the box —
+// around it for the filter fields, inside it for the unlock field.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

@@ -1,6 +1,5 @@
-// the Blacklists field is the only place the operator edits the list
-// a ref with no talkgroup here is blacklisted the same: the server compares refs
-// see the blacklist-field-list maintainer note.
+// the Blacklists field is the only place the operator edits the list a ref with
+// no talkgroup here is blacklisted the same: the server compares refs.
 
 import './dom-shim.js';
 
@@ -14,8 +13,8 @@ import '../presentation/admin/rdio-admin-talkgroups.js';
 
 import { findAll } from './dom-shim.js';
 
-// fetch records the save body; the answer echoes back what it got
-// see the level-endpoint-echo-fixture maintainer note.
+// fetch records the save body; the answer echoes back what it
+// got.
 const requests = [];
 
 globalThis.fetch = async (url, options = {}) => {

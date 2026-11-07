@@ -240,7 +240,6 @@ export function createListenerUseCases({
 
     // playback walks toward the newest searched call in both sort orders,
     // running through the page and on to newer pages in the named direction.
-    // see the playback-walk-page-order maintainer note.
     if (!results.length) {
       refresh();
     } else if (options?.sort === -1) {

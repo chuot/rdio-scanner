@@ -41,11 +41,11 @@ type Extracted struct {
 	// Call is the call the file describes, with its system and talkgroup	// still named as claims: resolving them is the ingest use case's job,	// the same job for a watch, an upload, and a forwarded call.
 	Call domain.Call
 
-	// Files are every file the call was built from: the file the watcher	// noticed plus any companion a parser read, so deleting after ingesting	// deletes them all; see the recording-parsers maintainer note.
+	// Files are every file the call was built from: the file the watcher	// noticed plus any companion a parser read, so deleting after ingesting	// deletes them all.
 	Files []string
 }
 
-// Parsers read what an ingest source produced into the call the server// records: the four shapes a watched directory holds, and the form// fields an upload endpoint is handed; see the recording-parsers// maintainer note.
+// Parsers read what an ingest source produced into the call the server// records: the four shapes a watched directory holds, and the form// fields an upload endpoint is handed.
 type Parsers struct {
 	systems ports.SystemRepository
 	clock   ports.Clock
@@ -60,7 +60,7 @@ func New(systems ports.SystemRepository, clock ports.Clock) *Parsers {
 	}
 }
 
-// Extract reads one file that appeared in a watched directory. The// second result says whether the file was this watch's parser's file// at all: a file it does not recognize is not a failure and nothing is// said about it, as in the legacy. A file it recognizes but cannot// turn into a call is a failure, and the watcher reports it in its// log, which is how an administrator finds a watch set to the wrong// shape; see the recording-parsers maintainer note.
+// Extract reads one file that appeared in a watched directory. The// second result says whether the file was this watch's parser's file// at all: a file it does not recognize is not a failure and nothing is// said about it, as in the legacy. A file it recognizes but cannot// turn into a call is a failure, and the watcher reports it in its// log, which is how an administrator finds a watch set to the wrong// shape.
 func (parsers *Parsers) Extract(ctx context.Context, watch domain.Dirwatch, filePath string) (Extracted, bool, error) {
 	var (
 		extracted Extracted
@@ -222,7 +222,7 @@ func (parsers *Parsers) extractSdrTrunk(ctx context.Context, watch domain.Dirwat
 	return Extracted{Call: call, Files: []string{filePath}}, true, nil
 }
 
-// extractTrunkRecorder reads a recording from the pair trunk-recorder// writes: the sidecar that describes the call, and the recording beside// it. The recording is read first, and a sidecar whose recording is not// there is dropped without a word, which is what the legacy does by// returning the read failure as a nil error; a sidecar that cannot be// read at all is reported; see the recording-parsers maintainer note.
+// extractTrunkRecorder reads a recording from the pair trunk-recorder// writes: the sidecar that describes the call, and the recording beside// it. The recording is read first, and a sidecar whose recording is not// there is dropped without a word, which is what the legacy does by// returning the read failure as a nil error; a sidecar that cannot be// read at all is reported.
 func (parsers *Parsers) extractTrunkRecorder(ctx context.Context, watch domain.Dirwatch, filePath string) (Extracted, bool, error) {
 	if !strings.EqualFold(path.Ext(filePath), ".json") {
 		return Extracted{}, false, nil
@@ -272,7 +272,7 @@ func (parsers *Parsers) applyDSDPlus(call *domain.Call, filePath string) error {
 
 	meta := splitDSDPlusName(base)
 
-	// The talkgroup and the source are read from the last two pieces of the	// name, so a name with fewer than two pieces has nothing to read them	// from. The legacy reads them unguarded and takes the server down with	// an index-out-of-range panic; here the name is refused and reported,	// the outcome the legacy's startup walk already produces for the same	// file; see the recording-parsers maintainer note.
+	// The talkgroup and the source are read from the last two pieces of the	// name, so a name with fewer than two pieces has nothing to read them	// from. The legacy reads them unguarded and takes the server down with	// an index-out-of-range panic; here the name is refused and reported,	// the outcome the legacy's startup walk already produces for the same	// file.
 	if len(meta) < 2 {
 		return fmt.Errorf("dsdplus: %s does not name a talkgroup and a source", base)
 	}
@@ -581,7 +581,7 @@ func (parsers *Parsers) applyTrunkRecorder(call *domain.Call, sidecar []byte) er
 	return nil
 }
 
-// ApplyTrunkRecorderSidecar reads the JSON document trunk-recorder// writes beside a recording, reached from the call-upload endpoint// instead of from a watched directory. It is the same reading and it// keeps the same quirk: a sidecar naming a start time and no timestamp// is recorded at the moment the server read it; see the// recording-parsers maintainer note.
+// ApplyTrunkRecorderSidecar reads the JSON document trunk-recorder// writes beside a recording, reached from the call-upload endpoint// instead of from a watched directory. It is the same reading and it// keeps the same quirk: a sidecar naming a start time and no timestamp// is recorded at the moment the server read it.
 func (parsers *Parsers) ApplyTrunkRecorderSidecar(call *domain.Call, sidecar []byte) error {
 	return parsers.applyTrunkRecorder(call, sidecar)
 }
@@ -617,7 +617,7 @@ func splitDSDPlusName(base string) []string {
 	return meta
 }
 
-// hasExtension reports whether a watched file is the kind this parser// reads. The watch's own extension wins over the parser's default, and// the comparison ignores case. The configured extension is written// without its dot, because that is what the administrator types: an// extension typed with a leading dot asks for a file whose extension// is a dot followed by the extension, which matches nothing; see the// recording-parsers maintainer note.
+// hasExtension reports whether a watched file is the kind this parser// reads. The watch's own extension wins over the parser's default, and// the comparison ignores case. The configured extension is written// without its dot, because that is what the administrator types: an// extension typed with a leading dot asks for a file whose extension// is a dot followed by the extension, which matches nothing.
 func hasExtension(filePath, configured, fallback string) bool {
 	extension := fallback
 
@@ -628,7 +628,7 @@ func hasExtension(filePath, configured, fallback string) bool {
 	return strings.EqualFold(path.Ext(filePath), extension)
 }
 
-// audioExtension is the recording extension a trunk-recorder watch// looks for beside the sidecar it read. The name composes a filesystem// path, so a stored name that is not a plain name - the kind an old// server left behind before the apply-time rule - asks for a file// outside the watched directory, and asks for nothing here: the pair// is not read; see the recording-parsers maintainer note.
+// audioExtension is the recording extension a trunk-recorder watch// looks for beside the sidecar it read. The name composes a filesystem// path, so a stored name that is not a plain name - the kind an old// server left behind before the apply-time rule - asks for a file// outside the watched directory, and asks for nothing here: the pair// is not read.
 func audioExtension(configured string) string {
 	if len(configured) > 0 {
 		if !plainExtensionPattern.MatchString(configured) {

@@ -29,8 +29,8 @@ import (
 
 // Dirwatches is the stored directory-watch configuration: the configuration in
 // effect, not a view of the `dirwatches` table — read once, kept in memory, and
-// replaced by what a save submits. The posture, including a save that takes
-// effect before it is stored, is the live configuration in effect maintainer note.
+// replaced by what a save submits. The posture, including a save that takes effect
+// before it is stored.
 type Dirwatches struct {
 	store store
 
@@ -85,9 +85,7 @@ func (dirwatches *Dirwatches) AllDirwatches(ctx context.Context) (domain.Dirwatc
 
 // SaveDirwatches makes the given watches what the server runs with and then stores
 // them. The submitted watches take effect before the store is reached, so a save
-// that cannot be persisted still leaves the submitted directories being watched;
-// why that order is the parity behavior lives in the live configuration in effect
-// maintainer note.
+// that cannot be persisted still leaves the submitted directories being watched.
 func (dirwatches *Dirwatches) SaveDirwatches(ctx context.Context, next domain.Dirwatches) error {
 	dirwatches.mutex.Lock()
 	defer dirwatches.mutex.Unlock()
@@ -164,9 +162,9 @@ func (dirwatches *Dirwatches) read(ctx context.Context) (domain.Dirwatches, []st
 		dirwatch.ID = uint64(id)
 
 		// The signed delay, frequency, and order columns are clamped to zero on the
-		// way into the unsigned fields; why, recorded in the signed-column-clamp
-		// maintainer note. The deleteAfter column is boolean in every schema and the
-		// field is a Go bool, so it has no signed value to clamp.
+		// way into the unsigned fields; why. The deleteAfter column is boolean in
+		// every schema and the field is a Go bool, so it has no signed value to
+		// clamp.
 		clamps := []string{}
 
 		if delay < 0 {
@@ -330,7 +328,7 @@ func (dirwatches *Dirwatches) selectObsolete(ctx context.Context, tx transaction
 // dirwatchNamed reports whether the submitted list still names a stored watch. The
 // legacy write stops its scan at the first submitted watch whose id is zero, so a
 // save that adds a watch silently keeps every watch the list removed; this server
-// repairs that rule, as recorded in the reconciling-saves maintainer note.
+// repairs that rule.
 func dirwatchNamed(next domain.Dirwatches, id uint64) bool {
 	for _, dirwatch := range next {
 		if dirwatch.ID == id {

@@ -64,10 +64,9 @@ const (
 	containerProgramEnv = "RDIO_CONTAINER_PROGRAM"
 )
 
-// resolveContainerProgram returns the container program to run,
-// the operator's named one when given, otherwise podman then docker;
+// resolveContainerProgram returns the container program to run, the
+// operator's named one when given, otherwise podman then docker;
 // every refusal names both programs it looked for.
-// see the container-program-preference maintainer note.
 func resolveContainerProgram(lookup func(string) (string, error), env func(string) (string, bool)) (string, error) {
 	named, ok := env(containerProgramEnv)
 
@@ -98,7 +97,6 @@ func resolveContainerProgram(lookup func(string) (string, error), env func(strin
 // theContainerProgram names the program a run speaks to and how it
 // runs one command in a container, leaving no files behind in the
 // operator's tree.
-// see the container-run-ownership maintainer note.
 type theContainerProgram struct {
 	name string
 }
@@ -183,7 +181,6 @@ func defaultOutputPath(target string) string {
 // parseArgs reads the command line and refuses what this tool
 // cannot honour: flags arrive on either side of their command, and
 // the default output path waits for the whole line to be read.
-// see the release-command-flags maintainer note.
 func parseArgs(args []string) (options, error) {
 	o := options{}
 
@@ -422,7 +419,6 @@ type step struct {
 // serverStep composes the server binary for the run's target, last
 // because it embeds both applications and that target's ffmpeg;
 // the version arrives through the linker, the target through goos.
-// see the static-stripped-server-build maintainer note.
 func serverStep(o options, repo string, version buildinfo.Version) step {
 	target := o.target
 	if target == "" {
@@ -479,7 +475,6 @@ func imageTagFor(version string) string {
 // containerStep asks the container program to build the image: the
 // version, the build time, and the file to build from arrive as
 // build arguments, and the image build compiles the server itself.
-// see the container-image-build-contract maintainer note.
 func containerStep(o options, repo string, version buildinfo.Version, created time.Time, program string) step {
 	tag := containerImage + ":" + imageTagFor(version.String())
 

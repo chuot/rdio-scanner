@@ -29,9 +29,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// the assistant flag gets its own journey: the deployment's entry point parses the word
-// and builds the server's configuration from it, and only a started server runs that handoff.
-// see the mcp-flag-journey maintainer note.
+// the assistant flag gets its own journey: the deployment's entry point parses the word and
+// builds the server's configuration from it, and only a started server runs that handoff.
 
 func TestTheOperatorTurnsTheAssistantOnFromTheCommandLine(t *testing.T) {
 	base := t.TempDir()

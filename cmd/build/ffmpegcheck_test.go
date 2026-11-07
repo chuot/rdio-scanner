@@ -26,7 +26,6 @@ import (
 
 // Component tests of the ffmpeg check: the commands are answered by a stand-in, so
 // the check itself is what these tests exercise.
-// see the ffmpeg-check-shipping-gate maintainer note.
 
 // anM4A is a converted recording whose first boxes say it is what the server stores.
 func anM4A() []byte {
@@ -399,7 +398,6 @@ func namesTheCodecProbe(argv []string) bool {
 
 // the shipped ffmpeg is compiled for audio: the recipe disables everything and
 // enables audio components only, so a program registering a video codec is refused.
-// see the ffmpeg-check-shipping-gate maintainer note.
 func TestTheFFMPEGCheckRefusesAFfmpegThatRegistersVideoCodecs(t *testing.T) {
 	stand := &aStandIn{codecs: []string{
 		"D.A.L. mp3                  MP3 (MPEG audio layer 3)",

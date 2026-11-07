@@ -71,8 +71,7 @@ func TestCallPayloadMatchesTheCapturedCallWithNothingToSay(t *testing.T) {
 }
 
 // TestCallPayloadKeepsAbsentPatchesAsNullAndEmptyPatchesAsAnEmptyList proves a
-// stored call answers null patches and a live call []:
-// both legacy. see the call-payload-field-order maintainer note.
+// stored call answers null patches and a live call []: both legacy.
 func TestCallPayloadKeepsAbsentPatchesAsNullAndEmptyPatchesAsAnEmptyList(t *testing.T) {
 	call := domain.Call{ID: 1, Audio: capturedRecording}
 
@@ -89,7 +88,7 @@ func TestCallPayloadKeepsAbsentPatchesAsNullAndEmptyPatchesAsAnEmptyList(t *test
 
 // TestCallPayloadCarriesTheAudioAsByteNumbersUnderABuffer: the audio is byte
 // numbers under a buffer wrapper, the clients' shape. No audio is an empty
-// list. see the call-payload-field-order maintainer note.
+// list.
 func TestCallPayloadCarriesTheAudioAsByteNumbersUnderABuffer(t *testing.T) {
 	call := domain.Call{ID: 1, Audio: []byte{82, 73, 70, 70}, PatchTalkgroupRefs: []uint{}}
 
@@ -216,8 +215,8 @@ func TestCallPayloadCarriesTheAudioLengthInSecondsToTheMillisecond(t *testing.T)
 	}
 }
 
-// TestCallPayloadLeavesOutTheAudioLengthWhenItWasNeverMeasured proves a call with
-// no measured length carries no length key. see the call-payload-field-order maintainer note.
+// TestCallPayloadLeavesOutTheAudioLengthWhenItWasNeverMeasured proves a call with no measured
+// length carries no length key.
 func TestCallPayloadLeavesOutTheAudioLengthWhenItWasNeverMeasured(t *testing.T) {
 	call := domain.Call{
 		ID:                 1,

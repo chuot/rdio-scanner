@@ -1,7 +1,6 @@
 // rdio-systems-selection: tri-state Everything/Groups/Tags/Systems/Talkgroups dialog
-// every check cascades through the domain model and the tree re-renders
-// result: '*' or [{ id: systemRef, talkgroups: '*' | [talkgroupRef...] }], null on cancel
-// see the systems-selection-result-format maintainer note.
+// every check cascades through the domain model and the tree re-renders result: '*' or [{
+// id: systemRef, talkgroups: '*' | [talkgroupRef...] }], null on cancel.
 
 import { openDialog } from '../../../../common/frontend/presentation/ui/primitives.js';
 import {
@@ -15,10 +14,9 @@ import {
   setTalkgroup,
 } from '../../domain/systems-selection.js';
 
-// rowLabel names a row by its label with (ref) in parentheses after it
-// groups and tags have no reference number, so their rows carry the label alone
-// an empty row falls back to the unnamed text instead of undefined or null
-// see the row-label-fallback maintainer note.
+// rowLabel names a row by its label with (ref) in parentheses after it groups
+// and tags have no reference number, so their rows carry the label alone an
+// empty row falls back to the unnamed text instead of undefined or null.
 function rowLabel({ label, ref, unnamed }) {
   const name = typeof label === 'string' ? label.trim() : '';
 
@@ -47,9 +45,8 @@ class RdioSystemsSelection extends HTMLElement {
     const model = this.model;
 
     // the tree repaints on every activation, which throws away the focused control
-    // the activated row's dataset.node is recorded before the rebuild
-    // the keyboard is put back on that same row after it
-    // see the selection-focus-restore maintainer note.
+    // the activated row's dataset.node is recorded before the rebuild the keyboard
+    // is put back on that same row after it.
     const activated = document.activeElement?.dataset?.node;
 
     const root = document.createElement('div');

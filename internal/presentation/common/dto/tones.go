@@ -34,8 +34,7 @@ type Tone struct {
 }
 
 // alertTones are the nine alert sequences the server carries, copied from
-// the server it replaces because they are the payload. see the
-// tones-fixtures-and-the-golden-capture-contract maintainer note.
+// the server it replaces because they are the payload.
 var alertTones = map[string][]Tone{
 	"alert1": {
 		{
@@ -282,8 +281,7 @@ type KeypadBeeps struct {
 	Denied     []Tone `json:"denied"`
 }
 
-// keypadBeeps picks the panel's tones by the brand it serves. see the
-// tones-fixtures-and-the-golden-capture-contract maintainer note.
+// keypadBeeps picks the panel's tones by the brand it serves.
 func keypadBeeps(option string) KeypadBeeps {
 	switch option {
 	case "uniden":

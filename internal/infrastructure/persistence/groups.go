@@ -30,7 +30,7 @@ import (
 // it. A save that stored is followed by reading the stored rows back so that the
 // identifiers the table assigned are what the next save and the configuration
 // broadcast work from. That posture, including a save that takes effect before it
-// is stored, is the live configuration in effect maintainer note.
+// is stored.
 type Groups struct {
 	store store
 
@@ -131,7 +131,7 @@ func readGroups(ctx context.Context, s store) (domain.Groups, []string, error) {
 		}
 
 		// The signed order column is clamped to zero on the way into the unsigned
-		// field; why, recorded in the signed-column-clamp maintainer note.
+		// field; why.
 		if order < 0 {
 			clamped = append(clamped, fmt.Sprintf("groups.read: group %d %q holds order %d: that is not a display order this server can hold, and it is read as 0",
 				id, label, order))
@@ -172,8 +172,7 @@ func (groups *Groups) reportClamps(clamped []string) {
 // transaction: select the stored identifiers, delete the ones the submitted list
 // no longer names, insert or update the rest. A submitted group with no identity
 // yet is inserted without the existence check. The delete check carries the
-// repaired keep rule — a submitted zero id does not shield stored rows — as
-// recorded in the reconciling-saves maintainer note.
+// repaired keep rule — a submitted zero id does not shield stored rows.
 func writeGroups(ctx context.Context, s store, next domain.Groups) error {
 	tx, err := s.begin(ctx)
 	if err != nil {

@@ -1,5 +1,5 @@
-// keyboard move buttons replace the drag gesture, same reorder and same save bar
-// see the keyboard-row-move maintainer note.
+// keyboard move buttons replace the drag gesture, same reorder and same save
+// bar.
 
 import './dom-shim.js';
 
@@ -84,8 +84,8 @@ function buttonNamed(row, direction) {
   return moveButtons(row).find((btn) => new RegExp(`^move ${direction} `, 'i').test(btn.getAttribute('aria-label') ?? '')) ?? null;
 }
 
-// a move button in a row's summary must preventDefault, or the click opens the row
-// see the preventdefault-summary-activation maintainer note.
+// a move button in a row's summary must preventDefault, or the click opens the
+// row.
 function clickButton(button) {
   let prevented = false;
 

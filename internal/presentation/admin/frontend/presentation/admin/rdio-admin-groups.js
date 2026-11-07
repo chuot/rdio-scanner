@@ -249,9 +249,8 @@ class RdioAdminGroups extends HTMLElement {
     this.commitRows(this.rows.map((row, i) => (i === index ? { ...row, ...patch } : row)), true);
   }
 
-  // every rows commit carries section validity for the Save control
-  // a drop re-reads the rows the store holds, not typed values left in rows not rebuilt
-  // see the rows-commit-validity maintainer note.
+  // every rows commit carries section validity for the Save control a drop re-reads the
+  // rows the store holds, not typed values left in rows not rebuilt.
   commitRows(rows, selfEdit = false) {
     if (selfEdit) this.internalEdit = rows;
 
@@ -262,9 +261,8 @@ class RdioAdminGroups extends HTMLElement {
   add() {
     const fresh = markRowIdentity({ alert: '', label: '', led: '', order: 0 });
 
-    // the added row opens as the section's one open row
-    // open details close on the page too: the next render reads open rows from the DOM
-    // see the open-row-dom-reset maintainer note.
+    // the added row opens as the section's one open row open details close on the page
+    // too: the next render reads open rows from the DOM.
     for (const row of this.querySelectorAll('details[data-key]')) row.open = false;
 
     this.openState.clear();

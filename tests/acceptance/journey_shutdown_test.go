@@ -33,7 +33,6 @@ import (
 
 // the shutdown journey is the only journey running the server as a subprocess:
 // interrupt handling is the process ending itself, invisible to an in-process server.
-// see the shutdown-journey maintainer note.
 
 // secondSignalWindow is how long the second interrupt may take: forcing the exit
 // exists so the operator never sits through the hang again.
@@ -131,7 +130,6 @@ func TestASecondInterruptEndsAServerThatCannotStop(t *testing.T) {
 }
 
 // buildServerBinary builds the command exactly the way the deployment builds it.
-// see the shutdown-journey maintainer note.
 func buildServerBinary(t *testing.T) string {
 	t.Helper()
 
@@ -235,7 +233,6 @@ func lockTheServerLog(t *testing.T, base string) *sql.DB {
 }
 
 // aFreeTCPPort gives back an OS-assigned free port for the built server to bind.
-// see the harness-ports maintainer note.
 func aFreeTCPPort(t *testing.T) string {
 	t.Helper()
 

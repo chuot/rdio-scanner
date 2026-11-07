@@ -20,8 +20,8 @@ import './rdio-admin-tags.js';
 import './rdio-admin-tools.js';
 import './rdio-admin-units.js';
 
-// keep SECTIONS in this order: the navigation is ordered by admin work flow, not labels
-// see the nav-section-order maintainer note.
+// keep SECTIONS in this order: the navigation is ordered by admin work flow, not
+// labels.
 const SECTIONS = [
   { name: 'dashboard', label: 'Dashboard', icon: 'speed' },
   { name: 'systems', label: 'Systems', icon: 'settings' },
@@ -136,8 +136,7 @@ class RdioAdmin extends HTMLElement {
     heading.textContent = sectionLabel(this.current);
 
     // the live region carries save and row-move answers; nothing static sits in it
-    // the shell keeps one region across every repaint so a reply is not lost
-    // see the live-region-repaint maintainer note.
+    // the shell keeps one region across every repaint so a reply is not lost.
     if (!this.liveRegion) this.liveRegion = document.createElement('rdio-live-region');
 
     content.append(heading, this.liveRegion);
@@ -152,8 +151,7 @@ class RdioAdmin extends HTMLElement {
   }
 
   // todosBanner sits above the section card, edges aligned by the same width cap
-  // it renders nothing when empty and is never dismissible
-  // see the todos-banner-placement maintainer note.
+  // it renders nothing when empty and is never dismissible.
   todosBanner(todos) {
     if (todos.length === 0) return null;
 

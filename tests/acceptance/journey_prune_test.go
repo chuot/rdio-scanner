@@ -28,7 +28,6 @@ import (
 
 // the retention prune journey pins the pruning use case and the hourly schedule
 // together, on history a running server wrote itself, which neither pinning alone shows.
-// see the prune-journey maintainer note.
 
 // pruneKey is the credential these tests post a recording with while testing what becomes of it.
 const pruneKey = "a-key-that-ages-out"

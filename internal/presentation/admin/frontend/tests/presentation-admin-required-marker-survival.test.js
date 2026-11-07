@@ -1,7 +1,6 @@
 // The marks survive the page's own work: each reading takes a section's
 // marked set, rebuilds the rows one of the section's own ways, and
 // re-reads it; a declaration on the field's name survives every rebuild.
-// see the required-marker-survival maintainer note.
 
 import './dom-shim.js';
 

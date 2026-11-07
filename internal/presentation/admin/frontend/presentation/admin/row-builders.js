@@ -3,9 +3,8 @@
 
 import { rowsToClose, scrollCompensation } from '../../domain/row-open-rule.js';
 
-// Two buttons give the keyboard the drag handle's reorder.
-// Ends disable the impossible move; attachDragSort owns the click.
-// see the row-move-keyboard maintainer note.
+// Two buttons give the keyboard the drag handle's reorder. Ends
+// disable the impossible move; attachDragSort owns the click.
 export function rowMoveButtons(label, index, total) {
   const buttons = [];
 
@@ -103,9 +102,8 @@ function scrollableAncestor(list) {
   return null;
 }
 
-// One open row at a time: toggle fires on the row and never bubbles.
-// openState follows the page; scroll compensation keeps the opened row in view.
-// see the single-open-row-rule maintainer note.
+// One open row at a time: toggle fires on the row and never bubbles. openState
+// follows the page; scroll compensation keeps the opened row in view.
 export function attachSingleOpenRule(list, openState) {
   let applying = false;
 

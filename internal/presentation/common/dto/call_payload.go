@@ -30,10 +30,10 @@ type CallPayload struct {
 	Call domain.Call
 }
 
-// MarshalJSON writes the call. The keys come out sorted, as
-// the legacy map produced them, and clients read those bytes.
-// Seven keys are always present; the rest appear only with
-// their value. see the call-payload-field-order maintainer note.
+// MarshalJSON writes the call. The keys come out sorted, as the
+// legacy map produced them, and clients read those bytes. Seven
+// keys are always present; the rest appear only with their
+// value.
 func (payload CallPayload) MarshalJSON() ([]byte, error) {
 	return json.Marshal(callPayloadMap(payload.Call))
 }
@@ -41,7 +41,6 @@ func (payload CallPayload) MarshalJSON() ([]byte, error) {
 // CallMetadataPayload is one recorded call as the HTTP
 // call-history surface answers it: the call payload's keys
 // without the recording's bytes, naming the link instead.
-// see the call-payload-field-order maintainer note.
 type CallMetadataPayload struct {
 	Call domain.Call
 }
@@ -57,10 +56,9 @@ func (payload CallMetadataPayload) MarshalJSON() ([]byte, error) {
 	return json.Marshal(body)
 }
 
-// callPayloadMap builds the call as the wire carries it, as a
-// map, because the legacy server built it from a map and
-// clients read those bytes. Seven keys are always present,
-// the rest only with their value. see the call-payload-field-order maintainer note.
+// callPayloadMap builds the call as the wire carries it, as a map, because the
+// legacy server built it from a map and clients read those bytes. Seven keys are
+// always present, the rest only with their value.
 func callPayloadMap(call domain.Call) map[string]any {
 	body := map[string]any{
 		"id":        call.ID,
@@ -85,7 +83,6 @@ func callPayloadMap(call domain.Call) map[string]any {
 
 			// frequency signal levels are emitted only above zero: a
 			// level the server stored can stay unseen.
-			// see the call-payload-field-order maintainer note.
 			if frequency.Dbm > 0 {
 				entry["dbm"] = frequency.Dbm
 			}

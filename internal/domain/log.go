@@ -31,7 +31,7 @@ const (
 // the operator's names for the parts, not the functions that write them, and
 // the list is closed on purpose: a filter for a name outside it is rejected,
 // not answered with an empty view. The vocabulary's history and the names no
-// writer of this server writes live in the domain maintainer note.
+// writer of this server writes live.
 type LogSource string
 
 const (
@@ -80,8 +80,7 @@ var writtenLogSources = []LogSource{
 // backfillOnlyLogSources are vocabulary names no writer of this server
 // writes: the log view still offers them so an operator can find rows a
 // database written before the source column existed already holds. The
-// calls and legacy names and where their rows come from live in the domain
-// maintainer note.
+// calls and legacy names and where their rows come from live.
 var backfillOnlyLogSources = []LogSource{
 	LogSourceCalls, LogSourceLegacy,
 }

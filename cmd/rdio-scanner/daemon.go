@@ -75,8 +75,8 @@ func newDaemon() (*daemon, error) {
 	return d, nil
 }
 
-// run hands the process to the manager, whose own loop starts the server
-// see the daemon-run-under-manager maintainer note.
+// run hands the process to the manager, whose own loop starts the
+// server.
 func (d *daemon) run() {
 	go func() {
 		if err := d.service.Run(); err != nil {
@@ -92,8 +92,7 @@ func asksTheServiceManager(action string) bool {
 }
 
 // controlService asks the manager to act, and an unknown action is refused
-// with only the exit code said to the operator
-// see the daemon-control-exit-code maintainer note.
+// with only the exit code said to the operator.
 func controlService(action string) int {
 	d, err := newDaemon()
 	if err != nil {
@@ -109,8 +108,7 @@ func controlService(action string) int {
 
 // daemonInterface is what the manager is told the service does: its start is
 // the server's start, and its stop signals this process so shutdown happens
-// on the one path the server already answers
-// see the daemon-stop-signals-itself maintainer note.
+// on the one path the server already answers.
 type daemonInterface struct {
 	process *os.Process
 }

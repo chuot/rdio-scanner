@@ -29,7 +29,6 @@ import (
 // The run this test reads was captured from the legacy server
 // with its time zone set to UTC, the time zone of every capture
 // here: a watched recording is dated by a local clock.
-// see the fixture-capture maintainer note.
 func init() {
 	os.Setenv("TZ", "UTC")
 }
@@ -37,7 +36,6 @@ func init() {
 // TestWatchedRecordingsBecomeCallsThatReachALiveListener is the
 // whole path: a watch ingests a recording and a live listener
 // hears it, against the `dirwatch-end-to-end` capture.
-// see the dirwatch-journey maintainer note.
 func TestWatchedRecordingsBecomeCallsThatReachALiveListener(t *testing.T) {
 	captured := capturedRun(t, "dirwatch-end-to-end.json")
 

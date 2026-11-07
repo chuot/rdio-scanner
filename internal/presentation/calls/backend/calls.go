@@ -14,8 +14,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
 // Package backend is the call history HTTP surface: the entry points a client uses to
-// search the recorded calls, read one recorded call, and fetch one recording; see the
-// call-history-over-http maintainer note.
+// search the recorded calls, read one recorded call, and fetch one recording.
 package backend
 
 import (
@@ -33,8 +32,7 @@ import (
 	"rdio-scanner/internal/presentation/common/httpaddr"
 )
 
-// accessCodeHeader carries a listener access code, never the Authorization header; see the
-// listener-access-code-header maintainer note.
+// accessCodeHeader carries a listener access code, never the Authorization header.
 const accessCodeHeader = "X-Access-Code"
 
 // CallsDeps is what the call history surface is built from: the two queries it answers with, the
@@ -92,15 +90,14 @@ func NewCalls(deps CallsDeps) *Calls {
 
 // Register hangs the three entry points on the routes the composition root is building; paths
 // register without a method, and each entry point answers methods it does not serve with 405
-// itself; see the method-agnostic-route-registration maintainer note.
+// itself.
 func (calls *Calls) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/calls/search", calls.Search)
 	mux.HandleFunc("/api/calls/{callId}", calls.Get)
 	mux.HandleFunc("/api/calls/{callId}/audio", calls.Audio)
 }
 
-// caller is who is asking, and what they may see; see the caller-scope-semantics
-// maintainer note.
+// caller is who is asking, and what they may see.
 type caller struct {
 	// Scoped says the caller's view is limited by an access, and is the only state that makes the
 	// server check a call against a scope at all.
@@ -171,8 +168,7 @@ func (calls *Calls) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, dto.CallMetadataPayload{Call: call})
 }
 
-// Audio answers one recording, as it is stored; see the recordings-served-as-stored-bytes
-// maintainer note.
+// Audio answers one recording, as it is stored.
 func (calls *Calls) Audio(w http.ResponseWriter, r *http.Request) {
 	who, ok := calls.who(r)
 	if !ok {
@@ -202,8 +198,7 @@ func (calls *Calls) Audio(w http.ResponseWriter, r *http.Request) {
 }
 
 // who decides who is asking: the administrator credential is checked first, then a listener
-// access code, then an anonymous caller on a restricted server; see the caller-scope-semantics
-// maintainer note.
+// access code, then an anonymous caller on a restricted server.
 func (calls *Calls) who(r *http.Request) (caller, bool) {
 	if calls.session.Handle(r.Context(), application.CheckAdminSessionQuery{Token: credential(r)}) {
 		return caller{}, true
@@ -237,8 +232,7 @@ func (calls *Calls) scopeOf(who caller) domain.AccessScope {
 }
 
 // callInScope reads one call and refuses a call its caller may not see, before answering
-// anything about it, with the refusal a call that is not there gets; see the
-// uniform-not-there-refusals maintainer note.
+// anything about it, with the refusal a call that is not there gets.
 func (calls *Calls) callInScope(w http.ResponseWriter, r *http.Request, who caller) (domain.Call, bool) {
 	id, err := strconv.ParseUint(r.PathValue("callId"), 10, 64)
 	if err != nil {

@@ -64,7 +64,6 @@ func TestAlertsPayloadMatchesTheCapturedAlerts(t *testing.T) {
 // TestAdminLogsPagePayloadMatchesTheCapturedLogView proves the log
 // view answers the total match count, the match span, the echoed
 // criteria, the per-subsystem counts, and this page's entries.
-// see the call-search-echoes-and-status-shortcuts maintainer note.
 func TestAdminLogsPagePayloadMatchesTheCapturedLogView(t *testing.T) {
 	first := time.Date(2026, 5, 11, 9, 0, 0, 0, time.UTC)
 	second := first.Add(time.Second)
@@ -108,7 +107,6 @@ func TestAdminLogsPagePayloadMatchesTheCapturedLogView(t *testing.T) {
 // TestAdminLogsPagePayloadEchoesTheCriteriaTheSearchWasAskedWith
 // proves criteria echo as submitted: unsubmitted criteria stay absent,
 // and an overlarge limit echoes as asked, not as clamped.
-// see the call-search-echoes-and-status-shortcuts maintainer note.
 func TestAdminLogsPagePayloadEchoesTheCriteriaTheSearchWasAskedWith(t *testing.T) {
 	page := ports.LogSearchPage{Count: 0, Results: []domain.LogEntry{}}
 
@@ -225,7 +223,6 @@ func TestAdminLogsPagePayloadReportsHowManyEntriesEachSubsystemWrote(t *testing.
 // TestAdminLogsPagePayloadEchoesTheSubsystemAndTheTextItWasAskedFor
 // proves subsystem and text echo in the contract's order, and an
 // unknown subsystem is not echoed.
-// see the call-search-echoes-and-status-shortcuts maintainer note.
 func TestAdminLogsPagePayloadEchoesTheSubsystemAndTheTextItWasAskedFor(t *testing.T) {
 	page := ports.LogSearchPage{Count: 0, Results: []domain.LogEntry{}}
 

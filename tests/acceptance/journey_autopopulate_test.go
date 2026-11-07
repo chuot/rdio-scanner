@@ -29,7 +29,6 @@ import (
 // TestWatchedRecordingsPopulateTheConfigurationTheyName drops
 // recordings naming unknown systems, talkgroups, groups, tags and
 // radios, checked against the `dirwatch-autopopulate` capture.
-// see the autopopulate-journey maintainer note.
 func TestWatchedRecordingsPopulateTheConfigurationTheyName(t *testing.T) {
 	captured := capturedRun(t, "dirwatch-autopopulate.json")
 
@@ -166,7 +165,6 @@ const (
 
 // Pins that a systems-section save keeps the invent-the-talkgroup flag
 // set and later recordings still name their talkgroup.
-// see the autopopulate-journey maintainer note.
 func TestASystemsSectionSaveLeavesAutoPopulateInventingTheTalkgroupsRecordingsName(t *testing.T) {
 	srv := journeyServerIn(t, t.TempDir())
 

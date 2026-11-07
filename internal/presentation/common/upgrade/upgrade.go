@@ -15,8 +15,7 @@
 
 // Package upgrade says whether a request asks to become a websocket
 // connection. It lives on its own because two endpoints must read an
-// upgrade request the same way. see the
-// upgrade-required-is-decided-elsewhere maintainer note.
+// upgrade request the same way.
 package upgrade
 
 import (
@@ -26,8 +25,7 @@ import (
 
 // Wanted reports whether a request asks for a websocket upgrade: the
 // legacy server's own test, the Upgrade header read without regard to
-// spelling, and nothing else. see the
-// upgrade-required-is-decided-elsewhere maintainer note.
+// spelling, and nothing else.
 func Wanted(r *http.Request) bool {
 	return strings.EqualFold(r.Header.Get("upgrade"), "websocket")
 }

@@ -31,7 +31,6 @@ import (
 
 // Every command mode test runs the program, flags in and exit code
 // out, against a server answering on a real address.
-// see the command-mode-client-of-running-server maintainer note.
 
 // logging in once leaves a session that the commands which follow use
 // from the token file
@@ -53,7 +52,6 @@ func TestTheCommandModeLogsInAndKeepsTheSessionForTheCommandsThatFollow(t *testi
 
 	// The session token file sits inside the base directory, named
 	// after the executable, and the test pins that placement.
-	// see the command-session-token-file maintainer note.
 	if filepath.Dir(tokenFile) != baseDir {
 		t.Errorf("the session is kept at %s, want it inside the base directory %s", tokenFile, baseDir)
 	}
@@ -362,7 +360,6 @@ func TestACommandThatNeedsASessionSaysItIsNotLoggedIn(t *testing.T) {
 
 // Every command run against a server that is not answering names the
 // failure and ends as a failure.
-// see the command-failure-reporting maintainer note.
 func TestEveryCommandAgainstAServerThatIsNotAnsweringIsReported(t *testing.T) {
 	url := commandTestServer(t)
 
@@ -467,7 +464,6 @@ func TestAnActionTheCommandModeDoesNotKnowPrintsTheUsageAndChangesNothing(t *tes
 
 		// The session file the usage text promises is the one the mode
 		// keeps: inside the base directory, named after the executable.
-		// see the command-session-token-file maintainer note.
 		"Session token keystore. Default is `" + tokenFileOf(baseDir) + "`.",
 
 		"Server remote address. Default is `http://localhost:3000/`.",
@@ -513,7 +509,6 @@ func TestACommandGivenAnAddressThatIsNotAServerAddressIsRefused(t *testing.T) {
 
 // An invalid address is refused before anything else the operator
 // named is read, the file included.
-// see the command-option-ordering maintainer note.
 func TestAnAddressThatIsNotOneIsRefusedBeforeAnythingElseIsNamed(t *testing.T) {
 	code, out := runTheCommandMode(t, t.TempDir(), "config-get", commandArgURL, "ftp://elsewhere/", commandArgOut, filepath.Join(t.TempDir(), "none"))
 

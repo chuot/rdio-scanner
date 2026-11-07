@@ -29,7 +29,7 @@ import (
 
 // The migration archive holds every v6 row the migration pass read and could not carry, so that
 // dropping a v6 table never destroys a row quietly. Why the table lives in the migration pass, why
-// it has three spellings, and how its writes behave is in the migration-archives maintainer note.
+// it has three spellings.
 const (
 	migrationArchiveTableSqlite = `CREATE TABLE IF NOT EXISTS "migrationArchive" (
     "archiveId" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -126,7 +126,7 @@ func hasMigrationArchiveIndex(ctx context.Context, s store) (bool, error) {
 
 // archiveRow writes one row the pass read and could not carry into the archive, with the reason in
 // the language of the system and the original values as the pass read them. The conflict tolerance
-// and the refuse-or-return posture are in the migration-archives maintainer note.
+// and the refuse-or-return posture.
 func archiveRow(ctx context.Context, tx transaction, tableName string, rowId int64, reason string, contents any) error {
 	statement := archiveInsertStatement(tx.store.dialect)
 
@@ -154,8 +154,7 @@ func archiveInsertStatement(dialect Dialect) string {
 	}
 }
 
-// archiveContents is the original row as JSON, exactly as the pass read it; the contents fidelity
-// is in the migration-archives maintainer note.
+// archiveContents is the original row as JSON, exactly as the pass read it.
 func archiveContents(row any) string {
 	b, err := json.Marshal(row)
 	if err != nil {
@@ -168,7 +167,7 @@ func archiveContents(row any) string {
 }
 
 // migrationArchiver is one migration's record of the rows it read and could not carry. Its
-// transaction posture and summary reporting are in the migration-archives maintainer note.
+// transaction posture and summary reporting.
 type migrationArchiver struct {
 	ctx      context.Context
 	tx       transaction
@@ -188,8 +187,7 @@ func archiving(ctx context.Context, tx transaction, progress Progress, table, on
 // skip keeps the record of one v6 row the migration read and could not carry: the row goes into the
 // archive with the reason, and the reason is held for the operator at warn level. `named` is the row
 // in the language of the system — `talkgroup 204 "Orphan"`, `call 705` — and `reason` is the tail of
-// that sentence, which is also what the archive's reason column holds. The refuse-and-rollback
-// posture is in the migration-archives maintainer note.
+// that sentence, which is also what the archive's reason column holds.
 func (a *migrationArchiver) skip(rowId int64, named, reason string, contents any) error {
 	if err := archiveRow(a.ctx, a.tx, a.table, rowId, reason, contents); err != nil {
 		return err

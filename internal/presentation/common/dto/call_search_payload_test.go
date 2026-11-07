@@ -23,8 +23,8 @@ import (
 )
 
 // TestCallSearchPageMatchesTheCapturedPage pins the page bytes to the
-// captured frame, written as fields in a fixed order and
-// not as a map. see the call-search-page-ordering maintainer note.
+// captured frame, written as fields in a fixed order and not as a
+// map.
 func TestCallSearchPageMatchesTheCapturedPage(t *testing.T) {
 	at := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 
@@ -53,9 +53,8 @@ func TestCallSearchPageMatchesTheCapturedPage(t *testing.T) {
 	}
 }
 
-// TestCallSearchPageEchoesOnlyTheCriteriaItUnderstood a
-// wrong-shaped criterion is simply absent from the answer,
-// so its filter reads as ignored. see the call-search-page-ordering maintainer note.
+// TestCallSearchPageEchoesOnlyTheCriteriaItUnderstood a wrong-shaped criterion is
+// simply absent from the answer, so its filter reads as ignored.
 func TestCallSearchPageEchoesOnlyTheCriteriaItUnderstood(t *testing.T) {
 	page := CallSearchPagePayload{
 		Criteria: map[string]any{
@@ -81,7 +80,6 @@ func TestCallSearchPageEchoesOnlyTheCriteriaItUnderstood(t *testing.T) {
 
 // TestCallSearchPageEchoesWhatWasAskedForNotWhatTheSearchUsed: an understood
 // criterion is echoed as asked, never clamped to the run's size.
-// see the call-search-page-ordering maintainer note.
 func TestCallSearchPageEchoesWhatWasAskedForNotWhatTheSearchUsed(t *testing.T) {
 	page := CallSearchPagePayload{Criteria: map[string]any{"limit": float64(600)}}
 
@@ -132,9 +130,8 @@ func TestCallSearchPageAnswersAnEmptySearchWithAnEmptyListAndTheUnixEpoch(t *tes
 }
 
 // TestCallSearchRowKeepsTheMillisecondsACallPayloadDrops proves a history row
-// renders the moment with milliseconds while a call payload
-// renders the same call without them.
-// see the call-payload-field-order maintainer note.
+// renders the moment with milliseconds while a call payload renders the same
+// call without them.
 func TestCallSearchRowKeepsTheMillisecondsACallPayloadDrops(t *testing.T) {
 	at := time.Date(2026, 10, 6, 12, 0, 0, 500_000_000, time.UTC)
 
@@ -147,10 +144,9 @@ func TestCallSearchRowKeepsTheMillisecondsACallPayloadDrops(t *testing.T) {
 	}
 }
 
-// TestCallSearchRowCarriesTheAudioLengthOfTheCallInSeconds proves a struct
-// always names what it has, so the length is on every row,
-// and the zero on a row stored before any source measured
-// it is the server's own "never measured". see the call-search-page-ordering maintainer note.
+// TestCallSearchRowCarriesTheAudioLengthOfTheCallInSeconds proves a struct always names what
+// it has, so the length is on every row, and the zero on a row stored before any source
+// measured it is the server's own "never measured".
 func TestCallSearchRowCarriesTheAudioLengthOfTheCallInSeconds(t *testing.T) {
 	at := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 

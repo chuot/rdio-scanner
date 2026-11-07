@@ -292,8 +292,7 @@ func TestTheRunSaysWhatVersionItResolvedAndWhy(t *testing.T) {
 }
 
 // A dist run builds the applications once, then each target's ffmpeg serially, then every
-// target's compile and archive at once; the ordering rules live in the note.
-// see the dist-run-order maintainer note.
+// target's compile and archive at once; the ordering rules live.
 func TestADistRunBuildsTheApplicationsOnceThenEveryFfmpegThenTheTargetsAtOnce(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -695,7 +694,6 @@ var theTargetNames = map[string]string{
 
 // A release run refuses a tree with uncommitted changes before building anything and names the
 // paths and the override.
-// see the dirty-tree-refusal maintainer note.
 func TestADistRunRefusesATreeWithUncommittedChanges(t *testing.T) {
 	tl, out, ran := fakeRun(uncommitted, "")
 
@@ -758,7 +756,6 @@ func TestADistRunReportsTheArchivesItWroteAndSaysTheReleaseIsComplete(t *testing
 
 // A dist run asked for a target that wrote no archive ends non-zero so scripts can tell an
 // incomplete machine from a broken run.
-// see the incomplete-matrix-reporting maintainer note.
 func TestADistRunExitsNonZeroWhenATargetItWasAskedForWroteNoArchive(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
@@ -799,7 +796,6 @@ func TestADistRunAskedForOneTargetThatWroteNoFfmpegExitsNonZero(t *testing.T) {
 
 // A release run reports a macOS target whose prepared SDK tree is absent as one it wrote no
 // archive for.
-// see the incomplete-matrix-reporting maintainer note.
 func TestAReleaseRunReportsAMacOSTargetWhoseSysrootIsAbsentAsWritingNoArchive(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -841,7 +837,6 @@ func TestAReleaseRunReportsAMacOSTargetWhoseSysrootIsAbsentAsWritingNoArchive(t 
 
 // The ffmpeg phase refuses a target whose prepared tree records another tree's digest, and
 // fetches and builds nothing for it.
-// see the prepared-sysroot-record maintainer note.
 func TestARunAskedForTheFfmpegOfATargetWhoseSysrootRecordsAnotherTreeIsRefused(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -1035,7 +1030,6 @@ func TestAReleaseRunFinishesTheFfmpegPhaseBeforeTheServerCompilesStart(t *testin
 
 // The archives a release run writes must not depend on the order its targets ran in, and each
 // archive reads only its own target's binary.
-// see the dist-run-order maintainer note.
 func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T) {
 	repo := t.TempDir()
 
@@ -1102,7 +1096,6 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 // wroteNoFfmpegFor is the ffmpeg phase of a stand-in run that produced no ffmpeg for the
 // targets it names, exercising the summary line and exit status for a partly unfillable
 // matrix.
-// see the incomplete-matrix-reporting maintainer note.
 func wroteNoFfmpegFor(ran *[]step, targets ...string) func(options, io.Writer) (bool, error) {
 	return func(o options, stdout io.Writer) (bool, error) {
 		for _, target := range targets {
@@ -1327,7 +1320,6 @@ func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T
 
 // The container step passes the resolved version to podman as a build argument and tags the
 // image with it beside latest, naming the Containerfile explicitly.
-// see the container-image-build maintainer note.
 func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1525,7 +1517,6 @@ func TestAFirstRunBuildsTheApplicationsTheFfmpegAndTheServer(t *testing.T) {
 
 // The native run is the build standing on the host that compiles the binaries, with the
 // external commands and the network source stood in.
-// see the native-run maintainer note.
 
 // whatRan is what the native run harness recorded: the order the steps ran in and the mode the
 // produced binaries arrived with.
@@ -1636,7 +1627,6 @@ func aNativeRunOn(t *testing.T, target string, failAt string, theHost host) (*to
 
 // The native run compiles its host's targets, runs the binaries, adopts them into the cache
 // entry the manifest names, and publishes; the manifest is never rewritten.
-// see the native-run maintainer note.
 func TestTheNativeRunCompilesRunsTheBinariesAndPublishes(t *testing.T) {
 	for _, target := range []string{"macos-arm64"} {
 		tl, out, seen, repo := aNativeRun(t, target, "")
@@ -1720,7 +1710,6 @@ func TestTheNativeRunCompilesRunsTheBinariesAndPublishes(t *testing.T) {
 // Binaries whose proving run failed are not cached and not published, the manifest stays
 // exactly as found, and the binaries wait in the bundle directory for the host that can run
 // them.
-// see the native-run maintainer note.
 func TestTheNativeRunPublishesNothingWhenTheRunOfTheBinariesFails(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

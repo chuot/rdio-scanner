@@ -18,9 +18,8 @@
 // talkgroup scope before the handshake, so both transports share one
 // entry point, and the gateway decides nothing: every call uses the
 // handlers the HTTP surface uses. Two principals shape the surface:
-// capabilities carry what the deployment has; see the capabilities-are-
-// questions-not-routes maintainer note. The protocol is JSON-RPC 2.0
-// over HTTP POST or the scanner websocket, and method and tool names
+// capabilities carry what the deployment has. The protocol is JSON-RPC
+// 2.0 over HTTP POST or the scanner websocket, and method and tool names
 // follow the MCP specification's published shapes: scanner-specific
 // behaviour sits in the result content.
 package backend

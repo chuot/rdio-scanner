@@ -101,8 +101,7 @@ func (scope AccessScope) Grants(call Call) bool {
 
 // GrantsReferences reports whether one system reference and one talkgroup reference
 // fall inside the scope. It answers against submitted references rather than resolved
-// identifiers because at the upload boundary nothing is resolved yet; why the resolved
-// pair cannot be used there lives in the domain maintainer note.
+// identifiers because at the upload boundary nothing is resolved yet.
 func (scope AccessScope) GrantsReferences(systemRef, talkgroupRef uint) bool {
 	if scope.Wildcard {
 		return true

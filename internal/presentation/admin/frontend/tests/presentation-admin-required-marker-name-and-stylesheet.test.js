@@ -1,6 +1,5 @@
 // the name keeps its text: the asterisk is a mark the stylesheet draws, never a
-// character put into the name; the shapes read and the asterisk pins are in the hub
-// see the required-asterisk-name-pins maintainer note.
+// character put into the name.
 
 import './dom-shim.js';
 

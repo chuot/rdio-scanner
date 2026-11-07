@@ -17,7 +17,6 @@
 // web app and the native applications hold open, the JSON-array frame they exchange,
 // the command constants of that protocol, and the hub that keeps the listener
 // connections. The wire format is frozen: the commands and their frames are captured
-// from the legacy server and compared by the completeness guard in message_test.go;
-// see the scanner-wire-format-and-completeness maintainer note. The administrator
-// configuration socket is not here; it lives in admin/backend.
+// from the legacy server and compared by the completeness guard in message_test.go.
+// The administrator configuration socket is not here; it lives in admin/backend.
 package backend

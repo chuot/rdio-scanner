@@ -25,22 +25,19 @@ import (
 
 // bundleRoot is the directory a request path is resolved against,
 // exactly as the legacy handler joins it, and that prefix is what
-// bounds a parent directory. see the
-// single-page-app-serving-rules-kept-from-legacy maintainer note.
+// bounds a parent directory.
 const bundleRoot = "bundle"
 
 // indexFile is the application shell every route that is not a file falls back to.
 const indexFile = "index.html"
 
-// New returns the catch-all handler serving the application out of
-// files: an embedded file when the path names one, otherwise the
-// shell, with files rooted at bundle/ and the mount stripped first.
-// see the single-page-app-serving-rules-kept-from-legacy maintainer note.
+// New returns the catch-all handler serving the application out of files:
+// an embedded file when the path names one, otherwise the shell, with
+// files rooted at bundle/ and the mount stripped first.
 func New(files fs.FS, mount string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// The legacy handler works on the path with its leading slash removed,
-		// and every rule below is a rule about that string. see the
-		// single-page-app-serving-rules-kept-from-legacy maintainer note.
+		// and every rule below is a rule about that string.
 		rest := r.URL.Path
 
 		if mount != "" {
@@ -71,13 +68,11 @@ func New(files fs.FS, mount string) http.Handler {
 
 		// The legacy condition, kept character for character: it drops the last
 		// character and compares, so a route ending in / takes the fallback,
-		// exactly as on a deployed server. Reproduced rather than corrected,
-		// see the single-page-app-serving-rules-kept-from-legacy maintainer note.
+		// exactly as on a deployed server. Reproduced rather than corrected.
 		if url[:len(url)-1] != "/" {
 			if b, err := fs.ReadFile(files, path.Join(bundleRoot, indexFile)); err == nil {
 				// No Content-Type is set on this path, and none is added: the legacy
-				// handler sets none, so Go sniffs the body. see the
-				// single-page-app-serving-rules-kept-from-legacy maintainer note.
+				// handler sets none, so Go sniffs the body.
 				w.Write(b)
 
 				return
@@ -90,8 +85,7 @@ func New(files fs.FS, mount string) http.Handler {
 
 // contentTypeOf is the Content-Type the legacy handler sends: .js is
 // hardcoded to text/javascript with no charset, because Go's mime table
-// adds one. see the
-// single-page-app-serving-rules-kept-from-legacy maintainer note.
+// adds one.
 func contentTypeOf(url string) string {
 	switch path.Ext(url) {
 	case ".js":

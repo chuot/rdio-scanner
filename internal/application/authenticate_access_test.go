@@ -565,7 +565,7 @@ func TestAccessGateDoesNotGateAnUnrestrictedServer(t *testing.T) {
 
 // An access configured without systems stays gated for every command except the access code
 // even after it authenticates, because the gate recognises an unauthenticated session by the
-// absence of a scope; the why lives in the access-gating maintainer note.
+// absence of a scope.
 func TestAccessGateKeepsGatingAnAccessThatNamesNoSystems(t *testing.T) {
 	fixture := newAccessFixture()
 	fixture.addAccess(domain.Access{ID: 1, Code: "dispatch-code", Ident: "dispatch"})

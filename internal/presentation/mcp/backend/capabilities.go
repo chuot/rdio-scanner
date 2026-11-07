@@ -21,10 +21,9 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// registerCapabilities builds the catalog an assistant is handed from what
-// an administrator asks, not from REST routes: each capability lands on
-// the servers of the tiers its reach names, writes last, behind a
-// confirmation; see the capabilities-are-questions-not-routes maintainer note.
+// registerCapabilities builds the catalog an assistant is handed from what an
+// administrator asks, not from REST routes: each capability lands on the
+// servers of the tiers its reach names, writes last, behind a confirmation.
 func (s *Server) registerCapabilities(deps Deps) {
 	for _, build := range []func(*mcp.Server, Deps){
 		registerVersionResource,

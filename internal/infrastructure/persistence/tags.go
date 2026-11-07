@@ -27,7 +27,7 @@ import (
 
 // Tags is the stored set of talkgroup tags, and the configuration in effect like
 // the systems catalog and the groups are: loaded once and re-read after a save
-// persisted, per the live configuration in effect maintainer note.
+// persisted.
 type Tags struct {
 	store store
 
@@ -131,7 +131,7 @@ func readTags(ctx context.Context, s store) (domain.Tags, []string, error) {
 		}
 
 		// The signed order column is clamped to zero on the way into the unsigned
-		// field; why, recorded in the signed-column-clamp maintainer note.
+		// field; why.
 		if order < 0 {
 			clamped = append(clamped, fmt.Sprintf("tags.read: tag %d %q holds order %d: that is not a display order this server can hold, and it is read as 0",
 				id, label, order))

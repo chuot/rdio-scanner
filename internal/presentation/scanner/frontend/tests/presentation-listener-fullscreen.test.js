@@ -1,7 +1,6 @@
 // the listener's fullscreen and its keyboard route: the display fills
 // the monitor on a double-click, a gesture with no keyboard equivalent,
 // so the state needs a control the keyboard can stop on.
-// see the fullscreen-keyboard-control maintainer note.
 
 import './dom-shim.js';
 
@@ -24,7 +23,6 @@ import { findAll } from './dom-shim.js';
 // the platform's fullscreen, as the page asks for it: the way in is
 // the element's own request, the way out the document's, because the
 // element never carries it. the shim records both the page's calls.
-// see the fullscreen-exit-api maintainer note.
 function fullscreenPlatform() {
   const calls = [];
 

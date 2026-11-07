@@ -1,6 +1,6 @@
 // the action runs while its dialog and content are still on the page
-// dismissal answers nothing was picked first, so a late pick is lost
-// see the dialog-action-order maintainer note.
+// dismissal answers nothing was picked first, so a late pick is
+// lost.
 
 import './dom-shim.js';
 

@@ -235,7 +235,6 @@ class RdioSearchPanel extends HTMLElement {
     // the date field is bounded to the window the search is answering with:
     // the two ends the server names are the ends of the whole match, not of
     // the page shown.
-    // see the search-date-window-bounds maintainer note.
     const answered = list && list.count > 0 ? [list.dateStart, list.dateStop] : [];
 
     this.form.elements.date.min = toLocalInputValue(answered[0]);
@@ -288,7 +287,6 @@ class RdioSearchPanel extends HTMLElement {
 
   // one place paints the search's state: the in-flight bar and whether
   // the form is the operator's to use.
-  // see the aria-disabled-search-lock maintainer note.
   renderProgress() {
     const pending = !!this.resultsPending;
 

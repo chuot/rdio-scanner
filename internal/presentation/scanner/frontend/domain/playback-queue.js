@@ -30,7 +30,6 @@ export function filterActive(queue, livefeedMap) {
 
 // calls left to play, from the reference up to the newest row of the
 // fetched page; the page's total and offset say what the filters left.
-// see the playback-walk-page-order maintainer note.
 export function playbackQueueCount(list, callId) {
   const index = list.results.findIndex((call) => call.id === callId);
   if (index < 0) return 0;

@@ -197,7 +197,6 @@ func TestTheFfmpegBuildUsesTheContainerAndToolchainTheManifestRecords(t *testing
 // What each container target is compiled with, and where its compiled
 // programs are checked, is pinned one target at a time here, written
 // out rather than read back off the manifest, containers at digests.
-// see the ffmpeg-check-component-tests maintainer note.
 func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -446,7 +445,6 @@ func TestEveryContainerTargetProvesWhatItCompiledInWhatItsRecordNames(t *testing
 // The machine a build runs on is not part of what a container target is
 // compiled with: the container carries the target's own compiler and
 // headers, and a macOS sysroot is mounted inside the container.
-// see the targets-and-platforms maintainer note.
 func TestEveryContainerTargetIsCompiledInAContainerWhateverHostRunsTheBuild(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -892,7 +890,6 @@ func TestTheBuildRefusesToCompileAnFfmpegItHasNoToolchainFor(t *testing.T) {
 }
 
 // ffmpeg.org publishes no checksum, only the recorded digest can verify the source.
-// see the ffmpeg-source-digest-anchor maintainer note.
 func TestTheBuildRefusesASourceTarballThatIsNotTheReleaseItPinned(t *testing.T) {
 	dir := t.TempDir()
 
@@ -1140,7 +1137,6 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 	// The eight cache keys are pinned by value: a warm cache is why a
 	// release run takes minutes, and a manifest gaining fields must not
 	// drop the entries an unchanged compile produced.
-	// see the ffmpeg-cache-key-inputs maintainer note.
 	want := map[string]string{
 		"freebsd-amd64": "0c3fe1cc043cf2e23badfc2e2cd27fb2ff45799a41e83585e625d9d88ab2cfdb",
 		"linux-386":     "4fa360ed32fc35aac0bdf1c71af8c0c91b5bacef74f21fc63621860ba2cb26f2",
@@ -2126,7 +2122,6 @@ func TestTheMacOSTargetOnItsOwnHostCompilesItsOwnBinaries(t *testing.T) {
 // The compile's steps run inside the unpacked ffmpeg tree, and the tar
 // command alone runs from the repository: configure writes its build
 // files into the directory it is run from.
-// see the ffmpeg-cross-build maintainer note.
 func TestTheNativeCompileRunsItsStepsInTheTreeItUnpacked(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		manifest := bundle.ReadManifest()

@@ -26,7 +26,6 @@ import (
 
 // these checks keep the project's one licence position the only position a reader, an
 // operator, or a client can meet, and refuse stale build-route wordings too.
-// see the docs-licence-checks maintainer note.
 
 // licenceNotice is the last line of the header every source file carries. Nothing belongs after it.
 const licenceNotice = "// along with this program.  If not, see <http://www.gnu.org/licenses/>"
@@ -99,7 +98,6 @@ var guardExtensions = map[string]bool{
 
 // skippedAnywhere names directories holding no project files at all, and a built bundle
 // is skipped too because the build rewrites it from the sources and the contract.
-// see the docs-licence-checks maintainer note.
 var skippedAnywhere = map[string]bool{".git": true, "node_modules": true}
 
 func isBuiltBundle(rel string) bool {
@@ -224,7 +222,6 @@ func TestNoSourceOrDocumentStatesTheWithdrawnPosition(t *testing.T) {
 }
 
 // a source header carrying the licence notice carries nothing after it.
-// see the docs-licence-checks maintainer note.
 func TestEverySourceFileHeaderEndsAtTheLicenceNotice(t *testing.T) {
 	root := repoRoot(t)
 

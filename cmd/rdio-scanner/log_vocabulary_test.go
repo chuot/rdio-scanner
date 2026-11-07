@@ -70,8 +70,8 @@ func TestTheLogDocumentationNamesEverySubsystemTheServerHas(t *testing.T) {
 }
 
 // the walk ties the written names to the server's own source, and three
-// places name a source without writing an entry are the only ones it ignores
-// see the log-vocabulary-walk-ignores maintainer note.
+// places name a source without writing an entry are the only ones it
+// ignores.
 func TestEveryWrittenSubsystemHasAWriter(t *testing.T) {
 	const vocabulary = "../../internal/domain/log.go"
 
@@ -257,8 +257,7 @@ type logSourceChoice struct {
 }
 
 // logSourceChoices reads the select's choices from the client's source as a
-// literal, not by parsing it
-// see the log-vocabulary-client-list maintainer note.
+// literal, not by parsing it.
 func logSourceChoices(t *testing.T, source string) []logSourceChoice {
 	t.Helper()
 

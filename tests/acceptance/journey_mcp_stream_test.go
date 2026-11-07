@@ -31,7 +31,6 @@ import (
 
 // the assistant session journey weighs the request bound against a long-lived session:
 // the endpoint needs its own bound for composite capabilities and open streams.
-// see the mcp-stream-journey maintainer note.
 
 // requestBound is the bound the composition root puts on an ordinary request, named
 // here because the journey's property is about time: the assistant's session must

@@ -79,7 +79,6 @@ func readSource(repo string) (source, error) {
 // changedPaths reads the paths out of git's porcelain status: the work
 // not in the commit the release is named for. git quotes a renamed
 // path by the file it became, and status characters are skipped left.
-// see the version-changed-paths maintainer note.
 func changedPaths(status string) []string {
 	var paths []string
 
@@ -104,7 +103,6 @@ func changedPaths(status string) []string {
 // git runs one git command in one directory and returns its trimmed
 // output, keeping git's own complaint: an error that says only exit
 // status 128 sends the operator to run git to learn what the tool knew.
-// see the version-git-errors maintainer note.
 func git(repo string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repo

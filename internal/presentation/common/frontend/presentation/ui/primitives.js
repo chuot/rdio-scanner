@@ -210,8 +210,7 @@ class RdioDialog extends HTMLElement {
       button.textContent = action.label;
       button.addEventListener('click', () => {
         // The action runs while the dialog and its content are still on the page,
-        // so content that answers its own removal reaches the action:
-        // see the dialog-action-before-close maintainer note.
+        // so content that answers its own removal reaches the action.
         action.onClick?.();
         this.close();
       });
@@ -224,8 +223,7 @@ class RdioDialog extends HTMLElement {
     this.previousFocus = document.activeElement;
 
     // The Tab stops are read fresh at the moment the key is pressed, so the
-    // trap ends where the keyboard actually stands:
-    // see the trap-focus-at-keypress maintainer note.
+    // trap ends where the keyboard actually stands.
     const focusables = () => [...this.querySelectorAll('button, input, select, textarea, [tabindex]')]
       .filter((el) => !el.disabled && !isOutOfSight(el));
 

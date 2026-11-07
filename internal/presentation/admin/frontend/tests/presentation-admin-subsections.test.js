@@ -147,8 +147,7 @@ test('blacklisting a talkgroup adds its reference to the system blacklist and re
   blacklist.click();
 
   // the Blacklist entry names the reference the server compares a recording against
-  // it joins the talkgroups' blacklists:2 list, not the Systems section's copy
-  // see the blacklist-slice-coupling maintainer note.
+  // it joins the talkgroups' blacklists: 2 list, not the Systems section's copy.
   assert.equal(store.getState()['blacklists:2'].working, '7,1514', 'the entry the Blacklist action wrote is not the reference the server compares');
   assert.equal(store.getState()['section:systems'].working.find((s) => s.id === 2).blacklists, '7', 'the Blacklist action wrote the Systems section, which does not save the talkgroups it is edited beside');
   assert.equal(store.getState()['section:systems'].dirty, false, 'the Blacklist action left the Systems section asking to be saved');

@@ -109,7 +109,6 @@ func withSubtreeDeadlines(routes http.Handler, streams http.Handler, streamAt, r
 // deadlineAnswer is the response writer the deadline middleware hands the handler,
 // passing everything through to the server's own writer, including the hijack the
 // websocket endpoints take, while watching what has arrived.
-// see the deadline-response-writer maintainer note.
 type deadlineAnswer struct {
 	w        http.ResponseWriter
 	mu       sync.Mutex
@@ -208,7 +207,6 @@ func (console *consoleLog) printf(format string, a ...any) {
 // Write lets the console stand in for the plain writer the websocket endpoints
 // write whole lines to, since what they say is already a finished line and a
 // logger handed a finished line would say it twice.
-// see the console-window-and-log-copies maintainer note.
 func (console *consoleLog) Write(b []byte) (int, error) {
 	console.logger.Print(strings.TrimRight(string(b), "\n"))
 
@@ -260,7 +258,6 @@ func (events *loggedEvents) DeleteLogsBefore(ctx context.Context, before time.Ti
 // listenerSettings answers what the server requires of listeners, from the
 // configuration in effect, asked at the moment of the question so the answer
 // comes from the access list as it is now.
-// see the listener-settings-from-the-access-list maintainer note.
 type listenerSettings struct {
 	accesses ports.AccessRepository
 	options  ports.OptionsRepository
@@ -276,7 +273,6 @@ func (settings *listenerSettings) Settings() scannerbackend.Settings {
 		// A server that cannot read its own options has nothing to report about itself,
 		// so it answers with the shipped defaults, the least surprising thing to give
 		// and not a lie about a fresh deployment.
-		// see the listener-settings-from-the-access-list maintainer note.
 		options = domain.DefaultOptions()
 	}
 
@@ -285,7 +281,6 @@ func (settings *listenerSettings) Settings() scannerbackend.Settings {
 		// Not knowing who is allowed is not the same as everybody being allowed, but it
 		// is not a reason to turn every listener away: an unreadable access list is a
 		// broken deployment, and the log view is where that becomes visible.
-		// see the listener-settings-from-the-access-list maintainer note.
 		return settingsOf(options, false)
 	}
 
@@ -304,7 +299,6 @@ func settingsOf(options domain.Options, restricted bool) scannerbackend.Settings
 // optionsSecrets hands the token adapter the signing secret the server is running
 // with, read when a token is made rather than remembered, and an options read
 // that fails is reported instead of answered with an empty string.
-// see the signing-secret-choice maintainer note.
 type optionsSecrets struct {
 	options ports.OptionsRepository
 }
@@ -317,7 +311,6 @@ func (secrets optionsSecrets) Secret() (string, error) {
 		// The failure is reported, not answered with the empty string: Issue fails beside
 		// it, and the login handler's existing failure report is the one log entry the
 		// operator reads.
-		// see the signing-secret-choice maintainer note.
 		return "", fmt.Errorf("tokens: reading the signing secret: %w", err)
 	}
 
@@ -327,7 +320,6 @@ func (secrets optionsSecrets) Secret() (string, error) {
 // ingestSink hands a call a directory watcher found to the use case that decides
 // what to do with it, discarding the outcome for the same reason the watcher
 // discards the error: nobody waits for an answer about a file that appeared.
-// see the ingest-sink-capture maintainer note.
 type ingestSink struct {
 	ingest *application.IngestCallHandler
 }
@@ -343,7 +335,6 @@ func (sink *ingestSink) IngestCall(ctx context.Context, call domain.Call) error 
 // listenerChanges is what the hub tells when the number of listeners is no longer
 // what it was. The hub and the debouncer need each other, and the composition
 // root breaks the circle by giving the hub a forwarder first.
-// see the hub-and-debouncer-contract maintainer note.
 type listenerChanges struct {
 	debouncer *application.ListenerCountDebouncer
 }
@@ -361,7 +352,6 @@ func (changes *listenerChanges) ListenerChanged() {
 // catchAll routes a request that is not an API call: one that asks to become a
 // listener connection goes to the listener endpoint, everything else to the
 // application the binary carries, decided by the upgrade header alone.
-// see the catch-all-handler maintainer note.
 func catchAll(listener http.Handler, app http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if upgrade.Wanted(r) {
@@ -398,7 +388,6 @@ func pruneHourly(scheduler ports.Scheduler, prune pruneRunner) *hourlyPruning {
 // pruneRunner is the retention pass as the schedule sees it: the schedule runs
 // the pass and nothing else, and the seam is what lets a test record the context
 // the pass ran under, where the deadline is visible.
-// see the request-and-stream-deadline-constants maintainer note.
 type pruneRunner interface {
 	Handle(ctx context.Context, cmd application.PruneOldCallsCommand) (application.PruneOldCallsResult, error)
 }
@@ -423,7 +412,6 @@ func (schedule *hourlyPruning) next() {
 		// The pass runs under the deadline: a pass blocked on a database that does not
 		// answer stops at its bound, the next hour always arrives, and the failure is
 		// already in the log view for the legacy scheduler to keep going past.
-		// see the request-and-stream-deadline-constants maintainer note.
 		ctx, cancel := context.WithTimeout(context.Background(), pruneDeadline)
 		defer cancel()
 

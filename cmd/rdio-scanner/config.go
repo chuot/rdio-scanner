@@ -136,14 +136,13 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	config.CommandArgs = fs.Args()
 	config.ServiceAction = *serviceAction
 
-	// The default base directory is deliberately empty for a program sitting in
-	// a Go build cache, and an empty base directory is not inert: every relative
+	// The default base directory is deliberately empty for a program sitting in a
+	// Go build cache, and an empty base directory is not inert: every relative
 	// path is joined onto it, so the folder the server really writes its database
-	// file, its configuration file and its state into is the folder it was
-	// started in. Naming that folder here makes it the one folder the paths
-	// resolve against, the folder the write check below probes, and the folder the
-	// server reports as the one it is serving.
-	// see the base-dir-default-heuristic maintainer note.
+	// file, its configuration file and its state into is the folder it was started
+	// in. Naming that folder here makes it the one folder the paths resolve
+	// against, the folder the write check below probes, and the folder the server
+	// reports as the one it is serving.
 	if config.BaseDir == "" {
 		launchDir, err := os.Getwd()
 		if err != nil {
@@ -205,7 +204,6 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 
 	// The -cmd mode is decided during config parsing, after the ini file is
 	// read, and it outranks -admin_password.
-	// see the cmd-mode-decision-order maintainer note.
 	if config.Command != "" {
 		return config, ModeCommand, nil
 	}
@@ -215,7 +213,6 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 
 // defaultBaseDir picks the executable's directory, falling back to
 // ~/Rdio Scanner when it is not writable; go run caches are excluded.
-// see the base-dir-default-heuristic maintainer note.
 func defaultBaseDir(exePath string) string {
 	if exePath == "" {
 		return ""
@@ -334,7 +331,6 @@ func isWritableDir(dir string) bool {
 }
 
 // saveConfig writes the ini file in the legacy server's key order.
-// see the ini-file-compatibility maintainer note.
 func (config *Config) saveConfig() error {
 	ini := []string{}
 
@@ -407,7 +403,6 @@ func (config *Config) saveConfig() error {
 
 	// The mcp_server key is saved only when it is on, like bcrypt_cost only
 	// when it differs from its default.
-	// see the ini-file-compatibility maintainer note.
 	if config.McpServer {
 		ini = append(ini, "mcp_server = true")
 	}

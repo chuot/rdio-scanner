@@ -19,8 +19,7 @@ import "fmt"
 
 // This file is the surface's inventory: every capability it registers, who
 // may reach it, what it changes, and the entry point its answer comes
-// from. A capability not listed here is one nobody reviewed; see the
-// capabilities-are-questions-not-routes maintainer note.
+// from. A capability not listed here is one nobody reviewed.
 
 // Kind is what shape a capability takes.
 type Kind string

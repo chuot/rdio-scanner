@@ -134,9 +134,8 @@ const guideSource = "docs/admin-guide.html"
 const listenerGuideSource = "docs/user-guide.html"
 
 // archiveFiles reads what a target's archive carries: the program the run wrote,
-// the two guides, and the licence of the ffmpeg the binary embeds.
-// The program comes from the path this run wrote it to, never a path of its own.
-// see the ffmpeg-licence-in-archive maintainer note.
+// the two guides, and the licence of the ffmpeg the binary embeds. The program
+// comes from the path this run wrote it to, never a path of its own.
 func archiveFiles(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
 	name := "rdio-scanner" + programSuffix(tr.targetWord())
 

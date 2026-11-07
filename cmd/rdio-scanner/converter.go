@@ -22,11 +22,9 @@ import (
 
 // theHostFFmpeg is the ffmpeg a host installs for itself, used when the
 // server's own bundle produced nothing.
-// see the ffmpeg-bundle-provenance maintainer note.
 const theHostFFmpeg = "ffmpeg"
 
 // theHostFFprobe is this host's own ffprobe, used for length probes.
-// see the ffmpeg-bundle-provenance maintainer note.
 const theHostFFprobe = "ffprobe"
 
 // converterChoice is which ffmpeg this server converts with, which ffprobe it measures lengths
@@ -67,7 +65,6 @@ func (choice converterChoice) prober(workDir string) *ffmpeg.Prober {
 // theConverter picks the ffmpeg and ffprobe from what the binary's
 // bundle produced: a carried pair wins over the host's install, and a
 // pair that could not be used falls back to the host's and says why.
-// see the ffmpeg-bundle-provenance maintainer note.
 func theConverter(bundled string, bundledProbe string, failure string) converterChoice {
 	if bundled != "" && bundledProbe != "" {
 		return converterChoice{Program: bundled, ProbeProgram: bundledProbe}

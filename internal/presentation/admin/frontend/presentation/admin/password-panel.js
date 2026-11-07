@@ -1,6 +1,5 @@
 // the password panel is a Tools details panel, not a section; no username field;
-// save: disable, change, snackbar, reset on success, re-enable on failure
-// see the password-panel-flow maintainer note.
+// save: disable, change, snackbar, reset on success, re-enable on failure.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { validatePasswordChange } from '../../domain/password.js';

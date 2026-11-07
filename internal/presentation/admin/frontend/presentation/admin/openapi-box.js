@@ -1,6 +1,5 @@
 // presentational box: the section hands it a derived group; detail rows stay
-// closed by default; the box never issues requests
-// see the openapi-entrypoint-box maintainer note.
+// closed by default; the box never issues requests.
 
 class RdioAdminOpenApiBox extends HTMLElement {
   connectedCallback() {

@@ -64,7 +64,6 @@ export function computeFilterOptions(config, selection) {
 
 // search criteria: systems and talkgroups travel as references,
 // groups and tags as labels the server expands.
-// see the search-criteria-label-vs-reference maintainer note.
 export function resolveCallSearchCriteria(config, selection) {
   const criteria = {};
 

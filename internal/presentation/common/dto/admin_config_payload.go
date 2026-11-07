@@ -25,7 +25,6 @@ import (
 
 // AdminConfigPayload is the whole configuration an administrator is
 // shown: every section of it and the version of the answering server.
-// see the two-configuration-payload-shapes maintainer note.
 type AdminConfigPayload struct {
 	Accesses    []domain.Access
 	Apikeys     []domain.Apikey
@@ -54,7 +53,6 @@ func (payload AdminConfigPayload) MarshalJSON() ([]byte, error) {
 
 // AdminConfigReply is the configuration endpoint's answer: the config,
 // the needs-changing flag, and container status, set only with DOCKER.
-// see the two-configuration-payload-shapes maintainer note.
 type AdminConfigReply struct {
 	Config             AdminConfigPayload
 	PasswordNeedChange bool
@@ -76,7 +74,6 @@ func (reply AdminConfigReply) MarshalJSON() ([]byte, error) {
 }
 
 // AccessListPayload is the admin access codes; each section is also answered bare.
-// see the two-configuration-payload-shapes maintainer note.
 type AccessListPayload []domain.Access
 
 // MarshalJSON writes the access codes. An expiry is written as an
@@ -281,7 +278,6 @@ func (payload SystemListPayload) MarshalJSON() ([]byte, error) {
 
 // talkgroupEntriesForAdmin writes the talkgroups stored under a system,
 // with display order under the key 'talkgroup'.
-// see the two-configuration-payload-shapes maintainer note.
 func talkgroupEntriesForAdmin(talkgroups domain.Talkgroups) []map[string]any {
 	out := []map[string]any{}
 
@@ -330,7 +326,6 @@ func talkgroupEntriesForAdmin(talkgroups domain.Talkgroups) []map[string]any {
 
 // siteEntries writes the sites stored under a system, each reported as
 // belonging to that system.
-// see the two-configuration-payload-shapes maintainer note.
 func siteEntries(sites domain.Sites) []map[string]any {
 	out := []map[string]any{}
 
@@ -373,7 +368,6 @@ func UnitListPayload(units domain.Units) []map[string]any {
 // OptionsPayload is the settings an administrator is shown. It never
 // carries the stored password, the needs-changing flag, or the
 // session-signing secret.
-// see the two-configuration-payload-shapes maintainer note.
 type OptionsPayload domain.Options
 
 // optionsBody is the settings an administrator is shown, in the order they are written.

@@ -33,12 +33,10 @@ import (
 // Prober measures how long recordings last by running ffprobe. It is the
 // fallback for the calls the converter could not measure, and it writes the
 // audio to a temporary file because ffprobe cannot seek a stream; whether
-// ffprobe is installed is decided once at startup; see the recording-
-// duration-probe maintainer note.
+// ffprobe is installed is decided once at startup.
 type Prober struct {
 	// program is the ffprobe this prober runs: the one the server carries inside
-	// its own binary, or the host's; see the recording-duration-probe maintainer
-	// note.
+	// its own binary, or the host's.
 	program string
 
 	// workDir is the folder the probe files are written into — the same folder the server
@@ -78,8 +76,7 @@ func NewProberAt(program string, workDir string) *Prober {
 }
 
 // probedRecordingFormat is the part of the ffprobe answer this prober asked
-// for, read with the same recipe the build's ffmpeg check uses; see the
-// recording-duration-probe maintainer note.
+// for, read with the same recipe the build's ffmpeg check uses.
 type probedRecordingFormat struct {
 	Format struct {
 		Duration string `json:"duration"`
@@ -88,8 +85,7 @@ type probedRecordingFormat struct {
 
 // Probe reports how long one recording lasts, through a temporary file
 // removed on every way this ends. A recording ffprobe cannot read and a
-// deployment without ffprobe each report an error and name no length; see
-// the recording-duration-probe maintainer note.
+// deployment without ffprobe each report an error and name no length.
 func (prober *Prober) Probe(ctx context.Context, in ports.AudioFile) (time.Duration, error) {
 	if missing, err := prober.notInstalled(); missing {
 		return 0, err
@@ -152,8 +148,7 @@ func (prober *Prober) Probe(ctx context.Context, in ports.AudioFile) (time.Durat
 }
 
 // Available reports whether the program this prober was given ran its probe,
-// which is what the status view shows; see the audio-conversion maintainer
-// note.
+// which is what the status view shows.
 func (prober *Prober) Available() bool {
 	prober.mutex.Lock()
 	defer prober.mutex.Unlock()

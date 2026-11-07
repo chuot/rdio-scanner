@@ -1,7 +1,6 @@
-// The surfaces the mark is not for: the login box, the OpenAPI box,
-// the Tools file forms, the Logs filters, and the systems-selection
-// dialog. The OpenAPI asterisk is the contract speaking, not the webapp.
-// see the required-marker-pinned-surfaces maintainer note.
+// The surfaces the mark is not for: the login box, the OpenAPI box, the
+// Tools file forms, the Logs filters, and the systems-selection dialog.
+// The OpenAPI asterisk is the contract speaking, not the webapp.
 
 import './dom-shim.js';
 

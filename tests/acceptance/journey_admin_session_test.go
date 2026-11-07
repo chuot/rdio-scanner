@@ -42,7 +42,6 @@ const testRequestAddress = "192.0.2.1"
 
 // A login window that has closed, so the next sign-in is refused for a
 // lockout reason. The lockout state sits in the shared database.
-// see the admin-session-journey maintainer note.
 func TestAdministratorLoginAttemptsAreCountedAgainstTheAddress(t *testing.T) {
 	srv := startedJourneyServer(t)
 
@@ -231,7 +230,6 @@ func TestAnAdministratorRequestTheServerCannotReadIsInTheLogView(t *testing.T) {
 // The login form's error region in the admin station. The divergence behind
 // it: the region is not a fixed live region, it is built when the refusal
 // arrives.
-// see the admin-session-journey maintainer note.
 func TestSavingTheWholeConfigurationAndSavingEachSectionReachTheSameConfiguration(t *testing.T) {
 	fixture := readCaptureFixture(t)
 
@@ -280,7 +278,6 @@ func TestSavingTheWholeConfigurationAndSavingEachSectionReachTheSameConfiguratio
 
 	// The API session query is the source of truth for what the person should be
 	// told, and the check is the visible text the browser shows.
-	// see the admin-session-journey maintainer note.
 	if written := canonicalConfiguration(t, want); written != want {
 		t.Fatalf("the captured answer is not written the way the server writes one:\n  %s\nfrom\n  %s", written, want)
 	}

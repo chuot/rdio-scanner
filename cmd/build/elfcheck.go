@@ -27,7 +27,6 @@ import (
 // The ELF half of the conformance reads: header, program headers, comments. No target program
 // runs on the host: the file's own words are the proof. Shipped files keep the proof: strip
 // leaves the comment section intact.
-// see the elf-check-static-rule maintainer note.
 
 const (
 	elfClass32 = 1

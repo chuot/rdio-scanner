@@ -33,8 +33,7 @@ import (
 
 // The keepalive intervals a listener connection is held to. They are the
 // protocol's own values, not choices this server makes: a client is
-// written to expect this schedule; see the listener-keepalive-intervals-
-// are-the-protocols maintainer note.
+// written to expect this schedule.
 const (
 	// pongWait is how long a connection may go without answering before it is given up on.
 	pongWait = 60 * time.Second
@@ -58,8 +57,7 @@ const (
 	sendBuffer = 256
 
 	// accessAttemptsWindow is the interval an address's access-code attempts
-	// are measured over, the same budget shape as the login one; see the
-	// per-address-access-code-attempt-budget maintainer note.
+	// are measured over, the same budget shape as the login one.
 	accessAttemptsWindow = 10 * time.Minute
 
 	// closeWorkers is how many connections the stopping hub says goodbye to at the same
@@ -81,16 +79,14 @@ type Settings struct {
 // ServerSettings answers what the server is currently configured to do
 // about listeners, asked at the moment of the question rather than
 // remembered by the hub: the settings can change while listeners are
-// already connected, and those listeners are who the change affects;
-// see the broadcast-delivery-gating maintainer note.
+// already connected, and those listeners are who the change affects.
 type ServerSettings interface {
 	Settings() Settings
 }
 
 // ListenerChanges is what the hub says when a listener joins or leaves:
 // only that the listener count changed. Whoever is told answers that
-// occurrence on its own schedule, debouncing repeated connects; see the
-// a-listener-is-a-registered-session maintainer note.
+// occurrence on its own schedule, debouncing repeated connects.
 type ListenerChanges interface {
 	ListenerChanged()
 }
@@ -99,14 +95,13 @@ type ListenerChanges interface {
 // a failure to the server log and ignores it: a frame the server cannot
 // act on is not a reason to end the connection it arrived on. The
 // context belongs to the session, which outlives the request that opened
-// it; see the a-bad-frame-does-not-end-the-connection maintainer note.
+// it.
 type Dispatch func(ctx context.Context, clientID string, message Message) error
 
 // Hub is the set of listener connections the server is holding, and the
 // thing the application talks to when it has something to tell listeners.
 // A session is a taken-over connection; only a registered session is a
-// listener, counted and sent calls; see the a-listener-is-a-
-// registered-session maintainer note.
+// listener, counted and sent calls.
 type Hub struct {
 	settings ServerSettings
 	changes  ListenerChanges
@@ -114,8 +109,7 @@ type Hub struct {
 
 	// clock is the server's one clock, injected into every writer, so log
 	// entries order against each other. The hub used to stamp its entries
-	// with the machine's wall clock; see the listener-log-entries-share-the-
-	// server-clock maintainer note.
+	// with the machine's wall clock.
 	clock ports.Clock
 
 	mutex    sync.Mutex
@@ -126,26 +120,22 @@ type Hub struct {
 	// accessAttempts counts access-code attempts per address, in a window
 	// that ages like the login budget. The per-session counter alone is
 	// bypassable by reconnecting, so the address counter is what makes
-	// "five tries" mean five tries per machine; see the per-address-access-
-	// code-attempt-budget maintainer note.
+	// "five tries" mean five tries per machine.
 	accessAttempts map[string]*accessWindow
 
 	// held counts the goroutines reading taken-over connections. A stopping
 	// server must finish them before it closes the database the log lives
-	// in; see the the-hub-close-drains-log-entries-before-the-database
-	// maintainer note.
+	// in.
 	held sync.WaitGroup
 
 	// closed marks a hub whose close has run: a connection arriving after it
 	// is refused, because attaching one would add goroutines to a WaitGroup
-	// the close is already waiting on; see the the-hub-close-drains-log-
-	// entries-before-the-database maintainer note.
+	// the close is already waiting on.
 	closed bool
 
 	// The intervals above are what every hub starts with, held as fields so
 	// this package's tests can shorten them; nothing outside this package
-	// may pick values that break the protocol; see the listener-keepalive-
-	// intervals-are-the-protocols maintainer note.
+	// may pick values that break the protocol.
 	handshakeWait time.Duration
 	pongWait      time.Duration
 	pingPeriod    time.Duration
@@ -158,8 +148,7 @@ var _ ports.Hub = (*Hub)(nil)
 // who it tells about listener changes, where its log goes, and the
 // server's clock to stamp the entries it writes. The hub keeps no
 // console of its own: every line it says about a connection goes into
-// the server log, which the composition root reads out loud; see the
-// listener-log-entries-share-the-server-clock maintainer note.
+// the server log, which the composition root reads out loud.
 func NewHub(settings ServerSettings, changes ListenerChanges, logs ports.LogRepository, clock ports.Clock) *Hub {
 	return &Hub{
 		accessAttempts: map[string]*accessWindow{},
@@ -189,8 +178,7 @@ type accessWindow struct {
 // Attach takes over one upgraded listener connection and returns the
 // session identifier it is known by. It reports false, closing the
 // connection in silence, when the server already holds as many
-// connections as it allows; see the a-listener-is-a-registered-session
-// maintainer note.
+// connections as it allows.
 func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatch) (string, bool) {
 	if conn == nil {
 		return "", false
@@ -217,8 +205,7 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 
 	// The admission gate is on the connections the server holds, not the
 	// ones that finished registering: a client that never answers must not
-	// keep a slot open; see the a-listener-is-a-registered-session
-	// maintainer note.
+	// keep a slot open.
 	if uint(len(hub.sessions)) >= max {
 		hub.mutex.Unlock()
 
@@ -238,8 +225,7 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 
 	// Both goroutines a connection runs are counted, because both write to
 	// the server log, and closing the hub waits for them so no entry is
-	// still on its way when the log's database closes; see the the-hub-
-	// close-drains-log-entries-before-the-database maintainer note.
+	// still on its way when the log's database closes.
 	hub.held.Add(2)
 
 	go func() {
@@ -260,8 +246,7 @@ func (hub *Hub) Attach(conn *websocket.Conn, remoteAddr string, dispatch Dispatc
 // BroadcastCall delivers a recorded call to every listener it is for:
 // the listener's live-watch selection must ask for that system or
 // talkgroup, and on a server that requires access codes the listener's
-// access must grant it; see the broadcast-delivery-gating maintainer
-// note.
+// access must grant it.
 func (hub *Hub) BroadcastCall(call domain.Call) {
 	settings := hub.settings.Settings()
 
@@ -310,8 +295,7 @@ func (hub *Hub) SendConfig(clientID string, cfg ports.ConfigSnapshot) {
 
 // BroadcastConfig delivers the configuration to every listener, each
 // scoped to what that listener is allowed to see. On a server that
-// requires access codes it arrives as a fresh request for the code;
-// see the broadcast-delivery-gating maintainer note.
+// requires access codes it arrives as a fresh request for the code.
 func (hub *Hub) BroadcastConfig(cfg ports.ConfigSnapshot) {
 	settings := hub.settings.Settings()
 
@@ -453,8 +437,7 @@ func (hub *Hub) CloseClient(clientID string, code int) {
 // Close ends every connection the server has taken over and reports
 // each one leaving, filing the departure while the log can still be
 // written, and making the goodbyes together within the shutdown
-// deadline; see the the-hub-close-drains-log-entries-before-the-
-// database maintainer note.
+// deadline.
 func (hub *Hub) Close(ctx context.Context) {
 	hub.mutex.Lock()
 
@@ -488,8 +471,7 @@ func (hub *Hub) Close(ctx context.Context) {
 			// The close code is the protocol's answer to a server that is going
 			// away: a listener that reads it knows the connection ended at the far
 			// end and can look for the next server instead of waiting out a read
-			// timeout; see the the-hub-close-drains-log-entries-before-the-
-			// database maintainer note.
+			// timeout.
 			hub.deliver(session, delivery{code: websocket.CloseGoingAway})
 		}(session)
 	}
@@ -498,8 +480,7 @@ func (hub *Hub) Close(ctx context.Context) {
 
 	// The close also waits for the goroutines that were reading and writing
 	// those connections, so it reports its own departures without leaving
-	// someone else's on its way; see the the-hub-close-drains-log-entries-
-	// before-the-database maintainer note.
+	// someone else's on its way.
 	hub.held.Wait()
 }
 
@@ -550,8 +531,7 @@ func (hub *Hub) RecordAccessAttempt(clientID string) uint {
 
 // ResetAccessAttempts clears a session's attempt counter, which happens
 // only when an access code is accepted, and with it the history of the
-// address the session connected from; see the per-address-access-code-
-// attempt-budget maintainer note.
+// address the session connected from.
 func (hub *Hub) ResetAccessAttempts(clientID string) {
 	hub.mutex.Lock()
 	defer hub.mutex.Unlock()
@@ -564,8 +544,7 @@ func (hub *Hub) ResetAccessAttempts(clientID string) {
 
 // RecordAddressAccessAttempt counts one attempt against the address the
 // session connected from and reports the attempts spent in the current
-// window; see the per-address-access-code-attempt-budget maintainer
-// note.
+// window.
 func (hub *Hub) RecordAddressAccessAttempt(clientID string) uint {
 	hub.mutex.Lock()
 	defer hub.mutex.Unlock()
@@ -601,8 +580,7 @@ func (hub *Hub) RecordAddressAccessAttempt(clientID string) uint {
 }
 
 // ShouldWarnAccessAttempt reports whether the refused-code warning is
-// due for this session's address, once per window; see the per-address-
-// access-code-attempt-budget maintainer note.
+// due for this session's address, once per window.
 func (hub *Hub) ShouldWarnAccessAttempt(clientID string) bool {
 	hub.mutex.Lock()
 	defer hub.mutex.Unlock()
@@ -690,8 +668,7 @@ func configDelivery(session *listener, cfg ports.ConfigSnapshot) delivery {
 // deliver hands one thing to a session's writer. A stopped writer is
 // skipped, and a send waiting for room stops the moment the writer
 // stops, while a merely slow listener does hold its delivery. The hub
-// lock is not held while this waits; see the deliveries-wait-outside-
-// the-hub-lock maintainer note.
+// lock is not held while this waits.
 func (hub *Hub) deliver(session *listener, out delivery) {
 	if session.stopped.Load() {
 		return
@@ -792,8 +769,7 @@ type delivery struct {
 
 // queued is what a broadcast hands one session: frames chosen while the
 // hub lock is held, because choosing them reads what that session may
-// see, and delivered after the lock is given back; see the deliveries-
-// wait-outside-the-hub-lock maintainer note.
+// see, and delivered after the lock is given back.
 type queued struct {
 	frames  []Message
 	session *listener
@@ -855,8 +831,7 @@ func newListener(hub *Hub, id string, conn *websocket.Conn, remoteAddr string) *
 
 // read takes the frames a session sends, in order, and hands each to
 // the server behind the hub. A frame the server cannot read or act on
-// is filed in the log and skipped, keeping the connection open; see
-// the a-bad-frame-does-not-end-the-connection maintainer note.
+// is filed in the log and skipped, keeping the connection open.
 func (session *listener) read(dispatch Dispatch) {
 	defer func() {
 		session.hub.disconnect(session)

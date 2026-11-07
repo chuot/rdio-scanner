@@ -299,8 +299,7 @@ func (saver configurationSaver) announce(ctx context.Context, section ConfigSect
 }
 
 // reportFailure records a section the server could not store, followed by the failure's own
-// text: the error names the statement that failed, which is the part an operator needs —
-// see the configuration-save-failure maintainer note.
+// text: the error names the statement that failed, which is the part an operator needs.
 func (saver configurationSaver) reportFailure(ctx context.Context, err error) {
 	saver.writeLog(ctx, domain.LogLevelError, domain.LogSourceConfig, fmt.Sprintf("the configuration could not be saved: %s", err))
 }
@@ -352,8 +351,7 @@ func (handler *UpdateConfigurationHandler) Handle(ctx context.Context, cmd Updat
 		// Every section this save named is in the store, and reading back the configuration
 		// that resulted is what failed. The result carries both halves — which sections
 		// reached the store, and that the save as a whole did not complete — because the two
-		// answers send an administrator to different actions — see the configuration-save
-		// failure maintainer note.
+		// answers send an administrator to different actions.
 		result.Outcome = ConfigurationSaveFailed
 
 		handler.saver.reportFailure(ctx, err)
@@ -367,9 +365,9 @@ func (handler *UpdateConfigurationHandler) Handle(ctx context.Context, cmd Updat
 }
 
 // watchesToStart decides which directories the server watches after a whole-configuration
-// save. Two preserved legacy quirks decide it, both recorded in the dirwatch save maintainer
-// note: a save that says nothing about dirwatch leaves the server watching nothing, and when
-// the section is named the watchers follow the store, except on a failed save.
+// save. Two preserved legacy quirks decide it, a save that says nothing about dirwatch
+// leaves the server watching nothing, and when the section is named the watchers follow the
+// store, except on a failed save.
 func (handler *UpdateConfigurationHandler) watchesToStart(ctx context.Context, changes ConfigurationChanges, saved map[ConfigSection]bool) domain.Dirwatches {
 	if !changes.names(DirwatchSection) {
 		return domain.Dirwatches{}
@@ -436,8 +434,7 @@ func (handler *UpdateConfigurationSectionHandler) Handle(ctx context.Context, cm
 		// The section the page submitted is in the store, and reading back the configuration
 		// that resulted is what failed. The page still gets the same 417 a refused section
 		// gets, so the distinction lives in the use case's answer and the server's log line:
-		// the section named as stored is one the server is now running with — see
-		// the configuration-save-failure maintainer note.
+		// the section named as stored is one the server is now running with.
 		result.Outcome = ConfigurationSaveFailed
 
 		handler.saver.reportFailure(ctx, err)

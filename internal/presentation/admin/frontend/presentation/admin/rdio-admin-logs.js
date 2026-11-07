@@ -1,6 +1,5 @@
 // rdio-admin-logs: logs section, not a config section: no section bar, no store slice,
-// fresh element per open, client pages of 10 over server pages of 200
-// see the logs-local-query-state maintainer note.
+// fresh element per open, client pages of 10 over server pages of 200.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import {

@@ -1,6 +1,5 @@
 // tri-state systems/talkgroups selection: cascades check in all four directions;
-// ids are business refs; indeterminate states and labels are display-only
-// see the systems-selection-model maintainer note.
+// ids are business refs; indeterminate states and labels are display-only.
 
 export function createSelectionModel(config) {
   const groups = (config.groups ?? []).map((group) => ({ id: group.id, label: group.label, checked: false }));

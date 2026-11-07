@@ -1,6 +1,5 @@
 // systems tree validation: pure rules, system to sites, talkgroups, and units;
-// cross-refs check the current groups/tags working copies, arrays included
-// see the systems-foreign-key-validation maintainer note.
+// cross-refs check the current groups/tags working copies, arrays included.
 
 const BLACKLISTS_PATTERN = /^[0-9]+(,[0-9]+)*$/;
 

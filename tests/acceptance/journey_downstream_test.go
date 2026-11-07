@@ -35,7 +35,6 @@ import (
 // A downstream server is another Rdio Scanner this one re-posts
 // its calls to; these tests pin the real arrangement: downstreams
 // as database rows and a receiving server on the loopback.
-// see the downstream-journey maintainer note.
 
 // repostKey is the credential these tests upload with, and
 // repostOpenKey the one the receiving server accepts it under:

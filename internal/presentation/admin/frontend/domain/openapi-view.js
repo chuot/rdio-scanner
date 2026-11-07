@@ -1,6 +1,6 @@
 // the OpenAPI groups come from the contract itself: answered endpoints only;
-// schemas read one level deep, and an undefined reference is named, not dropped
-// see the openapi-contract-grouping maintainer note.
+// schemas read one level deep, and an undefined reference is named, not
+// dropped.
 
 const GROUPS = [
   { title: 'Authentication', icon: 'vpn_key', match: (path) => path === '/api/admin/login' || path === '/api/admin/logout' },

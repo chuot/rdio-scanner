@@ -1,6 +1,5 @@
 // the log view's auto-refresh decision: no clock, no DOM; the element hands in the
-// poll and the timer
-// see the log-refresh-scheduling maintainer note.
+// poll and the timer.
 
 export const LOG_REFRESH_DELAY = 10000;
 

@@ -22,7 +22,6 @@ import (
 
 // The forwarding header is the peer's claim, not a fact. It is honored
 // only from named proxies, else clients pick the address limits key on.
-// see the trusted-proxy-selection-is-not-a-security-check maintainer note.
 
 func TestAddressHonorsTheForwardedEntryFromATrustedProxy(t *testing.T) {
 	trusted, err := ParseTrusted("127.0.0.0/8")

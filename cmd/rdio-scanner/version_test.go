@@ -51,8 +51,7 @@ func TestVersionModePrintsVersionAndExitsWithoutError(t *testing.T) {
 func TestVersionMatchesThePinnedWireContract(t *testing.T) {
 	// the pinned wire contract compares the core the build system resolves from
 	// VERSION.txt against the version inside the captured payload: a fallback is
-	// not a release a contract can pin, and moving VERSION.txt without moving the
-	// see the version-pinned-wire-contract maintainer note.
+	// not a release a contract can pin, and moving VERSION.txt without moving.
 	resolved, err := buildinfo.ReadCore(filepath.Join("..", "..", "VERSION.txt"))
 	if err != nil {
 		t.Fatalf("VERSION.txt at the repository root: %v", err)
@@ -98,8 +97,7 @@ func TestThePinnedWireContractComparesCoresAndNotWholeVersions(t *testing.T) {
 }
 
 // capturedVersionAnswer is the answer a legacy server put on the wire for a
-// version request, recorded byte for byte inside the test that compares it
-// see the legacy-captured-version-answer maintainer note.
+// version request, recorded byte for byte inside the test that compares it.
 const capturedVersionAnswer = `{"branding":"Capture Dispatch","email":"dispatch@example.com","version":"8.0.0"}`
 
 // pinnedWireCore reads the core of the version out of the recorded answer.

@@ -2034,8 +2034,8 @@ func testServerOn(t *testing.T, out io.Writer) *Server {
 }
 
 // the test reads the archiver's own state and the rows that record the
-// capture, because the archiver keeps a stream url copy that can drift
-// see the test-helper-documentation maintainer note.
+// capture, because the archiver keeps a stream url copy that can
+// drift.
 func startedTestServer(t *testing.T) *Server {
 	t.Helper()
 
@@ -2161,8 +2161,7 @@ func (s *Server) get(path string) *httptest.ResponseRecorder {
 }
 
 // the archived stream may be a different size or type from a live one,
-// and the endpoint has to answer for both the same way
-// see the test-helper-documentation maintainer note.
+// and the endpoint has to answer for both the same way.
 func (s *Server) askForAnUpgrade(path string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 
@@ -2222,8 +2221,7 @@ func (s *Server) getAuthorized(path, token string) *httptest.ResponseRecorder {
 }
 
 // the endpoint reads the rows that record the capture rather than the
-// catalog, so it keeps answering after the catalog drops the station
-// see the test-helper-documentation maintainer note.
+// catalog, so it keeps answering after the catalog drops the station.
 func (s *Server) dial(t *testing.T, path string) *websocket.Conn {
 	t.Helper()
 
@@ -2245,8 +2243,8 @@ func (s *Server) dial(t *testing.T, path string) *websocket.Conn {
 }
 
 // the endpoint reads the rows that record the capture rather than the
-// catalog: this is what keeps a stream reachable after its station is gone
-// see the test-helper-documentation maintainer note.
+// catalog: this is what keeps a stream reachable after its station is
+// gone.
 func closedWith(t *testing.T, conn *websocket.Conn) func() int {
 	t.Helper()
 
@@ -2414,8 +2412,7 @@ func readOptionValue(t *testing.T, db *sql.DB, key string) string {
 }
 
 // the test deletes the station through the catalog and then asks the
-// endpoint for the archived stream it must still serve
-// see the test-helper-documentation maintainer note.
+// endpoint for the archived stream it must still serve.
 func seedUploadTarget(t *testing.T, db *sql.DB, hold uint, key string) {
 	t.Helper()
 
@@ -2437,8 +2434,7 @@ func seedUploadTarget(t *testing.T, db *sql.DB, hold uint, key string) {
 }
 
 // the helper builds a stream url from the fixture's own table of stations,
-// the table its claims are read back from
-// see the legacy-fixture-statements maintainer note.
+// the table its claims are read back.
 var damagedMigratedStatements = []string{
 	`CREATE TABLE "callFrequencies" (
     "callFrequencyId" integer not null primary key autoincrement,
@@ -2537,8 +2533,7 @@ var damagedMigratedStatements = []string{
 }
 
 // the helper reads the fixture's claims from the source rather than from
-// memory, so a change to the fixture reaches this test on its own
-// see the legacy-fixture-statements maintainer note.
+// memory, so a change to the fixture reaches this test on its own.
 var damagedCrashedStatements = []string{
 	`CREATE TABLE "callFrequencies" (
     "callFrequencyId" integer not null primary key autoincrement,
@@ -2634,8 +2629,7 @@ var damagedCrashedStatements = []string{
 }
 
 // the helper reads the fixture's claims once and keeps them for the test's
-// lifetime: a rewrite mid run cannot change them underneath the test
-// see the legacy-fixture-statements maintainer note.
+// lifetime: a rewrite mid run cannot change them underneath the test.
 var legacyV6Statements = []string{
 	"CREATE TABLE `rdioScannerAccesses` (`_id` integer primary key autoincrement, `code` varchar(255) not null unique, `expiration` datetime, `ident` varchar(255), `limit` integer, `order` integer, `systems` text not null);",
 	"CREATE TABLE `rdioScannerApiKeys` (`_id` integer primary key autoincrement, `disabled` tinyint(1) default 0, `ident` varchar(255), `key` varchar(255) not null unique, `order` integer, `systems` text not null);",
@@ -2715,8 +2709,8 @@ var legacyV6Statements = []string{
 }
 
 // the helper reads the fixture's claims once and keeps them: the fixture
-// may be rewritten mid run, so a second read could disagree with the first
-// see the test-helper-documentation maintainer note.
+// may be rewritten mid run, so a second read could disagree with the
+// first.
 func writeRecordedDatabase(t *testing.T, statements []string) string {
 	t.Helper()
 
@@ -2739,8 +2733,8 @@ func writeRecordedDatabase(t *testing.T, statements []string) string {
 }
 
 // the helper builds a stream url from the fixture's own table of
-// stations, so a url it builds has to agree with the fixture's claims
-// see the test-helper-documentation maintainer note.
+// stations, so a url it builds has to agree with the fixture's
+// claims.
 func aFreePort(t *testing.T) string {
 	t.Helper()
 
@@ -2843,8 +2837,7 @@ func waitsForAddress(t *testing.T, addr string) bool {
 }
 
 // the server's in-flight count is read from the inside, not from the
-// outside
-// see the serving-list-race maintainer note.
+// outside.
 func TestStartingAndStoppingATLSServerIsRaceFree(t *testing.T) {
 	ctx := context.Background()
 

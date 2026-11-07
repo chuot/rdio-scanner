@@ -1,7 +1,6 @@
 // the smallest DOM the listener presentation components need outside a
 // browser: elements, attributes, events, and the inert application
 // globals a component test must not let reach the real world.
-// see the dom-shim-scope maintainer note.
 
 const FORM_FIELD = 'rdio-form-field';
 
@@ -39,7 +38,6 @@ class ShimNode {
   // dataset and the data-* attributes are one thing in a browser, so a
   // control marked through dataset and a control marked in markup
   // answer the same reading.
-  // see the dom-shim-one-node-facts maintainer note.
   get dataset() {
     const node = this;
 
@@ -63,7 +61,6 @@ class ShimNode {
 
   // a control's name is one fact in a browser: the markup's attribute is
   // the property the page and the form's handler read off the target.
-  // see the dom-shim-one-node-facts maintainer note.
   get name() {
     return this.attributes.name ?? '';
   }
@@ -75,7 +72,6 @@ class ShimNode {
   // a date field's bounds are one fact, like its name: the markup's
   // `min` and `max` are the properties the page reads and writes, and
   // the field accepts only the wall-clock shape they are written in.
-  // see the dom-shim-one-node-facts maintainer note.
   get min() {
     return this.attributes.min ?? '';
   }
@@ -94,7 +90,6 @@ class ShimNode {
 
   // hidden is one fact in a browser: the attribute the markup carries
   // and the property the page sets are the same state.
-  // see the dom-shim-one-node-facts maintainer note.
   get hidden() {
     return this.attributes.hidden !== undefined;
   }
@@ -140,7 +135,6 @@ class ShimNode {
   // a browser puts the keyboard at the top of the document when the
   // control it stood on leaves the page; keeping focus on a detached
   // node lets a test read a position no operator ever has.
-  // see the dom-shim-one-node-facts maintainer note.
   dropFocusUnder() {
     const active = globalThis.document.activeElement;
 
@@ -549,7 +543,6 @@ function parseHTML(html) {
     for (const attr of token.replace(/^<[a-zA-Z][\w-]*/, '').replace(/\/?>$/, '').matchAll(/([a-zA-Z-]+)(?:="([^"]*)")?/g)) {
       // a bare attribute is a present attribute with an empty value, and
       // a quoted-only parser answers those markups as absent.
-      // see the dom-shim-parser maintainer note.
       node.attributes[attr[1]] = attr[2] ?? '';
 
       if (attr[1] === 'class') node.className = attr[2] ?? '';

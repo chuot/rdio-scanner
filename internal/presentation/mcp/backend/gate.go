@@ -28,10 +28,9 @@ import (
 // credential, one header, across every stateless entry point.
 const accessCodeHeader = "X-Access-Code"
 
-// Tier is what a caller is entitled to do through this surface: the two
-// tiers the product has, the listener and the administrator. An
-// assistant is not a third kind of user and is handed no credential of
-// its own; see the credential-gate-decides-the-tier-before-the-protocol maintainer note.
+// Tier is what a caller is entitled to do through this surface: the two tiers the
+// product has, the listener and the administrator. An assistant is not a third kind of
+// user and is handed no credential of its own.
 type Tier uint8
 
 const (
@@ -45,10 +44,9 @@ const (
 	TierFull
 )
 
-// Caller is who reached the surface: the tier their credential opened and,
-// for a listener, the identity and scope it is configured with, which
-// capabilities answer with; an administrator's credential is unscoped.
-// see the credential-gate-decides-the-tier-before-the-protocol maintainer note.
+// Caller is who reached the surface: the tier their credential opened and, for
+// a listener, the identity and scope it is configured with, which capabilities
+// answer with; an administrator's credential is unscoped.
 type Caller struct {
 	Tier  Tier
 	Ident string
@@ -74,8 +72,7 @@ func CallerOf(ctx context.Context) (Caller, bool) {
 
 // Gate is the rule that decides who may reach the capabilities, and the
 // tier they reach them as: the same rule the call history endpoints
-// apply, in the same order, answered by the same empty 401; see the
-// credential-gate-decides-the-tier-before-the-protocol maintainer note.
+// apply, in the same order, answered by the same empty 401.
 func (s *Server) Gate() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -29,7 +29,6 @@ import (
 // The delay tests: a call on a talkgroup that holds its calls back
 // is told to nobody until the hold runs out, and a new server picks
 // up the calls the old one was holding.
-// see the delay-journey maintainer note.
 
 // heldUploadKey is the credential the delay tests upload with,
 // scoped to every system so the run is about the hold

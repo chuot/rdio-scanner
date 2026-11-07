@@ -6,8 +6,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // the scope dialog's tree scrolls itself: the box has no height limit
-// scrolling the tree keeps the title and the actions in view while rows move
-// see the scope-dialog-scroll maintainer note.
+// scrolling the tree keeps the title and the actions in view while rows
+// move.
 const presentationDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const STYLESHEETS = {

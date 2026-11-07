@@ -30,7 +30,6 @@ import (
 // The reads hold against files: no host runs these targets. The fixtures are the shapes each
 // read refuses plus two measured pairs: the FreeBSD pair the pinned recipe produced and the
 // published linux-amd64 pair to refuse.
-// see the elf-check-fixtures maintainer note.
 
 // program headers of the two measured pairs, read out of the files with readelf -lW: the
 // loader-linked-in read is asked of a file with these.
@@ -471,7 +470,6 @@ const theContainerMachineHasTheseCores = "4"
 // aBuildCompilingInAContainer stands the ffmpeg phase on a host with the container program:
 // the steps write the test's pair into the mounted directory, and the build's own read then
 // reaches real files.
-// see the container-compile-test-harness maintainer note.
 func aBuildCompilingInAContainer(t *testing.T, repo string, target string, produced func(t *testing.T, dir string, name string)) (*tool, *bytes.Buffer) {
 	t.Helper()
 

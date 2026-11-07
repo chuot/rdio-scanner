@@ -1,6 +1,5 @@
 // a named interval is taken off the clock; its re-arming chain cannot keep the test alive
-// holding it lets a test fire the poll instead of waiting on the wall clock
-// see the held-refresh-interval maintainer note.
+// holding it lets a test fire the poll instead of waiting on the wall clock.
 export function holdRefreshInterval(delay) {
   const realSetTimeout = globalThis.setTimeout;
   const realClearTimeout = globalThis.clearTimeout;

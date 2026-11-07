@@ -345,7 +345,6 @@ func TestACleanRunRemovesTheFfmpegScratchAndLeavesTheCacheStanding(t *testing.T)
 
 // a clean run prunes cache entries whose key no target the manifest records computes;
 // age decides nothing, only whether the manifest as it is now could ask for the entry.
-// see the ffmpeg-cache-pruning maintainer note.
 func TestACleanRunPrunesTheCacheEntriesTheManifestCannotProduce(t *testing.T) {
 	repo := t.TempDir()
 
@@ -532,7 +531,6 @@ func TestTheVersionFileAndTheModuleFilesAreSourcesOfTheServerBinary(t *testing.T
 }
 
 // setMTime gives a test-made tree the file dates the suite relies on.
-// see the build-test-harness maintainer note.
 func setMTime(t *testing.T, repo string, path string, when time.Time) {
 	t.Helper()
 
@@ -577,7 +575,6 @@ func TestAReleaseRunAsksWhetherTheServerBinaryIsCurrent(t *testing.T) {
 
 // every part the phases ask for is wired into the tool newTool makes,
 // and the order the wiring is written in is part of what this pins.
-// see the tool-wiring-order maintainer note.
 func TestTheBuildToolCarriesEveryPartThePhasesAskFor(t *testing.T) {
 	tl := newTool("/repo")
 
@@ -604,7 +601,6 @@ func TestTheBuildToolCarriesEveryPartThePhasesAskFor(t *testing.T) {
 // bound phases carry copies of the tool, so the wiring is measured by asking a
 // bound phase to run a drop's binaries here: a cross-architecture drop is refused
 // by naming its host, and not a crash in the operator's terminal.
-// see the tool-wiring-order maintainer note.
 func TestTheToolTheCommandRunsRunsTheBinariesOfADropOnThisMachine(t *testing.T) {
 	repo := t.TempDir()
 
@@ -653,7 +649,6 @@ func TestTheToolTheCommandRunsRunsTheBinariesOfADropOnThisMachine(t *testing.T) 
 
 // a step's own output reaches the operator's streams as the program wrote it,
 // and git writes to both streams as a prerequisite of this build.
-// see the operator-streams maintainer note.
 func TestAStepsOwnOutputReachesTheOperator(t *testing.T) {
 	dir := scratchWithoutARepository(t)
 

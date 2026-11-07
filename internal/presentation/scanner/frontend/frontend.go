@@ -23,14 +23,12 @@ import (
 	"rdio-scanner/internal/presentation/common/spa"
 )
 
-// bundle is the scanner application compiled into the binary; see the
-// webapp-bundle-location maintainer note.
+// bundle is the scanner application compiled into the binary.
 //
 //go:embed all:bundle
 var bundle embed.FS
 
-// bundleIsBuilt is the bundle question asked of a file set; see the
-// webapp-bundle-location maintainer note.
+// bundleIsBuilt is the bundle question asked of a file set.
 func bundleIsBuilt(files fs.FS) bool {
 	_, err := fs.Stat(files, "bundle/index.html")
 
@@ -43,7 +41,7 @@ func BundleIsBuilt() bool {
 }
 
 // Embedded returns the catch-all handler for the scanner application, served at the
-// listener page root; see the webapp-bundle-location maintainer note.
+// listener page root.
 func Embedded() http.Handler {
 	return spa.New(bundle, "")
 }

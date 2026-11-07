@@ -22,20 +22,19 @@ import (
 	"rdio-scanner/internal/application/ports"
 )
 
-// CallSearchPagePayload is one search answer: the page and the criteria the
-// listener asked with, echoed back. see the call-search-page-ordering maintainer note.
+// CallSearchPagePayload is one search answer: the page and the criteria the listener
+// asked with, echoed back.
 type CallSearchPagePayload struct {
 	Page ports.CallSearchPage
 
-	// Criteria is the search as it arrived on the wire, not the
-	// search the query ran. see the call-search-page-ordering maintainer note.
+	// Criteria is the search as it arrived on the wire, not the search the
+	// query ran.
 	Criteria map[string]any
 }
 
-// MarshalJSON writes the answer. The legacy server marshaled
-// this one from a struct, so keys keep declaration order:
-// count, dateStart, dateStop, options, results, a row as id,
-// system, talkgroup, dateTime. see the call-search-page-ordering maintainer note.
+// MarshalJSON writes the answer. The legacy server marshaled this one from a
+// struct, so keys keep declaration order: count, dateStart, dateStop, options,
+// results, a row as id, system, talkgroup, dateTime.
 func (payload CallSearchPagePayload) MarshalJSON() ([]byte, error) {
 	return json.Marshal(callSearchEnvelope{
 		Count:     payload.Page.Count,
@@ -55,10 +54,9 @@ type callSearchEnvelope struct {
 	Results   []CallSearchRow `json:"results"`
 }
 
-// CallSearchRow is one call in a history page: the four things a
-// history view lists. The system is the system reference itself,
-// not an object holding one, the moment keeps milliseconds, and
-// the length is on every row. see the call-search-page-ordering maintainer note.
+// CallSearchRow is one call in a history page: the four things a history view
+// lists. The system is the system reference itself, not an object holding one,
+// the moment keeps milliseconds, and the length is on every row.
 type CallSearchRow struct {
 	ID          uint64          `json:"id"`
 	System      uint            `json:"system"`
@@ -86,7 +84,6 @@ func callSearchRows(summaries []ports.CallSummary) []CallSearchRow {
 // callSearchEcho is the criteria the listener asked with, in the
 // order the legacy server declares them. An absent criterion is
 // left out; a zero criterion that was asked for is still there.
-// see the call-search-page-ordering maintainer note.
 type callSearchEcho struct {
 	Date      any `json:"date,omitempty"`
 	Group     any `json:"group,omitempty"`
@@ -101,7 +98,6 @@ type callSearchEcho struct {
 // echoCallSearch accepts a criterion only in the shape the search
 // understands, as domain.ParseCallSearch does, except the echo
 // neither invents an unasked page size nor clamps an asked one.
-// see the call-search-page-ordering maintainer note.
 func echoCallSearch(criteria map[string]any) callSearchEcho {
 	echo := callSearchEcho{}
 

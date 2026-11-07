@@ -254,9 +254,8 @@ func TestABundleIsCurrentWhenItIsNewerThanEverySourceItIsBuiltFrom(t *testing.T)
 	}
 }
 
-// each application is judged by its own sources and the sources the
-// two share, and the administration contract belongs to its bundle alone.
-// see the webapps-source-watch maintainer note.
+// each application is judged by its own sources and the sources the two
+// share, and the administration contract belongs to its bundle alone.
 func TestEachApplicationIsJudgedByItsOwnSourcesAndTheSourcesTheTwoShare(t *testing.T) {
 	repo := t.TempDir()
 

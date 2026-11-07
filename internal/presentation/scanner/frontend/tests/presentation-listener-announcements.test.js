@@ -1,7 +1,6 @@
 // the listener says what the screen shows: one polite region the page
 // writes into with the words the contract fixes, when a state the
 // display or the search panel owns changes.
-// see the display-state-announcements maintainer note.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';

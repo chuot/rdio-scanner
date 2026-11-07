@@ -20,8 +20,7 @@ import (
 )
 
 // The commands are wire values the native applications send and switch on: they are
-// frozen by the protocol contract and are not free to become more descriptive; see
-// the scanner-wire-format-and-completeness maintainer note.
+// frozen by the protocol contract and are not free to become more descriptive.
 const (
 	// CommandCall fetches one recorded call, and pushes one that has just been recorded.
 	CommandCall = "CAL"
@@ -99,9 +98,8 @@ func ReadMessage(b []byte) (Message, error) {
 
 // MarshalJSON writes the frame: an absent or empty-string payload or flag is left out
 // (that is what keeps `["PIN"]` two characters), a present false payload is kept (the
-// livefeed ack is `["LFM",false]`), and the flag is appended on its own because the
-// client reads the array by position; see the frame-marshalling-rules maintainer
-// note.
+// livefeed ack is `["LFM", false]`), and the flag is appended on its own because the
+// client reads the array by position.
 func (message Message) MarshalJSON() ([]byte, error) {
 	frame := []any{message.Command}
 

@@ -33,10 +33,9 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// The -cmd mode drives a running server through the administrator
-// endpoints and keeps its session token in a file; it is a mode of running
-// the program, so it lives in the composition root, not the application layer.
-// see the command-mode-client-of-running-server maintainer note.
+// The -cmd mode drives a running server through the administrator endpoints
+// and keeps its session token in a file; it is a mode of running the program,
+// so it lives in the composition root, not the application layer.
 
 const (
 	// commandArg is the flag the mode is asked for with, and the name the usage text prints in front of
@@ -70,12 +69,10 @@ const (
 
 // commandNoSession is this mode's own refusal, raised
 // before any dealings with the server.
-// see the command-wiring-legacy-behavior maintainer note.
 var commandNoSession = errors.New("Not logged in.")
 
 // commandInvalidURL is the refusal of an address this mode will
 // not send a credential to.
-// see the command-option-ordering maintainer note.
 var commandInvalidURL = errors.New("invalid URL")
 
 var commandURLScheme = regexp.MustCompile(`^https?://`)
@@ -126,7 +123,6 @@ func newCommand(config *Config, exePath string, getenv func(string) string, stdo
 
 		// The session token file sits inside the base directory,
 		// named after the executable name plus .token.
-		// see the command-session-token-file maintainer note.
 		tokenFile: filepath.Join(config.BaseDir, app+".token"),
 
 		password: password,
@@ -187,7 +183,6 @@ func (cmd *command) do(action string) int {
 	if err != nil {
 		// An action that could not be done is reported with the
 		// failure and ends as a failure.
-		// see the command-failure-reporting maintainer note.
 		fmt.Fprintf(cmd.stdout, "%v\n", err)
 
 		return 1
@@ -198,7 +193,6 @@ func (cmd *command) do(action string) int {
 
 // readOptions walks the tokens after the action and takes the value
 // after each option; an option with nothing after it names nothing.
-// see the command-option-ordering maintainer note.
 func (cmd *command) readOptions() error {
 	i := 0
 
@@ -595,7 +589,6 @@ func (cmd *command) submit(method, path string, body []byte, auth bool) (*http.R
 	res, err := http.DefaultClient.Do(request)
 	if err != nil {
 		// submit hands the failure to the caller for reporting.
-		// see the command-failure-reporting maintainer note.
 		return nil, err
 	}
 

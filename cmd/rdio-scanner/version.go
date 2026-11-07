@@ -15,12 +15,10 @@
 
 // command rdio-scanner is the server's composition root: it loads
 // configuration, wires infrastructure adapters into the use cases, and serves
-// the HTTP and WebSocket interfaces
-// see the legacy-drop-in-contract maintainer note.
+// the HTTP and WebSocket interfaces.
 package main
 
 // Version is the release version the build injects with -ldflags, resolved
 // from VERSION.txt and git, and a binary built any other way reports the dev
-// fallback on purpose
-// see the buildinfo-version-derivation maintainer note.
+// fallback on purpose.
 var Version = "dev"

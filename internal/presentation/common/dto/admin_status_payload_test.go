@@ -26,8 +26,8 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// AdminStatusPayload tests: the JSON names are the contract,
-// not the read model's own. see the call-payload-field-order maintainer note.
+// AdminStatusPayload tests: the JSON names are the contract, not the read
+// model's own.
 
 var statusNow = time.Date(2026, 10, 17, 8, 45, 11, 0, time.UTC)
 
@@ -98,8 +98,7 @@ func TestAdminStatusPayloadNamesTheDeploymentBesideTheSnapshot(t *testing.T) {
 		t.Errorf("the server block names %v as the folder it serves, want the folder the operator named", server["baseDir"])
 	}
 
-	// UptimeSeconds is asserted as whole seconds, the page
-	// choosing the words. see the administrator-status-payload-shape maintainer note.
+	// UptimeSeconds is asserted as whole seconds, the page choosing the words.
 	if server["uptimeSeconds"] != float64(8048) {
 		t.Errorf("the server block reports uptimeSeconds=%v, want 8048: 2h 14m 8s, whole seconds", server["uptimeSeconds"])
 	}
@@ -207,8 +206,7 @@ func TestAdminStatusPayloadCarriesNoAudioAndNoConfiguration(t *testing.T) {
 
 	call := recent[0].(map[string]any)
 
-	// audioLengthSeconds is asserted as a number of seconds,
-	// not a duration string. see the administrator-status-payload-shape maintainer note.
+	// audioLengthSeconds is asserted as a number of seconds, not a duration string.
 	if call["audioLengthSeconds"] != 12.4 {
 		t.Errorf("the recent row carries audioLengthSeconds=%v, want 12.4", call["audioLengthSeconds"])
 	}

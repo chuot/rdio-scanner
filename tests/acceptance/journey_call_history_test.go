@@ -29,7 +29,6 @@ import (
 // The call history over HTTP: search, read one call, fetch one
 // recording, the surface a third-party client and the Model
 // Context Protocol surface reach the history through.
-// see the call-history-journey maintainer note.
 
 const (
 	historyKey       = "history-upload-key"

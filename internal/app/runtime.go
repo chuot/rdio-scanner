@@ -40,13 +40,11 @@ type runtimeState struct {
 	dbPath  string
 
 	// startedAt is the instant this server's start sequence ran, zero until it has run.
-	// see the status-endpoint-reads maintainer note.
 	mutex     sync.RWMutex
 	startedAt time.Time
 }
 
 // administratorConnections is the question the status read asks of the admin socket.
-// see the status-endpoint-reads maintainer note.
 type administratorConnections interface {
 	Count() int
 }
@@ -55,7 +53,6 @@ var _ ports.RuntimeState = (*runtimeState)(nil)
 
 // markStarted records the instant the start sequence ran; an unstarted server records
 // nothing, and the status read says so rather than inventing an uptime.
-// see the status-endpoint-reads maintainer note.
 func (state *runtimeState) markStarted(at time.Time) {
 	state.mutex.Lock()
 	defer state.mutex.Unlock()
@@ -77,7 +74,6 @@ func (state *runtimeState) ListenerCount() int {
 }
 
 // AdministratorSessionCount reports how many administrator connections the server holds.
-// see the status-endpoint-reads maintainer note.
 func (state *runtimeState) AdministratorSessionCount() int {
 	return state.sessions.Count()
 }
@@ -105,7 +101,6 @@ func (state *runtimeState) AudioProbeAvailable() bool {
 
 // DatabaseSize reports the size of the file this server writes its database into, known only
 // when it owns that file: a backend-dependent number misleads a status page.
-// see the status-endpoint-reads maintainer note.
 func (state *runtimeState) DatabaseSize() (bytes int64, known bool) {
 	if state.dialect != persistence.DialectSqlite || state.dbPath == "" {
 		return 0, false

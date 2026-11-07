@@ -454,9 +454,8 @@ test('editing a unit label keeps the row and the field the operator is in on the
   assert.equal(saveButton(el).disabled, false, 'Save is enabled for the change the operator made');
 });
 
-// a field edit does not rebuild the rows the render built
-// so a drag commits the rows as the operator left them in the fields
-// see the drag-commits-edited-rows maintainer note.
+// a field edit does not rebuild the rows the render built so a drag
+// commits the rows as the operator left them in the fields.
 test('dragging a site after editing it keeps what the operator typed', () => {
   const store = seed();
   const el = attach('rdio-admin-sites');

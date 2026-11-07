@@ -44,7 +44,7 @@ var errUnknownLogSource = errors.New("the log entry names no part of this server
 // `fmt.Sprintf` and put the message in raw, so a message with a single quote — every
 // line naming a failed statement — produced broken SQL, the insert failed, and the
 // error was discarded. Parameterizing is the fix: those lines are stored and the log
-// view shows them, per the log statement construction maintainer note.
+// view shows them.
 const (
 	logInsertQuery = `INSERT INTO "logs" ("level", "source", "message", "timestamp") VALUES (?, ?, ?, ?)`
 	logDeleteQuery = `DELETE FROM "logs" WHERE "timestamp" < ?`
@@ -61,8 +61,7 @@ func NewLogs(db *sql.DB, dialect Dialect) *Logs {
 // A source that is a name this server does not have is refused: the vocabulary is owned
 // by the Domain and every writer reaches it through a constant. Rows with no source
 // exist permanently — the other server's insert never mentions the column — and the
-// read side files them under legacy, per the log-source write and read posture
-// maintainer note.
+// read side files them under legacy.
 func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
 	if !domain.IsKnownLogSource(entry.Source) {
 		return operationError("logs", "logevent", fmt.Errorf("%w: %q", errUnknownLogSource, entry.Source))
@@ -79,8 +78,7 @@ func (logs *Logs) AppendLog(ctx context.Context, entry domain.LogEntry) error {
 // in the requested order from the requested offset. The criteria is already resolved by
 // the query handler, and the date window is the one `domain.LogSearch` models. The
 // filter is assembled from fixed fragments and placeholders; the only text joined into
-// the statement is the sort direction, chosen from two constants, per the log statement
-// construction maintainer note.
+// the statement is the sort direction, chosen from two constants.
 func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (ports.LogSearchPage, error) {
 	where := []string{`TRUE`}
 	args := []any{}
@@ -92,7 +90,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 
 	// The message search is a case-insensitive substring with the submitted text escaped so
 	// a % or an _ matches itself; lower on both sides keeps the statement case-insensitive
-	// on backends where LIKE is not, per the log statement construction maintainer note.
+	// on backends where LIKE is not.
 	if search.HasText() {
 		where = append(where, `lower("message") LIKE ? ESCAPE '!'`)
 		args = append(args, "%"+escapeLikeText(strings.ToLower(search.Text))+"%")
@@ -107,7 +105,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 
 	// The per-source counts are computed from the criteria as submitted except for the
 	// source itself: they have to describe the whole match while the operator is still
-	// choosing, per the log search page posture maintainer note.
+	// choosing.
 	countsWhere := append([]string{}, where...)
 	countsArgs := append([]any{}, args...)
 
@@ -134,8 +132,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 
 	// The span of everything the criteria match is read first, in the legacy read order:
 	// matching timestamps ascending, then descending, then the count, then the page. The
-	// two ends belong to the whole match, not the page, per the log search page posture
-	// maintainer note.
+	// two ends belong to the whole match, not the page.
 	startQuery := `SELECT "timestamp" FROM "logs" WHERE ` + filter + ` ORDER BY "timestamp" ASC`
 
 	if at, ok, err := logs.searchInstant(ctx, startQuery, args); err != nil {
@@ -166,8 +163,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 	page.Count = clampNonNegative(count)
 
 	// The per-subsystem counts are read over the whole match and not over the page, so
-	// they stay the same while the log view pages, per the log search page posture
-	// maintainer note.
+	// they stay the same while the log view pages.
 	countsQuery := `SELECT "source", COUNT(*) FROM "logs" WHERE ` + strings.Join(countsWhere, " AND ") + ` GROUP BY "source"`
 
 	countRows, err := logs.store.query(ctx, countsQuery, countsArgs...)
@@ -233,9 +229,9 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 
 		if err := rows.Scan(&id, &level, &source, &message, &timestamp); err != nil {
 			// A row whose scan fails is dropped as the legacy drops a damaged row —
-			// unless the read itself failed, per the damaged log row parity
-			// maintainer note: a cancelled context is felt at the scan and not at
-			// the iterator, and a short page answered as a success hides that.
+			// unless the read itself failed, a cancelled context is felt at the
+			// scan and not at the iterator, and a short page answered as a success
+			// hides that.
 			if readErr := rows.Err(); readErr != nil {
 				return ports.LogSearchPage{}, statementError("logs", "search", readErr, rowsQuery)
 			}
@@ -249,8 +245,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 
 		// A row that carries nothing to show — no identity, no level, no message, or
 		// a timestamp that is not a real instant — is dropped from the results while
-		// the count still includes it, as the legacy does, per the damaged log row
-		// parity maintainer note.
+		// the count still includes it, as the legacy does.
 		if !id.Valid {
 			continue
 		}
@@ -289,8 +284,7 @@ func (logs *Logs) SearchLogs(ctx context.Context, search domain.LogSearch) (port
 }
 
 // logSourceOf reads the source a row carries. A row written without one is filed under
-// legacy — a read-side mapping, never a rewrite of another server's rows, per the
-// log-source write and read posture maintainer note.
+// legacy — a read-side mapping, never a rewrite of another server's rows.
 func logSourceOf(source sql.NullString) domain.LogSource {
 	if !source.Valid || source.String == "" {
 		return domain.LogSourceLegacy
@@ -301,7 +295,7 @@ func logSourceOf(source sql.NullString) domain.LogSource {
 
 // escapeLikeText prepares submitted text for a LIKE comparison so the characters the
 // operator typed match themselves, escaping with `!` because `ESCAPE '\'` is not one
-// statement on every backend, per the log statement construction maintainer note.
+// statement on every backend.
 func escapeLikeText(text string) string {
 	out := strings.Builder{}
 

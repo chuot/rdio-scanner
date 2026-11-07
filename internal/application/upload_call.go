@@ -80,7 +80,7 @@ func NewUploadCallHandler(apikeys ports.ApikeyRepository, ingest *IngestCallHand
 // it is what an uploader is told: the submission is checked for being a call at all before the
 // credential is looked at, and the credential is decided before the call is matched against the
 // server's own configuration. The answer stays success however the ingest step then ends; that
-// is deliberate, and the reason lives in the uploaded-call maintainer note.
+// is deliberate.
 func (handler *UploadCallHandler) Handle(ctx context.Context, cmd UploadCallCommand) (UploadCallResult, error) {
 	if err := cmd.Call.IsValid(); err != nil {
 		return UploadCallResult{Outcome: UploadCallIncomplete}, err

@@ -1,7 +1,6 @@
 // Shared scaffold for the per-level sections: system dropdown, rows, save bar; the row
-// editor is the only part each section supplies.
-// The scaffold owns the store binding: only it knows which system is shown.
-// see the subsection-binding-ownership maintainer note.
+// editor is the only part each section supplies. The scaffold owns the store binding:
+// only it knows which system is shown.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import { subSectionInvalid } from '../../domain/systems-validation.js';
@@ -82,10 +81,8 @@ export function disconnectSubSection(component) {
   component.unsubscribes = [];
 }
 
-// Model commit for a per-level section.
-// A field edit carries the selfEdit marker and its render skips the rebuild, so the
-// row being typed in stays on the page.
-// see the subsection-selfedit-rebuild maintainer note.
+// Model commit for a per-level section. A field edit carries the selfEdit marker
+// and its render skips the rebuild, so the row being typed in stays on the page.
 export function commitSubRows(component, rows, selfEdit = false) {
   const { level } = component.subSection;
 
@@ -192,7 +189,6 @@ export function renderSubSection(component) {
 
     // The row the add control creates is the section's one open row: the rows the operator
     // left open close with it.
-    // see the add-close-open-rows maintainer note.
     const opened = rowPanelKey(component, fresh[0], 0);
 
     for (const row of component.querySelectorAll('details[data-key]')) row.open = false;

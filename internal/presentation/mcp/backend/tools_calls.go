@@ -41,9 +41,8 @@ func isNotFound(err error) bool {
 }
 
 // The read-only capabilities an access-code caller reaches: the history
-// search, one recorded call, and discovery. Each runs the use case the
-// REST surface runs, over the scope the gate decided; see the capabilities-
-// are-questions-not-routes maintainer note.
+// search, one recorded call, and discovery. Each runs the use case the REST
+// surface runs, over the scope the gate decided.
 
 // registerCallTools adds the history search, one call, and the scoped systems projection.
 func registerCallTools(target *mcp.Server, deps Deps) {

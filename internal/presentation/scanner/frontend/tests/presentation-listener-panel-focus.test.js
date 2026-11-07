@@ -1,7 +1,6 @@
 // the listener's panels and the keyboard that travels with them: a
 // panel that opens without taking the keyboard leaves it behind the
 // panel in the tab order, and a closing one can lose it to the top.
-// see the panel-keyboard-landing maintainer note.
 
 import './dom-shim.js';
 

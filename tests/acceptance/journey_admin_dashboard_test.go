@@ -29,7 +29,6 @@ import (
 
 // The admin dashboard journey: the file lays out showing and saving the
 // dashboard as one browser test per user story, and records its divergences.
-// see the admin-dashboard-journey maintainer note.
 
 const dashboardUploadKey = "dashboard-status-upload"
 

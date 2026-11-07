@@ -287,7 +287,6 @@ func TestADistRunAskedForATargetOutsideTheMatrixIsRefused(t *testing.T) {
 // the word go names a machine by resolves to the release word: the
 // manifest, the output path, and every operator message name the
 // target the way the release names it.
-// see the targets-and-platforms maintainer note.
 func TestTheWordGoNamesAMachineByIsTheReleaseWord(t *testing.T) {
 	for _, typed := range []struct{ word, release string }{
 		{"darwin-amd64", "macos-amd64"},

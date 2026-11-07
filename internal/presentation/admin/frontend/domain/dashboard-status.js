@@ -1,6 +1,5 @@
-// dashboard derivations: pure functions over the snapshot and stored config;
-// no DOM, clock, or fetch; the inventory is derived here, not read from the server
-// see the dashboard-derivations maintainer note.
+// dashboard derivations: pure functions over the snapshot and stored config; no
+// DOM, clock, or fetch; the inventory is derived here, not read from the server.
 
 export const STATUS_REFRESH_DELAY = 5000;
 
@@ -74,8 +73,7 @@ const needsAttention = (key, label, reason) => ({ key, label, state: 'attention'
 const notKnown = (key, label, reason) => ({ key, label, state: 'unknown', reason });
 
 // the dashboard's only card-state rules: the word, the sentence, and the test
-// in one place; a card never seeks attention on a normal state
-// see the dashboard-card-states maintainer note.
+// in one place; a card never seeks attention on a normal state.
 export function deriveCardStates(status, inventory, { passwordNeedChange = false } = {}) {
   const server = status?.server;
   const live = status?.live;

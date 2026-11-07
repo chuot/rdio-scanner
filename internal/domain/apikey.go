@@ -77,8 +77,7 @@ func (apikey Apikey) Accepts(call Call) bool {
 }
 
 // AcceptsUpload reports whether the credential an uploader presented covers the call it posted,
-// comparing the references the upload itself names rather than resolved identifiers. Why the
-// upload boundary cannot use resolved identifiers lives in the domain maintainer note.
+// comparing the references the upload itself names rather than resolved identifiers.
 func (apikeys Apikeys) AcceptsUpload(key string, call Call) bool {
 	apikey, ok := apikeys.ByKey(key)
 	if !ok || apikey.Disabled {

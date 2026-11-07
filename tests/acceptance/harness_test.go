@@ -48,7 +48,6 @@ import (
 // This is the harness the journeys in this package run against: a whole
 // server reached only through the composition root's exported API, and a
 // second database connection, configured the way a deployment configures one.
-// see the harness-boot maintainer note.
 
 // journeyServer is a server a journey is running against, together with the two things a journey reads
 // and writes beside it: the folder the server was built in, and the database the server opened.
@@ -752,7 +751,6 @@ func waitForLog(t *testing.T, db *sql.DB, what string, matches func(string) bool
 // assertEveryServerLogEntry is the guard over a real server's log view: every
 // row names the subsystem that wrote it and no row begins with the internal
 // name of the code that wrote it, read back out of the writing store.
-// see the harness-log-guard maintainer note.
 func assertEveryServerLogEntry(t *testing.T, db *sql.DB) {
 	t.Helper()
 

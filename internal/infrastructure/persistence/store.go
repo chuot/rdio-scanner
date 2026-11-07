@@ -68,9 +68,8 @@ func (s store) exec(ctx context.Context, query string, args ...any) (sql.Result,
 // is one the next save would read back as the configuration.
 //
 // It is begun with the write posture the sqlite connection string carries — the
-// write lock is held before the save reads, which is what a save needs; the why
-// lives in the sqlite-save-posture maintainer note. A read belongs here as
-// little as a save belongs in beginRead.
+// write lock is held before the save reads, which is what a save needs. A read
+// belongs here as little as a save belongs in beginRead.
 func (s store) begin(ctx context.Context) (transaction, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -84,10 +83,9 @@ func (s store) begin(ctx context.Context) (transaction, error) {
 // tables, needs what it read to agree with itself, and writes nothing.
 //
 // It asks the driver for a read-only transaction, and the driver begins one
-// asked for that way without the connection string's write posture; why that
-// keeps readers out of the write lock lives in the sqlite-save-posture
-// maintainer note. So this is for reads only: a save that used it would be a
-// save allowed to read before it held the write lock.
+// asked for that way without the connection string's write posture. So this
+// is for reads only: a save that used it would be a save allowed to read
+// before it held the write lock.
 func (s store) beginRead(ctx context.Context) (transaction, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
@@ -125,9 +123,8 @@ func (t transaction) rollback() {
 
 // bind writes one query for the dialect it is about to run on: every query in
 // this package is written once with `?` placeholders, and only PostgreSQL needs
-// them numbered, so an adapter never carries two copies of a statement; why
-// that replaces the legacy server's per-backend `fmt.Sprintf` SQL lives in the
-// placeholder-binding maintainer note.
+// them numbered, so an adapter never carries two copies of a statement; why that
+// replaces the legacy server's per-backend `fmt.Sprintf`
 //
 // It is a scan rather than a parser, and it relies on one invariant pinned by a
 // test: SQL writes a quote inside a literal as a doubled quote, so a doubled

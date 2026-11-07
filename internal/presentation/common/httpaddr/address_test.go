@@ -21,8 +21,7 @@ import (
 )
 
 // trustedLocalhost names the localhost peer as the trusted proxy, so
-// these tests exercise the forwarded path. see the
-// trusted-proxy-selection-is-not-a-security-check maintainer note.
+// these tests exercise the forwarded path.
 func trustedLocalhost(t *testing.T) *Trusted {
 	t.Helper()
 
@@ -45,8 +44,7 @@ func TestAddressIsTheFirstForwardedEntryWithoutItsPort(t *testing.T) {
 }
 
 // TestAddressReportsAForwardedEntryThePatternCannotCutAsItArrived: a
-// forward entry with no port to cut is reported whole. see the
-// trusted-proxy-selection-is-not-a-security-check maintainer note.
+// forward entry with no port to cut is reported whole.
 func TestAddressReportsAForwardedEntryThePatternCannotCutAsItArrived(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/admin/config", nil)
 	r.Header.Set("X-Forwarded-For", ":8123, 198.51.100.4")
@@ -57,8 +55,7 @@ func TestAddressReportsAForwardedEntryThePatternCannotCutAsItArrived(t *testing.
 	}
 }
 
-// TestAddressKeepsAForwardedAddressInBracketsWhole: cut at the port colon. see the
-// trusted-proxy-selection-is-not-a-security-check maintainer note.
+// TestAddressKeepsAForwardedAddressInBracketsWhole: cut at the port colon.
 func TestAddressKeepsAForwardedAddressInBracketsWhole(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/admin/config", nil)
 	r.Header.Set("X-Forwarded-For", "[2001:db8::1]:1234")

@@ -1,6 +1,5 @@
 // row-list sections keep one row open at a time; opening one closes the others;
-// both functions are arithmetic over section state: no DOM, store, or clock
-// see the single-open-row-rule maintainer note.
+// both functions are arithmetic over section state: no DOM, store, or clock.
 
 // close the open rows that are not the opened row: one open row remains; a row the
 // operator closed closes nothing.

@@ -42,10 +42,10 @@ func (body unreadableBody) Error() string {
 }
 
 // Section reads or saves one section of the configuration: the administrator's page
-// shows one list at a time, saves that list, and is answered with that list. The
-// order of its first three decisions - upgrade refused, unknown section refused before
-// the credential, credential refused before the method - is the legacy order and what
-// a client sees; see the administrator-endpoint-gate-order maintainer note.
+// shows one list at a time, saves that list, and is answered with that list. The order
+// of its first three decisions - upgrade refused, unknown section refused before the
+// credential, credential refused before the method - is the legacy order and what a
+// client sees.
 func (admin *Admin) Section(w http.ResponseWriter, r *http.Request) {
 	if upgrade.Wanted(r) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -108,8 +108,7 @@ func isSubSectionPath(rest string) bool {
 }
 
 // saveSection saves one section. The watched directories are stopped and started
-// whatever happens to the body, even a body that cannot be read at all; see the
-// configuration-save-semantics maintainer note.
+// whatever happens to the body, even a body that cannot be read at all.
 func (admin *Admin) saveSection(w http.ResponseWriter, r *http.Request, section application.ConfigSection) {
 	changes, err := admin.submittedSection(r.Context(), section, r)
 
@@ -139,7 +138,7 @@ func (admin *Admin) saveSection(w http.ResponseWriter, r *http.Request, section 
 // submittedSection turns what was submitted into the one section a save replaces: an
 // empty list is a submission and replaces the section with nothing, and a body that
 // is not the list this section wants is answered 400 rather than saving nothing
-// quietly. See the configuration-save-semantics maintainer note.
+// quietly.
 func (admin *Admin) submittedSection(ctx context.Context, section application.ConfigSection, r *http.Request) (application.ConfigurationChanges, error) {
 	changes := application.ConfigurationChanges{}
 
@@ -220,10 +219,10 @@ func (admin *Admin) sendSection(ctx context.Context, w http.ResponseWriter, sect
 	writeJSON(w, sectionPayload(configuration, section))
 }
 
-// SubSection reads or saves one level of one system: its sites, its talkgroups, or
-// its units. It answers the way a section does, with one decision added: a system this
+// SubSection reads or saves one level of one system: its sites, its talkgroups, or its
+// units. It answers the way a section does, with one decision added: a system this
 // server does not store is refused with 404, and so is a level that is not one of the
-// three; see the administrator-endpoint-gate-order maintainer note.
+// three.
 func (admin *Admin) SubSection(w http.ResponseWriter, r *http.Request) {
 	if upgrade.Wanted(r) {
 		w.WriteHeader(http.StatusMethodNotAllowed)

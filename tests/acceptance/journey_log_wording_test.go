@@ -28,7 +28,6 @@ import (
 // The server log view must name the part of the server that wrote
 // each entry and say what happened, not code names: the journey
 // drives each writer and the guard checks the log view.
-// see the log-wording-guard maintainer note.
 func TestTheServerLogViewNamesThePartOfTheServerThatWroteEachEntry(t *testing.T) {
 	srv, token := configuredTestServer(t)
 

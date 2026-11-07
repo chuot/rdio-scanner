@@ -5,9 +5,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// reduced motion, proven in the stylesheets that run it
-// every animation and transition is guarded on its own selector
-// see the reduced-motion-scan maintainer note.
+// reduced motion, proven in the stylesheets that run it every
+// animation and transition is guarded on its own selector.
 const presentationDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const STYLESHEETS = {

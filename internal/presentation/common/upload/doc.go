@@ -15,5 +15,4 @@
 
 // Package upload is the inbound recording ingestion boundary: the
 // endpoints outside programs use to post a recording to this server.
-// see the call-upload-contract-and-legacy-divergences maintainer note.
 package upload

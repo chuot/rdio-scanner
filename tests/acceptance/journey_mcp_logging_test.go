@@ -27,7 +27,6 @@ import (
 
 // the assistant's work has to show up in the operator's log view under a filterable
 // subsystem, and that view must never carry a session credential: it is shared freely.
-// see the mcp-logging-journey maintainer note.
 
 func TestTheAssistantsWorkIsInTheLogViewTheOperatorFiltersBySubsystem(t *testing.T) {
 	srv := startedServerNamingTheAssistant(t)

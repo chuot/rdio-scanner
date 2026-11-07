@@ -98,7 +98,6 @@ function unstoredTalkgroupFields(rows, groups, tags) {
 // systemsBlacklistDraft reads the Systems section's draft of the
 // Blacklists field and the text behind it: the Blacklist action is
 // about to replace a differing draft the operator must hear about.
-// see the blacklist-draft-overwrite maintainer note.
 function systemsBlacklistDraft(systemId) {
   const systems = getAdminContext().store.getState()['section:systems'] ?? {};
 
@@ -258,7 +257,6 @@ function talkgroupRow(component, talkgroup, index, rows) {
     blacklist.addEventListener('click', async () => {
       // the Blacklist click stores both halves at once: the row goes away
       // and the entry names the talkgroup's reference.
-      // see the blacklist-save-flow maintainer note.
       const rows = freshRows(component).filter((_, i) => i !== index);
       const groups = sectionWorking('groups') ?? [];
       const tags = sectionWorking('tags') ?? [];

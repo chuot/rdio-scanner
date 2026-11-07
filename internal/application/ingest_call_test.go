@@ -1240,8 +1240,7 @@ func TestIngestCallReportsAConfigurationReadThatFailed(t *testing.T) {
 
 // The server stores one call at a time: the watchers run on their own goroutines and an upload
 // is answered on the connection that posted it, so the rule is held on purpose. Duplicate
-// detection and creating an unknown system once both depend on it; the rationale lives in the
-// ingest-serialization maintainer note.
+// detection and creating an unknown system once both depend on it.
 func TestIngestCallHandlerStoresOneCallAtATime(t *testing.T) {
 	fixture := newIngestFixture()
 	fixture.seedKnownSystem()
@@ -1368,8 +1367,7 @@ func TestIngestCallStoresAndDeliversACallWhenTheServerLogCannotBeWritten(t *test
 
 // A talkgroup or a system can hold its calls back: the call is recorded and reported like any
 // other, and only the telling is held back, until the hold runs out. The delay is set on the
-// stored system and talkgroup because those are the ones a call is resolved against; the
-// rationale lives in the holding-delayed-calls maintainer note.
+// stored system and talkgroup because those are the ones a call is resolved against.
 func TestIngestCallHoldsBackACallOnADelayedTalkgroup(t *testing.T) {
 	fixture := newIngestFixture()
 

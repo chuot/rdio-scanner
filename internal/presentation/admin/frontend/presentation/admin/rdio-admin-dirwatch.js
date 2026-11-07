@@ -392,8 +392,7 @@ class RdioAdminDirwatch extends HTMLElement {
 
     // the asterisk mark declares the dirwatch field required on every row,
     // split between the label and the field host so the control announces it
-    // a dirwatch field required only on some rows stays plain
-    // see the required-field-marker maintainer note.
+    // a dirwatch field required only on some rows stays plain.
     if (required) markRequired(field, labelEl);
 
     field.append(labelEl, input);
@@ -460,10 +459,9 @@ class RdioAdminDirwatch extends HTMLElement {
   }
 
   add() {
-    // new dirwatch rows start with mask '#SYS_#TG' and frequency 1:
-    // the server answers an unset mask or frequency with a value its rule rejects:
-    // an unset row would validate as new but not as saved
-    // see the new-row-defaults maintainer note.
+    // new dirwatch rows start with mask '#SYS_#TG' and frequency 1: the server
+    // answers an unset mask or frequency with a value its rule rejects: an unset
+    // row would validate as new but not as saved.
     const fresh = markRowIdentity({ delay: 2000, deleteAfter: true, directory: '', disabled: false, frequency: 1, mask: '#SYS_#TG', order: 0, type: 'default' });
     const rows = [fresh, ...this.rows.map((row, i) => ({ ...row, order: i + 2 }))];
 

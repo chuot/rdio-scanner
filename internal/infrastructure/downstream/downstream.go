@@ -34,18 +34,17 @@ import (
 )
 
 // uploadPath is the endpoint every Rdio Scanner server accepts a call
-// upload on; see the downstream-forwarding maintainer note.
+// upload on.
 const uploadPath = "/api/call-upload"
 
 // requestTimeout is how long the legacy server waits for a downstream to
-// take a call; see the downstream-forwarding maintainer note.
+// take a call.
 const requestTimeout = 30 * time.Second
 
 // Forwarder re-posts a recorded call to another Rdio Scanner server,
 // over the same call-upload endpoint an external application uploads
 // to. The group and tag repositories are read for the two fields the
-// wire carries as labels rather than as identifiers; see the
-// downstream-forwarding maintainer note.
+// wire carries as labels rather than as identifiers.
 type Forwarder struct {
 	groups ports.GroupRepository
 	tags   ports.TagRepository
@@ -53,7 +52,7 @@ type Forwarder struct {
 }
 
 // NewForwarder builds the forwarder for a server that re-posts its calls
-// to other servers; see the downstream-forwarding maintainer note.
+// to other servers.
 func NewForwarder(groups ports.GroupRepository, tags ports.TagRepository) *Forwarder {
 	return &Forwarder{
 		groups: groups,
@@ -68,7 +67,7 @@ func NewForwarder(groups ports.GroupRepository, tags ports.TagRepository) *Forwa
 }
 
 // Forward posts one call to one downstream server and reports what that
-// server said; see the downstream-forwarding maintainer note.
+// server said.
 func (forwarder *Forwarder) Forward(ctx context.Context, target ports.DownstreamTarget, call domain.Call) error {
 	body, contentType, err := forwarder.uploadBody(ctx, target, call)
 	if err != nil {
@@ -76,15 +75,14 @@ func (forwarder *Forwarder) Forward(ctx context.Context, target ports.Downstream
 	}
 
 	// The legacy's address parsing is reproduced rather than tidied: the
-	// upload path is appended to whatever path the address already has;
-	// see the downstream-forwarding maintainer note.
+	// upload path is appended to whatever path the address already has.
 	endpoint, err := url.Parse(target.URL)
 	if err != nil {
 		return operationError(err)
 	}
 
 	// The scheme is re-checked here, and an address is posted to only over
-	// http or https; see the downstream-forwarding maintainer note.
+	// http or https.
 	if endpoint.Scheme != "http" && endpoint.Scheme != "https" {
 		return operationError(fmt.Errorf("the downstream address %s must be an http or https address", target.URL))
 	}
@@ -93,7 +91,7 @@ func (forwarder *Forwarder) Forward(ctx context.Context, target ports.Downstream
 
 	// The legacy's fresh per-send client with no context is not reproduced:
 	// the context is honored here, and the legacy's hard-coded timeout is
-	// kept; see the downstream-forwarding maintainer note.
+	// kept.
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), body)
 	if err != nil {
 		return operationError(err)
@@ -109,8 +107,7 @@ func (forwarder *Forwarder) Forward(ctx context.Context, target ports.Downstream
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		// The answer is read out before the connection is handed back; see the
-		// downstream-forwarding maintainer note.
+		// The answer is read out before the connection is handed back.
 		io.Copy(io.Discard, response.Body)
 
 		return operationError(fmt.Errorf("bad status: %s", response.Status))
@@ -119,9 +116,8 @@ func (forwarder *Forwarder) Forward(ctx context.Context, target ports.Downstream
 	return nil
 }
 
-// uploadBody builds the multipart upload the receiving server parses,
-// in the order the legacy writes the parts; see the downstream-forwarding
-// maintainer note.
+// uploadBody builds the multipart upload the receiving server parses, in
+// the order the legacy writes the parts.
 func (forwarder *Forwarder) uploadBody(ctx context.Context, target ports.DownstreamTarget, call domain.Call) (io.Reader, string, error) {
 	buf := bytes.Buffer{}
 
@@ -136,8 +132,7 @@ func (forwarder *Forwarder) uploadBody(ctx context.Context, target ports.Downstr
 	}
 
 	// The length of the recording, in seconds to the millisecond, and only
-	// when some source named it; see the downstream-forwarding maintainer
-	// note.
+	// when some source named it.
 	if call.AudioLength > 0 {
 		if err := writeField(writer, "audioLength", audioLengthText(call.AudioLength)); err != nil {
 			return nil, "", err
@@ -218,7 +213,7 @@ func (forwarder *Forwarder) uploadBody(ctx context.Context, target ports.Downstr
 // endpoint reads it from and under the filename the call carries. The
 // filename goes over through the standard library's form writer, so the
 // receiver sees the library's escaping of it rather than the call's own
-// string; see the downstream-forwarding maintainer note.
+// string.
 func (forwarder *Forwarder) writeAudio(writer *multipart.Writer, call domain.Call) error {
 	part, err := writer.CreateFormFile("audio", call.AudioFilename)
 	if err != nil {
@@ -233,8 +228,7 @@ func (forwarder *Forwarder) writeAudio(writer *multipart.Writer, call domain.Cal
 }
 
 // writeTagLabel writes the talkgroup's tag label. The part is created
-// whether or not the tag is configured; see the downstream-forwarding
-// maintainer note.
+// whether or not the tag is configured.
 func (forwarder *Forwarder) writeTagLabel(ctx context.Context, writer *multipart.Writer, call domain.Call) error {
 	part, err := writer.CreateFormField("talkgroupTag")
 	if err != nil {
@@ -257,8 +251,7 @@ func (forwarder *Forwarder) writeTagLabel(ctx context.Context, writer *multipart
 }
 
 // groupLabels are the talkgroup's group names, in the order the
-// talkgroup lists them, joined the way the upload endpoint splits them;
-// see the downstream-forwarding maintainer note.
+// talkgroup lists them, joined the way the upload endpoint splits them.
 func (forwarder *Forwarder) groupLabels(ctx context.Context, call domain.Call) (string, error) {
 	groups, err := forwarder.groups.AllGroups(ctx)
 	if err != nil {
@@ -281,8 +274,7 @@ func (forwarder *Forwarder) groupLabels(ctx context.Context, call domain.Call) (
 
 // frequenciesOf is the frequency list as the legacy marshals it: the Go
 // field names of its own struct, not the wire names the upload endpoint
-// reads. That is a defect, reproduced rather than repaired; see the
-// downstream-forwarding maintainer note.
+// reads. That is a defect, reproduced rather than repaired.
 func frequenciesOf(call domain.Call) any {
 	out := []map[string]any{}
 
@@ -332,8 +324,7 @@ func writeField(writer *multipart.Writer, name, value string) error {
 
 // audioLengthText writes a recording's length as the count of seconds it
 // is, to the millisecond, 3.500 for three and a half seconds, the same
-// spelling the `audioLength` upload field names on the way in; see the
-// downstream-forwarding maintainer note.
+// spelling the `audioLength` upload field names on the way in.
 func audioLengthText(length time.Duration) string {
 	return strconv.FormatFloat(float64(length)/float64(time.Second), 'f', 3, 64)
 }

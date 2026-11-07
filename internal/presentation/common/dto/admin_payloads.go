@@ -50,7 +50,6 @@ func Alerts() AlertsPayload {
 // AdminLogsPagePayload is the log view's answer. Count and span cover
 // the whole match, not this page, and the criteria are echoed so the
 // view can page again; subsystem counts accompany every search.
-// see the call-search-echoes-and-status-shortcuts maintainer note.
 type AdminLogsPagePayload struct {
 	Count     uint64            `json:"count"`
 	DateStart time.Time         `json:"dateStart"`
@@ -69,7 +68,6 @@ type AdminLogSource struct {
 // AdminLogEntry is one recorded server event, as the log view shows it.
 // The source names the part of the server that wrote the entry, which
 // is what the log view narrows on.
-// see the call-search-echoes-and-status-shortcuts maintainer note.
 type AdminLogEntry struct {
 	ID       uint64    `json:"id"`
 	DateTime time.Time `json:"dateTime"`
@@ -79,9 +77,8 @@ type AdminLogEntry struct {
 }
 
 // AdminLogsPage builds the log view's answer from the query's page and
-// the request's criteria: the echo comes from the request, not the
-// parsed search, and subsystem counts pass through in the search's order.
-// see the call-search-echoes-and-status-shortcuts maintainer note.
+// the request's criteria: the echo comes from the request, not the parsed
+// search, and subsystem counts pass through in the search's order.
 func AdminLogsPage(page ports.LogSearchPage, criteria map[string]any) AdminLogsPagePayload {
 	logs := []AdminLogEntry{}
 
@@ -96,7 +93,6 @@ func AdminLogsPage(page ports.LogSearchPage, criteria map[string]any) AdminLogsP
 	}
 
 	// sources stays an empty list, not a null: a matchless search has no subsystems.
-	// see the call-search-echoes-and-status-shortcuts maintainer note.
 	sources := []AdminLogSource{}
 
 	for _, count := range page.SourceCounts {
@@ -116,7 +112,6 @@ func AdminLogsPage(page ports.LogSearchPage, criteria map[string]any) AdminLogsP
 // logSearchCriteria is the submitted criteria, echoed back. A field is
 // written only when the request named it and the server understood it;
 // the seven fields keep the order the log view reads.
-// see the call-search-echoes-and-status-shortcuts maintainer note.
 type logSearchCriteria struct {
 	Date   any `json:"date,omitempty"`
 	Level  any `json:"level,omitempty"`
@@ -130,7 +125,6 @@ type logSearchCriteria struct {
 // echoLogSearch reads the criteria out of the submitted request under
 // the search's own reading rules, so the echo is what the search ran
 // with, and the limit is echoed as submitted, not clamped.
-// see the call-search-echoes-and-status-shortcuts maintainer note.
 func echoLogSearch(criteria map[string]any) logSearchCriteria {
 	echo := logSearchCriteria{}
 
@@ -147,7 +141,6 @@ func echoLogSearch(criteria map[string]any) logSearchCriteria {
 	// A subsystem is read through the vocabulary, as the search reads it.
 	// A name outside it applied no filter, so echoing it would claim a
 	// criterion the search never ran with.
-	// see the call-search-echoes-and-status-shortcuts maintainer note.
 	if named, ok := criteria["source"]; ok {
 		if source, valid := domain.ParseLogSource(named); valid {
 			echo.Source = string(source)

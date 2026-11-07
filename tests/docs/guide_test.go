@@ -29,7 +29,6 @@ import (
 
 // these checks hold the administrator guide to one self-contained file: it carries
 // everything it renders and every chapter it promises.
-// see the docs-guide-checks maintainer note.
 
 // guideFile is the guide the tests read: the file the reader opens, in the documentation folder.
 func guideFile(t *testing.T) string {
@@ -572,7 +571,6 @@ func tabulatedFlags(t *testing.T, body, chapter string) map[string]string {
 
 // the guide's section table repeats the administration navigation's order and chapter
 // for every section, read from the frontend's own declaration.
-// see the docs-guide-checks maintainer note.
 func TestTheGuideTabulatesTheSectionsInTheOrderTheNavigationListsThem(t *testing.T) {
 	body := guidePath(t)
 
@@ -885,7 +883,6 @@ func TestTheEndpointsTheGuideTabulatesAreTheEndpointsTheContractPublishes(t *tes
 
 // no link, reference, or resource in the guide leaves the file, except the named
 // out-of-scope pointer carried beside it.
-// see the docs-guide-checks maintainer note.
 func TestNothingInTheGuidePointsOutsideItself(t *testing.T) {
 	body := guidePath(t)
 
@@ -1000,7 +997,6 @@ func words(body string) string {
 
 // the guide states the ffmpeg is compiled for audio only wherever operators read the
 // ritual, and keeps the hand route as drop two files and run one command.
-// see the docs-guide-checks maintainer note.
 func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 	body := guidePath(t)
 
@@ -1062,7 +1058,6 @@ func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 
 // the guide names which machine compiles each archive's ffmpeg, the container route for
 // every target, and what the build reads instead of running.
-// see the docs-guide-checks maintainer note.
 func TestTheGuideSaysWhereTheFfmpegIsCompiledAndWhatTheBuildReadsInsteadOfRunning(t *testing.T) {
 	body := guidePath(t)
 
@@ -1136,7 +1131,6 @@ func TestTheGuideSaysWhereTheFfmpegIsCompiledAndWhatTheBuildReadsInsteadOfRunnin
 
 // the guide teaches which Mac compiles both macOS architectures when a Mac uses its own
 // toolchain, and that the release build compiles both in a container.
-// see the docs-guide-checks maintainer note.
 func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 	body := guidePath(t)
 
@@ -1225,7 +1219,6 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 
 // the guide says the compile is the check, one command, and no longer names a check
 // command, digests to copy, or a manifest to edit.
-// see the docs-guide-checks maintainer note.
 func TestTheGuideSaysTheCompileIsTheCheck(t *testing.T) {
 	body := strings.ToLower(words(guidePath(t)))
 
@@ -1266,7 +1259,6 @@ func TestTheGuideSaysTheCompileIsTheCheck(t *testing.T) {
 
 // `COMPILING.md` states the same simplified compile the guide states: one container
 // command, one Mac command, no check command, no digests.
-// see the docs-guide-checks maintainer note.
 func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
 	body := strings.ToLower(words(repoFile(t, "COMPILING.md")))
 
@@ -1288,7 +1280,6 @@ func TestCompilingNotesStateTheSimplifiedCompile(t *testing.T) {
 
 	// `COMPILING.md` names both cached-pair lines: container says compiled,
 	// the Mac's own compile says built.
-	// see the docs-guide-checks maintainer note.
 	for _, printed := range []string{"reusing the ffmpeg compiled for", "reusing the ffmpeg built for"} {
 		if !strings.Contains(body, printed) {
 			t.Errorf("COMPILING.md never names %q, which is a line the build prints when its cache already holds the pair", printed)
@@ -1359,7 +1350,6 @@ func guideFooter(t *testing.T, body string) string {
 
 // the guide states one licence position in every place an operator reads it: every
 // interface the server answers is under GPL version 3.
-// see the docs-guide-checks maintainer note.
 func TestTheGuideStatesOneLicencePositionForEveryInterface(t *testing.T) {
 	body := guidePath(t)
 
@@ -1423,7 +1413,6 @@ func TestTheGuideStatesOneLicencePositionForEveryInterface(t *testing.T) {
 	}
 
 	// these refusals catch wordings of the retired second licence position.
-	// see the docs-licence-checks maintainer note.
 	all := strings.ToLower(words(body))
 
 	for _, withdrawn := range []string{

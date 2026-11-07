@@ -166,11 +166,10 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 		// driver decodes it, and the string is kept because it must read
 		// exactly as the other server writes it.
 		//
-		// `_txlock=immediate` is this server's own addition, and why the saves
-		// need it lives in the sqlite-save-posture maintainer note. A
-		// transaction asked for as read-only is begun without the begin mode,
-		// so reads that only read keep their read lock, and a statement
-		// outside a transaction is not affected by a begin mode at all.
+		// `_txlock=immediate` is this server's own addition. A transaction
+		// asked for as read-only is begun without the begin mode, so reads
+		// that only read keep their read lock, and a statement outside a
+		// transaction is not affected by a begin mode at all.
 		//
 		// The path is escaped into the URL the driver reads: a path with a
 		// space, a `#`, or a `?` in it is a path, not a query. Escaping is
@@ -188,8 +187,7 @@ func dataSourceName(settings Settings) (driver string, dsn string, err error) {
 	case DialectMariadb, DialectMysql:
 		// ANSI_QUOTES is what lets the same double-quoted identifiers in the schema work on
 		// MariaDB and MySQL as they do on sqlite and PostgreSQL. Why clientFoundRows,
-		// carried on the field below, is on lives in the mysql-connection-string maintainer
-		// note.
+		// carried on the field below.
 		source := &mysql.Config{
 			User:   settings.Username,
 			Passwd: settings.Password,

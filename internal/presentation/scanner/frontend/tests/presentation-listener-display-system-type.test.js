@@ -3,7 +3,6 @@
 // type, or the empty type the wire sends for an untyped talkgroup,
 // pushes the system type up to the small line, and in every other case
 // the type is said once, on the system row.
-// see the display-system-type-line maintainer note.
 
 import './dom-shim.js';
 

@@ -3,8 +3,7 @@
 package persistence
 
 // The live tests prove the migration pass against backends that are not files, compiled only
-// under the `live` tag: see the migration-tests maintainer note for the never-skip posture,
-// the reseed-per-test rule, and what each run proves.
+// under the `live` tag: the reseed-per-test rule, and what each run proves.
 
 import (
 	"context"

@@ -1,7 +1,6 @@
 // the progress row rides the audio clock: the engine anchors the
 // elapsed reading to the recording's own position, which the replaced
 // wall clock could not keep true across a replay or a pause.
-// see the audio-clock-progress-row maintainer note.
 
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';

@@ -70,8 +70,7 @@ func registerHealthReview(target *mcp.Server, deps Deps) {
 
 		// The log view is asked once per severity, because its counts describe
 		// the criteria as submitted, and oldest first, because newest-first
-		// would read the day before an instant at the window's start; see the
-		// log-review-asks-the-log-view-as-the-operator-would maintainer note.
+		// would read the day before an instant at the window's start.
 		warnings, err := deps.Logs.Handle(ctx, application.SearchLogsQuery{Search: domain.LogSearch{
 			Date:      at,
 			Level:     domain.LogLevelWarn,

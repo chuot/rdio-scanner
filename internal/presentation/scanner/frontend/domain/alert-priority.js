@@ -1,6 +1,5 @@
 // Alert and LED color priority resolution: group, then tag, then
 // system, then talkgroup.
-// see the alert-priority-single-source maintainer note.
 
 export function resolveAlert(call, config) {
   for (const groupData of call?.groupsData ?? []) {

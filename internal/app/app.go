@@ -59,14 +59,12 @@ type Config struct {
 	// DbTLS, DbSslMode, and DbConnectTimeout are the database transport
 	// options the operator opts in to: db_tls for the mysql driver, db_sslmode
 	// for postgres, and a connect timeout for both.
-	// see the configuration-transport-options maintainer note.
 	DbTLS            string
 	DbSslMode        string
 	DbConnectTimeout string
 
 	// BcryptCost is the bcrypt cost the deployment hashes the administrator
 	// credential at. The zero value means bcrypt's own default cost.
-	// see the bcrypt-cost-option maintainer note.
 	BcryptCost int
 
 	Listen      string
@@ -77,13 +75,11 @@ type Config struct {
 
 	// TrustedProxies names the proxy addresses whose X-Forwarded-For the server
 	// honors, a comma-separated list of CIDR prefixes and bare addresses.
-	// see the trusted-proxies-option maintainer note.
 	TrustedProxies string
 
 	// McpServer is whether this server serves the Model Context Protocol
 	// endpoint an AI assistant administers the deployment through. Off is the
 	// default at every entry point.
-	// see the legacy-configuration-relocation maintainer note.
 	McpServer bool
 
 	// Version is the release the server reports to clients, and is what the build tool resolved from
@@ -94,10 +90,8 @@ type Config struct {
 
 	Echo LogEcho
 
-	// Converter decides which ffmpeg the server converts with and which ffprobe
-	// it measures lengths with, and it is decided once while the server is
-	// wired.
-	// see the ffmpeg-carried-by-the-server-and-hosted-by-the-operator maintainer note.
+	// Converter decides which ffmpeg the server converts with and which ffprobe it
+	// measures lengths with, and it is decided once while the server is wired.
 	Converter func(dir string) (ports.AudioConverter, ports.AudioLengthProber, string)
 }
 
@@ -133,7 +127,6 @@ func (config *Config) GetAutocertCachePath() string {
 // GetFFmpegDirPath returns the disposable folder under the system temp
 // directory, named for the server, where the carried programs and the
 // probe files are written.
-// see the legacy-configuration-relocation maintainer note.
 func (config *Config) GetFFmpegDirPath() string {
 	return filepath.Join(os.TempDir(), "rdio-scanner.ffmpeg")
 }
@@ -145,7 +138,6 @@ type LogEcho interface {
 // ChangeAdminPassword stores the chosen administrator credential, says so
 // in the log view, and exits: the -admin_password mode, run instead of
 // starting the server.
-// see the signing-secret-choice maintainer note.
 func (s *Server) ChangeAdminPassword(ctx context.Context, password string) error {
 	hash, err := s.hashes.Hash(ctx, password)
 	if err != nil {
@@ -180,7 +172,6 @@ func (s *Server) ChangeAdminPassword(ctx context.Context, password string) error
 // refuses the mode for any other backend before this method is reached, and
 // the check here keeps the composition root honest when the operation is
 // called directly.
-// see the sqlite-vacuum maintainer note.
 func (s *Server) Vacuum(ctx context.Context) (persistence.VacuumMeasurements, persistence.VacuumMeasurements, error) {
 	if s.dialect != persistence.DialectSqlite {
 		return persistence.VacuumMeasurements{}, persistence.VacuumMeasurements{},
@@ -192,7 +183,6 @@ func (s *Server) Vacuum(ctx context.Context) (persistence.VacuumMeasurements, pe
 
 // serviceLog is the copy of the server's log entries a service manager
 // keeps, the log an operator of a service deployment reads.
-// see the console-window-and-log-copies maintainer note.
 type serviceLog struct {
 	logger service.Logger
 }

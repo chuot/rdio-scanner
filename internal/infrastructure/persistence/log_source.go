@@ -30,8 +30,7 @@ import (
 // has to come out of this server exactly as it went in, so everything that
 // changes a database that already exists happens here, after the schema has
 // been applied and before any v6 table is read. MySQL is why the column and
-// the source index each have two spellings, and the migration-pass posture is
-// the log-source migration pass maintainer note.
+// the source index each have two spellings.
 const (
 	logSourceColumnSqlite     = `ALTER TABLE "logs" ADD COLUMN "source" text NOT NULL DEFAULT ''`
 	logSourceColumnServer     = `ALTER TABLE "logs" ADD COLUMN "source" varchar(255) NOT NULL DEFAULT ''`
@@ -102,8 +101,6 @@ func ensureLogSourceColumn(ctx context.Context, s store) error {
 	// the column and to the runs that find the indexes missing, and to no
 	// other run; it files only rows that still name no source, so a row an
 	// operator or a legacy server already re-filed keeps what it was given.
-	// Why the fill belongs to no other run is the log-source backfill
-	// maintainer note.
 	missing := false
 
 	for _, index := range indexes {

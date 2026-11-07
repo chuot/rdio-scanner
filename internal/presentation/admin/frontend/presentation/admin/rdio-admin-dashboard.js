@@ -1,6 +1,5 @@
 // rdio-admin-dashboard: read of the server, not a form: no store slice,
-// GET /api/admin/status on its own interval; rendering only, rules elsewhere
-// see the dashboard-status-read maintainer note.
+// GET /api/admin/status on its own interval; this file only renders.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import {
@@ -116,8 +115,8 @@ class RdioAdminDashboard extends HTMLElement {
     return reading;
   }
 
-  // a requested refresh is answered out loud; a refusal is said once
-  // see the dashboard-refresh-announce maintainer note.
+  // a requested refresh is answered out loud; a refusal is said
+  // once.
   async readAgain() {
     this.failureAnnounced = false;
 
@@ -208,8 +207,8 @@ class RdioAdminDashboard extends HTMLElement {
       return;
     }
 
-    // stale past three intervals; a refused read is stale from the first refusal on
-    // see the dashboard-stale-readline maintainer note.
+    // stale past three intervals; a refused read is stale from the first refusal
+    // on.
     const stale = status.failed || isStale(status.fetchedAt, new Date().toISOString());
 
     this.readLine.textContent = stale

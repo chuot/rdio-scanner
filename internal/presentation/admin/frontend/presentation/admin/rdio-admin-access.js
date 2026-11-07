@@ -287,8 +287,7 @@ class RdioAdminAccess extends HTMLElement {
     const rows = [fresh, ...this.rows.map((row, i) => ({ ...row, order: i + 2 }))];
 
     // the added row opens as the section's one open row: the others close in the map
-    // and on the page, since the next render reads open rows off the page
-    // see the single-open-row-rule maintainer note.
+    // and on the page, since the next render reads open rows off the page.
     for (const row of this.querySelectorAll('details[data-key]')) row.open = false;
 
     this.openState.clear();

@@ -34,7 +34,6 @@ import (
 
 // The call-upload endpoints take posted recordings, answer in plain
 // text, and file every refusal with the upload endpoint.
-// see the call-upload-tests-and-their-captures maintainer note.
 
 const (
 	uploadSystemRef    = uint(10001)
@@ -338,7 +337,6 @@ func (fixture *uploadFixture) loggedAs(source domain.LogSource, fragment string)
 
 // TestCallUploadEndpointAnswersTheCapturedUpload proves an accepted
 // upload gets the captured legacy answer, credential kept out.
-// see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointAnswersTheCapturedUpload(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -376,7 +374,6 @@ func TestCallUploadEndpointAnswersTheCapturedUpload(t *testing.T) {
 
 // TestCallUploadEndpointRefusesAKeyTheServerDoesNotKnowWithTheCapturedAnswer
 // proves the refusal is the legacy message, whose two names are nothing.
-// see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointRefusesAKeyTheServerDoesNotKnowWithTheCapturedAnswer(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -399,13 +396,11 @@ func TestCallUploadEndpointRefusesAKeyTheServerDoesNotKnowWithTheCapturedAnswer(
 	// The refusal is filed with the upload endpoint, which the legacy
 	// server never did: the operator must tell an unreachable server
 	// from a refused upload. The uploader's answer is unchanged.
-	// see the call-upload-tests-and-their-captures maintainer note.
 	if !fixture.loggedAs(domain.LogSourceUpload, "the upload was refused: the apikey is not valid") {
 		t.Errorf("the refused credential is not filed with the upload endpoint: %v", fixture.logs.Stored)
 	}
 
 	// The refusal entry is stamped with the server's clock.
-	// see the call-upload-tests-and-their-captures maintainer note.
 	fixture.assertStamped(t, "the upload was refused")
 }
 
@@ -486,8 +481,7 @@ func TestCallUploadEndpointRefusesAKeyScopedAwayFromTheSystemTheUploadNames(t *t
 	}
 }
 
-// TestCallUploadEndpointAnswersWhatASubmissionIsMissing answers what is missing,
-// see the call-upload-tests-and-their-captures maintainer note.
+// TestCallUploadEndpointAnswersWhatASubmissionIsMissing answers what is missing.
 func TestCallUploadEndpointAnswersWhatASubmissionIsMissing(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -522,8 +516,8 @@ func TestCallUploadEndpointAnswersWhatASubmissionIsMissing(t *testing.T) {
 	}
 }
 
-// TestCallUploadEndpointRefusesAMethodItDoesNotAnswerWithItsOwnBody refuses
-// with its own body, see the call-upload-tests-and-their-captures maintainer note.
+// TestCallUploadEndpointRefusesAMethodItDoesNotAnswerWithItsOwnBody refuses with
+// its own body.
 func TestCallUploadEndpointRefusesAMethodItDoesNotAnswerWithItsOwnBody(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -591,7 +585,6 @@ func TestCallUploadEndpointRefusesARequestWhoseContentTypeItCannotRead(t *testin
 
 // TestCallUploadEndpointReportsAMultipartBodyItCannotRead proves an
 // unreadable body is reported with the reader's own words.
-// see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointReportsAMultipartBodyItCannotRead(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -642,9 +635,8 @@ func TestCallUploadEndpointReportsABodyThatStopsBeingRead(t *testing.T) {
 }
 
 // TestUploadEndpointAnswersSuccessForACallTheServerCouldNotPlace proves an
-// unplaceable call is still answered success: the failure reaches only
-// the server's own log view.
-// see the call-upload-tests-and-their-captures maintainer note.
+// unplaceable call is still answered success: the failure reaches only the
+// server's own log view.
 func TestUploadEndpointAnswersSuccessForACallTheServerCouldNotPlace(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -752,7 +744,6 @@ func TestTrunkRecorderUploadEndpointRefusesASidecarItCannotRead(t *testing.T) {
 // TestUploadEndpointsHandTheParserEveryFieldInTheOrderTheyArrived proves
 // both endpoints apply posted fields in arrival order, so a later field
 // wins an earlier one.
-// see the call-upload-tests-and-their-captures maintainer note.
 func TestUploadEndpointsHandTheParserEveryFieldInTheOrderTheyArrived(t *testing.T) {
 	cases := []struct {
 		path   string
@@ -857,7 +848,6 @@ func (err *bodyCutShortError) Error() string {
 // TestCallUploadEndpointRefusesABodyBeyondTheUploadCap proves a body over
 // the cap is refused with the existing read-failure answer: the only
 // thing between an anonymous POST and the server's memory.
-// see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointRefusesABodyBeyondTheUploadCap(t *testing.T) {
 	fixture := newUploadFixture()
 
@@ -903,7 +893,6 @@ func TestCallUploadEndpointAcceptsABodyUnderTheUploadCap(t *testing.T) {
 // TestCallUploadEndpointFilesAnOversizedListTruncation proves the
 // endpoint files the parser's list truncation in the operator's log:
 // the upload is still taken, just bounded.
-// see the call-upload-tests-and-their-captures maintainer note.
 func TestCallUploadEndpointFilesAnOversizedListTruncation(t *testing.T) {
 	fixture := newUploadFixture()
 

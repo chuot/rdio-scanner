@@ -28,8 +28,7 @@ import (
 // The tally the status view's log-health card is built from, kept apart from the
 // log view's search: the search pages and filters entries for an operator reading
 // them, this counts what the server complained about for an operator watching a
-// page. Why only error and warning severities are tallied is the log health tally
-// posture maintainer note.
+// page.
 
 var _ ports.LogTallyRepository = (*Logs)(nil)
 

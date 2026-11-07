@@ -31,8 +31,7 @@ import (
 
 // Progress receives one migration line and the level it is filed under: carried tables are
 // notices, left-behind rows and damaged units are problems. Levels are decided here because the
-// pass is rebuilding the log table it would otherwise write into; see the migration-progress-
-// reporting maintainer note.
+// pass is rebuilding the log table it would otherwise write into.
 type Progress func(level, message string)
 
 // Migrate applies the schema and then the v6 → v7 migration pass, in the order
@@ -41,20 +40,15 @@ type Progress func(level, message string)
 // The thirteen stages run in the legacy order because later stages resolve
 // their v6 references against tables earlier stages have already filled; a
 // different order migrates a different database. A database with no v6 tables
-// is left as it was: every stage probes its own table, and the v6 catalog
-// probe maintainer note says what that probe does, and does not, look at.
-// The order, the idempotence posture, the callback levels, and the bound-
-// parameter repair are in the v6-to-v7 migration chain and migration progress
-// reporting maintainer notes.
+// is left as it was: every stage probes its own table.
 //
 // Stages that add columns or indexes this server owns run before the pass: the
 // log source column, the call audio length column, the calls search index, the
 // migration archive, and the options key index are additive steps kept out of
-// the dialect schemas, as the migration archives maintainer note explains. A
-// database the legacy server already migrated can still hold damage this pass
-// will not touch, because the v6 rows it read from are gone, so
-// reportMigrationDamage reads what is left at the end of the startup pass,
-// before the server starts answering from it.
+// the dialect schemas. A database the legacy server already migrated can still
+// hold damage this pass will not touch, because the v6 rows it read from are
+// gone, so reportMigrationDamage reads what is left at the end of the startup
+// pass, before the server starts answering from it.
 func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock, progress Progress) error {
 	if progress == nil {
 		progress = func(_, _ string) {}
@@ -97,16 +91,15 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 		return operationError("database", "migrate", err)
 	}
 
-	// The migration archive is created here, not in the dialect schemas, per the
-	// migration archives maintainer note; the step runs before any v6 table is read.
+	// The migration archive is created here, not in the dialect schemas, the step
+	// runs before any v6 table is read.
 	if err := ensureMigrationArchive(ctx, s); err != nil {
 		return operationError("database", "migrate", err)
 	}
 
 	// The options table gets its one-row-per-key rule before any step writes option
 	// rows: the duplicates a legacy deployment's saves left behind are removed first,
-	// and the unique index is created over the deduplicated table. See the options-key-
-	// index maintainer note.
+	// and the unique index is created over the deduplicated table.
 	if err := ensureOptionsKeyIndex(ctx, s); err != nil {
 		return operationError("database", "migrate", err)
 	}
@@ -179,11 +172,10 @@ func alreadyCarried(ctx context.Context, tx transaction, table, column string, i
 
 // readV6Table opens the v6 table a migration is carrying rows out of: on the
 // pool for the server backends, on the transaction itself for the file
-// backend, per the reading-the-v6-tables maintainer note. The cursor stays
-// open while the carry, the archive, and the alreadyCarried pre-check run, so
-// nothing may write a v6 table while it is being read: dropV6Table runs only
-// after this cursor is closed, and a carry that fails halfway rolls back so
-// the next run reads the same rows again.
+// backend. The cursor stays open while the carry, the archive, and the
+// alreadyCarried pre-check run, so nothing may write a v6 table while it is
+// being read: dropV6Table runs only after this cursor is closed, and a carry
+// that fails halfway rolls back so the next run reads the same rows again.
 func readV6Table(ctx context.Context, s store, tx transaction, query string) (*sql.Rows, error) {
 	if s.dialect == DialectSqlite {
 		return tx.query(ctx, query)
@@ -198,9 +190,9 @@ func readV6Table(ctx context.Context, s store, tx transaction, query string) (*s
 }
 
 // v6DateTime reads one v6 datetime column into the instant it names, in whatever shape the driver
-// that carried it hands back: see the datetime-shapes maintainer note. A value that fits none of
-// those shapes is reported, and the caller treats it the way it treats a row it could not read at
-// all: the row's table stays where the pass found it.
+// that carried it hands back. A value that fits none of those shapes is reported, and the caller
+// treats it the way it treats a row it could not read at all: the row's table stays where the
+// pass found it.
 func v6DateTime(value any) (sql.NullTime, error) {
 	switch typed := value.(type) {
 	case nil:
@@ -221,8 +213,7 @@ func v6DateTime(value any) (sql.NullTime, error) {
 	return sql.NullTime{Time: when, Valid: true}, nil
 }
 
-// v6DateTimeLayouts are the shapes a v6 datetime arrives in, in the order tried; the datetime-shapes
-// maintainer note says where each shape comes from.
+// v6DateTimeLayouts are the shapes a v6 datetime arrives in, in the order tried.
 var v6DateTimeLayouts = []string{
 	"2006-01-02 15:04:05",
 	"2006-01-02 15:04:05 -07:00",
@@ -241,9 +232,8 @@ func parseV6DateTime(text string) (time.Time, error) {
 }
 
 // dropV6Table drops the v6 table a migration has just read, unless some row of it could not be
-// read: see the damaged-rows maintainer note for why the table stays where it was found. `unread`
-// is set by the row loop when a scan fails, and the cursor error covers a read that stopped before
-// the end of the table: both name a row the pass never saw.
+// read. `unread` is set by the row loop when a scan fails, and the cursor error covers a read that
+// stopped before the end of the table: both name a row the pass never saw.
 func dropV6Table(ctx context.Context, tx transaction, progress Progress, part, section, operation, table string, unread bool) {
 	if unread {
 		progress(domain.LogLevelWarn, fmt.Sprintf("the migration left the %s table where it found it: a row of it could not be read", part))
@@ -260,8 +250,7 @@ func dropV6Table(ctx context.Context, tx transaction, progress Progress, part, s
 
 // migrateGroups mirrors `migrateGroups` in `server/migrations.go`: it carries the v6 groups
 // re-ordered by label with a display order of 1..n, keeping their v6 identifiers so a group keeps
-// the identity its talkgroups refer to. Its gate is the legacy probe, not a row count: see the
-// groups-probe-and-order maintainer note.
+// the identity its talkgroups refer to. Its gate is the legacy probe, not a row count.
 func migrateGroups(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateGroups", "groups"
 
@@ -498,8 +487,7 @@ func migrateTags(ctx context.Context, s store, progress Progress) error {
 
 // migrateSystems mirrors `migrateSystems` in `server/migrations.go`: the v6 system's `id` column is
 // its radio-system reference and becomes `systemRef`, and its `_id` becomes the identity every
-// later stage resolves v6 references against; see the system-unit-and-talkgroup maintainer
-// note for the blacklist shape.
+// later stage resolves v6 references against.
 func migrateSystems(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateSystems", "systems"
 
@@ -659,7 +647,7 @@ func normalizeBlacklist(text string) string {
 // migrateTalkgroups mirrors `migrateTalkgroups` in `server/migrations.go`: each row's system and
 // group are resolved against the tables earlier stages have already filled, a row whose system is
 // not there is archived with its reason said at warn level, and a group link is written only for a
-// group that is actually here; see the system-unit-and-talkgroup maintainer note.
+// group that is actually here.
 func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateTalkgroups", "talkgroups"
 
@@ -962,8 +950,7 @@ func migrateTalkgroups(ctx context.Context, s store, progress Progress) error {
 
 // migrateUnits mirrors `migrateUnits` in `server/migrations.go`: each row's system is resolved the
 // way the talkgroup stage resolves it, and a row whose system is not there is archived with its
-// reason said at warn level; see the system-unit-and-talkgroup maintainer note for the
-// repaired `unitRef` write.
+// reason said at warn level write.
 func migrateUnits(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateUnits", "units"
 
@@ -1156,8 +1143,7 @@ func migrateUnits(ctx context.Context, s store, progress Progress) error {
 
 // ensureOptionsKeyIndex gives the options table the one rule its own writes assume: a key appears
 // once. It removes the duplicates a deployment already has, keeping the last row written for each
-// key, and the unique index refuses further ones; see the options-key-index maintainer note for why
-// MySQL duplicated every key and why the step is a migration step rather than schema.
+// key, and the unique index refuses further ones.
 func ensureOptionsKeyIndex(ctx context.Context, s store) error {
 	const section, operation = "migration", "ensureOptionsKeyIndex"
 
@@ -1191,8 +1177,7 @@ func ensureOptionsKeyIndex(ctx context.Context, s store) error {
 }
 
 // tableExists asks the database's own catalog whether a table is there, which is the question the v6
-// gates ask and the reason they no longer run a count against the table itself: see the
-// catalog-probe maintainer note.
+// gates ask and the reason they no longer run a count against the table itself.
 func tableExists(ctx context.Context, s store, table string) (bool, error) {
 	// Views count as there: the legacy probe read a view as easily as a table, and
 	// the migrations that consume the v6 names meet the same failures over a view as
@@ -1246,8 +1231,7 @@ func hasOptionsKeyIndex(ctx context.Context, s store) (bool, error) {
 
 // migrateOptions mirrors `migrateOptions` in `server/migrations.go`: it unpacks a fixed list of names
 // out of the v6 configuration table's `options` row and copies every other row of that table across
-// as it stands; see the options-blob maintainer note for what the unpack accepts, how it stores a
-// value, and what it leaves behind.
+// as it stands; how it stores a value, and what it leaves behind.
 func migrateOptions(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateOptions", "options"
 
@@ -1543,7 +1527,7 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 
 // migrateMeta mirrors `migrateMeta` in `server/migrations.go`: it archives the v6 migration
 // bookkeeping rows and drops the table, and unlike every other migration its failure is returned
-// rather than printed; see the migration-meta-table maintainer note.
+// rather than printed.
 func migrateMeta(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateMeta", "meta"
 
@@ -1639,7 +1623,7 @@ func migrateMeta(ctx context.Context, s store, progress Progress) error {
 // migrateLogs mirrors `migrateLogs` in `server/migrations.go`: it converts the v6 datetime
 // timestamps to the Unix milliseconds this schema stores everywhere, and a row with no timestamp,
 // no level, or no message is archived with its reason said rather than skipped silently. The rows
-// it carries are filed afterwards; see the log-source-backfill maintainer note.
+// it carries are filed afterwards.
 func migrateLogs(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateLogs", "logs"
 
@@ -1776,8 +1760,7 @@ func migrateLogs(ctx context.Context, s store, progress Progress) error {
 	}
 
 	// The rows just carried across arrived with nothing in the source column, and the add-column step
-	// that files the rows a database already has ran before them: see the log-source-backfill
-	// maintainer note.
+	// that files the rows a database already has ran before them.
 	return backfillLogSources(ctx, s)
 }
 
@@ -1927,8 +1910,8 @@ const v6DirwatchesTable = "rdioScannerDirWatches"
 
 // migrateDirwatches mirrors `migrateDirwatches` in `server/migrations.go`: the lookup maps that
 // resolve a dirwatch's system and talkgroup are the legacy cross product scanned with the legacy's
-// leftover variables, and the three statements naming the v6 table now name it once,
-// in the spelling v6 created it with; see the dirwatch-table-name maintainer note.
+// leftover variables, and the three statements naming the v6 table now name it once, in the
+// spelling v6 created it with.
 func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateDirwatches", "dirwatches"
 
@@ -2168,8 +2151,7 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 
 // migrateCalls mirrors `migrateCalls` in `server/migrations.go`: a call is carried only when its
 // audio, its timestamp, and both of its aggregate references resolve, and it is archived with its
-// audio when it does not; see the call-storage maintainer note for how the embedded JSON columns
-// are unpacked and what the two disagreeing column checks pin.
+// audio when it does not.
 func migrateCalls(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateCalls", "calls"
 
@@ -2854,8 +2836,7 @@ func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 
 // reportMigrationDamage reads the two shapes the legacy migration pass leaves in a database that
 // pass has already run over and writes what it finds to `progress`; it changes no row, and a
-// failure to read is reported and carried on from. See the legacy-damage-report maintainer note for
-// why neither shape is repaired, why the report is console-only, and why the comparison runs in Go.
+// failure to read is reported and carried on from.
 func reportMigrationDamage(ctx context.Context, s store, progress Progress) {
 	const section, operation = "migration", "damage"
 
@@ -2917,7 +2898,7 @@ func damagedSystem(label sql.NullString, ref sql.NullInt64) string {
 }
 
 // reportDamaged writes one summary line and then one line per damaged unit, and says nothing at all
-// when there is nothing to say; see the legacy-damage-report maintainer note for what each line names.
+// when there is nothing to say.
 func reportDamaged(progress Progress, found []string, one, many, cause string) {
 	if len(found) == 0 {
 		return

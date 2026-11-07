@@ -240,7 +240,6 @@ class RdioDisplay extends HTMLElement {
 
   // the display writes the listener's state it shows into the shell's
   // polite region, in the page's own words; the first render stays silent.
-  // see the display-state-announcements maintainer note.
   announceState(call, pause, queue) {
     const playing = call ? (call.talkgroupData?.label ?? `${call.talkgroup}`) : null;
 

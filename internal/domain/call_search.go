@@ -158,7 +158,7 @@ type TalkgroupScope struct {
 // no scope named sees every system here — unlike live delivery, where no
 // scope grants nothing. Talkgroups the server no longer knows are left out;
 // a system keeps its place even empty. The scope-list distinction and the
-// ordering quirks live in the domain maintainer note.
+// ordering quirks live.
 func (systems Systems) Scoped(scope AccessScope, tags Tags) Systems {
 	out := Systems{}
 

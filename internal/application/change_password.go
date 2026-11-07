@@ -126,8 +126,7 @@ func (handler *ChangeAdminPasswordHandler) Handle(ctx context.Context, cmd Chang
 	}
 
 	// The options are read back from what was stored, and that read resets every option to
-	// its default before applying the stored rows; the reason that quietly restores the
-	// duplicate-detection window lives in the administrator-credential maintainer note.
+	// its default before applying the stored rows.
 	reloaded, err := handler.options.ReloadOptions(ctx)
 	if err != nil {
 		return handler.reject(ctx, err, refused)

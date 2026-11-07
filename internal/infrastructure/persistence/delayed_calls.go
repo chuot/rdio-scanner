@@ -25,8 +25,7 @@ import (
 
 // DelayedCalls stores the calls that are waiting out a talkgroup or system
 // delay. It is table-backed rather than held in memory, and nothing here
-// decides whether a call is delayed, per the delayed calls posture maintainer
-// note.
+// decides whether a call is delayed.
 type DelayedCalls struct {
 	store store
 }

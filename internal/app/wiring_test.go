@@ -293,7 +293,6 @@ func TestTheOptionsSecretReportsAReadFailure(t *testing.T) {
 
 // a ServeContent-style endpoint keeps every byte behind the deadline
 // writer.
-// see the request-and-stream-deadline-constants maintainer note.
 func TestARequestThatNamesItsStatusThenWritesItsBodyKeepsEveryByte(t *testing.T) {
 	handler := withRequestDeadline(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "audio/wav")
@@ -322,7 +321,6 @@ func TestARequestThatNamesItsStatusThenWritesItsBodyKeepsEveryByte(t *testing.T)
 
 // a blocked handler is answered with a failure once its work outlives the
 // request deadline.
-// see the request-and-stream-deadline-constants maintainer note.
 func TestARequestWhoseWorkBlocksIsAnsweredWithAFailureByTheDeadline(t *testing.T) {
 	release := make(chan struct{})
 	t.Cleanup(func() { close(release) })
@@ -360,7 +358,6 @@ func TestARequestWhoseWorkBlocksIsAnsweredWithAFailureByTheDeadline(t *testing.T
 }
 
 // the request deadline is twenty-five seconds.
-// see the request-and-stream-deadline-constants maintainer note.
 func TestTheRequestDeadlineIsTwentyFiveSeconds(t *testing.T) {
 	if got, want := requestDeadline, 25*time.Second; got != want {
 		t.Errorf("request deadline = %v, want %v: inside the socket timeouts, so the answer is a readable failure", got, want)
@@ -406,8 +403,6 @@ func TestTheModelContextProtocolSubtreeIsBoundedByItsOwnDeadline(t *testing.T) {
 
 	// the assistant endpoint refuses at the stream bound, not the request
 	// bound.
-	// see the request-and-stream-deadline-constants maintainer note.
-	// see the request-and-stream-deadline-constants maintainer note.
 	refused := awaitTheAnswer(t, startTheRequest(server.URL+"/mcp"))
 
 	if refused.status != http.StatusServiceUnavailable {
@@ -430,8 +425,6 @@ func TestTheModelContextProtocolSubtreeIsBoundedByItsOwnDeadline(t *testing.T) {
 
 	// a request past the request bound keeps working and answers with its own
 	// result.
-	// see the request-and-stream-deadline-constants maintainer note.
-	// see the request-and-stream-deadline-constants maintainer note.
 	assistant := startTheRequest(server.URL + "/mcp")
 
 	administered := awaitTheAnswer(t, startTheRequest(server.URL+"/api/admin/alerts"))
@@ -483,7 +476,6 @@ func TestTheStreamDeadlineIsMateriallyLargerThanTheRequestDeadline(t *testing.T)
 }
 
 // startTheRequest issues a request and leaves it running.
-// see the request-and-stream-deadline-constants maintainer note.
 func startTheRequest(url string) chan requestAnswer {
 	running := make(chan requestAnswer, 1)
 
@@ -513,7 +505,6 @@ func startTheRequest(url string) chan requestAnswer {
 }
 
 // requestAnswer is what a request answered and how long it took.
-// see the request-and-stream-deadline-constants maintainer note.
 type requestAnswer struct {
 	status  int
 	body    string
@@ -543,7 +534,6 @@ func awaitTheAnswer(t *testing.T, running chan requestAnswer) requestAnswer {
 }
 
 // the hourly retention pass runs under a context with a deadline.
-// see the request-and-stream-deadline-constants maintainer note.
 func TestTheHourlyPruningRunsUnderAContextWithADeadline(t *testing.T) {
 	scheduler := fakes.NewScheduler()
 
@@ -568,7 +558,6 @@ func TestTheHourlyPruningRunsUnderAContextWithADeadline(t *testing.T) {
 }
 
 // recordedPruning keeps the context the pass ran under.
-// see the request-and-stream-deadline-constants maintainer note.
 type recordedPruning struct {
 	calls int
 	ctx   context.Context

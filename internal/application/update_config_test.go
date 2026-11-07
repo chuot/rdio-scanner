@@ -289,9 +289,9 @@ func TestUpdateConfigurationKeepsGoingWhenASectionCannotBeStored(t *testing.T) {
 }
 
 // A whole-configuration save names a section the store refused in `Failed` and a section the
-// store holds while the announcement failed separately; the distinction lives in the
-// configuration-save-failure maintainer note. The announcement here reads a configuration
-// through a repository that cannot answer its read — `tags`, which this save never writes.
+// store holds while the announcement failed separately. The announcement here reads a
+// configuration through a repository that cannot answer its read — `tags`, which this save
+// never writes.
 func TestUpdateConfigurationReportsTheSectionsItStoredWhenTheAnnouncementFailed(t *testing.T) {
 	fixture := newConfigFixture()
 
@@ -389,8 +389,7 @@ func TestUpdateConfigurationStopsAndRestartsTheDirectoryWatchersAroundTheSave(t 
 	}
 }
 
-// A whole-configuration save that names no dirwatch section leaves the server watching nothing,
-// the preserved quirk the dirwatch-save maintainer note records.
+// A whole-configuration save that names no dirwatch section leaves the server watching nothing.
 func TestUpdateConfigurationWithoutADirwatchSectionLeavesTheServerWatchingNothing(t *testing.T) {
 	fixture := newConfigFixture()
 
@@ -425,8 +424,7 @@ func TestUpdateConfigurationWatchesTheStoredDirectoriesWhenItSavesTheDirwatchSec
 	}
 }
 
-// A failed dirwatch section save leaves the submitted directories being watched, the preserved
-// quirk the dirwatch-save maintainer note records.
+// A failed dirwatch section save leaves the submitted directories being watched.
 func TestUpdateConfigurationWatchesWhatWasSubmittedWhenTheDirwatchSaveFails(t *testing.T) {
 	fixture := newConfigFixture()
 	fixture.dirwatches.SaveErr = errors.New("disk full")
@@ -554,9 +552,8 @@ func TestUpdateConfigurationSectionReportsAFailureAndChangesNothingElse(t *testi
 	}
 }
 
-// A per-section save distinguishes a section the store holds while the announcement failed from
-// one it refused, even though the administration page answers both the same way; the
-// distinction lives in the configuration-save-failure maintainer note.
+// A per-section save distinguishes a section the store holds while the announcement failed from one
+// it refused, even though the administration page answers both the same way.
 //
 // The watchers are restarted before the announcement is attempted, exactly as they are for a save the
 // store refused, so an announcement failure cannot leave the server stopped watching. That is pinned

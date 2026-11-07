@@ -31,8 +31,7 @@ import (
 //
 // A seed failure is returned wrapped, and unlike a migration a seed treats
 // a failure of the count that decides whether to seed as a failure; the two
-// postures and the legacy wrapping live in the seed-failure-posture
-// maintainer note.
+// postures and the legacy wrapping live.
 func Seed(ctx context.Context, db *sql.DB, dialect Dialect) error {
 	s := newStore(db, dialect)
 

@@ -28,7 +28,6 @@ import (
 
 // the changed paths are the paths git says are not committed, so the
 // operator sees the work to commit.
-// see the version-changed-paths maintainer note.
 func TestTheChangedPathsAreThePathsGitSaysAreNotCommitted(t *testing.T) {
 	status := strings.TrimSpace(strings.Join([]string{
 		" M cmd/build/build.go",
@@ -59,7 +58,6 @@ func TestTheChangedPathsAreThePathsGitSaysAreNotCommitted(t *testing.T) {
 // scratchRepository makes a repository in a temporary directory, with
 // one empty commit and, when a tag name is given, that tag naming it.
 // The tag is written as a ref file rather than with the git tag command.
-// see the version-test-scratch maintainer note.
 func scratchRepository(t *testing.T, tag string) string {
 	t.Helper()
 
@@ -292,7 +290,6 @@ func TestReadSourceReportsAVersionTheRepositoryNeverDeclaredAsAssumed(t *testing
 
 // scratchWithoutARepository is a scratch directory no repository
 // covers, which is what the tests below need git to refuse.
-// see the version-test-scratch maintainer note.
 func scratchWithoutARepository(t *testing.T) string {
 	t.Helper()
 
@@ -342,7 +339,6 @@ func TestReadSourceRefusesAVersionFileItCannotReadBeforeAskingGit(t *testing.T) 
 // a tree git cannot answer for names git, the directory, and the
 // command, because git's own complaint is the part that says what
 // to do and exit status 128 alone does not.
-// see the version-git-errors maintainer note.
 func TestATreeGitCannotAnswerForNamesGitTheDirectoryAndTheCommand(t *testing.T) {
 	dir := scratchWithoutARepository(t)
 

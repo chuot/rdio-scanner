@@ -22,8 +22,7 @@ import (
 )
 
 // Scheduler runs work after a delay: the clock says when it is, and the scheduler says when
-// something will be. It is the adapter behind the application's Scheduler port; see the
-// clock-and-scheduler maintainer note.
+// something will be. It is the adapter behind the application's Scheduler port.
 type Scheduler struct {
 	// report is told the panic a piece of scheduled work recovered, so the
 	// server says the failure in its own log instead of dying by it.
@@ -44,8 +43,7 @@ func NewScheduler(report func(problem any)) *Scheduler {
 
 // Schedule asks for work to run after the delay and hands back the handle that can abandon it.
 // The work runs on a timer and a goroutine the scheduler owns rather than the caller's, and
-// under a recover that hands the recovered value to the report; see the clock-and-scheduler
-// maintainer note.
+// under a recover that hands the recovered value to the report.
 func (scheduler *Scheduler) Schedule(delay time.Duration, work func()) ports.Timer {
 	return scheduled{timer: time.AfterFunc(delay, func() {
 		defer func() {

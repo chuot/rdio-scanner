@@ -94,8 +94,7 @@ type AdminDeps struct {
 // the command-line tooling talk to. It decides nothing: every endpoint reads a
 // credential, hands what was submitted to the use case that owns the decision, and
 // turns the outcome into the status code and body the frozen contract fixes. Each
-// endpoint writes down its own order of those steps rather than sharing a helper; see
-// the administrator-endpoint-gate-order maintainer note.
+// endpoint writes down its own order of those steps rather than sharing a helper.
 type Admin struct {
 	addUser              *application.AddAccessUserHandler
 	config               *application.GetConfigHandler
@@ -153,8 +152,7 @@ func NewAdmin(deps AdminDeps) *Admin {
 // are part of the frozen contract, and the whole-configuration path and the section
 // subtree hanging off it are two different handlers, exactly as in the legacy server.
 // The whole-configuration path is also where the administrator's configuration socket
-// is opened: an upgrade request is handed over before any credential is asked for; see
-// the administrator-endpoint-gate-order maintainer note.
+// is opened: an upgrade request is handed over before any credential is asked for.
 func (admin *Admin) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/api/admin/alerts", admin.Alerts)
 	mux.HandleFunc("/api/admin/config", admin.Config)
@@ -256,10 +254,9 @@ func (admin *Admin) Logout(w http.ResponseWriter, r *http.Request) {
 // Config reads or saves the whole configuration, or hands the request to the
 // configuration socket. The upgrade header is looked at first, before anything is
 // asked for, and the socket authenticates by the frames it sends rather than by a
-// credential in a header; see the administrator-socket-trust maintainer note. For an
-// ordinary request the session is asked before the method, so a request asking
-// something this endpoint does not answer is told the session is gone rather than that
-// the question is wrong.
+// credential in a header. For an ordinary request the session is asked before the
+// method, so a request asking something this endpoint does not answer is told the
+// session is gone rather than that the question is wrong.
 func (admin *Admin) Config(w http.ResponseWriter, r *http.Request) {
 	if admin.configSocket != nil && upgrade.Wanted(r) {
 		admin.configSocket.ServeHTTP(w, r)
@@ -386,8 +383,7 @@ func (admin *Admin) Logs(w http.ResponseWriter, r *http.Request) {
 // administrator's landing page is built from. The credential is settled before the
 // method, and the method before anything is read; a failed read is answered with 417
 // and nothing in the body rather than a zeroed snapshot that would read as healthy and
-// idle. This path is not an upgrade path. See the status-read-protection maintainer
-// note.
+// idle. This path is not an upgrade path.
 func (admin *Admin) Status(w http.ResponseWriter, r *http.Request) {
 	if !admin.sessionIsOpen(r) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -578,8 +574,7 @@ func (admin *Admin) sendConfig(ctx context.Context, w http.ResponseWriter) {
 	})
 }
 
-// submittedConfiguration turns what was submitted into the sections a save replaces;
-// see the configuration-save-semantics maintainer note.
+// submittedConfiguration turns what was submitted into the sections a save replaces.
 func (admin *Admin) submittedConfiguration(ctx context.Context, submitted map[string]any) (application.ConfigurationChanges, error) {
 	changes := application.ConfigurationChanges{}
 
@@ -640,8 +635,7 @@ func (admin *Admin) submittedConfiguration(ctx context.Context, submitted map[st
 }
 
 // currentOptions reads the settings the server is running with, which is what a
-// submitted set of settings is merged into; see the configuration-save-semantics
-// maintainer note.
+// submitted set of settings is merged into.
 func (admin *Admin) currentOptions(ctx context.Context) (domain.Options, error) {
 	configuration, err := admin.config.Handle(ctx, application.GetConfigQuery{})
 	if err != nil {
@@ -713,8 +707,7 @@ func (admin *Admin) reportUnreadableRequest(r *http.Request, reason error) {
 
 // writeJSON answers with a payload, and with the failure status the frozen contract
 // fixes when the payload cannot be written at all; no Content-Type is named, as the
-// legacy server never named one; see the administrator-answers-carry-no-content-type
-// maintainer note.
+// legacy server never named one.
 func writeJSON(w http.ResponseWriter, payload any) {
 	body, err := json.Marshal(payload)
 	if err != nil {

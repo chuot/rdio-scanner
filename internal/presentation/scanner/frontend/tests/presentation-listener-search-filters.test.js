@@ -1,7 +1,6 @@
 // the search screen's filters and the list they narrow: the operator
 // reads labels and the history is stored under references, so the
 // screen must answer with the calls the named filter selects.
-// see the search-date-window-bounds maintainer note.
 
 import './dom-shim.js';
 

@@ -131,8 +131,8 @@ func TestAdminSiteReportsTheSystemItIsOn(t *testing.T) {
 	}
 }
 
-// TestAdminOptionsCarryNoPasswordAndNoSecret proves options carry no
-// secret and no password. see the two-configuration-payload-shapes maintainer note.
+// TestAdminOptionsCarryNoPasswordAndNoSecret proves options carry no secret and no
+// password.
 func TestAdminOptionsCarryNoPasswordAndNoSecret(t *testing.T) {
 	options := captureConfiguration().Snapshot.Options
 

@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// no stylesheet may carry //: the browser throws away the text to the next semicolon
-// see the css-scan-rules maintainer note.
+// no stylesheet may carry //: the browser throws away the text to the next
+// semicolon.
 const presentationDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const STYLESHEETS = [

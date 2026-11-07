@@ -28,8 +28,7 @@ var withoutPort = regexp.MustCompile(`(.+):.*$`)
 
 // Trusted is the list of proxy addresses whose forwarding header the
 // server honors, built once from the trusted_proxies option, and the
-// header is the peer's statement, not a fact. see the
-// trusted-proxy-selection-is-not-a-security-check maintainer note.
+// header is the peer's statement, not a fact.
 type Trusted struct {
 	prefixes []netip.Prefix
 }
@@ -62,8 +61,7 @@ func ParseTrusted(spec string) (*Trusted, error) {
 	return trusted, nil
 }
 
-// contains reports whether the peer matches a named prefix; a nil list
-// trusts nobody. see the trusted-proxy-selection-is-not-a-security-check maintainer note.
+// contains reports whether the peer matches a named prefix; a nil list trusts nobody.
 func (trusted *Trusted) contains(peer netip.Addr) bool {
 	if trusted == nil {
 		return false
@@ -95,8 +93,7 @@ func peerAddress(remoteAddr string) (netip.Addr, bool) {
 
 // Address names the machine a request came from: when the peer is a
 // named proxy, the first nonempty forwarding entry minus its port,
-// otherwise the connection address. see the
-// trusted-proxy-selection-is-not-a-security-check maintainer note.
+// otherwise the connection address.
 func Address(r *http.Request, trusted *Trusted) string {
 	if peer, ok := peerAddress(r.RemoteAddr); ok && trusted.contains(peer) {
 		for _, address := range strings.Split(r.Header.Get("X-Forwarded-For"), ",") {

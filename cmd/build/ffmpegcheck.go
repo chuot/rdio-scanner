@@ -116,7 +116,6 @@ type checkReport struct {
 
 	// Productions is what each conversion produced, in the order the check ran them.
 	// The build prints the shortest and the longest; the report keeps every one.
-	// see the ffmpeg-check-shipping-gate maintainer note.
 	Productions []production
 }
 
@@ -137,9 +136,8 @@ type production struct {
 }
 
 // ffmpegCheck runs a compiled ffmpeg through the converter's own argument list and
-// reads what comes back as the server's audio endpoints read it: an m4a, padded
-// to the length the filters ask for, carrying the server's tags.
-// see the ffmpeg-check-shipping-gate maintainer note.
+// reads what comes back as the server's audio endpoints read it: an m4a, padded to
+// the length the filters ask for, carrying the server's tags.
 func ffmpegCheck(execute command, programs checkPrograms, dir string) (checkReport, error) {
 	metadata := &theRecordingMetadata
 
@@ -196,7 +194,6 @@ func ffmpegCheck(execute command, programs checkPrograms, dir string) (checkRepo
 
 	// Ask here what the program registers: the conversions prove the binaries do the
 	// job, the registry proves what they are.
-	// see the ffmpeg-check-shipping-gate maintainer note.
 	codecs, err := theCodecsTheProgramRegisters(execute, programs)
 	if err != nil {
 		return report, err

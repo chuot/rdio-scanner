@@ -264,8 +264,7 @@ func NewAccessGate(accesses ports.AccessRepository, hub ports.Hub) *AccessGate {
 
 // RequiresAccessCode reports whether the server is restricted and this session still holds
 // nothing but the anonymous access. The test is whether the session's access names any
-// systems, which is how the legacy server recognises an unauthenticated session; its
-// consequence for an access without systems lives in the access-gating maintainer note.
+// systems, which is how the legacy server recognises an unauthenticated session.
 func (gate *AccessGate) RequiresAccessCode(ctx context.Context, clientID string) (bool, error) {
 	accesses, err := gate.accesses.AllAccesses(ctx)
 	if err != nil {

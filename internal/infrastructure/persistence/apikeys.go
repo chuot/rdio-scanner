@@ -28,7 +28,7 @@ import (
 
 // Apikeys is the server's upload credential list, held the same way the access list is
 // held: loaded once, replaced by a save before it is stored, and read back after a save
-// that worked; see the access-and-apikey-configuration-in-effect maintainer note.
+// that worked.
 type Apikeys struct {
 	store store
 
@@ -120,8 +120,7 @@ func (apikeys *Apikeys) SaveApikeys(ctx context.Context, next domain.Apikeys) er
 }
 
 // read is the legacy `Apikeys.Read`: every row, sorted by display order. `disabled` is
-// scanned straight into a Go bool, as the legacy server does; why both directions of the
-// flag work over the same column lives in the disabled-flag-parity maintainer note.
+// scanned straight into a Go bool, as the legacy server does.
 func (apikeys *Apikeys) read(ctx context.Context) (domain.Apikeys, []string, error) {
 	rows, err := apikeys.store.query(ctx, apikeySelectQuery)
 	if err != nil {
@@ -149,7 +148,7 @@ func (apikeys *Apikeys) read(ctx context.Context) (domain.Apikeys, []string, err
 		}
 
 		// The signed order column is clamped to zero on the way into the unsigned
-		// field; why, recorded in the signed-column-clamp maintainer note.
+		// field; why.
 		if order < 0 {
 			clamped = append(clamped, fmt.Sprintf("apikeys.read: apikey %d %q holds order %d: that is not a display order this server can hold, and it is read as 0",
 				id, ident, order))
@@ -189,7 +188,7 @@ func (apikeys *Apikeys) reportClamps(clamped []string) {
 
 // write is the legacy `Apikeys.Write`, in one transaction, with the values out of the
 // statements: the legacy `Write` interpolated `ident` and `key` with no escaping at all,
-// which the placeholder fix repairs, as recorded in the reconciling-saves maintainer note.
+// which the placeholder fix repairs.
 func (apikeys *Apikeys) write(ctx context.Context, list domain.Apikeys) error {
 	tx, err := apikeys.store.begin(ctx)
 	if err != nil {

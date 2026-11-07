@@ -14,5 +14,5 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>
 
 // Package frontend is the administration interface plus the Go file that serves its
-// built bundle; see the webapp-bundle-location maintainer note.
+// built bundle.
 package frontend

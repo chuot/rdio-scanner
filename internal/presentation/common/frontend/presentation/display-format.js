@@ -111,8 +111,7 @@ export function resolveUnit(call, elapsed) {  if (Array.isArray(call.sources) &&
   return call.systemData?.units?.find((u) => u.id === call.source)?.label ?? `${call.source ?? ''}`;
 }
 
-// The bound a date field is given, written the way the field reads it:
-// see the date-field-wall-clock-bounds maintainer note.
+// The bound a date field is given, written the way the field reads it.
 export function toLocalInputValue(value) {
   if (!value) return '';
 

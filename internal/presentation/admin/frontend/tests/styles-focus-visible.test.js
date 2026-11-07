@@ -5,9 +5,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// the focus indicator, proven in the stylesheets that draw it
-// a field-box ring may replace a control ring, but only paired with it
-// see the focus-visible-readings maintainer note.
+// the focus indicator, proven in the stylesheets that draw it a
+// field-box ring may replace a control ring, but only paired with it.
 const presentationDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 const STYLESHEETS = {
@@ -172,8 +171,8 @@ describe('focus indicators — the cascade the keyboard gets', () => {
     });
 
     it('draws the indicator as the accent outline the pages already use, at the offset that clears the control', () => {
-        // every ring is the accent; light fields use grey ink, forced mode uses Highlight
-        // see the focus-ring-ink maintainer note.
+        // every ring is the accent; light fields use grey ink, forced mode uses
+        // Highlight.
         const wrong = [];
 
         for (const sheet of ['theme', 'admin', 'scanner']) {
@@ -201,9 +200,8 @@ describe('focus indicators — the cascade the keyboard gets', () => {
     });
 });
 
-// under a forced palette the system owns the colours; the shapes stay
-// every sheet needs a forced-colors block, and no forced-color-adjust: none
-// see the forced-colours maintainer note.
+// under a forced palette the system owns the colours; the shapes stay every
+// sheet needs a forced-colors block, and no forced-color-adjust: none.
 
 function blocksAtOneLevel(css) {
     const stripped = css.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));

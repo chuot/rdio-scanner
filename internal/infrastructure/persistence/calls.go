@@ -29,7 +29,7 @@ import (
 
 // Calls is the recorded call history: the calls table and its callFrequencies,
 // callPatches, and callUnits children. Every statement keeps its values as
-// placeholders, per the call-history statements maintainer note.
+// placeholders.
 type Calls struct {
 	store
 
@@ -65,8 +65,7 @@ func (calls *Calls) reportClamps(clamped []string) {
 // GetCall returns one recorded call with its audio, its frequencies, its source
 // units, and the references of the talkgroups it was patched to, or
 // ports.ErrNotFound when nothing was recorded under that identifier. The four
-// reads run in one read-only transaction, per the call fetch transaction
-// posture maintainer note.
+// reads run in one read-only transaction.
 func (calls *Calls) GetCall(ctx context.Context, id uint64) (domain.Call, error) {
 	tx, err := calls.beginRead(ctx)
 	if err != nil {
@@ -200,7 +199,7 @@ func readCall(ctx context.Context, tx transaction, id uint64) (domain.Call, []st
 }
 
 // readCallPatches reads the references of the talkgroups a call was patched
-// to, per the patched talkgroup reads maintainer note.
+// to.
 func readCallPatches(ctx context.Context, tx transaction, id uint64) ([]uint, error) {
 	// COALESCE and the > 0 skip together make a patch whose talkgroup is gone
 	// disappear, as in the legacy server.
@@ -399,8 +398,7 @@ func writeCallFrequencies(ctx context.Context, tx transaction, id uint64, freque
 
 // writeCallPatches stores the talkgroups a call was patched to. Patches are
 // submitted as talkgroup references, resolved against the call's own system,
-// and an unresolved reference is dropped rather than failing the write, per
-// the patch reference resolution maintainer note.
+// and an unresolved reference is dropped rather than failing the write.
 func writeCallPatches(ctx context.Context, tx transaction, call domain.Call, id uint64) error {
 	const findTalkgroup = `SELECT "talkgroupId" FROM "talkgroups" WHERE "systemId" = ? AND "talkgroupRef" = ?`
 	const insertPatch = `INSERT INTO "callPatches" ("callId", "talkgroupId") VALUES (?, ?)`
@@ -445,8 +443,7 @@ const callHistoryFrom = `FROM "calls" AS c LEFT JOIN "systems" AS s ON s."system
 
 // SearchCalls returns one page of the recorded history, together with how many
 // calls the criteria matches in total and the span of their timestamps — over
-// the whole match, not the page, per the history search statements maintainer
-// note.
+// the whole match, not the page.
 func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (ports.CallSearchPage, error) {
 	where, args := callSearchFilters(search)
 
@@ -547,8 +544,7 @@ func (calls *Calls) SearchCalls(ctx context.Context, search ports.CallSearch) (p
 }
 
 // readSearchSpan reads one end of the matching history into at; an empty
-// match answers the Unix epoch, per the span empty match parity maintainer
-// note.
+// match answers the Unix epoch.
 func (calls *Calls) readSearchSpan(ctx context.Context, query string, args []any, at *time.Time) error {
 	var timestamp int64
 
@@ -573,7 +569,7 @@ func (calls *Calls) readSearchSpan(ctx context.Context, query string, args []any
 
 // callSearchFilters turns the resolved criteria into the history query's
 // filter and the values that go with it, written to stay usable through the
-// calls index, per the search filter index shape maintainer note.
+// calls index.
 func callSearchFilters(search ports.CallSearch) (string, []any) {
 	filters := []string{
 		`c."systemId" > 0`,
@@ -715,7 +711,7 @@ const nothingMatches = `1 = 0`
 // FindDuplicateCandidates returns the recorded calls that could make a call a
 // duplicate of an earlier one: the calls on the same system, talkgroup and
 // site whose timestamps fall between from and to, inclusive, read lean and
-// including held calls, per the duplicate candidate window maintainer note.
+// including held calls.
 func (calls *Calls) FindDuplicateCandidates(ctx context.Context, systemID, talkgroupID uint64, siteRef uint, from, to time.Time) ([]domain.Call, error) {
 	// No delayed join here: the legacy duplicate check counts every call in the
 	// window, held or not.

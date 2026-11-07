@@ -29,9 +29,8 @@ import (
 
 // Systems is the adapter for the stored system catalog: a system and everything under it —
 // talkgroups, their group memberships, sites, and units — all saved inside one system
-// transaction, per the systems aggregate transaction maintainer note. The catalog is the
-// configuration in effect: loaded once, replaced with what was submitted before storing, and
-// read back after a save that persisted.
+// transaction. The catalog is the configuration in effect: loaded once, replaced with what
+// was submitted before storing, and read back after a save that persisted.
 type Systems struct {
 	store store
 
@@ -82,7 +81,7 @@ func (systems *Systems) AllSystems(ctx context.Context) (domain.Systems, error) 
 // SaveSystems reconciles the stored systems with the given ones and leaves the
 // reconciled result as what the server runs with: the submitted catalog is live
 // before anything is stored, and a persisted save is followed by reading the
-// stored rows back, per the reconciling saves maintainer note.
+// stored rows back.
 func (systems *Systems) SaveSystems(ctx context.Context, next domain.Systems) error {
 	systems.mutex.Lock()
 	defer systems.mutex.Unlock()
@@ -262,8 +261,7 @@ func saveSystemLevel(ctx context.Context, s store, systemID uint64, write func(t
 
 // readSystems is the legacy `Systems.Read`: one transaction that reads the catalog and each
 // system's sites, talkgroups, and units through it, returning the result sorted by display
-// order; the transaction is asked for as read-only, per the systems aggregate transaction
-// maintainer note.
+// order; the transaction is asked for as read-only.
 func readSystems(ctx context.Context, s store) (domain.Systems, []string, error) {
 	tx, err := s.beginRead(ctx)
 	if err != nil {
@@ -300,8 +298,7 @@ func readSystems(ctx context.Context, s store) (domain.Systems, []string, error)
 		}
 
 		// The signed delay, order, and systemRef columns are clamped to zero on the
-		// way into the unsigned fields; why, recorded in the signed-column-clamp
-		// maintainer note.
+		// way into the unsigned fields; why.
 		clamps := []string{}
 
 		if delay < 0 {
@@ -379,8 +376,7 @@ func (systems *Systems) reportClamps(clamped []string) {
 }
 
 // readSites is the legacy `Sites.ReadTx`: the stored `systemId` filters the query and the site
-// is given the system it was found under, per the patched systems catalog reads maintainer
-// note.
+// is given the system it was found under.
 func readSites(ctx context.Context, tx transaction, systemID uint64) (domain.Sites, []string, error) {
 	const query = `SELECT "siteId", "label", "order", "siteRef" FROM "sites" WHERE "systemId" = ?`
 
@@ -409,8 +405,7 @@ func readSites(ctx context.Context, tx transaction, systemID uint64) (domain.Sit
 		}
 
 		// The signed order and siteRef columns are clamped to zero on the way into
-		// the unsigned fields; why, recorded in the signed-column-clamp maintainer
-		// note.
+		// the unsigned fields; why.
 		clamps := []string{}
 
 		if order < 0 {
@@ -443,8 +438,7 @@ func readSites(ctx context.Context, tx transaction, systemID uint64) (domain.Sit
 
 // readTalkgroups is the legacy `Talkgroups.ReadTx`: the talkgroup columns plus its group
 // memberships aggregated out of `talkgroupGroups` in the same row; `order` and `talkgroupRef`
-// are read from the columns they are stored in, never from each other, per the patched systems
-// catalog reads maintainer note.
+// are read from the columns they are stored in, never from each other.
 func readTalkgroups(ctx context.Context, tx transaction, dialect Dialect, systemID uint64) (domain.Talkgroups, []string, error) {
 	query := talkgroupsReadQuery(dialect)
 
@@ -477,8 +471,7 @@ func readTalkgroups(ctx context.Context, tx transaction, dialect Dialect, system
 		}
 
 		// The signed delay, frequency, order, tagId, and talkgroupRef columns are
-		// clamped to zero on the way into the unsigned fields; why, recorded in the
-		// signed-column-clamp maintainer note.
+		// clamped to zero on the way into the unsigned fields; why.
 		clamps := []string{}
 
 		if delay < 0 {
@@ -557,8 +550,7 @@ func readUnits(ctx context.Context, tx transaction, systemID uint64) (domain.Uni
 		}
 
 		// The signed order, unitRef, unitFrom, and unitTo columns are clamped to
-		// zero on the way into the unsigned fields; why, recorded in the
-		// signed-column-clamp maintainer note.
+		// zero on the way into the unsigned fields; why.
 		clamps := []string{}
 
 		if order < 0 {
@@ -600,9 +592,8 @@ func readUnits(ctx context.Context, tx transaction, systemID uint64) (domain.Uni
 }
 
 // talkgroupsReadQuery is the one statement in this file spelled two ways: the aggregate that
-// folds a talkgroup's group rows into one value is named differently by the backends, per the
-// patched systems catalog reads maintainer note. The value the query is filtered by is always a
-// placeholder.
+// folds a talkgroup's group rows into one value is named differently by the backends. The value
+// the query is filtered by is always a placeholder.
 func talkgroupsReadQuery(dialect Dialect) string {
 	aggregate := `GROUP_CONCAT(COALESCE(tg."groupId", 0))`
 
@@ -630,7 +621,7 @@ func parseGroupIDs(text string) []uint64 {
 // writeSystems is the legacy `Systems.Write`: one transaction that selects the stored identifiers,
 // deletes the ones the submitted list no longer names, and inserts or updates the rest — each
 // system together with its sites, talkgroups, and units; a failure anywhere discards the whole
-// section, per the systems aggregate transaction maintainer note.
+// section.
 func writeSystems(ctx context.Context, s store, next domain.Systems) error {
 	tx, err := s.begin(ctx)
 	if err != nil {
@@ -824,7 +815,7 @@ func writeSites(ctx context.Context, tx transaction, systemID uint64, sites doma
 
 // writeTalkgroups is the legacy `Talkgroups.WriteTx`: reconcile the system's talkgroups, insert
 // or update each one, then reconcile the `talkgroupGroups` rows that carry its groups; the update
-// never writes `systemId`, per the talkgroup save repairs maintainer note.
+// never writes `systemId`.
 func writeTalkgroups(ctx context.Context, tx transaction, dialect Dialect, systemID uint64, talkgroups domain.Talkgroups) error {
 	const storedQuery = `SELECT "talkgroupId" FROM "talkgroups" WHERE "systemId" = ?`
 
@@ -884,7 +875,7 @@ func writeTalkgroups(ctx context.Context, tx transaction, dialect Dialect, syste
 
 // writeTalkgroupGroups reconciles one talkgroup's group memberships: stored memberships the
 // submitted list does not name are removed, and a pair is inserted only when it is not already
-// stored; the comparison uses `groupId`, per the talkgroup save repairs maintainer note.
+// stored; the comparison uses `groupId`.
 func writeTalkgroupGroups(ctx context.Context, tx transaction, talkgroupID uint64, groupIDs []uint64) error {
 	const storedQuery = `SELECT "groupId" FROM "talkgroupGroups" WHERE "talkgroupId" = ?`
 
@@ -1006,7 +997,7 @@ func readColumnIDs(ctx context.Context, tx transaction, section, operation, quer
 }
 
 // droppedIdentifiers returns the stored identifiers the submitted collection does not name,
-// the repaired keep-rule every section saves with, per the reconciling saves maintainer note.
+// the repaired keep-rule every section saves with.
 func droppedIdentifiers(submitted, stored []uint64) []uint64 {
 	out := []uint64{}
 

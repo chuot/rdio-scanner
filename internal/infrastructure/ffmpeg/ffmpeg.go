@@ -34,8 +34,7 @@ import (
 )
 
 // Converter runs audio conversions with ffmpeg. Whether ffmpeg is installed,
-// which release it is, is decided once at startup; see the audio-conversion
-// maintainer note.
+// which release it is, is decided once at startup.
 type Converter struct {
 	// program is the ffmpeg this converter runs: the one the server carries inside its own binary,
 	// or the name `ffmpeg` when the server's target carries none and the host's is used.
@@ -49,11 +48,11 @@ type Converter struct {
 	loudnorm bool
 
 	// warned records that the missing converter has already been reported, once
-	// per server run; see the audio-conversion maintainer note.
+	// per server run.
 	warned bool
 
 	// mutex guards warned and the probe results against the concurrent handlers
-	// that read them; see the audio-conversion maintainer note.
+	// that read them.
 	mutex sync.Mutex
 }
 
@@ -65,8 +64,7 @@ func New() *Converter {
 
 // NewAt builds the converter for the ffmpeg at the path the server was given,
 // the one it carries inside its binary and writes out to its data directory.
-// The filters that program has get asked of that program; see the audio-
-// conversion maintainer note.
+// The filters that program has get asked of that program.
 func NewAt(program string) *Converter {
 	converter := &Converter{program: program}
 
@@ -85,18 +83,16 @@ func NewAt(program string) *Converter {
 }
 
 // loudnormFilterLine matches the loudnorm line `ffmpeg -filters` prints:
-// the flag columns, then the filter name; see the audio-conversion
-// maintainer note for why the pattern takes both flag widths.
+// the flag columns, then the filter name.
 var loudnormFilterLine = regexp.MustCompile(`(?m)^\s*[TSC.]{2,3}\s+loudnorm\s`)
 
 // ffmpegProgressTime matches the running time ffmpeg states in the progress
-// lines it writes while it converts: `time=00:00:03.01`; see the audio-
-// conversion maintainer note for how the fraction is read.
+// lines it writes while it converts: `time=00: 00: 03.01`.
 var ffmpegProgressTime = regexp.MustCompile(`time=(\d+):(\d{2}):(\d{2})(?:\.(\d{1,6}))?`)
 
 // statedRunningTime is the length of the recording a program was writing
 // while it printed these progress lines: the last running time it stated is
-// the end of the file it produced; see the audio-conversion maintainer note.
+// the end of the file it produced.
 func statedRunningTime(progress string) time.Duration {
 	matches := ffmpegProgressTime.FindAllStringSubmatch(progress, -1)
 	if len(matches) == 0 {
@@ -122,8 +118,7 @@ func statedRunningTime(progress string) time.Duration {
 }
 
 // hasLoudnorm reports whether the filter list a program printed names the
-// loudnorm filter, which is the ground truth; see the audio-conversion
-// maintainer note for what the legacy's version-string rule misread.
+// loudnorm filter, which is the ground truth.
 func hasLoudnorm(filters string) bool {
 	return loudnormFilterLine.MatchString(filters)
 }
@@ -131,13 +126,11 @@ func hasLoudnorm(filters string) bool {
 // Arguments returns the argument list the converter gives ffmpeg for one
 // recording: the recording arrives on the pipe and leaves on it, and the
 // tags and filters are the ones this recording and this ffmpeg ask for. The
-// build's ffmpeg check runs against this same list; see the audio-conversion
-// maintainer note.
+// build's ffmpeg check runs against this same list.
 func Arguments(mode uint, metadata *ports.AudioMetadata, loudnorm bool) []string {
 	args := []string{"-i", "-"}
 
-	// The tags are written only for a talkgroup that has a tag; see the
-	// audio-conversion maintainer note.
+	// The tags are written only for a talkgroup that has a tag.
 	if metadata != nil {
 		args = append(args,
 			"-metadata", fmt.Sprintf("album=%v", metadata.Album),
@@ -165,7 +158,7 @@ func Arguments(mode uint, metadata *ports.AudioMetadata, loudnorm bool) []string
 // level returns the recording untouched without running anything, and a call
 // is never lost because its audio would not convert: a converter that is not
 // installed, and a recording ffmpeg refuses, both leave the recording as it
-// arrived; see the audio-conversion maintainer note.
+// arrived.
 func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mode uint, metadata *ports.AudioMetadata) (ports.AudioFile, error) {
 	if mode == domain.AudioConversionDisabled {
 		return in, nil
@@ -189,8 +182,7 @@ func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mod
 
 	if err := command.Run(); err != nil {
 		// A conversion that failed is reported with what ffmpeg said, and the
-		// recording is kept either way; see the audio-conversion maintainer note
-		// for how short and quiet the report is, and why.
+		// recording is kept either way; and why.
 		report := stderr.String()
 
 		if len(report) > 512 {
@@ -209,8 +201,7 @@ func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mod
 }
 
 // Available reports whether the program this converter was given ran its
-// probe, which is what the status view shows; see the audio-conversion
-// maintainer note.
+// probe, which is what the status view shows.
 func (converter *Converter) Available() bool {
 	converter.mutex.Lock()
 	defer converter.mutex.Unlock()

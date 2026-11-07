@@ -1,6 +1,6 @@
 // Blacklist in a section that cannot be saved: one incomplete row disables Save
-// so a merely queued entry could never be stored; the click must refuse cleanly
-// see the blacklist-atomic-refusal maintainer note.
+// so a merely queued entry could never be stored; the click must refuse
+// cleanly.
 
 import './dom-shim.js';
 

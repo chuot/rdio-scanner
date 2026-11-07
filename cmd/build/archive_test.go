@@ -30,7 +30,6 @@ import (
 
 // One archive per release target, carrying the release-archive contract:
 // the program, the two guides that operate it, and the ffmpeg licence.
-// see the archive-contract maintainer note.
 
 // the archive name matches the name the guide's installation chapter names
 func TestTheArchiveIsNamedForTheTargetAndTheVersionTheReleaseResolved(t *testing.T) {
@@ -416,7 +415,6 @@ func TestEveryReleaseTargetCarriesTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 
 // an adopted ffmpeg's archive carries the ffmpeg phase's own notice:
 // terms, source release, recipe, posture, host, command, and codecs.
-// see the ffmpeg-licence-in-archive maintainer note.
 func TestTheArchiveOfATargetWhoseFfmpegWasAdoptedCarriesWhatItsFfmpegIs(t *testing.T) {
 	repo := t.TempDir()
 

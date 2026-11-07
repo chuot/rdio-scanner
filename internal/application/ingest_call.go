@@ -88,7 +88,7 @@ type IngestCallHandler struct {
 	// writes holds one call being ingested at a time. Duplicate detection and auto-
 	// populate's create-once both depend on that serialization, and with watchers on
 	// their own goroutines and uploads answered on their own connections the rule has
-	// to be held on purpose — see the ingest-serialization maintainer note.
+	// to be held on purpose.
 	writes sync.Mutex
 }
 
@@ -191,8 +191,7 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 
 	// What this recording changed in the administrator's configuration, in the order
 	// the changes were made: auto-populate creates what the recording named it, and
-	// an operator has to be able to find the recording that named it — see the
-	// auto-populate-configuration-log maintainer note.
+	// an operator has to be able to find the recording that named it.
 	created := []string{}
 
 	logCreated := func(what string) {
@@ -499,7 +498,7 @@ var forwardingCalls atomic.Int64
 // It runs on its own goroutine, bounded only by the forwarder's own timeout, so a slow
 // or unreachable downstream cannot hold up later calls; the call was already stored
 // and delivered here, so a forwarding failure is a server-log line, not this use
-// case's failure — see the downstream-forwarding-from-ingest maintainer note.
+// case's failure.
 func (handler *IngestCallHandler) forwardCall(ctx context.Context, call domain.Call) {
 	if forwardingCalls.Load() >= maxForwardingCalls {
 		handler.log(ctx, domain.LogLevelWarn, domain.LogSourceDownstream, fmt.Sprintf("call from system %d talkgroup %d was not forwarded: too many calls were already waiting for the downstream servers",

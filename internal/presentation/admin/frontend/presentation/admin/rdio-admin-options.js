@@ -1,7 +1,6 @@
 // rdio-admin-options: options section: a single object form (no rows),
 // editable options in legacy order. Edits set only the edited key, so
 // server-only keys (adminPassword, secret) survive.
-// see the options-retired-fields maintainer note.
 
 import { getAdminContext } from '../../application/admin-context.js';
 import {

@@ -43,9 +43,7 @@ func schemaFor(dialect Dialect) ([]string, error) {
 
 // ApplySchema creates the tables the server works with, on a database that
 // may already have them: every statement is `IF NOT EXISTS`, so it runs
-// safely on every start and neither server changes the other's schema; why
-// the statements are a copy of the legacy ones lives in the
-// schema-copy-idempotence maintainer note.
+// safely on every start and neither server changes the other's schema.
 //
 // They run in one transaction, as the legacy server applies them — on MySQL
 // and MariaDB a formality, since a data-definition statement commits the

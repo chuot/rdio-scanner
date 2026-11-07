@@ -33,13 +33,12 @@ import (
 // maxListEntries is the ceiling on a posted list field - frequencies,
 // units, patches - because the lists land in server memory and are
 // stored with the call: an over-cap list is truncated at it, and the
-// endpoint files the truncation warning; see the multipart-upload-fields
-// maintainer note.
+// endpoint files the truncation warning.
 const maxListEntries = 4096
 
 // unixSeconds is the shape of a Unix second count, which the pre-v7
 // dateTime field may carry; compiled once, because the endpoint reads a
-// field per upload; see the multipart-upload-fields maintainer note.
+// field per upload.
 var unixSeconds = regexp.MustCompile(`^[0-9]+$`)
 
 // truncatedList is the warning one oversized list earns.
@@ -51,8 +50,7 @@ func truncatedList(field string) string {
 // every field is optional, an unknown field reads as nothing, and the
 // fields apply in arrival order so a later one writing the same thing
 // wins; the second result is a truncation warning the endpoint files,
-// and a field read whole says nothing; see the multipart-upload-fields
-// maintainer note.
+// and a field read whole says nothing.
 func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string) {
 	warning := ""
 
@@ -71,8 +69,7 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain
 	case "audioLength":
 		// The recorder's own count of its recording, in seconds. The server
 		// takes its word and measures nothing; a count it cannot read leaves
-		// the length unmeasured rather than invented; see the multipart-upload-
-		// fields maintainer note.
+		// the length unmeasured rather than invented.
 		if seconds, err := strconv.ParseFloat(string(data), 64); err == nil && seconds > 0 && !math.IsNaN(seconds) && !math.IsInf(seconds, 0) {
 			call.AudioLength = time.Duration(math.Round(seconds*1000)) * time.Millisecond
 		}
@@ -288,8 +285,7 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain
 
 // appendUnitMetadata pairs a unit's label with the reference it
 // describes, once: a reference with no label or a label with no
-// reference is not a pair; see the multipart-upload-fields maintainer
-// note.
+// reference is not a pair.
 func appendUnitMetadata(call *domain.Call, unitRef uint, label string) {
 	if unitRef == 0 || len(label) == 0 {
 		return
@@ -307,7 +303,7 @@ func appendUnitMetadata(call *domain.Call, unitRef uint, label string) {
 
 // decodeList reads a form field whose value is a JSON array, says
 // nothing when the field is not one, and cuts an over-cap list at the
-// cap and says so; see the multipart-upload-fields maintainer note.
+// cap and says so.
 func decodeList(data []byte) ([]any, bool) {
 	var decoded any
 
@@ -329,8 +325,7 @@ func decodeList(data []byte) ([]any, bool) {
 
 // ApplyMultipart is this package's reading handed to the call-upload
 // endpoints as a value, because by the server's contract they declare
-// this parsing themselves and may not import the package; see the
-// recording-parsers maintainer note.
+// this parsing themselves and may not import the package.
 func (parsers *Parsers) ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string) {
 	return ApplyMultipart(part, data, call)
 }

@@ -1,7 +1,6 @@
 // the hourglass the flag row draws is in no font the listener ships:
 // the declared families' ranges exclude the codepoint and the default
 // Linux fallback lacks the glyph, so the cascade names a family for it.
-// see the timed-avoid-hourglass-glyph maintainer note.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';

@@ -256,8 +256,7 @@ test('section responses reference the config entity schemas', () => {
 });
 
 // the ingestion endpoints are apikey form uploads, and UPLOAD_FIELDS mirrors
-// internal/infrastructure/dirwatch/parsers/multipart.go's catalogue
-// see the upload-field-catalogue maintainer note.
+// internal/infrastructure/dirwatch/parsers/multipart.go's catalogue.
 const UPLOAD_FIELDS = [
   'audio', 'audioFilename', 'audioName', 'audioMime', 'audioType', 'channelType',
   'dateTime', 'frequency', 'frequencies', 'key', 'patches', 'patched_talkgroups',

@@ -26,11 +26,11 @@ import (
 
 // Bcrypt is the credential adapter the server runs with: it compares and stores administrator
 // credentials the way the legacy server does, so a deployment that swaps servers keeps the
-// credential its administrator already set; see the password-hashing maintainer note.
+// credential its administrator already set.
 type Bcrypt struct {
 	// cost is the bcrypt cost the deployment is configured for; the hash this
 	// adapter writes and the bar NeedsUpgrade measures stored hashes against are
-	// both set by it; see the password-hashing maintainer note.
+	// both set by it.
 	cost int
 }
 
@@ -40,7 +40,7 @@ var _ ports.PasswordUpgrader = (*Bcrypt)(nil)
 
 // NewBcrypt returns the credential adapter, hashing at the cost the deployment is configured
 // for; a cost below bcrypt's own floor falls back to bcrypt's default, the cost the legacy
-// server hashed at; see the password-hashing maintainer note.
+// server hashed at.
 func NewBcrypt(cost int) *Bcrypt {
 	if cost < bcrypt.MinCost {
 		cost = bcrypt.DefaultCost
@@ -50,15 +50,14 @@ func NewBcrypt(cost int) *Bcrypt {
 }
 
 // Matches reports whether the submitted credential reproduces the stored hash; every way
-// bcrypt can say no is the same refusal here, with the caller never told which happened;
-// see the password-hashing maintainer note.
+// bcrypt can say no is the same refusal here, with the caller never told which happened.
 func (hashes *Bcrypt) Matches(ctx context.Context, storedCredential string, submittedCredential string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(storedCredential), []byte(submittedCredential)) == nil
 }
 
 // Hash returns the bcrypt hash the server stores for a credential, at the configured cost,
 // the legacy default until an operator raises it; it fails for a credential bcrypt cannot
-// store; see the password-hashing maintainer note.
+// store.
 func (hashes *Bcrypt) Hash(ctx context.Context, credential string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(credential), hashes.cost)
 	if err != nil {
@@ -70,7 +69,7 @@ func (hashes *Bcrypt) Hash(ctx context.Context, credential string) (string, erro
 
 // NeedsUpgrade reports whether a stored credential was hashed more cheaply than the deployment
 // hashes at now; the cost lives in the stored hash itself, and a stored value that is not a
-// hash reports no upgrade; see the password-hashing maintainer note.
+// hash reports no upgrade.
 func (hashes *Bcrypt) NeedsUpgrade(storedCredential string) bool {
 	cost, err := bcrypt.Cost([]byte(storedCredential))
 	if err != nil {

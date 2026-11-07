@@ -1,6 +1,5 @@
-// the smallest DOM the admin presentation components need outside a browser
-// the form field primitive is built and connected for real on every creation route
-// see the form-field-real-primitive maintainer note.
+// the smallest DOM the admin presentation components need outside a browser the
+// form field primitive is built and connected for real on every creation route.
 
 const FORM_FIELD = 'rdio-form-field';
 const LIVE_REGION = 'rdio-live-region';
@@ -217,8 +216,7 @@ class ShimNode {
 
   // isConnected: a node is connected while its parents reach the document;
   // a removed subtree reports not connected, as does a never-placed node
-  // the shim tracks parents but runs no disconnected callback on removal
-  // see the disconnected-callback-gap maintainer note.
+  // the shim tracks parents but runs no disconnected callback on removal.
   get isConnected() {
     let node = this;
 
@@ -293,9 +291,8 @@ class ShimNode {
     document.activeElement = this;
   }
 
-  // events bubble up to the owning field, as in a browser
-  // an event the browser does not bubble stays put, like details' toggle
-  // see the event-bubbling-shim maintainer note.
+  // events bubble up to the owning field, as in a browser an event the
+  // browser does not bubble stays put, like details' toggle.
   dispatchEvent(event) {
     const bubbles = event.bubbles !== false;
 

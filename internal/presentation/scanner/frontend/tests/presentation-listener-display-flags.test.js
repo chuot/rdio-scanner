@@ -1,7 +1,6 @@
 // the flag row says which talkgroups left the live feed and for how
 // long; the timed-avoid flag is drawn as a glyph with the minutes
 // beside it, and the port asks the browser for its colour-emoji face.
-// see the timed-avoid-hourglass-glyph maintainer note.
 
 import './dom-shim.js';
 

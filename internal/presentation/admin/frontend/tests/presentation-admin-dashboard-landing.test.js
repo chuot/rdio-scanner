@@ -1,6 +1,5 @@
-// the landing is proven through the two real session starts
-// through the shell's own context, adapter, and an answered transport
-// see the landing-session-fixtures maintainer note.
+// the landing is proven through the two real session starts through
+// the shell's own context, adapter, and an answered transport.
 
 import './dom-shim.js';
 
@@ -189,9 +188,8 @@ test('an operator who is not signed in is not shown the dashboard', () => {
   assert.equal(requests.length, asked, `the sign-in page asked the server for ${requests.length - asked} thing(s) it has not earned`);
 });
 
-// the dashboard heads the nav after either session start:
-// operators see where they stand and find the landing at the column's head
-// see the nav-current-item maintainer note.
+// the dashboard heads the nav after either session start: operators see
+// where they stand and find the landing at the column's head.
 test('the dashboard heads the navigation, whichever way the session started', async () => {
   const opensWithTheLanding = (items, how) => {
     const sections = items.map((button) => button.dataset.section);

@@ -29,7 +29,6 @@ import (
 // The administrator's standing questions, packaged so a client starts a
 // session with them: a prompt states the question, the capabilities that
 // answer it, and their order, registered on the administrator's set.
-// see the prompts-carry-standing-questions-for-administrators maintainer note.
 
 // registerStandingQuestions adds the administrator's standing questions.
 func registerStandingQuestions(target *mcp.Server, deps Deps) {

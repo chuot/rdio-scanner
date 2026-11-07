@@ -518,8 +518,8 @@ test('a refused read says the figures the page is holding are no longer being ke
     );
 
     // repeated refusals look identical to the store, which may signal nothing new
-    // the page knows it has not read the server and keeps saying so while they fail
-    // see the dashboard-staleness-after-refusals maintainer note.
+    // the page knows it has not read the server and keeps saying so while they
+    // fail.
     await context.useCases.loadStatus();
 
     assert.match(

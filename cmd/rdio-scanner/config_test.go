@@ -207,7 +207,6 @@ func TestMcpServerIsOffUnlessTheOperatorAsksForIt(t *testing.T) {
 }
 
 // -config_save writes the mcp_server key only when the switch is on.
-// see the ini-file-compatibility maintainer note.
 func TestConfigSaveWritesTheMcpSwitchOnlyWhenItIsOn(t *testing.T) {
 	off, _ := newTestConfig(t, "-config_save")
 

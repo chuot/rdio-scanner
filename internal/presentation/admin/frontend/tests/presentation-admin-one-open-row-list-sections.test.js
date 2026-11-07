@@ -1,6 +1,5 @@
 // row-list sections open one row at a time; readings come from the rendered rows
-// rows are driven by the toggle event: the shim carries no keyboard or layout
-// see the one-open-row-lists maintainer note.
+// rows are driven by the toggle event: the shim carries no keyboard or layout.
 
 import './dom-shim.js';
 

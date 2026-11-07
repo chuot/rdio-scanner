@@ -32,14 +32,12 @@ import (
 // Endpoints is the surface outside programs post recordings to: radio
 // bridges, capture applications, and peer servers. They are guarded
 // only by the apikey the upload carries, and they answer in plain text.
-// see the call-upload-contract-and-legacy-divergences maintainer note.
 type Endpoints struct {
 	ingest *application.UploadCallHandler
 	parser Parser
 	logs   ports.LogRepository
 
 	// clock is the server's one clock, injected into the upload writer.
-	// see the call-upload-contract-and-legacy-divergences maintainer note.
 	clock ports.Clock
 }
 
@@ -53,9 +51,8 @@ type Deps struct {
 }
 
 // Parser is the part of the server that knows what an uploader's
-// fields mean. It is declared by the endpoints that ask for it, not
-// by the application layer, which must not know the wire format.
-// see the call-upload-contract-and-legacy-divergences maintainer note.
+// fields mean. It is declared by the endpoints that ask for it, not by
+// the application layer, which must not know the wire format.
 type Parser interface {
 	// ApplyMultipart reads one posted field into the call being built
 	// and returns the call and what the reading had to say: an oversized
@@ -84,9 +81,8 @@ func (upload *Endpoints) Register(mux *http.ServeMux) {
 }
 
 // uploadAccepted and uploadDenied are the two plain-text answers an
-// upload gets once the server has read it and decided. The refusal
-// has always named the system and talkgroup as nothing:
-// see the call-upload-contract-and-legacy-divergences maintainer note.
+// upload gets once the server has read it and decided. The refusal has
+// always named the system and talkgroup as nothing.
 const (
 	uploadAccepted = "Call imported successfully.\n"
 	uploadDenied   = "Invalid API key for system <nil> talkgroup <nil>.\n"
@@ -94,14 +90,12 @@ const (
 	// maxUploadBytes is the ceiling on the body an upload endpoint will
 	// read. The endpoints read the whole body into memory before the
 	// credential is checked, so it bounds an anonymous POST.
-	// see the call-upload-contract-and-legacy-divergences maintainer note.
 	maxUploadBytes = 32 << 20
 )
 
 // CallUpload takes a call an outside program posted as a set of form
 // fields. Every field is optional and each is read in the order it
 // arrived, so a later field wins an earlier one.
-// see the call-upload-contract-and-legacy-divergences maintainer note.
 func (upload *Endpoints) CallUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		upload.refuseMethod(w)
@@ -120,7 +114,6 @@ func (upload *Endpoints) CallUpload(w http.ResponseWriter, r *http.Request) {
 // TrunkRecorderCallUpload takes a call from trunk-recorder: a JSON
 // sidecar beside the recording, read as a document and not as a form
 // field, so a sidecar upload can name what the sidecar itself omits.
-// see the call-upload-contract-and-legacy-divergences maintainer note.
 func (upload *Endpoints) TrunkRecorderCallUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		upload.refuseMethod(w)
@@ -195,7 +188,6 @@ func (upload *Endpoints) readCall(w http.ResponseWriter, r *http.Request, trunkR
 
 			if err := upload.parser.ApplyTrunkRecorderSidecar(&call, body); err != nil {
 				// The legacy server names no reason here; the real reason is logged.
-				// see the call-upload-contract-and-legacy-divergences maintainer note.
 				upload.fail(w, http.StatusExpectationFailed, "Invalid call data")
 
 				return domain.Call{}, "", false
@@ -221,9 +213,8 @@ func (upload *Endpoints) readFailure(trunkRecorder bool, step string, err error)
 }
 
 // answer tells the uploader what the server decided: an accepted
-// upload is answered success whether or not the server then placed
-// the call. What the server made of it goes to the server log.
-// see the call-upload-contract-and-legacy-divergences maintainer note.
+// upload is answered success whether or not the server then placed the
+// call. What the server made of it goes to the server log.
 func (upload *Endpoints) answer(w http.ResponseWriter, r *http.Request, key string, call domain.Call) {
 	result, err := upload.ingest.Handle(r.Context(), application.UploadCallCommand{Call: call, Key: key})
 
@@ -234,9 +225,8 @@ func (upload *Endpoints) answer(w http.ResponseWriter, r *http.Request, key stri
 		upload.fail(w, http.StatusExpectationFailed, fmt.Sprintf("Incomplete call data: %s\n", err.Error()))
 
 	case application.UploadCallRefused:
-		// The legacy server answered this refusal in silence; it is now
-		// filed with the upload endpoint. The uploader's answer is unchanged.
-		// see the call-upload-contract-and-legacy-divergences maintainer note.
+		// The legacy server answered this refusal in silence; it is now filed
+		// with the upload endpoint. The uploader's answer is unchanged.
 		upload.logRefusal("the apikey is not valid")
 
 		w.WriteHeader(http.StatusUnauthorized)
@@ -253,10 +243,9 @@ func (upload *Endpoints) answer(w http.ResponseWriter, r *http.Request, key stri
 	}
 }
 
-// refuseMethod answers a method these endpoints do not take, with
-// the plain-text body upload clients have always been given and a
-// log entry: a wrong-method poster is a standing misconfiguration.
-// see the call-upload-contract-and-legacy-divergences maintainer note.
+// refuseMethod answers a method these endpoints do not take, with the
+// plain-text body upload clients have always been given and a log
+// entry: a wrong-method poster is a standing misconfiguration.
 func (upload *Endpoints) refuseMethod(w http.ResponseWriter) {
 	upload.logRefusal("the server does not answer this method")
 
@@ -264,8 +253,7 @@ func (upload *Endpoints) refuseMethod(w http.ResponseWriter) {
 	w.Write([]byte("Unsupported method\n"))
 }
 
-// fail writes a failure the legacy way:
-// see the call-upload-contract-and-legacy-divergences maintainer note.
+// fail writes a failure the legacy way.
 func (upload *Endpoints) fail(w http.ResponseWriter, status int, message string) {
 	upload.logRefusal(message)
 
@@ -275,7 +263,6 @@ func (upload *Endpoints) fail(w http.ResponseWriter, status int, message string)
 
 // logRefusal files one upload refusal, action then reason, trimmed so
 // the log never holds the uploader's trailing line break.
-// see the call-upload-contract-and-legacy-divergences maintainer note.
 func (upload *Endpoints) logRefusal(reason string) {
 	if upload.logs == nil {
 		return
@@ -289,10 +276,9 @@ func (upload *Endpoints) logRefusal(reason string) {
 	})
 }
 
-// fileTruncation files the parser's warning about an oversized
-// posted list: the upload is still taken, and the operator reads
-// that a poster sent more entries than the server carries.
-// see the call-upload-contract-and-legacy-divergences maintainer note.
+// fileTruncation files the parser's warning about an oversized posted
+// list: the upload is still taken, and the operator reads that a
+// poster sent more entries than the server carries.
 func (upload *Endpoints) fileTruncation(warning string) {
 	if len(warning) == 0 || upload.logs == nil {
 		return

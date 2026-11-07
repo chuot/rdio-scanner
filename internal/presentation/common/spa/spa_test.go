@@ -247,8 +247,7 @@ func TestMissingRouteServesTheApplicationShell(t *testing.T) {
 
 // TestFallbackContentTypeComesFromTheBodyNotTheExtension: no Content-Type
 // is set on the fallback, so Go sniffs the body and the header differs
-// from the same file served as a bundle entry. see the
-// single-page-app-serving-rules-kept-from-legacy maintainer note.
+// from the same file served as a bundle entry.
 func TestFallbackContentTypeComesFromTheBodyNotTheExtension(t *testing.T) {
 	files := fstest.MapFS{
 		"bundle/index.html": &fstest.MapFile{Data: []byte(shellText)},

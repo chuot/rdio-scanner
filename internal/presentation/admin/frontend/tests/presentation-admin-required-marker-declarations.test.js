@@ -1,6 +1,5 @@
 // the guard against drift: a section's marks must match the fields its rule
-// requires, the named exemptions aside; readings and exemptions are in the hub
-// see the required-marker-declaration-drift maintainer note.
+// requires, the named exemptions aside.
 
 import './dom-shim.js';
 

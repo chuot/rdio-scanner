@@ -61,9 +61,8 @@ func TestTheConfigurationResolvesEveryPathAgainstTheBaseDirectory(t *testing.T) 
 	}
 }
 
-// TestTheFfmpegFolderIsTheServersOwnInTempDirectory puts the carried
-// programs in the server's own folder in the system temp directory.
-// see the ffmpeg-carried-by-the-server-and-hosted-by-the-operator maintainer note.
+// TestTheFfmpegFolderIsTheServersOwnInTempDirectory puts the carried programs in
+// the server's own folder in the system temp directory.
 func TestTheFfmpegFolderIsTheServersOwnInTempDirectory(t *testing.T) {
 	config := Config{BaseDir: "/srv/rdio"}
 

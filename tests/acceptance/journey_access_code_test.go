@@ -23,7 +23,6 @@ import (
 
 // The access-code journey: the file lays out the story as one browser test per
 // user story, with the divergences it found recorded at the end.
-// see the access-code-journey maintainer note.
 
 // The test server is configured here, with its own throwaway database, and the
 const restrictedAccesses = `[
@@ -124,8 +123,7 @@ func TestAnAccessCodeLimitsHowManySessionsMayUnlockWithIt(t *testing.T) {
 }
 
 // The golden broadcast fixture is the one every journey file uses, and it
-// carries no access code: adding one to the shared fixture would change
-// see the access-code-journey maintainer note.
+// carries no access code: adding one to the shared fixture would change.
 func TestAConfigurationChangeOnARestrictedServerAsksEveryListenerToUnlockAgain(t *testing.T) {
 	srv, token := configuredTestServer(t)
 
@@ -169,7 +167,6 @@ func configuredTestServer(t *testing.T) (*journeyServer, string) {
 
 	// The capture of this save order sits in the journey file, not the shared
 	// fixture, because only this station carries an access code.
-	// see the access-code-journey maintainer note.
 	for _, step := range []struct {
 		path string
 		body string
@@ -236,7 +233,6 @@ func captureFixtureSection(t *testing.T, name string) string {
 }
 
 // An access-code copy of the golden broadcast, saved through the API.
-// see the access-code-journey maintainer note.
 type restrictedGolden = struct {
 	scoped  []string
 	expired []string

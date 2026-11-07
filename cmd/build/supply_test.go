@@ -31,11 +31,9 @@ import (
 // These tests pin what the build reads out of a Mach-O program
 // without running it: the machine code the file holds and the load
 // commands naming how it was linked and what starts it.
-// see the supply-macho-fixture-provenance maintainer note.
 
 // The Mach-O numbers these rules are written in, from the pinned
 // SDK headers and checked against real compiles.
-// see the supply-macho-fixture-provenance maintainer note.
 const (
 	theMachOMagic   = 0xfeedfacf // MH_MAGIC_64, a thin 64-bit image, little-endian
 	theMachO32Magic = 0xfeedface // MH_MAGIC, a 32-bit image: no macOS deployment this project ships
@@ -58,7 +56,6 @@ const (
 // aMachO is a Mach-O header and the load commands a test cares about,
 // written to a file the build reads: a fixture admitting to the rules
 // carries all of them, and a test removes just the one it asks about.
-// see the supply-macho-fixture-provenance maintainer note.
 type aMachO struct {
 	Magic     uint32
 	CPUType   uint32
@@ -106,7 +103,6 @@ func writeMachO(t *testing.T, name string, fixture aMachO) string {
 // machOBytes lays out a fixture's header and load commands the way a
 // Mach-O linker lays them out. The command count and the command
 // size are different numbers living in different header words.
-// see the macho-fixture-layout maintainer note.
 func machOBytes(fixture aMachO) []byte {
 	commands := theFixtureCommands(fixture)
 
@@ -204,7 +200,6 @@ func aCodeSignatureCommand() []byte {
 // The command numbers a Mach-O linker writes beyond the ones the
 // rules above are about; LC_MAIN is 24 bytes on both architectures,
 // naming the entry point as an offset and a stack size.
-// see the supply-macho-fixture-provenance maintainer note.
 const (
 	theSegment64Command    = 0x19       // LC_SEGMENT_64, naming one segment of the program
 	theSymtabCommand       = 0x02       // LC_SYMTAB
@@ -266,7 +261,6 @@ func aDylinkerCommand(path string) []byte {
 // theDarwinLinkersCommands are the load commands the linker in the
 // container this build compiles a macOS ffmpeg in wrote into the
 // pair it produced, in the order and sizes it wrote them.
-// see the supply-macho-fixture-provenance maintainer note.
 func theDarwinLinkersCommands(cpuType uint32) [][]byte {
 	commands := [][]byte{
 		aSegmentCommand("__PAGEZERO", 72),
@@ -345,10 +339,9 @@ func aSystemProgram(cpuType uint32) aMachO {
 	}
 }
 
-// the build admits a supplied Mach-O only as the program its target
-// runs: the file's own header and load commands say the architecture,
-// the link, and what starts it, and a dropped pair is held to the same reads.
-// see the supply-macho-read-rules maintainer note.
+// the build admits a supplied Mach-O only as the program its target runs: the
+// file's own header and load commands say the architecture, the link, and
+// what starts it, and a dropped pair is held to the same reads.
 func TestASuppliedMachOIsTheProgramItsTargetRuns(t *testing.T) {
 	manifest := bundle.ReadManifest()
 
@@ -1040,7 +1033,6 @@ func aSuppliedProgramBytes(target string) []byte {
 // a host that cannot run the binaries adopts nothing and is told
 // which host compiles them. The gate is the binaries' own execution:
 // the operating system answers, and nothing is recorded about them.
-// see the ffmpeg-run-gate maintainer note.
 func TestAHostThatCannotRunTheBinariesIsToldWhichHostCompilesThem(t *testing.T) {
 	for _, target := range []string{"macos-amd64", "macos-arm64"} {
 		repo := t.TempDir()
@@ -1266,7 +1258,6 @@ func theManifestFile(t *testing.T, repo string) []byte {
 // the fixture programs are laid out the way linkers lay programs
 // out: a header names its commands twice, a count and a size, and a
 // universal magic is big-endian on disk.
-// see the macho-fixture-layout maintainer note.
 func TestTheFixtureProgramsAreLaidOutTheWayLinkersLayThemOut(t *testing.T) {
 	t.Run("the Mach-O header names its load commands twice", func(t *testing.T) {
 		fixture := aSystemProgram(theArm64CPU)

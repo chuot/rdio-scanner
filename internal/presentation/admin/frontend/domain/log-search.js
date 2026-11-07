@@ -1,6 +1,5 @@
 // the log view's rules: the subsystems offered, the filters' request, the counts;
-// the element renders, the api requests, this owns what the filters mean
-// see the log-subsystem-vocabulary maintainer note.
+// the element renders, the api requests, this owns what the filters mean.
 
 import { serverOffset } from '../../../common/frontend/domain/search-pagination.js';
 
@@ -41,9 +40,8 @@ export function logSearchFilterOptions() {
   return [['', 'All Subsystems'], ...LOG_SOURCES];
 }
 
-// unset filters are not sent: the server reads absent as no filter
-// server pages of 200, client pages of 10: the covering page loads lazily
-// see the log-search-paging maintainer note.
+// unset filters are not sent: the server reads absent as no filter server
+// pages of 200, client pages of 10: the covering page loads lazily.
 export function logSearchOptions({ pageIndex, sort, level, source, text, date }) {
   const options = {
     limit: LOG_SERVER_PAGE,
@@ -60,8 +58,7 @@ export function logSearchOptions({ pageIndex, sort, level, source, text, date })
 }
 
 // counts keep the server's order, noisiest first; an unnamed subsystem shows
-// own name
-// see the log-subsystem-vocabulary maintainer note.
+// own name.
 export function logSourceCounts(sources) {
   return (sources ?? []).map((entry) => ({
     source: entry.source,

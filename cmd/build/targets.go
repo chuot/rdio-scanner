@@ -37,9 +37,8 @@ func (t releaseTarget) targetWord() string {
 }
 
 // releaseTargets is the matrix: the platforms a release archive is built for.
-// Which targets carry an ffmpeg, and how those binaries came to be, is
-// not in this list: the manifest answers that.
-// see the targets-and-platforms maintainer note.
+// Which targets carry an ffmpeg, and how those binaries came to be, is not in
+// this list: the manifest answers that.
 var releaseTargets = []releaseTarget{
 	{name: "freebsd", goos: "freebsd", goarch: "amd64"},
 	{name: "linux", goos: "linux", goarch: "386"},
@@ -72,7 +71,6 @@ func targetFor(word string) (releaseTarget, bool) {
 // theReleaseWordTheRunBuildsFor is the release word a target word
 // names: the manifest, the archive name, and the guide all use the
 // release word, so every phase downstream works with one name.
-// see the targets-and-platforms maintainer note.
 func theReleaseWordTheRunBuildsFor(word string) string {
 	tr, found := targetFor(word)
 	if !found {
@@ -85,7 +83,6 @@ func theReleaseWordTheRunBuildsFor(word string) string {
 // releaseTargetWordFor is the release target a machine belongs to,
 // named the way the release names it: go builds a macOS binary for
 // darwin and the release is macos, so the matrix maps one word.
-// see the targets-and-platforms maintainer note.
 func releaseTargetWordFor(goos string, goarch string) string {
 	for _, tr := range releaseTargets {
 		if tr.goos == goos && tr.goarch == goarch {
@@ -99,7 +96,6 @@ func releaseTargetWordFor(goos string, goarch string) string {
 // distTargets is the list of platforms one release run walks, decided
 // before any of it runs: the named target, the whole matrix when it
 // was asked for, or the release target of the machine running it.
-// see the targets-and-platforms maintainer note.
 func distTargets(o options, goos string, goarch string) ([]releaseTarget, error) {
 	if o.target != "" {
 		tr, found := targetFor(o.target)

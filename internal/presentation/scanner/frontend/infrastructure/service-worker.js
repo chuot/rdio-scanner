@@ -79,7 +79,6 @@ self.addEventListener('fetch', (event) => {
 
   // admin is served from its own bundle with no worker of its own, and
   // this worker's scope is the whole origin.
-  // see the service-worker-origin-scope maintainer note.
   if (isAdminApplication(url)) return;
 
   if (request.mode === 'navigate') {

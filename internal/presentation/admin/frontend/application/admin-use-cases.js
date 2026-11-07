@@ -20,7 +20,6 @@ const sliceKey = (name) => `section:${name}`;
 const subSliceKey = (level, systemId) => `subsection:${level}:${systemId}`;
 
 // the blacklist edited by a talkgroups section travels as its own keyed slice.
-// see the blacklist-slice-coupling maintainer note.
 const blacklistsSliceKey = (systemId) => `blacklists:${systemId}`;
 
 // the stored dirwatch delay sits below the section minimum; the loader applies the
@@ -90,8 +89,8 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
       if (event.type === 'config') {
         applyConfig(event.config);
 
-        // a save changes what the server runs; the dashboard shows that, so it reloads
-        // see the dashboard-status-reload maintainer note.
+        // a save changes what the server runs; the dashboard shows that, so it
+        // reloads.
         loadStatus();
       }
 
@@ -132,7 +131,6 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     }
 
     // every system level gets its own slice, plus one for its talkgroups blacklist.
-    // see the blacklist-slice-coupling maintainer note.
     for (const system of config?.systems ?? []) {
       for (const level of SYSTEM_SUB_LEVELS) {
         const key = subSliceKey(level, system.id);
@@ -156,7 +154,6 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
 
   // a systems save re-seeds blacklist slices: untouched slices follow stored text,
   // an edited slice conflicts.
-  // see the blacklist-slice-coupling maintainer note.
   function blacklistsState(system, current) {
     const baseline = system.blacklists ?? '';
 
@@ -214,8 +211,8 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
     }
   }
 
-  // the dashboard's live status snapshot; one read at a time
-  // see the status-read-serialization maintainer note.
+  // the dashboard's live status snapshot; one read at a
+  // time.
   let statusRead = null;
 
   async function loadStatus() {
@@ -402,7 +399,6 @@ export function createAdminUseCases({ api, storage, createSocket, store }) {
 
     // a level save that changes a blacklist must leave Systems holding the server list
     // server's new list, baseline and working copy, or its next save overwrites it.
-    // see the blacklist-slice-coupling maintainer note.
     const systems = store.getState()[sliceKey('systems')];
 
     if (systems && blacklists !== undefined) {

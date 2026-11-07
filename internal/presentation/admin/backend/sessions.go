@@ -39,8 +39,7 @@ import (
 
 // writeWait bounds how long the server is willing to spend writing to one
 // administrator connection, the interval listener connections are written to; the
-// legacy server wrote with no deadline at all; see the administrator-connection-
-// lifecycle maintainer note.
+// legacy server wrote with no deadline at all.
 const writeWait = 10 * time.Second
 
 // closeWait bounds the goodbye written on the way out: the close frame is small, and
@@ -63,8 +62,7 @@ const maxFrameSize = 1 << 20
 // upgrader is the socket this endpoint hands over. It is left at its zero value
 // because that is what the legacy server uses here, and the zero value is not
 // neutral: with no origin check it insists the connection comes from the same origin
-// the page was served from, the opposite of what the listener endpoint asks for; see
-// the administrator-socket-trust maintainer note.
+// the page was served from, the opposite of what the listener endpoint asks for.
 var upgrader = websocket.Upgrader{}
 
 // Sessions is the server's set of open administrator connections: both the handler
@@ -125,7 +123,7 @@ type administrator struct {
 
 	// writing serializes the writes to this connection: the server writes from two
 	// places, and a websocket connection is not something two goroutines may write to
-	// at the same time; see the administrator-connection-lifecycle maintainer note.
+	// at the same time.
 	writing sync.Mutex
 
 	// quit is closed when the read loop ends, telling the goroutine that keeps asking this
@@ -162,10 +160,9 @@ func NewSessions(deps SessionDeps) *Sessions {
 
 // ServeHTTP hands over an administrator configuration socket. The upgrade asks for
 // nothing: no credential in a header, no access code, and what the connection may see
-// is decided afterwards by the frames it sends; see the administrator-socket-trust
-// maintainer note. A request that is not an upgrade is answered by the upgrader
-// itself and nothing said about it, the configuration endpoint being routed there by
-// the composition root.
+// is decided afterwards by the frames it sends. A request that is not an upgrade is
+// answered by the upgrader itself and nothing said about it, the configuration
+// endpoint being routed there by the composition root.
 func (sessions *Sessions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -193,8 +190,7 @@ func (sessions *Sessions) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // NotifyConfigurationChanged pushes the whole configuration, the administrator's own
 // view of it rather than the trimmed one a listener is given, to every administrator
-// connection that has presented a credential; see the administrator-socket-trust
-// maintainer note.
+// connection that has presented a credential.
 func (sessions *Sessions) NotifyConfigurationChanged(ctx context.Context, configuration domain.Configuration) {
 	body, err := json.Marshal(dto.AdminConfigPayload{
 		Accesses:    configuration.Access,
@@ -235,8 +231,7 @@ func (sessions *Sessions) NotifyConfigurationChanged(ctx context.Context, config
 }
 
 // listen reads the frames an administrator connection sends. Every frame is checked
-// against the credentials this server still accepts, not only the first one; see the
-// administrator-socket-trust maintainer note.
+// against the credentials this server still accepts, not only the first one.
 func (sessions *Sessions) listen(admin *administrator) {
 	// An administrator connection is held to the same ping and pong discipline a
 	// listener connection is, and one that stops answering is ended: a half-open peer
@@ -253,8 +248,7 @@ func (sessions *Sessions) listen(admin *administrator) {
 	// The asking happens while the reading waits: a connection that has gone quiet is
 	// not one whose next frame the server is sitting down to read, and the ping
 	// goroutine writes under the same lock every other writer of this connection takes
-	// and is counted with the rest; see the administrator-connection-lifecycle
-	// maintainer note.
+	// and is counted with the rest.
 	sessions.held.Add(1)
 
 	go func() {
@@ -340,8 +334,7 @@ func (sessions *Sessions) grant(admin *administrator) {
 
 // write pushes one frame to one connection. The write is bounded, which the legacy
 // server's is not, and a connection that cannot be written to is not a connection any
-// more and is forgotten by the caller; see the administrator-connection-lifecycle
-// maintainer note.
+// more and is forgotten by the caller.
 func (sessions *Sessions) write(admin *administrator, body []byte) error {
 	admin.writing.Lock()
 	defer admin.writing.Unlock()
@@ -354,10 +347,8 @@ func (sessions *Sessions) write(admin *administrator, body []byte) error {
 }
 
 // leave ends a connection: it is removed from the set, told why in a close frame, and
-// closed; the close is written before the socket is closed; see the administrator-
-// connection-lifecycle maintainer note.
-// leave forgets one administrator connection and says it went, when this half is the
-// one that found it.
+// closed; the close is written before the socket is closed. leave forgets one
+// administrator connection and says it went, when this half is the one that found it.
 func (sessions *Sessions) leave(admin *administrator) {
 	sessions.mutex.Lock()
 
@@ -390,8 +381,7 @@ func (sessions *Sessions) Count() int {
 
 // CloseAll ends every administrator connection the server is holding and reports each
 // one leaving; the set is emptied first, the goodbyes are written together, and the
-// close waits for the goroutines that were reading; see the administrator-connection-
-// lifecycle maintainer note.
+// close waits for the goroutines that were reading.
 func (sessions *Sessions) CloseAll(ctx context.Context) {
 	sessions.mutex.Lock()
 

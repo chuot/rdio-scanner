@@ -23,7 +23,6 @@ import (
 
 // The admin blacklist-action journey: the file lays out the story as one
 // browser test per user story and records the divergences it found.
-// see the admin-blacklist-action-journey maintainer note.
 func TestBlacklistingATalkgroupStoresBothHalvesAndTheSystemsSectionShowsTheEntry(t *testing.T) {
 	srv := seededBlacklistServer(t)
 
@@ -102,8 +101,8 @@ func systemsSectionRows(t *testing.T, level any) []map[string]any {
 	return levelRows(t, body)
 }
 
-// The broadcast fixture must not get the blacklist treatment: it is the one
-// see the admin-blacklist-action-journey maintainer note.
+// The broadcast fixture must not get the blacklist treatment: it is the
+// one.
 func TestSavingTheSystemsSectionAfterBlacklistingATalkgroupKeepsTheEntryTheActionStored(t *testing.T) {
 	srv := seededBlacklistServer(t)
 
@@ -150,8 +149,8 @@ func TestSavingTheSystemsSectionAfterBlacklistingATalkgroupKeepsTheEntryTheActio
 	assertEveryServerLogEntry(t, srv.db)
 }
 
-// A second broadcast with its own blacklist so the blacklist under test can
-// see the admin-blacklist-action-journey maintainer note.
+// A second broadcast with its own blacklist so the blacklist under test
+// can.
 func TestSavingTheSystemsSectionWritesTheListItIsToldAndTheEntryTheActionStoredIsGoneWithIt(t *testing.T) {
 	srv := seededBlacklistServer(t)
 

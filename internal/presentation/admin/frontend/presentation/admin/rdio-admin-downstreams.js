@@ -1,6 +1,5 @@
 // rdio-admin-downstreams: downstream connections as collapsible row panels,
-// one open at a time: disabled, url, apikey, systems selection;
-// see the id-as-passthrough maintainer note.
+// one open at a time: disabled, url, apikey, systems selection.
 
 import { openSystemsSelectionDialog } from './rdio-systems-selection.js';
 import {

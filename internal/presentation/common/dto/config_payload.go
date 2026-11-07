@@ -25,7 +25,6 @@ import (
 
 // ConfigPayload is the configuration one listener is allowed to see, built from
 // what that listener's access reaches rather than from the whole server.
-// see the configuration-payload-field-order maintainer note.
 type ConfigPayload struct {
 	Snapshot ports.ConfigSnapshot
 	Scope    domain.AccessScope
@@ -33,8 +32,7 @@ type ConfigPayload struct {
 
 // MarshalJSON writes the configuration.
 //
-// All keys are map keys, so they come out sorted, as the captures compare them,
-// see the configuration-payload-field-order maintainer note.
+// All keys are map keys, so they come out sorted, as the captures compare them.
 func (payload ConfigPayload) MarshalJSON() ([]byte, error) {
 	options := payload.Snapshot.Options
 
@@ -60,7 +58,6 @@ func (payload ConfigPayload) MarshalJSON() ([]byte, error) {
 
 // visibleSystem is one system as a listener sees it, plus what the group and
 // tag listings need and the entry itself does not carry.
-// see the configuration-payload-field-order maintainer note.
 type visibleSystem struct {
 	Entry      map[string]any
 	SystemRef  uint
@@ -152,7 +149,6 @@ func visibleSystems(view domain.Systems, groups domain.Groups, tags domain.Tags)
 
 // ordered puts systems in their display order and their talkgroups in theirs,
 // numbering them by the talkgroups option. Lists are copied first.
-// see the configuration-payload-field-order maintainer note.
 func ordered(systems domain.Systems, sortTalkgroups bool) domain.Systems {
 	out := append(domain.Systems{}, systems...)
 
@@ -199,7 +195,6 @@ func talkgroupEntries(talkgroups []visibleTalkgroup) []map[string]any {
 
 // unitEntries writes the units a system declares. The identifier on the wire
 // is the unit reference, written twice, not the server's number.
-// see the configuration-payload-field-order maintainer note.
 func unitEntries(units domain.Units) []map[string]any {
 	out := []map[string]any{}
 
@@ -233,7 +228,7 @@ func unitEntries(units domain.Units) []map[string]any {
 
 // groupList is the groups this listener's talkgroups use, in first-seen
 // order, each named once, including groups that are only ever a talkgroup's
-// second group. see the configuration-payload-field-order maintainer note.
+// second group.
 func groupList(systems []visibleSystem, groups domain.Groups) []map[string]any {
 	out := []domain.Group{}
 

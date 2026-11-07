@@ -35,12 +35,10 @@ import (
 // The write capabilities: each states the change, asks the operator to
 // confirm through the protocol's own elicitation, and writes only in the
 // confirmed round; the saves use the same use cases the page saves with.
-// see the every-write-asks-the-operator-before-it-saves maintainer note.
 
-// registerWriteTools adds the writes to the administrator's set alone,
-// and their handlers check the credential again whatever the catalog
-// says; registering each in changes keeps the activity list from drifting.
-// see the every-write-asks-the-operator-before-it-saves maintainer note.
+// registerWriteTools adds the writes to the administrator's set alone, and
+// their handlers check the credential again whatever the catalog says;
+// registering each in changes keeps the activity list from drifting.
 func registerWriteTools(target *mcp.Server, deps Deps, changes map[string]bool) {
 	addWriteTool(target, changes, &mcp.Tool{
 		Name:  "manage_config",
@@ -166,7 +164,6 @@ func canAsk(req *mcp.CallToolRequest) bool {
 // askResult is the ask in the protocol's multi-round-trip pattern: the
 // change stated in the message, and the state the confirmed round resumes
 // from; the write starts only in the round carrying the operator's answer.
-// see the every-write-asks-the-operator-before-it-saves maintainer note.
 func askResult(message, state string) (*mcp.CallToolResult, error) {
 	schema, err := jsonschema.For[confirmationForm](nil)
 	if err != nil {
@@ -770,9 +767,8 @@ type listChanges struct {
 }
 
 // sameEntry compares two rows of a section the way the configuration's
-// parsers do, counting an empty list as an absent one, so a diff reports
-// a change the operator could act on; see the write-diffs-read-a-save-the-
-// way-the-server-replaces-it maintainer note.
+// parsers do, counting an empty list as an absent one, so a diff reports a
+// change the operator could act on.
 func sameEntry(entry, other any) bool {
 	return reflect.DeepEqual(normalize(entry), normalize(other))
 }
@@ -827,10 +823,9 @@ func normalizeValue(value reflect.Value) reflect.Value {
 	}
 }
 
-// listDiff compares a submitted list with the stored one as the whole effect
-// of the save: rows added, changed, deleted, each matched by the reference
-// the store knows, compared as the server's own values, not the masked rows.
-// see the write-diffs-read-a-save-the-way-the-server-replaces-it maintainer note.
+// listDiff compares a submitted list with the stored one as the whole effect of
+// the save: rows added, changed, deleted, each matched by the reference the store
+// knows, compared as the server's own values, not the masked rows.
 func listDiff[T any](current []T, submitted []T, identity func(T) uint64, name func(T) string, describe func(T) any) listChanges {
 	changes := listChanges{
 		Added:   []any{},

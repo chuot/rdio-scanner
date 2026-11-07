@@ -26,7 +26,6 @@ import (
 
 // The admin blacklist journey: the file lays out adding, showing, and removing
 // a blacklisted station as one browser test per user story.
-// see the admin-blacklist-journey maintainer note.
 
 const (
 	// The API behind the proxy answers with what the server holds, which is what

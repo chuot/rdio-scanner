@@ -181,7 +181,6 @@ func (t tool) howManyCoresCanTheMachineCompilingHereCheckOut(target string, prog
 // canCompile says whether this machine can build a target's ffmpeg with its
 // own toolchain: only a Mac building a macOS target, either architecture
 // from either Mac. Every other target is compiled in a container.
-// see the targets-and-platforms maintainer note.
 func (h host) canCompile(target string) bool {
 	if h.goos != "darwin" {
 		return false
@@ -347,7 +346,6 @@ func ffmpegScratch(repo string) []string {
 // pruneFFMPEGCache removes the cache entries the manifest as it is now
 // cannot ask for, keyed off release, source, target, recipe, toolchain and
 // check environment, plus whole cache directories of old releases.
-// see the ffmpeg-cache-pruning maintainer note.
 func pruneFFMpegCache(repo string) ([]string, error) {
 	manifest := bundle.ReadManifest()
 
@@ -418,7 +416,6 @@ func pruneFFMpegCache(repo string) ([]string, error) {
 // the release, the pinned source, the target, the configure recipe, and
 // that target's toolchain and check environment as its record names them,
 // including the machine that toolchain is a set of packages for.
-// see the ffmpeg-cache-key-inputs maintainer note.
 func cacheKey(manifest bundle.Manifest, target string) string {
 	record := manifest.Targets[target]
 
@@ -546,7 +543,6 @@ func theCacheEntryNamingNoProofOfItsPair(target string, state ffmpegState) strin
 // planFFmpeg decides what the ffmpeg phase does for one target: a target
 // with no record is not a failure, and one with a record is a promise a
 // build that cannot keep it says so about.
-// see the targets-and-platforms maintainer note.
 func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegState, machine host) (ffmpegPlan, error) {
 	target := ffmpegTarget(o)
 
@@ -740,7 +736,6 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 	// The tree the container compiled in belongs to a uid this build cannot
 	// name, so it is made readable, writable and traversable by everybody in
 	// it rather than chasing which uid turned out to be which.
-	// see the container-run-ownership maintainer note.
 	plan.Steps = append(plan.Steps, step{
 		label:  "chmod",
 		result: paths.scratch,
@@ -759,7 +754,6 @@ func planFFmpeg(o options, repo string, manifest bundle.Manifest, state ffmpegSt
 // planHostFFmpeg decides the ffmpeg of a target whose host is this
 // machine. Dropped binaries win over a fresh compile every time, and a
 // drop is held to the same reads, gate and run as a compiled pair.
-// see the native-run-boundaries maintainer note.
 func planHostFFmpeg(repo string, manifest bundle.Manifest, target string, record bundle.Target, paths ffmpegPaths, state ffmpegState, machine host) (ffmpegPlan, error) {
 	// The cache key is the manifest's record and the target, so a warm cache is the entry this machine's
 	// own run published, and the drop is not needed again: it has already been consumed out of this
@@ -939,7 +933,6 @@ func nativeProgramsAre(record bundle.Target, target string) []string {
 // checkNativeToolchain asks for the host's own build tools before a step
 // runs and names the missing program and where it comes from, so the
 // build never spends a minute finding out what it could say at once.
-// see the native-run-boundaries maintainer note.
 func checkNativeToolchain(record bundle.Target, target string, state ffmpegState) error {
 	for _, name := range nativeProgramsAre(record, target) {
 		if state.nativeTools[name] == "" {
@@ -1016,7 +1009,6 @@ func theLicenceInTheCache(paths ffmpegPaths, target string) (string, error) {
 // buildImageArgs prepares the container one target is compiled or checked
 // in, from an empty context: the image is a toolchain, and nothing of this
 // repository belongs in it.
-// see the container-image-build-contract maintainer note.
 func buildImageArgs(image string, file string, base string, platform string, sysrootImage string, packages []string) []string {
 	args := []string{
 		"build",
@@ -1073,8 +1065,7 @@ const darwinSysrootVariable = "RDIO_FFMPEG_DARWIN_SDK"
 
 // thePreparedSysrootFor answers where the sysroot tree a record pins is
 // on this machine: the cache directory for the pinned SDK version, or the
-// operator named one. It is reported only when the directory carries the
-// see the macos-sdk-tree-lookup maintainer note.
+// operator named one. It is reported only when the directory carries.
 func thePreparedSysrootFor(record bundle.Target, look func(string) (string, bool), homeDir string) (tree string, lookedIn string) {
 	lookedIn, named := look(darwinSysrootVariable)
 
@@ -1092,13 +1083,11 @@ func thePreparedSysrootFor(record bundle.Target, look func(string) (string, bool
 
 // theSysrootDigestFile is the name the preparation of a sysroot tree
 // records its digest under, beside the tree itself.
-// see the macos-sdk-digest-mismatch maintainer note.
 const theSysrootDigestFile = "sha256"
 
 // theSysrootDigestRecordedBeside answers what the preparation of a sysroot
 // tree recorded for it. Nothing inside the tree names it, and a tree with
 // nothing recorded beside it has no measured digest: empty, not invented.
-// see the macos-sdk-digest-mismatch maintainer note.
 func theSysrootDigestRecordedBeside(tree string) string {
 	if tree == "" {
 		return ""
@@ -1115,7 +1104,7 @@ func theSysrootDigestRecordedBeside(tree string) string {
 // theRefusalOfAnUnpreparedSysroot is what the build says instead of
 // compiling a pair against a tree it does not have. It names the target,
 // the SDK version the record pins, the directory it looked in, and how to
-// see the macos-sdk-tree-lookup maintainer note.
+// prepare that tree.
 func theRefusalOfAnUnpreparedSysroot(target string, record bundle.Target, lookedIn string) error {
 	where := "the cache directory of the machine running the build"
 
@@ -1179,7 +1168,6 @@ func whatTheCompileProduced(record bundle.Target, target string) string {
 // configureStep is the trimmed build asked of the source: the recipe, then
 // what makes the compile cross to this target, then the flags that link it
 // statically.
-// see the ffmpeg-cross-build maintainer note.
 func configureStep(repo string, paths ffmpegPaths, image string, manifest bundle.Manifest, record bundle.Target, program theContainerProgram, sysroot string) step {
 	args := append(program.run(), "-v", paths.scratch+":/work")
 
@@ -1248,7 +1236,6 @@ func programSuffix(target string) string {
 
 // checkSource is the integrity anchor of this feature: the digest
 // the manifest recorded is what every fetch checks against.
-// see the ffmpeg-source-digest-anchor maintainer note.
 func checkSource(path string, manifest bundle.Manifest) error {
 	file, err := os.Open(path)
 	if err != nil {
@@ -1277,7 +1264,6 @@ func checkSource(path string, manifest bundle.Manifest) error {
 
 // fetchSource puts the release tarball in the build cache, fetched by
 // the tool itself, so a container program stays the only prerequisite.
-// see the container-image-build-contract maintainer note.
 func fetchSource(src ffmpegSource) error {
 	client := &http.Client{Timeout: 10 * time.Minute}
 
@@ -1512,7 +1498,6 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 // readTheCompiledPair reads out of the container's pair everything
 // their record says proves them, answering with the first refusal.
 // The target's operating system picks the reader, never the record.
-// see the ffmpeg-read-vs-run-gate maintainer note.
 func readTheCompiledPair(paths ffmpegPaths, manifest bundle.Manifest, record bundle.Target, target string) error {
 	produced := filepath.Join(paths.scratch, sourceDir(manifest))
 
@@ -1542,7 +1527,6 @@ func aRecordNamingAReadWithNoRule(target string, read string) error {
 // runFFmpegOnHost does the work of the ffmpeg that comes from the
 // machine running the build: a maintainer's dropped pair, or the
 // pair this machine's own run cached, both run before adoption.
-// see the native-run-publishes-its-binaries maintainer note.
 func (t tool) runFFmpegOnHost(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
 	if plan.Adopts {
 		run, err := t.prove(target, manifest.Targets[target], plan.Paths, stdout)
@@ -1587,7 +1571,6 @@ func (t tool) runFFmpegOnHost(plan ffmpegPlan, manifest bundle.Manifest, target 
 // runNativeFFmpeg does the work of the ffmpeg binaries compiled on
 // the machine that runs them, through the same adoption path a
 // maintainer's drop takes, run before anything is adopted.
-// see the native-run-publishes-its-binaries maintainer note.
 func (t tool) runNativeFFmpeg(plan ffmpegPlan, manifest bundle.Manifest, target string, stdout io.Writer) (bool, error) {
 	if err := prepareFFmpeg(plan.Paths); err != nil {
 		return false, err
@@ -2033,7 +2016,6 @@ func theRecipeCarries(recipe []string, flag string) bool {
 // suppliedFFMpegLicence is what a release archive carries about a pair
 // this build did not compile in a container: the pair a Mac compiled
 // with its own toolchain, or a maintainer's hand-built drop.
-// see the ffmpeg-licence-in-archive maintainer note.
 func suppliedFFMpegLicence(manifest bundle.Manifest, target string, run theRunOfTheBinaries) string {
 	var text strings.Builder
 

@@ -1,6 +1,5 @@
 // the page announces what changed while the operator was not looking:
-// the save's answer and the moved row go into one polite live region
-// see the admin-polite-live-region maintainer note.
+// the save's answer and the moved row go into one polite live region.
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -157,9 +156,8 @@ describe('administration announcements — the page says what changed', () => {
 
     const live = region(el);
 
-    // a configuration push repaints the header, nav, and contents
-    // the announcement written for an operator not looking must survive that paint
-    // see the admin-polite-live-region maintainer note.
+    // a configuration push repaints the header, nav, and contents the announcement
+    // written for an operator not looking must survive that paint.
     getAdminContext().store.setState({ todos: ['Systems has changes'] });
 
     assert.equal(region(el), live,

@@ -29,7 +29,7 @@ import (
 // Downstreams is the stored downstream-server configuration: the configuration in
 // effect, not a view of the `downstreams` table — read once, kept in memory, and
 // replaced by what a save submits. The posture, including a save that takes effect
-// before it is stored, is the live configuration in effect maintainer note.
+// before it is stored.
 type Downstreams struct {
 	store store
 
@@ -137,7 +137,7 @@ func (downstreams *Downstreams) read(ctx context.Context) (domain.Downstreams, [
 		downstream.ID = uint64(id)
 
 		// The signed order column is clamped to zero on the way into the unsigned
-		// field; why, recorded in the signed-column-clamp maintainer note.
+		// field; why.
 		if order < 0 {
 			clamped = append(clamped, fmt.Sprintf("downstreams.read: downstream %d %q holds order %d: that is not a display order this server can hold, and it is read as 0",
 				id, downstream.Apikey, order))
@@ -284,8 +284,7 @@ func (downstreams *Downstreams) selectObsolete(ctx context.Context, tx transacti
 // downstreamNamed reports whether the submitted list still names a stored
 // downstream. The legacy write stops its scan at the first submitted downstream
 // whose id is zero, so a save that adds a downstream silently keeps every
-// downstream the list removed; this server repairs that rule, as recorded in the
-// reconciling-saves maintainer note.
+// downstream the list removed; this server repairs that rule.
 func downstreamNamed(next domain.Downstreams, id uint64) bool {
 	for _, downstream := range next {
 		if downstream.ID == id {

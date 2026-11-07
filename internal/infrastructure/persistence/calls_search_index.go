@@ -28,7 +28,7 @@ import (
 // every start, so the copied statement is out of the MySQL copy and this step carries the
 // index for every backend instead, the way the log indexes and the options key index are
 // carried. The column order is the one the search filter's statements are written
-// against, per the search filter index shape maintainer note.
+// against.
 const callsSearchIndexCreate = `CREATE INDEX "calls_idx" ON "calls" ("systemId","siteRef","talkgroupId","timestamp")`
 
 // ensureCallsSearchIndex gives the calls table the search index, idempotent the way every

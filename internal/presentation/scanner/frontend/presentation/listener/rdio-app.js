@@ -12,7 +12,6 @@ class RdioApp extends HTMLElement {
     // the content the listener works in is a named region, named by the
     // application's own heading: entering the page by landmark says the
     // application name, and the headings name both panels.
-    // see the named-working-region maintainer note.
     this.innerHTML = `
       <aside class="panel search" hidden>
         <h2 class="rdio-visually-hidden">Search</h2>
@@ -85,7 +84,6 @@ class RdioApp extends HTMLElement {
 
     // the keyboard's route into the display's double-click fullscreen:
     // the gesture has no keyboard equivalent.
-    // see the fullscreen-keyboard-control maintainer note.
     this.fullscreenButton = this.querySelector('.rdio-fullscreen button');
     this.fullscreenButton.addEventListener('click', () => this.toggleFullscreen());
 
@@ -139,7 +137,6 @@ class RdioApp extends HTMLElement {
     // the keyboard travels with the panel it opened: the landing place is
     // a control the panel marks itself, because a search answer repaints
     // a row a landed keyboard would stand on.
-    // see the panel-keyboard-landing maintainer note.
     const landing = panel.querySelector('[data-landing]')
       ?? panel.querySelector('.scroll button, .scroll input, .scroll select, .scroll textarea, .scroll a[href], .scroll [tabindex]')
       ?? panel.querySelector('.panel-close');
@@ -190,7 +187,6 @@ class RdioApp extends HTMLElement {
     if (document.fullscreenElement) {
       // the way out of fullscreen is the document's own: Chrome and
       // Safari carry it there, and only Firefox puts it on the element.
-      // see the fullscreen-exit-api maintainer note.
       (document.exitFullscreen ?? document.webkitExitFullscreen ?? document.mozCancelFullScreen ?? document.msExitFullscreen)?.call(document);
     } else {
       (el.requestFullscreen ?? el.mozRequestFullScreen ?? el.msRequestFullscreen ?? el.webkitRequestFullscreen)?.call(el);
@@ -199,7 +195,6 @@ class RdioApp extends HTMLElement {
 
   // the control names the move it will make, not the state it sits in:
   // pressed says where the page is.
-  // see the fullscreen-keyboard-control maintainer note.
   renderFullscreen() {
     const button = this.fullscreenButton;
 

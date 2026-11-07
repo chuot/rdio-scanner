@@ -255,9 +255,8 @@ func (handler *AdminLoginHandler) countAttempt(remoteAddr string) *loginAttempt 
 
 // forgetAttempt clears the attempt history of the address that just signed in: the budget
 // belongs to the address that spent it, and only that address gets it back, which repairs the
-// legacy clear-every-address-on-any-success behavior — see the login attempt budget maintainer
-// note. It runs only after a session has been started: a login that failed on the way out
-// leaves the counts where they were.
+// legacy clear-every-address-on-any-success behavior. It runs only after a session has been
+// started: a login that failed on the way out leaves the counts where they were.
 func (handler *AdminLoginHandler) forgetAttempt(remoteAddr string) {
 	handler.mutex.Lock()
 	defer handler.mutex.Unlock()

@@ -27,8 +27,7 @@ import (
 
 // Options is the server's options, held as the configuration in effect: `ReadOptions`
 // answers with what the server runs with, not what the `options` table holds, and
-// `WriteOptions` replaces what it runs with and then stores it, per the live configuration
-// in effect maintainer note.
+// `WriteOptions` replaces what it runs with and then stores it.
 type Options struct {
 	store store
 
@@ -64,8 +63,8 @@ func NewOptions(db *sql.DB, dialect Dialect) *Options {
 
 // StoreInitialCredential records the credential the server accepts when its stored
 // configuration has none, and keeps it in memory only: writing it would persist the signing
-// secret with it, per the live configuration in effect maintainer note. The credential is
-// supplied rather than computed because bcrypt belongs to the password adapter.
+// secret with it. The credential is supplied rather than computed because bcrypt belongs to
+// the password adapter.
 func (options *Options) StoreInitialCredential(credential string) {
 	options.mutex.Lock()
 	defer options.mutex.Unlock()
@@ -105,8 +104,7 @@ func (options *Options) ReadOptions(ctx context.Context) (domain.Options, error)
 }
 
 // WriteOptions makes the given options the ones the server runs with and then stores them,
-// and the save answers with what was submitted: this section is never read back, per the
-// live configuration in effect maintainer note.
+// and the save answers with what was submitted: this section is never read back.
 func (options *Options) WriteOptions(ctx context.Context, next domain.Options) error {
 	// The submitted options take effect under the mutex; the rows are written
 	// outside it, as in `Accesses.SaveAccesses`.
@@ -222,7 +220,7 @@ func (options *Options) fetch(ctx context.Context) ([]optionRow, error) {
 // the stored rows: every option it has a default for is reset, except `branding`, `email`,
 // and the secret, which keep what the server was already running with. The credential stays
 // empty here — bcrypt belongs to the password adapter — and the re-derivation puts in what
-// StoreInitialCredential supplied, per the live configuration in effect maintainer note.
+// StoreInitialCredential supplied.
 func resetOptions(live domain.Options) domain.Options {
 	next := domain.DefaultOptions()
 
@@ -297,7 +295,7 @@ func applyOptionRow(options domain.Options, row optionRow) domain.Options {
 	case "secret":
 		// A stored secret is taken only at the length the server signs with, and a
 		// value that fails that rule is not taken at all: the reader no longer
-		// invents a secret, per the live configuration in effect maintainer note.
+		// invents a secret.
 		if v, ok := row.value.(string); ok {
 			options = options.AcceptSecret(v)
 		}

@@ -377,8 +377,8 @@ test('saveSection sends the working copy, then re-baselines from the saved secti
   assert.deepEqual(slice.working, [{ id: 1, label: 'Renamed' }]);
 });
 
-// saveSection sends the system row and not the levels: the loaded rows are stale
-// see the systems-level-staleness maintainer note.
+// saveSection sends the system row and not the levels: the loaded rows are
+// stale.
 test('saveSection sends the system row and leaves its levels to the sections that save them', async () => {
   const { api, useCases } = setup({ token: 'jwt-0' });
 
@@ -521,8 +521,7 @@ test('the section that answered the request leaves nothing standing for the next
 });
 
 // the server clamps dirwatch delays to 1440, below the section's floor of 2000
-// the application clamps server rows on baseline and working copy alike
-// see the dirwatch-delay-clamp maintainer note.
+// the application clamps server rows on baseline and working copy alike.
 test('a dirwatch row the server answers with its clamped delay loads as the floor the rule accepts, and is not a change', async () => {
   const { store, useCases } = setup({
     token: 'jwt-0',

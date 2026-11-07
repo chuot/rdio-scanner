@@ -1,5 +1,5 @@
-// the row's warning icon and its section's save answer validity, not the contact detail
-// see the validity-markers-pinned maintainer note.
+// the row's warning icon and its section's save answer validity, not the contact
+// detail.
 
 import './dom-shim.js';
 
@@ -238,8 +238,8 @@ for (const [name, tag, fillRow, deleteLabel] of DELETES) {
   });
 }
 
-// a new dirwatch row lacks a mask where a saved one has an empty string: add seeds a default
-// see the dirwatch-mask-default maintainer note.
+// a new dirwatch row lacks a mask where a saved one has an empty string: add seeds a
+// default.
 test('the dirwatch row the add control creates carries the mask the section needs, and Directory is its only complaint', () => {
   seed(getAdminContext().store);
 

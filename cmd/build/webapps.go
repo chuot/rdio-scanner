@@ -49,9 +49,8 @@ func bundleOutput(repo string, app string) string {
 }
 
 // clientSources is every file the bundle of one application is built
-// from: the build script and manifests, that application's frontend,
-// the shared sources, and for administration alone the OpenAPI contract.
-// see the webapps-source-watch maintainer note.
+// from: the build script and manifests, that application's frontend, the
+// shared sources, and for administration alone the OpenAPI contract.
 func clientSources(repo string, app string) ([]string, error) {
 	var files []string
 
@@ -97,9 +96,8 @@ func clientSources(repo string, app string) ([]string, error) {
 }
 
 // isBundleContent reports whether a file is inside a built bundle:
-// the bundle and everything under it are output, not sources.
-// A rule watching its own output would rebuild on every run.
-// see the webapps-source-watch maintainer note.
+// the bundle and everything under it are output, not sources. A
+// rule watching its own output would rebuild on every run.
 func isBundleContent(path string) bool {
 	for _, part := range strings.Split(path, string(filepath.Separator)) {
 		if part == "bundle" {

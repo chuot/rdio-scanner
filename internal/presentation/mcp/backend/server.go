@@ -32,14 +32,12 @@ import (
 
 // EndpointPath is the path the surface is served from: a route of its
 // own, a sibling of the administrator's API, promised to assistants in
-// the surface's configuration lines; see the mcp-endpoint-is-its-own-
-// path-on-the-server maintainer note.
+// the surface's configuration lines.
 const EndpointPath = "/mcp"
 
 // toolDeadline bounds one capability's own work, narrower than the
 // endpoint's bound, so the assistant hears the capability's own failure
-// in time to ask a narrower one; see the mcp-endpoint-is-its-own-path-on-
-// the-server maintainer note.
+// in time to ask a narrower one.
 const toolDeadline = 2 * time.Minute
 
 // sessionKeepalive is how often the surface asks held sessions whether
@@ -114,10 +112,9 @@ type Deps struct {
 	Password   *application.ChangeAdminPasswordHandler
 }
 
-// Server is the surface: the capability sets the tiers read and the HTTP
-// handler that carries them. Each set is one server object shared by every
-// session of its tier, so a capability can tell a connected assistant the
-// list changed; see the credential-gate-decides-the-tier-before-the-protocol maintainer note.
+// Server is the surface: the capability sets the tiers read and the HTTP handler that carries
+// them. Each set is one server object shared by every session of its tier, so a capability
+// can tell a connected assistant the list changed.
 type Server struct {
 	readonly *mcp.Server
 	full     *mcp.Server
@@ -184,8 +181,7 @@ func New(deps Deps) *Server {
 
 	// The handler hands each request the server of the tier the gate decided,
 	// from the credential and not from anything the protocol is asked for; a
-	// refused caller never reaches the protocol handler. See the credential-
-	// gate-decides-the-tier-before-the-protocol maintainer note.
+	// refused caller never reaches the protocol handler.
 	sdk := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		if who, ok := CallerOf(r.Context()); ok && who.Tier == TierFull {
 			return srv.full
@@ -238,8 +234,7 @@ const methodCallTool = "tools/call"
 
 // withToolDeadline bounds one capability's work and keeps the stream
 // writing while it runs, so the failure is the capability's own, not a
-// silent stream; see the mcp-endpoint-is-its-own-path-on-the-server
-// maintainer note.
+// silent stream.
 func withToolDeadline(at, keepalive time.Duration) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
@@ -375,8 +370,7 @@ func (s *Server) Sessions() iter.Seq[*mcp.ServerSession] {
 
 // CloseSessions says goodbye to every held session, the way the stopping
 // server does to its other connections: the SDK closes a session's own
-// transport, so the surface tracks none of its own; see the credential-
-// gate-decides-the-tier-before-the-protocol maintainer note.
+// transport, so the surface tracks none of its own.
 func (s *Server) CloseSessions(ctx context.Context) error {
 	var first error
 

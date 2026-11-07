@@ -28,8 +28,8 @@ import (
 
 // with no service manager to talk to, these tests pin the two decisions of
 
-// an unknown action ends with a failure and says nothing but the exit code
-// see the daemon-unknown-action-exit-code maintainer note.
+// an unknown action ends with a failure and says nothing but the exit
+// code.
 func TestAnActionTheServiceManagerDoesNotKnowEndsWithAFailureAndSaysNothing(t *testing.T) {
 	var out bytes.Buffer
 

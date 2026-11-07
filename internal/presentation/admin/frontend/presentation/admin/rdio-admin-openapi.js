@@ -1,7 +1,6 @@
 // rdio-admin-openapi: endpoint groups derived from the docs/openapi.json contract, shown by
 // rdio-admin-openapi-box; a fetch failure renders one honest caption. Informational only:
-// no save bar, no store slice, no requests beyond the fetch
-// see the openapi-contract-card maintainer note.
+// no save bar, no store slice, no requests beyond the fetch.
 
 import './openapi-box.js';
 

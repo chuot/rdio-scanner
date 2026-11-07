@@ -86,23 +86,22 @@ func run(args []string, stdout io.Writer, unbuilt func() []string) int {
 	}
 
 	// the command mode drives a running server and stops, outranking the
-	// administrator password mode and needing no database or configuration
-	// see the command-mode-ordering maintainer note.
+	// administrator password mode and needing no database or
+	// configuration.
 	if mode == ModeCommand {
 		return runCommand(config, exePath, stdout)
 	}
 
 	// the service mode's two halves: asking the manager to act ends this process,
-	// and the manager's run action makes it the service with the server underneath
-	// see the daemon-lifecycle-halves maintainer note.
+	// and the manager's run action makes it the service with the server
+	// underneath.
 	if asksTheServiceManager(config.ServiceAction) {
 		return controlService(config.ServiceAction)
 	}
 
 	// the vacuum mode is a one-shot that compacts the database and stops: it
 	// needs the deployment open and locked like the password mode, and nothing
-	// else, so it outranks it the same way
-	// see the sqlite-vacuum maintainer note.
+	// else, so it outranks it the same way.
 	if config.Vacuum {
 		return vacuumDatabase(config, stdout)
 	}
@@ -123,14 +122,14 @@ func run(args []string, stdout io.Writer, unbuilt func() []string) int {
 
 // serve starts the server and answers with it until the operator stops it.
 func serve(config *Config, stdout io.Writer) int {
-	// the banner is said before the database opens, so what ran is visible first
-	// see the banner-before-database maintainer note.
+	// the banner is said before the database opens, so what ran is visible
+	// first.
 	fmt.Fprintf(stdout, "\nRdio Scanner v%s\n", Version)
 	fmt.Fprintf(stdout, "----------------------------------\n")
 
 	// under the manager, the manager's loop is handed a goroutine before the
-	// database opens, so a service that cannot start is visible to the manager
-	// see the daemon-start-before-database maintainer note.
+	// database opens, so a service that cannot start is visible to the
+	// manager.
 	var echo app.LogEcho
 
 	if config.ServiceAction == serviceActionRun {
@@ -205,7 +204,6 @@ func serverConfig(config *Config, out io.Writer, echo app.LogEcho) app.Config {
 // vacuumDatabase is the -vacuum mode: open the deployment the same way the
 // server does, so the in-use refusal covers it, compact the sqlite file in
 // place, report what came back, and stop without serving.
-// see the sqlite-vacuum maintainer note.
 func vacuumDatabase(config *Config, stdout io.Writer) int {
 	ctx := context.Background()
 
@@ -262,8 +260,8 @@ func changeAdminPassword(config *Config) int {
 	return 0
 }
 
-// exitWithError prints the failure on the standard error and ends with a code
-// see the failure-reporting-legacy-format maintainer note.
+// exitWithError prints the failure on the standard error and ends with a
+// code.
 func exitWithError(err error) int {
 	log.Println(err)
 

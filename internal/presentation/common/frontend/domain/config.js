@@ -40,10 +40,8 @@ export function transformCall(config, call) {
   return call;
 }
 
-// Admin round-trip.
-// The server writes the talkgroup order under key talkgroup and reads key
-// order; the working copy normalizes on read:
-// see the talkgroup-order-key-drift maintainer note.
+// Admin round-trip. The server writes the talkgroup order under key
+// talkgroup and reads key order; the working copy normalizes on read.
 
 export function createAdminWorkingCopy(config) {
   const working = structuredClone(config);
@@ -131,8 +129,7 @@ export function serializeSubSection(level, working) {
 
 // Per-section save payload: the fields of the system row, with the
 // serialization-side normalization (systems section only), and no sites,
-// talkgroups, or units:
-// see the section-save-scoping maintainer note.
+// talkgroups, or units.
 export function serializeSection(section, working) {
   if (section !== 'systems') return structuredClone(working);
 

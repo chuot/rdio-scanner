@@ -30,10 +30,9 @@ import (
 	"rdio-scanner/internal/infrastructure/ffmpeg/bundle"
 )
 
-// The Mach-O reads this build makes of a macOS ffmpeg, and the rules
-// its binaries are admitted under: a thin 64-bit image of the target's
-// own architecture, entry point, linker, system library, and arm64 signature.
-// see the supply-macho-read-rules maintainer note.
+// The Mach-O reads this build makes of a macOS ffmpeg, and the rules its
+// binaries are admitted under: a thin 64-bit image of the target's own
+// architecture, entry point, linker, system library, and arm64 signature.
 const (
 	machOMagic   = 0xfeedfacf // MH_MAGIC_64: a thin 64-bit image, little-endian
 	machO32Magic = 0xfeedface // MH_MAGIC: 32-bit, which no release of this project ships
@@ -86,7 +85,6 @@ type aMachOProgram struct {
 // aMachOProblem is one refused fact about a Mach-O program: what the
 // file said, and what the read asked for instead; an empty said half
 // is the file saying what was asked.
-// see the supply-macho-read-rules maintainer note.
 type aMachOProblem struct {
 	// noRule marks a record naming a read this build has no rule for:
 	// the record's failure, not the file's.
@@ -97,9 +95,8 @@ type aMachOProblem struct {
 }
 
 // aMachOProgramAt reads a Mach-O program's header and load commands
-// and answers the program or what the file said instead of one.
-// the architecture is asked of the header, never left to the record.
-// see the supply-macho-read-rules maintainer note.
+// and answers the program or what the file said instead of one. the
+// architecture is asked of the header, never left to the record.
 func aMachOProgramAt(path string, target string) (aMachOProgram, aMachOProblem) {
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -287,7 +284,6 @@ func checkSuppliedProgram(path string, target string, record bundle.Target) erro
 // checkTheSuppliedMachOProgram reports whether a dropped program is
 // the program the macOS target runs. The architecture is a rule a
 // crossed compile cannot check: only the file can answer it.
-// see the supply-macho-read-rules maintainer note.
 func checkTheSuppliedMachOProgram(path string, name string, target string, record bundle.Target) error {
 	file, problem := aMachOProgramAt(path, target)
 
@@ -348,7 +344,6 @@ func readAMachOProgram(path string, program string, target string, reads []strin
 // theMachOReadFailure answers no problem when a program says what a
 // read asks, and the two halves of an answer when it does not; each
 // name refuses one shape a compiler can produce, read out of the file.
-// see the supply-macho-read-rules maintainer note.
 func theMachOReadFailure(read string, file aMachOProgram) aMachOProblem {
 	switch read {
 	case "mh_execute":
@@ -490,7 +485,6 @@ func nameOfCPU(cpuType uint32) string {
 // theRunOfTheBinaries is what the build saw when it ran the ffmpeg
 // binaries: the machine, the version they said, the codecs they
 // registered, and the recordings they converted.
-// see the ffmpeg-run-gate maintainer note.
 type theRunOfTheBinaries struct {
 	Host        string
 	Version     string
@@ -502,7 +496,6 @@ type theRunOfTheBinaries struct {
 // theBinariesTheHostCannotRun is what a host is told when the ffmpeg
 // binaries in front of it do not run on it: the answer names the host
 // that can, the command that compiles them, and where they sit.
-// see the ffmpeg-run-gate maintainer note.
 func theBinariesTheHostCannotRun(target string, paths ffmpegPaths, machine host, err error) error {
 	return fmt.Errorf("the %s ffmpeg binaries do not run on this machine (%s): %w\n"+
 		"the pair in %s is adopted by being run, and this host cannot run it: run go run ./cmd/build ffmpeg %s on a %s host",
@@ -512,7 +505,6 @@ func theBinariesTheHostCannotRun(target string, paths ffmpegPaths, machine host,
 // proveSuppliedBinaries runs the ffmpeg binaries in one target's
 // bundle directory here, and says what it saw: a run answers what a
 // program does, not which program it is, so the file is read first.
-// see the supply-macho-read-rules maintainer note.
 func (t tool) proveSuppliedBinaries(target string, record bundle.Target, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error) {
 	drop := suppliedDropFor(paths, target)
 
@@ -582,7 +574,6 @@ func theProgramVersion(run command, program []string) (string, error) {
 // onThisMachine runs one program here, hands it a recording on its
 // input, and hands back what it wrote: when a program never started,
 // the operating system's refusal is carried out, not thrown away.
-// see the ffmpeg-run-gate maintainer note.
 func onThisMachine() command {
 	return func(argv []string, stdin []byte) ([]byte, error) {
 		out := bytes.NewBuffer([]byte(nil))

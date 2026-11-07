@@ -132,8 +132,7 @@ func (call Call) DuplicateWindow(window time.Duration) (time.Time, time.Time) {
 // IsDuplicateOf reports whether another call already covers this one: the
 // same system, talkgroup, and site, and a timestamp within the window on
 // either side. A zero window switches detection off; unresolved system or
-// talkgroup identifiers never match. The site rule and its history live in
-// the domain maintainer note.
+// talkgroup identifiers never match. The site rule and its history live.
 func (call Call) IsDuplicateOf(other Call, window time.Duration) bool {
 	if window <= 0 {
 		return false

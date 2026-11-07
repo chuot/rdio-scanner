@@ -85,8 +85,7 @@ func TestTheBundleWarningNamesEveryUnbuiltApplication(t *testing.T) {
 
 // a switch the command layer parses and the composition shape does not carry
 // across is a switch the server never hears, so these pin the two opt-in
-// switches no address or file path can stand in for
-// see the operator-switches-reach-server maintainer note.
+// switches no address or file path can stand in for.
 func TestTheOperatorsSwitchesReachTheServerTheyWereTypedFor(t *testing.T) {
 	cfg, _ := newTestConfig(t, "-mcp_server", "-trusted_proxies", "10.0.0.0/8, 127.0.0.1")
 

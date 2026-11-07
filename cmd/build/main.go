@@ -15,7 +15,6 @@
 
 // Command build compiles this project: the scanner webapp, then the administration
 // application, then the server that carries both bundles.
-// see the buildinfo-version-derivation maintainer note.
 package main
 
 import (

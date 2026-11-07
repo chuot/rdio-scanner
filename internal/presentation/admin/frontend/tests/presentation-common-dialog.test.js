@@ -1,6 +1,6 @@
 // the dialog's tab focus trap, read through the keyboard events it answers
-// it reads its ends at keypress time and skips hidden and disabled controls
-// see the dialog-focus-trap maintainer note.
+// it reads its ends at keypress time and skips hidden and disabled
+// controls.
 
 import './dom-shim.js';
 

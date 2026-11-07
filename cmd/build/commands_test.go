@@ -834,7 +834,6 @@ func TestTheCompileGuideSaysHowToVerifyABuild(t *testing.T) {
 // the compile guide names the container builder the ffmpeg compiles need: a container program
 // without it stops at the FreeBSD sysroot stage before a compiler starts, and what it answers
 // there names no file and no instruction, only a step number.
-// see the container-image-build-contract maintainer note.
 func TestTheCompileGuideNamesTheContainerBuilderTheCompilesNeed(t *testing.T) {
 	path := filepath.Join("..", "..", "COMPILING.md")
 

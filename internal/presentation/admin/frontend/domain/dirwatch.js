@@ -50,8 +50,7 @@ export function validDirectory(value, allRows) {
 
 // the server clamps every stored delay to 1440, below this section's 2000 floor:
 // no value passes both rules, so the loader applies the 2000 floor on load and a
-// saved row reads valid and unchanged
-// see the dirwatch-delay-clamp maintainer note.
+// saved row reads valid and unchanged.
 export function normalizeDirwatchRow(row) {
   return typeof row.delay === 'number' ? { ...row, delay: Math.max(2000, row.delay) } : row;
 }

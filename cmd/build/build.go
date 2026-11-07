@@ -70,14 +70,12 @@ type tool struct {
 	releaseFiles func(repo string, tr releaseTarget, output string) ([]archiveFile, error)
 
 	// ffmpeg produces the ffmpeg the server binary built here embeds: fetch, check,
-	// compile in a container, prove what it produced, and cache it for embedding.
-	// It reports the target it wrote no ffmpeg for, and the run carries on without it.
-	// see the ffmpeg-cross-build maintainer note.
+	// compile in a container, prove what it produced, and cache it for embedding. It
+	// reports the target it wrote no ffmpeg for, and the run carries on without it.
 	ffmpeg func(options, io.Writer) (bool, error)
 
-	// prove is the gate the ffmpeg binaries pass before anything adopts them:
-	// version line, conversions through the converter's own argument list, and codecs.
-	// see the ffmpeg-cross-build maintainer note.
+	// prove is the gate the ffmpeg binaries pass before anything adopts them: version
+	// line, conversions through the converter's own argument list, and codecs.
 	prove func(target string, record bundle.Target, paths ffmpegPaths, stdout io.Writer) (theRunOfTheBinaries, error)
 
 	// source is the ffmpeg release the manifest pins arriving in the build's cache
@@ -88,14 +86,12 @@ type tool struct {
 	// the build runs its compiled ffmpeg binaries through it, where each can run.
 	theRun command
 
-	// machine is the platform the build runs on, and it decides which route
-	// a target's ffmpeg takes: native toolchain on that platform, container elsewhere.
-	// see the ffmpeg-cross-build maintainer note.
+	// machine is the platform the build runs on, and it decides which route a target's
+	// ffmpeg takes: native toolchain on that platform, container elsewhere.
 	machine func() host
 
-	// now is the moment the run is making the container image: the image's build
-	// time is a fact the run knows and the Containerfile cannot, so the run supplies it.
-	// see the container-image-build-time maintainer note.
+	// now is the moment the run is making the container image: the image's build time is
+	// a fact the run knows and the Containerfile cannot, so the run supplies it.
 	now func() time.Time
 }
 
@@ -111,7 +107,6 @@ func (t tool) theMachine() host {
 
 // newTool is the tool the build command runs with: the tree it works in,
 // and every part the phases ask of it, wired in a fixed order.
-// see the tool-wiring-order maintainer note.
 func newTool(repo string) tool {
 	t := tool{
 		repo:         repo,
@@ -126,7 +121,6 @@ func newTool(repo string) tool {
 
 		// the machine and the way programs run on it are wired with the fields,
 		// before any phase is bound, so every bound phase carries them.
-		// see the tool-wiring-order maintainer note.
 		machine: thisMachine,
 		theRun:  onThisMachine(),
 		now:     time.Now,
@@ -175,9 +169,8 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	}
 
 	// a release is built from a commit, and its archive is named for it:
-	// a dirty tree is refused before anything is built, so an archive
-	// is never built from work a reader cannot check out.
-	// see the release-from-commit maintainer note.
+	// a dirty tree is refused before anything is built, so an archive is
+	// never built from work a reader cannot check out.
 	if o.sub == subDist && src.dirty && !o.allowDirty {
 		return fail(t.errout, fmt.Errorf("dist releases the tree as it is committed, and this tree has uncommitted work: %s\ncommit it, or say --allow-dirty to release the tree as it stands", strings.Join(src.changed, ", ")))
 	}
@@ -312,10 +305,9 @@ func (t tool) runServer(o options, version buildinfo.Version, stdout io.Writer) 
 	return nil
 }
 
-// runDist builds the release for the targets asked for: this platform, the whole
-// matrix, or the named target, each target's ffmpeg before the server that embeds it.
-// A failed ffmpeg ends the run; a skipped target writes no archive and the run carries on.
-// see the dist-target-selection maintainer note.
+// runDist builds the release for the targets asked for: this platform, the whole matrix,
+// or the named target, each target's ffmpeg before the server that embeds it. A failed
+// ffmpeg ends the run; a skipped target writes no archive and the run carries on.
 func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) int {
 	// the target list is decided once, before any of it runs,
 	// so an impossible request is refused before a single application is built.
@@ -345,7 +337,6 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 
 	// the ffmpeg phase stays serial and finishes before any server compile starts,
 	// so the log records one target's block of lines at a time.
-	// see the dist-run-scheduling maintainer note.
 	ready := make([]releaseTarget, 0, len(targets))
 
 	for _, tr := range targets {
@@ -375,7 +366,6 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 
 	// server compile and archive write run at once for each ready target:
 	// each touches only files its own step wrote.
-	// see the dist-run-scheduling maintainer note.
 	work := make([]theWorkOfOneTarget, len(ready))
 
 	var wg sync.WaitGroup
@@ -514,7 +504,6 @@ const buildJobsEnv = "RDIO_BUILD_JOBS"
 // run already carries for deciding which targets it can build: the server compiles of a release run run on that
 // machine, so its own count is the one to size them with, and the ffmpeg compile's job count comes from the same
 // place. A bound that is not a count of work is refused; an empty variable leaves the machine's bound standing.
-// see the dist-run-scheduling maintainer note.
 func distWorkers(ready int, machine host, lookup func(string) (string, bool)) (int, error) {
 	if ready == 0 {
 		return 0, nil
@@ -607,7 +596,6 @@ func directoryExists(path string) bool {
 // cleanTree removes what a clean run removes: the release output, the client
 // dependencies, the bundle contents, and the ffmpeg phase's disposable scratch.
 // It leaves the compiled ffmpeg standing and prunes the ffmpeg cache.
-// see the clean-run-scope maintainer note.
 func cleanTree(repo string) ([]string, error) {
 	targets := []string{filepath.Join(repo, "dist"), filepath.Join(repo, presentationDir, "node_modules")}
 
@@ -663,7 +651,6 @@ func cleanTree(repo string) ([]string, error) {
 
 // serverSources is every file the server binary is built from: the Go files,
 // both bundle contents, the declared core version file, and the module files.
-// see the server-build-sources maintainer note.
 func serverSources(repo string) ([]string, error) {
 	var files []string
 

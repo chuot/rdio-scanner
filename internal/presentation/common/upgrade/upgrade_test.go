@@ -20,8 +20,8 @@ import (
 	"testing"
 )
 
-// TestWantedReadsTheUpgradeHeaderWhateverItsCase: one header decides,
-// spelled any way. see the upgrade-required-is-decided-elsewhere maintainer note.
+// TestWantedReadsTheUpgradeHeaderWhateverItsCase: one header decides, spelled any
+// way.
 func TestWantedReadsTheUpgradeHeaderWhateverItsCase(t *testing.T) {
 	for _, spelling := range []string{"websocket", "WebSocket", "WEBSOCKET", "webSocket"} {
 		req := request()
