@@ -782,6 +782,24 @@ func TestTheContainerRunArgsAreTheOnesTheProgramUnderstands(t *testing.T) {
 	}
 }
 
+// the core count of the machine a program runs containers on is asked for in that program's own
+// words: each program templates its own info payload, and a field written for one is a field the
+// other does not have.
+func TestTheContainerProgramAsksForItsCoresInItsOwnForm(t *testing.T) {
+	podman := theContainerProgram{name: podmanProgram}
+	docker := theContainerProgram{name: dockerProgram}
+
+	if got := podman.coresAsk(); !sameArgs(got, []string{"info", "--format", "{{.Host.CPUs}}"}) {
+		t.Errorf("podman is asked for its cores with %v, want info --format {{.Host.CPUs}}: podman answers its info with a "+
+			"payload that has no NCPU field, and says so instead of giving a count", got)
+	}
+
+	if got := docker.coresAsk(); !sameArgs(got, []string{"info", "--format", "{{.NCPU}}"}) {
+		t.Errorf("docker is asked for its cores with %v, want info --format {{.NCPU}}: docker answers its info with a "+
+			"payload that has no Host field, and says so instead of giving a count", got)
+	}
+}
+
 // sameArgs says two argument lists are the same arguments in the same order.
 func sameArgs(got, want []string) bool {
 	if len(got) != len(want) {

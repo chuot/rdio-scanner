@@ -97,10 +97,20 @@ func (s ffmpegState) theCompileCanCheckOutHowManyCores() string {
 }
 
 // refusesToPlanACompileOnAMachineThatNamesNoCores is that refusal: a run that named the machine the compile runs
-// on, and got no count from it, has no job count to plan with.
+// on, and got no count from it, has no job count to plan with. The sentence names the program and the form it was
+// asked with, because "no count" is what an operator sees whether the machine has no cores to name or the tool
+// asked that program in a vocabulary it does not answer.
 func (s ffmpegState) refusesToPlanACompileOnAMachineThatNamesNoCores() (string, bool) {
 	if s.compileCoreHost != "" && s.compileCores == "" {
-		return "the " + s.compileCoreHost + " reports no CPU count to compile with", true
+		refusal := "the " + s.compileCoreHost + " reports no CPU count to compile with"
+
+		if s.program != "" && s.compileCoreHost == theContainerMachineNamedBy(s.program) {
+			ask := append([]string{s.program}, theContainerProgram{name: s.program}.coresAsk()...)
+
+			refusal += ", after being asked with " + strings.Join(ask, " ")
+		}
+
+		return refusal, true
 	}
 
 	return "", false
@@ -165,7 +175,7 @@ func (t tool) howManyCoresCanTheMachineCompilingHereCheckOut(target string, prog
 		return "", named
 	}
 
-	report, err := t.theRun([]string{program, "info", "--format", "{{.NCPU}}"}, nil)
+	report, err := t.theRun(append([]string{program}, theContainerProgram{name: program}.coresAsk()...), nil)
 	if err != nil {
 		return "", named
 	}

@@ -18,6 +18,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -732,6 +733,134 @@ func TestTheToolAsksTheContainerEngineForItsCores(t *testing.T) {
 
 	if machine != theContainerMachineNamedBy(dockerProgram) {
 		t.Errorf("the empty count was attributed to %q, want the %s", machine, theContainerMachineNamedBy(dockerProgram))
+	}
+}
+
+// podmanAnswersOnlyInItsOwnWords is a machine running podman that answers the core-count ask it was asked in
+// podman's words with the count given, and answers an ask written in docker's words with the error podman really
+// returns for it. This is the machine the owner's WSL2 workstation is: podman answers no {{.NCPU}} ask with a
+// count, and every Linux target of the release stopped before its compile started.
+func podmanAnswersOnlyInItsOwnWords(cores string, asked *[]string) *tool {
+	tl := tool{theRun: func(argv []string, stdin []byte) ([]byte, error) {
+		*asked = append(*asked, strings.Join(argv, " "))
+
+		if strings.Contains(strings.Join(argv, " "), "{{.NCPU}}") {
+			return nil, errors.New(`podman's answer: can't evaluate field NCPU in type system.infoReport`)
+		}
+
+		return []byte(cores + "\n"), nil
+	}}
+
+	tl.repo = "/repo"
+
+	return &tl
+}
+
+// TestTheToolAsksPodmanForItsCoresInPodmansOwnWords is CA-094-03: on a machine whose podman answers no docker-shaped
+// ask, the tool's core-count ask is answered, and docker's shape never reaches the program.
+func TestTheToolAsksPodmanForItsCoresInPodmansOwnWords(t *testing.T) {
+	asked := []string{}
+
+	cpus, machine := podmanAnswersOnlyInItsOwnWords("12", &asked).howManyCoresCanTheMachineCompilingHereCheckOut("linux-amd64", podmanProgram, theReleaseHost)
+	if cpus != "12" {
+		t.Errorf("podman reported %q, want 12: the ask was answered in podman's own words", cpus)
+	}
+
+	if machine != theContainerMachineNamedBy(podmanProgram) {
+		t.Errorf("the count came from %q, want it attributed to the %s", machine, theContainerMachineNamedBy(podmanProgram))
+	}
+
+	for _, one := range asked {
+		if strings.Contains(one, "{{.NCPU}}") {
+			t.Errorf("the tool asked podman %q, which is docker's field and not podman's: podman answers that ask with an error "+
+				"and no count, and the release run refuses every Linux target with %s", one, "reports no CPU count to compile with")
+		}
+	}
+}
+
+// TestAPodmanAnswerSizesTheContainerCompile is CA-094-04 and the defect the owner reported: the podman answer of
+// a machine with podman reaches the container compile's job count, so the linux-amd64 target of a release run is
+// planned and not refused.
+func TestAPodmanAnswerSizesTheContainerCompile(t *testing.T) {
+	ownCores := runtime.NumCPU()
+	if ownCores == 12 {
+		t.Skipf("this machine has %d cores, the number the fake podman reports", ownCores)
+	}
+
+	asked := []string{}
+
+	tl := podmanAnswersOnlyInItsOwnWords("12", &asked)
+
+	cpus, machine := tl.howManyCoresCanTheMachineCompilingHereCheckOut("linux-amd64", podmanProgram, theReleaseHost)
+	if cpus != "12" {
+		t.Fatalf("the run read %q cores from podman, want 12. It asked: %v", cpus, asked)
+	}
+
+	plan, err := planFFmpeg(options{target: "linux-amd64"}, tl.repo, bundle.ReadManifest(), aTreeWhoseCompileMachineWasAsked(machine, cpus), theReleaseHost)
+	if err != nil {
+		t.Fatalf("the release run refused its linux target: %v", err)
+	}
+
+	if got := theJobCountOf(plan); got != "12" {
+		t.Errorf("the compile puts %q jobs to work, want 12: podman's machine has 12 cores and the machine running this build has %d",
+			got, ownCores)
+	}
+}
+
+// TestTheContainerCompileWhenTheProgramAnswersAnErrorIsRefused and TestTheContainerCompileWhenTheProgramAnswersNotACountIsRefused
+// are CA-094-06 and CA-094-07: a program that answers the core-count ask with an error, or with words that are not a
+// count, is still refused, and the operator is told which program was asked and in what form, so a build tool that
+// asked in the wrong vocabulary is told apart from a machine that has no cores to lend.
+func TestTheContainerCompileWhenTheProgramAnswersAnErrorIsRefused(t *testing.T) {
+	asked := []string{}
+
+	tl := tool{theRun: func(argv []string, stdin []byte) ([]byte, error) {
+		joined := strings.Join(argv, " ")
+		asked = append(asked, joined)
+
+		return nil, errors.New("can't evaluate field CPUs in type system.infoReport")
+	}}
+
+	cpus, machine := tl.howManyCoresCanTheMachineCompilingHereCheckOut("linux-amd64", podmanProgram, theReleaseHost)
+
+	_, err := planFFmpeg(options{target: "linux-amd64"}, "/repo", bundle.ReadManifest(), aTreeWhoseCompileMachineWasAsked(machine, cpus), theReleaseHost)
+	if err == nil {
+		t.Fatalf("a podman answering an error planned a compile anyway. It was asked: %v", asked)
+	}
+
+	message := err.Error()
+	if !strings.Contains(message, podmanProgram) || !strings.Contains(message, "{{.Host.CPUs}}") {
+		t.Errorf("the refusal %q does not name the program it asked and the form it asked it with", message)
+	}
+
+	if !strings.Contains(message, "no CPU count to compile with") {
+		t.Errorf("the refusal %q does not keep the words that say the machine reported no count", message)
+	}
+}
+
+func TestTheContainerCompileWhenTheProgramAnswersNotACountIsRefused(t *testing.T) {
+	asked := []string{}
+
+	tl := tool{theRun: func(argv []string, stdin []byte) ([]byte, error) {
+		asked = append(asked, strings.Join(argv, " "))
+
+		return []byte("not a count\n"), nil
+	}}
+
+	cpus, machine := tl.howManyCoresCanTheMachineCompilingHereCheckOut("linux-amd64", podmanProgram, theReleaseHost)
+
+	_, err := planFFmpeg(options{target: "linux-amd64"}, "/repo", bundle.ReadManifest(), aTreeWhoseCompileMachineWasAsked(machine, cpus), theReleaseHost)
+	if err == nil {
+		t.Fatalf("a podman answering %q planned a compile anyway. It was asked: %v", "not a count", asked)
+	}
+
+	message := err.Error()
+	if !strings.Contains(message, podmanProgram) || !strings.Contains(message, "{{.Host.CPUs}}") {
+		t.Errorf("the refusal %q does not name the program it asked and the form it asked it with", message)
+	}
+
+	if !strings.Contains(message, "no CPU count to compile with") {
+		t.Errorf("the refusal %q does not keep the words that say the machine reported no count", message)
 	}
 }
 

@@ -94,9 +94,10 @@ func resolveContainerProgram(lookup func(string) (string, error), env func(strin
 		podmanProgram, dockerProgram)
 }
 
-// theContainerProgram names the program a run speaks to and how it
-// runs one command in a container, leaving no files behind in the
-// operator's tree.
+// theContainerProgram names the program a run speaks to, how it runs
+// one command in a container leaving no files behind in the operator's
+// tree, and the questions it asks that program in the words that
+// program answers.
 type theContainerProgram struct {
 	name string
 }
@@ -107,6 +108,19 @@ func (p theContainerProgram) run() []string {
 	}
 
 	return []string{"run", "--rm", "--userns=host"}
+}
+
+// coresAsk is the question a program answers with the number of cores
+// the machine its containers run on has. The form differs per program
+// because each templates its own info payload: docker names its count
+// NCPU and has no Host, podman names it Host.CPUs and has no NCPU, and
+// each rejects the other's field by name rather than giving a count.
+func (p theContainerProgram) coresAsk() []string {
+	if p.name == dockerProgram {
+		return []string{"info", "--format", "{{.NCPU}}"}
+	}
+
+	return []string{"info", "--format", "{{.Host.CPUs}}"}
 }
 
 // subArchive names the release's one non-command step, so the log
