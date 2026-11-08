@@ -611,10 +611,10 @@ func TestARecordNamingNoToolchainPlatformIsRefused(t *testing.T) {
 }
 
 // TestTheContainerCompileJobsAreTheContainerCores, TestTheContainerCompileWithNoCpuCountIsRefused, and
-// TestAHostCompileUsesTheHostsOwnCoreCount are CA-093-18 and CA-093-19 of FEAT-093: the compile in the tool's own
-// container asks the container machine how many cores it has rather than counting the cores of the machine running
-// the tool, a container machine that reports no count is refused instead of guessed for, and the host route keeps
-// the count of the host that runs its own toolchain.
+// TestAHostCompileUsesTheHostsOwnCoreCount: the compile in the tool's own container asks the container machine how
+// many cores it has rather than counting the cores of the machine running the tool, a container machine that reports
+// no count is refused instead of guessed for, and the host route keeps the count of the host that runs its own
+// toolchain.
 
 // withTheCompileMachineAsked is what the run read about the machine its compile runs on: the count it reported
 // and which machine that count is the count of. An empty count is a machine that reported nothing.
@@ -697,9 +697,9 @@ func TestAHostCompileUsesTheHostsOwnCoreCount(t *testing.T) {
 	}
 }
 
-// TestTheToolAsksTheContainerEngineForItsCores and TestTheHostCompileTakesTheCountOfTheMachineRunningIt are the
-// asking behind CA-093-18 and CA-093-19: the count comes from the machine the compile runs on, asked through the
-// engine that runs the container, and an answer that is not a count leaves nothing for the plan to use.
+// TestTheToolAsksTheContainerEngineForItsCores and TestTheHostCompileTakesTheCountOfTheMachineRunningIt cover the
+// ask itself: the count comes from the machine the compile runs on, asked through the engine that runs the container,
+// and an answer that is not a count leaves nothing for the plan to use.
 func TestTheToolAsksTheContainerEngineForItsCores(t *testing.T) {
 	asked := []string{}
 	tl := tool{
@@ -756,8 +756,8 @@ func podmanAnswersOnlyInItsOwnWords(cores string, asked *[]string) *tool {
 	return &tl
 }
 
-// TestTheToolAsksPodmanForItsCoresInPodmansOwnWords is CA-094-03: on a machine whose podman answers no docker-shaped
-// ask, the tool's core-count ask is answered, and docker's shape never reaches the program.
+// TestTheToolAsksPodmanForItsCoresInPodmansOwnWords: on a machine whose podman answers no docker-shaped ask, the
+// tool's core-count ask is answered, and docker's shape never reaches the program.
 func TestTheToolAsksPodmanForItsCoresInPodmansOwnWords(t *testing.T) {
 	asked := []string{}
 
@@ -778,9 +778,9 @@ func TestTheToolAsksPodmanForItsCoresInPodmansOwnWords(t *testing.T) {
 	}
 }
 
-// TestAPodmanAnswerSizesTheContainerCompile is CA-094-04 and the defect the owner reported: the podman answer of
-// a machine with podman reaches the container compile's job count, so the linux-amd64 target of a release run is
-// planned and not refused.
+// TestAPodmanAnswerSizesTheContainerCompile is the defect the owner reported: the core-count answer of a machine
+// running podman reaches the container compile's job count, so the linux-amd64 target of a release run is planned
+// and not refused.
 func TestAPodmanAnswerSizesTheContainerCompile(t *testing.T) {
 	ownCores := runtime.NumCPU()
 	if ownCores == 12 {
@@ -807,10 +807,11 @@ func TestAPodmanAnswerSizesTheContainerCompile(t *testing.T) {
 	}
 }
 
-// TestTheContainerCompileWhenTheProgramAnswersAnErrorIsRefused and TestTheContainerCompileWhenTheProgramAnswersNotACountIsRefused
-// are CA-094-06 and CA-094-07: a program that answers the core-count ask with an error, or with words that are not a
-// count, is still refused, and the operator is told which program was asked and in what form, so a build tool that
-// asked in the wrong vocabulary is told apart from a machine that has no cores to lend.
+// TestTheContainerCompileWhenTheProgramAnswersAnErrorIsRefused and
+// TestTheContainerCompileWhenTheProgramAnswersNotACountIsRefused: a program that answers the core-count ask with an
+// error, or with words that are not a count, is still refused, and the operator is told which program was asked and
+// in what form, so a build tool that asked in the wrong vocabulary is told apart from a machine that has no cores
+// to lend.
 func TestTheContainerCompileWhenTheProgramAnswersAnErrorIsRefused(t *testing.T) {
 	asked := []string{}
 
