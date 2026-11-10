@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -937,4 +938,862 @@ func queryPlan(t *testing.T, db *sql.DB, statement string, args ...any) []string
 	}
 
 	return details
+}
+
+// The statement inventory kept here is composed from the same pieces the repository's own
+// read-path builders compose a real history read from: the joins, the filters every history read
+// carries on its own, the projection each read answers with, and the ordering and limit it ends with.
+// A test can therefore compare what the inventory records against what those builders answer now,
+// rather than against a copy of a statement an earlier run wrote down.
+
+// inventoriedStatement is one statement the inventory carries: the name the measurement gives it, the
+// repository method that issues it, whether it reads or writes, and the statement itself.
+type inventoriedStatement struct {
+	label     string
+	probe     string
+	kind      string
+	statement string
+}
+
+// unmeasuredStatement is one statement a measured piece of work issues that no measurement times,
+// with what leaves it out of the inventoried list.
+type unmeasuredStatement struct {
+	probe     string
+	statement string
+	reason    string
+}
+
+// historyReadShape is one read a history search issues: what the measurement calls it beside its
+// search's own name, the projection it answers with, and the ordering and limit it ends with.
+type historyReadShape struct {
+	suffix  string
+	columns string
+	tail    string
+}
+
+// unmeasuredRead is one read a measured search issues beside the reads a measurement times.
+type unmeasuredRead struct {
+	shape  historyReadShape
+	reason string
+}
+
+// historySearchWork is one history search the measurements time: the criteria the query handler runs,
+// the filter those criteria add to the ones every history read carries, the reads timed for it, and
+// the reads it issues beside them.
+type historySearchWork struct {
+	label    string
+	criteria ports.CallSearch
+	filters  string
+	reads    []historyReadShape
+	extra    []unmeasuredRead
+}
+
+// historySpan is the dated range the windowed reads are measured against, taken from the calls the
+// test fixture holds.
+type historySpan struct {
+	newest  time.Time
+	dayFrom time.Time
+}
+
+const (
+	// inventoryHistoryJoin names the joins every history read repeats, which the repository states
+	// once for the whole history.
+	inventoryHistoryJoin = `FROM "calls" AS c ` +
+		`LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" ` +
+		`LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" ` +
+		`LEFT JOIN "delayed" AS d ON d."callId" = c."callId"`
+
+	// inventoryBaseFilters are the filters every history read carries, whatever its caller asks for.
+	inventoryBaseFilters = `c."systemId" > 0 AND c."talkgroupId" > 0 AND ` +
+		`s."systemRef" IS NOT NULL AND t."talkgroupRef" IS NOT NULL AND d."callId" IS NULL`
+
+	// The three projections a history search answers with, and the four orderings its reads end with.
+	inventorySpanColumns  = `SELECT c."timestamp"`
+	inventoryCountColumns = `SELECT COUNT(*)`
+	inventoryPageColumns  = `SELECT c."callId", c."timestamp", c."audioLength", s."systemRef", t."talkgroupRef"`
+
+	inventorySpanOldestTail      = ` ORDER BY c."timestamp" ASC LIMIT 1`
+	inventorySpanNewestTail      = ` ORDER BY c."timestamp" DESC LIMIT 1`
+	inventoryPageTail            = ` ORDER BY c."timestamp" DESC LIMIT ? OFFSET ?`
+	inventoryOldestFirstPageTail = ` ORDER BY c."timestamp" ASC LIMIT ? OFFSET ?`
+)
+
+// The filter each measured search adds to the ones the history carries on its own, one per search.
+const (
+	inventoryBareHistoryFilter     = ``
+	inventoryDayFilter             = `c."timestamp" >= ? AND c."timestamp" <= ?`
+	inventorySystemFilter          = `(s."systemRef" = ?)`
+	inventorySystemTalkgroupFilter = `(s."systemRef" = ? AND t."talkgroupRef" = ?)`
+	inventoryTagPairFilter         = `((s."systemRef" = ? AND t."talkgroupRef" IN (?, ?)) OR ` +
+		`(s."systemRef" = ? AND t."talkgroupRef" IN (?)))`
+	inventoryGroupPairFilter = `((s."systemRef" = ? AND t."talkgroupRef" IN (?, ?, ?)) OR ` +
+		`(s."systemRef" = ? AND t."talkgroupRef" IN (?)))`
+	inventoryAccessScopeFilter = `((s."systemRef" = ? AND t."talkgroupRef" IN (?, ?)) OR s."systemRef" = ?)`
+	inventoryUnmatchedFilter   = `(1 = 0)`
+)
+
+// everyHistoryRead and pageOnlyHistoryRead are the reads a history search issues: the search's oldest
+// and newest call, how many calls it holds, and one page of it. A caller that asks for a page and
+// nothing else issues that page alone, and the measurement names such a read after the caller rather
+// than after the shape of the read, so it carries no suffix of its own.
+var (
+	everyHistoryRead = []historyReadShape{
+		{suffix: " span oldest", columns: inventorySpanColumns, tail: inventorySpanOldestTail},
+		{suffix: " span newest", columns: inventorySpanColumns, tail: inventorySpanNewestTail},
+		{suffix: " count", columns: inventoryCountColumns, tail: ""},
+		{suffix: " page 25", columns: inventoryPageColumns, tail: inventoryPageTail},
+	}
+
+	pageOnlyHistoryRead = []historyReadShape{
+		{columns: inventoryPageColumns, tail: inventoryPageTail},
+	}
+)
+
+// The systems, talkgroups, and access scope the measured searches run against, taken from what the
+// test fixture stores. Each list is as short as the fixture allows while still standing for more than
+// one system and more than one talkgroup on a system, so every filter shape the search builders have
+// is measured.
+const (
+	historySystemRef    uint = 10001
+	historyTalkgroupRef uint = 1514000
+)
+
+func historyTagScopes() []domain.TalkgroupScope {
+	return []domain.TalkgroupScope{
+		{SystemRef: historySystemRef, TalkgroupRefs: []uint{1514000, 1514001}},
+		{SystemRef: 10002, TalkgroupRefs: []uint{1520000}},
+	}
+}
+
+func historyGroupScopes() []domain.TalkgroupScope {
+	return []domain.TalkgroupScope{
+		{SystemRef: historySystemRef, TalkgroupRefs: []uint{1514000, 1514001, 1514002}},
+		{SystemRef: 10002, TalkgroupRefs: []uint{1520000}},
+	}
+}
+
+func historyAccessScope() domain.AccessScope {
+	return domain.AccessScope{
+		Present: true,
+		Systems: []domain.ScopedSystem{
+			{SystemRef: historySystemRef, TalkgroupsGiven: true, TalkgroupRefs: []uint{1514000, 1514001}},
+			{SystemRef: 10002, TalkgroupsWildcard: true},
+		},
+	}
+}
+
+// historyRead composes one inventoried statement from the pieces above, the way the repository's own
+// filter builder joins its filters into the history's WHERE clause.
+func historyRead(columns, filters, tail string) string {
+	where := inventoryBaseFilters
+
+	if filters != "" {
+		where += ` AND ` + filters
+	}
+
+	return columns + ` ` + inventoryHistoryJoin + ` WHERE ` + where + tail
+}
+
+// historySearchStatement composes one read of a measured search.
+func historySearchStatement(work historySearchWork, shape historyReadShape) string {
+	return historyRead(shape.columns, work.filters, shape.tail)
+}
+
+// callHistoryStatementInventory returns the whole statement inventory: the reads the measured
+// history searches issue, and the reads and writes those searches do not stand for.
+func callHistoryStatementInventory(span historySpan) []inventoriedStatement {
+	out := []inventoriedStatement{}
+
+	for _, work := range historySearchWorks(span) {
+		for _, shape := range work.reads {
+			out = append(out, inventoriedStatement{
+				label:     work.label + shape.suffix,
+				probe:     "SearchCalls",
+				kind:      "read",
+				statement: historySearchStatement(work, shape),
+			})
+		}
+	}
+
+	return append(out, historiedReadsAndWrites()...)
+}
+
+// statementsOutsideTheReports returns every statement a measured work issues that no measurement
+// times: the reads a search issues beside the reads timed for it, and the statements of the
+// repository reads a measurement touches only part of.
+func statementsOutsideTheReports(span historySpan) []unmeasuredStatement {
+	out := []unmeasuredStatement{}
+
+	for _, work := range historySearchWorks(span) {
+		for _, extra := range work.extra {
+			out = append(out, unmeasuredStatement{
+				probe:     "SearchCalls",
+				statement: historySearchStatement(work, extra.shape),
+				reason:    extra.reason,
+			})
+		}
+	}
+
+	return append(out, historiedStatementsOutsideTheReports()...)
+}
+
+// historySearchWorks is the table of the history searches the reports time: the criteria the
+// query handler runs, the filter that criteria adds to the ones every history read carries on
+// its own, the reads a report times for it, and the reads it issues beside those.
+func historySearchWorks(span historySpan) []historySearchWork {
+	return []historySearchWork{
+		{
+			label:    "all",
+			criteria: ports.CallSearch{},
+			filters:  inventoryBareHistoryFilter,
+			reads:    everyHistoryRead,
+		},
+		{
+			label:    "day",
+			criteria: ports.CallSearch{From: span.dayFrom, To: span.newest},
+			filters:  inventoryDayFilter,
+			reads:    everyHistoryRead,
+		},
+		{
+			label:    "system",
+			criteria: ports.CallSearch{SystemRef: historySystemRef},
+			filters:  inventorySystemFilter,
+			reads:    everyHistoryRead,
+		},
+		{
+			label:    "system talkgroup",
+			criteria: ports.CallSearch{SystemRef: historySystemRef, TalkgroupRef: historyTalkgroupRef},
+			filters:  inventorySystemTalkgroupFilter,
+			reads:    everyHistoryRead,
+		},
+		{
+			label:    "tag scope",
+			criteria: ports.CallSearch{TagTalkgroups: historyTagScopes()},
+			filters:  inventoryTagPairFilter,
+			reads:    everyHistoryRead,
+		},
+		{
+			label:    "group scope",
+			criteria: ports.CallSearch{GroupTalkgroups: historyGroupScopes()},
+			filters:  inventoryGroupPairFilter,
+			reads:    everyHistoryRead,
+		},
+		{
+			label:    "search tag window",
+			criteria: ports.CallSearch{From: span.dayFrom, To: span.newest, Limit: 25, TagTalkgroups: historyTagScopes()},
+			filters:  inventoryTagPairFilter + " AND " + inventoryDayFilter,
+			reads:    everyHistoryRead,
+		},
+		{
+			label:    "search talkgroup window",
+			criteria: ports.CallSearch{From: span.dayFrom, To: span.newest, Limit: 25, SystemRef: historySystemRef, TalkgroupRef: historyTalkgroupRef},
+			filters:  inventorySystemTalkgroupFilter + " AND " + inventoryDayFilter,
+			reads:    everyHistoryRead,
+		},
+		{
+			label:    "all page 25 offset 1000",
+			criteria: ports.CallSearch{Limit: 25, Offset: 1000},
+			filters:  inventoryBareHistoryFilter,
+			reads:    pageOnlyHistoryRead,
+		},
+		{
+			label:    "access scope page",
+			criteria: ports.CallSearch{Scope: historyAccessScope(), Limit: 25},
+			filters:  inventoryAccessScopeFilter,
+			reads:    pageOnlyHistoryRead,
+			extra: []unmeasuredRead{
+				{shape: historyReadShape{suffix: " span oldest", columns: inventorySpanColumns, tail: inventorySpanOldestTail},
+					reason: "the measurement times a caller reading under its own access scope as a page alone; this read takes that caller’s filter and reaches the same keys as the page it times"},
+				{shape: historyReadShape{suffix: " span newest", columns: inventorySpanColumns, tail: inventorySpanNewestTail},
+					reason: "the measurement times a caller reading under its own access scope as a page alone; this read takes that caller’s filter and reaches the same keys as the page it times"},
+				{shape: historyReadShape{suffix: " count", columns: inventoryCountColumns, tail: ""},
+					reason: "the measurement times a caller reading under its own access scope as a page alone; this read takes that caller’s filter and reaches the same keys as the page it times"},
+			},
+		},
+		{
+			label:    "oldest first page",
+			criteria: ports.CallSearch{Limit: 25, Ascending: true},
+			filters:  inventoryBareHistoryFilter,
+			reads:    nil,
+			extra: []unmeasuredRead{
+				{shape: historyReadShape{suffix: " page 25 oldest first", columns: inventoryPageColumns, tail: inventoryOldestFirstPageTail},
+					reason: "the reports time the history page newest first; the tools that walk the history from its oldest end ask for the same page oldest first, and no report times that page"},
+			},
+		},
+		{
+			label:    "empty scope",
+			criteria: ports.CallSearch{Scope: domain.AccessScope{Present: true}, Limit: 25},
+			filters:  inventoryUnmatchedFilter,
+			reads:    nil,
+			extra: []unmeasuredRead{
+				{shape: historyReadShape{suffix: " span oldest", columns: inventorySpanColumns, tail: inventorySpanOldestTail},
+					reason: "the measurement times a caller whose access names nothing as a page alone; this read takes the same filter as the page it times"},
+				{shape: historyReadShape{suffix: " span newest", columns: inventorySpanColumns, tail: inventorySpanNewestTail},
+					reason: "the measurement times a caller whose access names nothing as a page alone; this read takes the same filter as the page it times"},
+				{shape: historyReadShape{suffix: " count", columns: inventoryCountColumns, tail: ""},
+					reason: "the measurement times a caller whose access names nothing as a page alone; this read takes the same filter as the page it times"},
+				{shape: historyReadShape{suffix: " page 25", columns: inventoryPageColumns, tail: inventoryPageTail},
+					reason: "the measurement times a caller whose access names nothing as a page alone; this read takes the same filter as the page it times"},
+			},
+		},
+	}
+}
+
+// historiedReadsAndWrites returns the inventoried reads and writes no history search stands
+// for: each is a statement the measurement names, issued by the repository method the entry
+// names, as that method issues it now.
+func historiedReadsAndWrites() []inventoriedStatement {
+	return []inventoriedStatement{
+		{
+			label: "status count 2m",
+			probe: "CountCallsSince",
+			kind:  "read",
+			statement: `SELECT COUNT(*) FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT ` +
+				`JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" LEFT JOIN "delayed" AS d ON ` +
+				`d."callId" = c."callId" WHERE d."callId" IS NULL AND c."timestamp" >= ?`,
+		},
+		{
+			label: "status hours 24h",
+			probe: "CountCallsByHour",
+			kind:  "read",
+			statement: `SELECT c."timestamp" / 3600000 AS "bucket", COUNT(*) FROM "calls" AS c LEFT JOIN "systems" AS ` +
+				`s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = ` +
+				`c."talkgroupId" LEFT JOIN "delayed" AS d ON d."callId" = c."callId" WHERE d."callId" IS NULL ` +
+				`AND c."timestamp" >= ? GROUP BY "bucket" ORDER BY "bucket" ASC`,
+		},
+		{
+			label: "status tallies 15m",
+			probe: "CountCallsByTalkgroup",
+			kind:  "read",
+			statement: `SELECT s."systemRef", t."talkgroupRef", t."name", t."label", COUNT(*) FROM "calls" AS c LEFT ` +
+				`JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS t ON ` +
+				`t."talkgroupId" = c."talkgroupId" LEFT JOIN "delayed" AS d ON d."callId" = c."callId" WHERE ` +
+				`d."callId" IS NULL AND c."timestamp" >= ? GROUP BY s."systemRef", t."talkgroupRef", t."name", ` +
+				`t."label" ORDER BY COUNT(*) DESC, t."talkgroupRef" ASC LIMIT ?`,
+		},
+		{
+			label: "recent 10",
+			probe: "RecentCalls",
+			kind:  "read",
+			statement: `SELECT c."callId", c."timestamp", c."audioLength", s."systemRef", t."talkgroupRef" FROM ` +
+				`"calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS ` +
+				`t ON t."talkgroupId" = c."talkgroupId" LEFT JOIN "delayed" AS d ON d."callId" = c."callId" ` +
+				`WHERE d."callId" IS NULL ORDER BY c."timestamp" DESC, c."callId" DESC LIMIT ?`,
+		},
+		{
+			label: "recent 200",
+			probe: "RecentCalls",
+			kind:  "read",
+			statement: `SELECT c."callId", c."timestamp", c."audioLength", s."systemRef", t."talkgroupRef" FROM ` +
+				`"calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" LEFT JOIN "talkgroups" AS ` +
+				`t ON t."talkgroupId" = c."talkgroupId" LEFT JOIN "delayed" AS d ON d."callId" = c."callId" ` +
+				`WHERE d."callId" IS NULL ORDER BY c."timestamp" DESC, c."callId" DESC LIMIT ?`,
+		},
+		{
+			label: "call by id",
+			probe: "GetCall",
+			kind:  "read",
+			statement: `SELECT c."audio", c."audioFilename", c."audioMime", c."audioLength", c."siteRef", ` +
+				`c."timestamp", c."systemId", c."talkgroupId", s."systemRef", t."talkgroupRef", t."label", ` +
+				`t."name", s."delay", t."delay" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = ` +
+				`c."systemId" LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."callId" ` +
+				`= ?`,
+		},
+		{
+			label: "patches by call",
+			probe: "GetCall",
+			kind:  "read",
+			statement: `SELECT COALESCE(t."talkgroupRef", 0) FROM "callPatches" AS cp LEFT JOIN "talkgroups" AS t ON ` +
+				`t."talkgroupId" = cp."talkgroupId" WHERE cp."callId" = ? ORDER BY cp."callPatchId"`,
+		},
+		{
+			label: "frequencies by call",
+			probe: "GetCall",
+			kind:  "read",
+			statement: `SELECT "callFrequencyId", "dbm", "errors", "frequency", "offset", "spikes" FROM ` +
+				`"callFrequencies" WHERE "callId" = ? ORDER BY "callFrequencyId"`,
+		},
+		{
+			label: "units by call",
+			probe: "GetCall",
+			kind:  "read",
+			statement: `SELECT "callUnitId", "offset", "unitRef" FROM "callUnits" WHERE "callId" = ? ORDER BY ` +
+				`"callUnitId"`,
+		},
+		{
+			label:     "delayed list",
+			probe:     "AllDelayed",
+			kind:      "read",
+			statement: `SELECT "callId", "timestamp" FROM "delayed" ORDER BY "callId"`,
+		},
+		{
+			label:     "delayed drop",
+			probe:     "UnscheduleDelayed",
+			kind:      "write",
+			statement: `DELETE FROM "delayed" WHERE "callId" = ?`,
+		},
+		{
+			label: "duplicate check",
+			probe: "FindDuplicateCandidates",
+			kind:  "read",
+			statement: `SELECT c."callId", c."timestamp", c."systemId", c."talkgroupId", c."siteRef", s."systemRef", ` +
+				`t."talkgroupRef" FROM "calls" AS c LEFT JOIN "systems" AS s ON s."systemId" = c."systemId" ` +
+				`LEFT JOIN "talkgroups" AS t ON t."talkgroupId" = c."talkgroupId" WHERE c."systemId" = ? AND ` +
+				`c."talkgroupId" = ? AND c."siteRef" = ? AND c."timestamp" BETWEEN ? AND ? ORDER BY ` +
+				`c."timestamp"`,
+		},
+		{
+			label:     "talkgroup lookup",
+			probe:     "SaveCall",
+			kind:      "read",
+			statement: `SELECT "talkgroupId" FROM "talkgroups" WHERE "systemId" = ? AND "talkgroupRef" = ?`,
+		},
+		{
+			label:     "group members",
+			probe:     "SaveSystemTalkgroups",
+			kind:      "read",
+			statement: `SELECT "groupId" FROM "talkgroupGroups" WHERE "talkgroupId" = ?`,
+		},
+		{
+			label: "talkgroups by system",
+			probe: "AllSystems",
+			kind:  "read",
+			statement: `SELECT t."talkgroupId", t."alert", t."delay", t."frequency", t."label", t."led", t."name", ` +
+				`t."order", t."tagId", t."talkgroupRef", t."type", GROUP_CONCAT(COALESCE(tg."groupId", 0) ORDER ` +
+				`BY tg."groupId") FROM "talkgroups" AS t LEFT JOIN "talkgroupGroups" AS tg ON tg."talkgroupId" ` +
+				`= t."talkgroupId" WHERE t."systemId" = ? GROUP BY t."talkgroupId"`,
+		},
+		{
+			label: "insert call",
+			probe: "SaveCall",
+			kind:  "write",
+			statement: `INSERT INTO "calls" ("audio", "audioFilename", "audioLength", "audioMime", "siteRef", ` +
+				`"systemId", "talkgroupId", "timestamp") VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		},
+		{
+			label: "insert call frequencies",
+			probe: "SaveCall",
+			kind:  "write",
+			statement: `INSERT INTO "callFrequencies" ("callId", "dbm", "errors", "frequency", "offset", "spikes") ` +
+				`VALUES (?, ?, ?, ?, ?, ?)`,
+		},
+		{
+			label:     "insert call units",
+			probe:     "SaveCall",
+			kind:      "write",
+			statement: `INSERT INTO "callUnits" ("callId", "offset", "unitRef") VALUES (?, ?, ?)`,
+		},
+		{
+			label:     "insert delayed",
+			probe:     "ScheduleDelayed",
+			kind:      "write",
+			statement: `INSERT INTO "delayed" ("callId", "timestamp") VALUES (?, ?)`,
+		},
+	}
+}
+
+// historiedStatementsOutsideTheReports returns the statements those reads and writes run beside
+// the ones a report times, and what leaves each out of the inventoried list.
+func historiedStatementsOutsideTheReports() []unmeasuredStatement {
+	return []unmeasuredStatement{
+		{
+			probe: "AllSystems",
+			statement: `SELECT "systemId", "alert", "autoPopulate", "blacklists", "delay", "label", "led", "order", ` +
+				`"systemRef", "type" FROM "systems"`,
+			reason: "the configuration read carries the system rows beside the talkgroups the measurement times, and no report times those rows",
+		},
+		{
+			probe:     "AllSystems",
+			statement: `SELECT "siteId", "label", "order", "siteRef" FROM "sites" WHERE "systemId" = ?`,
+			reason:    "the configuration read carries each system’s sites, and no report times them",
+		},
+		{
+			probe: "AllSystems",
+			statement: `SELECT "unitId", "label", "order", "unitRef", "unitFrom", "unitTo" FROM "units" WHERE ` +
+				`"systemId" = ?`,
+			reason: "the configuration read carries each system’s units, and no report times them",
+		},
+		{
+			probe:     "SaveCall",
+			statement: `INSERT INTO "callPatches" ("callId", "talkgroupId") VALUES (?, ?)`,
+			reason:    "the call the measurement saves names a talkgroup patched onto it, so this write runs in the server, and no measurement times it",
+		},
+		{
+			probe:     "SaveSystemTalkgroups",
+			statement: `SELECT COUNT(*) FROM "systems" WHERE "systemId" = ?`,
+			reason:    "the guard a configuration save runs before it writes a system, timed by no report",
+		},
+		{
+			probe:     "SaveSystemTalkgroups",
+			statement: `SELECT "talkgroupId" FROM "talkgroups" WHERE "systemId" = ?`,
+			reason:    "the stored talkgroups a configuration save compares its own list against, timed by no report",
+		},
+		{
+			probe:     "SaveSystemTalkgroups",
+			statement: `SELECT COUNT(*) FROM "talkgroups" WHERE "talkgroupId" = ?`,
+			reason:    "the guard each talkgroup a configuration save keeps is checked against, timed by no report",
+		},
+		{
+			probe: "SaveSystemTalkgroups",
+			statement: `UPDATE "talkgroups" SET "alert" = ?, "delay" = ?, "frequency" = ?, "label" = ?, "led" = ?, ` +
+				`"name" = ?, "order" = ?, "tagId" = ?, "talkgroupRef" = ?, "type" = ? WHERE "talkgroupId" = ?`,
+			reason: "the write a configuration save makes to a talkgroup it keeps, timed by no report",
+		},
+		{
+			probe:     "SaveSystemTalkgroups",
+			statement: `SELECT COUNT(*) FROM "talkgroupGroups" WHERE "talkgroupId" = ? AND "groupId" = ?`,
+			reason:    "the guard each group link a configuration save keeps is checked against, timed by no report",
+		},
+	}
+}
+
+// historySpanOfTheDatabase reads the dated range the windowed reads are measured against out of the
+// calls the fixture holds: its newest call, and the day that ends with it.
+func historySpanOfTheDatabase(t *testing.T, db *sql.DB) historySpan {
+	t.Helper()
+
+	var newestMillis int64
+
+	if err := db.QueryRow(`SELECT MAX("timestamp") FROM "calls"`).Scan(&newestMillis); err != nil {
+		t.Fatalf("reading the newest call the fixture holds: %v", err)
+	}
+
+	newest := time.UnixMilli(newestMillis)
+
+	return historySpan{newest: newest, dayFrom: newest.Add(-24 * time.Hour)}
+}
+
+// statementsOfTheMeasuredWorks runs each piece of work the measurements time through the same
+// repositories the server runs it with, and answers, under each repository method's name, the
+// statements that method handed the database, once each, in the order it handed them.
+func statementsOfTheMeasuredWorks(t *testing.T, db *sql.DB, counter *statementCounter, span historySpan) map[string][]string {
+	t.Helper()
+
+	calls := NewCalls(db, DialectSqlite)
+	delayed := NewDelayedCalls(db, DialectSqlite)
+	systems := NewSystems(db, DialectSqlite)
+
+	var systemID, talkgroupID, siteRef int64
+
+	err := db.QueryRow(`SELECT "systemId", "talkgroupId", "siteRef" FROM "calls" ORDER BY "callId" LIMIT 1`).
+		Scan(&systemID, &talkgroupID, &siteRef)
+	if err != nil {
+		t.Fatalf("reading the call row the fixture holds: %v", err)
+	}
+
+	measured := map[string][]string{}
+
+	measure := func(probe string, run func() error) {
+		t.Helper()
+
+		counter.reset()
+
+		if err := run(); err != nil {
+			t.Fatalf("%s: %v", probe, err)
+		}
+
+		seen := map[string]bool{}
+
+		for _, statement := range counter.statements() {
+			if !seen[statement] {
+				seen[statement] = true
+
+				measured[probe] = append(measured[probe], statement)
+			}
+		}
+	}
+
+	// Every history search the works table names, run through the read path the server reads through.
+	for _, work := range historySearchWorks(span) {
+		criteria := work.criteria
+
+		measure("SearchCalls", func() error {
+			_, err := calls.SearchCalls(context.Background(), criteria)
+
+			return err
+		})
+	}
+
+	measure("CountCallsSince", func() error {
+		_, err := calls.CountCallsSince(context.Background(), span.newest.Add(-2*time.Minute))
+
+		return err
+	})
+
+	measure("CountCallsByHour", func() error {
+		_, err := calls.CountCallsByHour(context.Background(), span.dayFrom)
+
+		return err
+	})
+
+	measure("CountCallsByTalkgroup", func() error {
+		_, err := calls.CountCallsByTalkgroup(context.Background(), span.newest.Add(-15*time.Minute), 10)
+
+		return err
+	})
+
+	for _, limit := range []uint{10, 200} {
+		measure("RecentCalls", func() error {
+			_, err := calls.RecentCalls(context.Background(), limit)
+
+			return err
+		})
+	}
+
+	measure("GetCall", func() error {
+		_, err := calls.GetCall(context.Background(), fixtureCallID)
+
+		return err
+	})
+
+	measure("AllDelayed", func() error {
+		_, err := delayed.AllDelayed(context.Background())
+
+		return err
+	})
+
+	measure("UnscheduleDelayed", func() error {
+		return delayed.UnscheduleDelayed(context.Background(), fixtureDelayedCallID)
+	})
+
+	measure("ScheduleDelayed", func() error {
+		return delayed.ScheduleDelayed(context.Background(), fixtureCallID, span.newest.Add(time.Hour))
+	})
+
+	measure("FindDuplicateCandidates", func() error {
+		_, err := calls.FindDuplicateCandidates(context.Background(),
+			uint64(systemID), uint64(talkgroupID), uint(siteRef), span.dayFrom, span.newest)
+
+		return err
+	})
+
+	// The stored talkgroups the configuration save writes back are read through the count driver, so
+	// the configuration read's own statements are among the measured ones.
+	var stored domain.Systems
+
+	measure("AllSystems", func() error {
+		var err error
+
+		stored, err = systems.AllSystems(context.Background())
+
+		return err
+	})
+
+	measure("SaveCall", func() error {
+		call := domain.NewCall()
+
+		call.Audio = testAudio
+		call.AudioFilename = "audio.wav"
+		call.AudioMime = "audio/wav"
+		call.Timestamp = span.newest
+		call.System = domain.System{ID: uint64(systemID), SystemRef: historySystemRef}
+		call.Talkgroup = domain.Talkgroup{ID: uint64(talkgroupID), TalkgroupRef: historyTalkgroupRef}
+		call.Frequencies = []domain.CallFrequency{{Dbm: -95, Frequency: 851000000}}
+		call.Units = []domain.CallUnit{{UnitRef: 12345}}
+		call.PatchTalkgroupRefs = []uint{1514001}
+
+		_, err := calls.SaveCall(context.Background(), call)
+
+		return err
+	})
+
+	measure("SaveSystemTalkgroups", func() error {
+		return systems.SaveSystemTalkgroups(context.Background(), uint64(systemID), stored[0].Talkgroups, nil)
+	})
+
+	return measured
+}
+
+// everyExtraShape collects the reads a search issues beside the reads a measurement times.
+func everyExtraShape(extras []unmeasuredRead) []historyReadShape {
+	out := make([]historyReadShape, 0, len(extras))
+
+	for _, extra := range extras {
+		out = append(out, extra.shape)
+	}
+
+	return out
+}
+
+// historyPairClausesOf answers the pair filters the handler builds for one search's criteria: the
+// systems and talkgroups its caller's access names, or the ones expanded from a group label or a tag
+// label. A search whose criteria names no such list has none.
+func historyPairClausesOf(criteria ports.CallSearch) []string {
+	switch {
+	case criteria.Scope.Present && !criteria.Scope.Wildcard:
+		clauses, _ := accessScopeFilters(criteria.Scope)
+
+		return clauses
+
+	case len(criteria.GroupTalkgroups) > 0:
+		clauses, _ := callSearchPairFilters(expandedTalkgroups(criteria.GroupTalkgroups))
+
+		return clauses
+
+	case len(criteria.TagTalkgroups) > 0:
+		clauses, _ := callSearchPairFilters(expandedTalkgroups(criteria.TagTalkgroups))
+
+		return clauses
+	}
+
+	return nil
+}
+
+// TestStatementInventoryMatchesTheHandlerBuilders checks the statement inventory against the
+// repository's own read-path builders, so a change to how a history read is built fails here instead
+// of leaving the inventory holding a statement the server no longer issues.
+func TestStatementInventoryMatchesTheHandlerBuilders(t *testing.T) {
+	db, counter := openCountedLegacyDatabase(t)
+
+	if err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, nil); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+
+	span := historySpanOfTheDatabase(t, db)
+
+	works := historySearchWorks(span)
+	inventory := callHistoryStatementInventory(span)
+	outside := statementsOutsideTheReports(span)
+	measured := statementsOfTheMeasuredWorks(t, db, counter, span)
+
+	// The inventory composes its history reads from the joins and the filters the repository names for
+	// the whole history.
+	if inventoryHistoryJoin != callHistoryFrom {
+		t.Errorf("the inventory composes its history reads from %s, not from the joins the repository names, %s",
+			inventoryHistoryJoin, callHistoryFrom)
+	}
+
+	base, _ := callSearchFilters(ports.CallSearch{})
+
+	if inventoryBaseFilters != base {
+		t.Errorf("the inventory carries %s on every history read, but callSearchFilters answers %s for a "+
+			"search that filters nothing", inventoryBaseFilters, base)
+	}
+
+	// The filter each measured search adds to those is the filter the handler's own builders answer for
+	// that search's criteria now, whatever a measurement once recorded for it, and where that filter is
+	// made of pairs it is the clauses the pair builders join, in the order they join them.
+	for _, work := range works {
+		where, _ := callSearchFilters(work.criteria)
+
+		filters := strings.TrimPrefix(strings.TrimPrefix(where, base), ` AND `)
+
+		if work.filters != filters {
+			t.Errorf("the inventory filters %s as\n\t%s\nbut callSearchFilters answers\n\t%s\nfor its criteria",
+				work.label, work.filters, filters)
+		}
+
+		if clauses := historyPairClausesOf(work.criteria); len(clauses) > 0 {
+			want := `(` + strings.Join(clauses, " OR ") + `)`
+
+			if !strings.HasPrefix(work.filters, want) {
+				t.Errorf("the inventory filters %s as\n\t%s\nbut the handler's own pair filters join\n\t%s",
+					work.label, work.filters, want)
+			}
+		}
+
+		// And each read the search issues is that filter over the history's joins, under the projection
+		// and the ordering and limit the measurement timed it with.
+		shapes := append([]historyReadShape{}, work.reads...)
+		shapes = append(shapes, everyExtraShape(work.extra)...)
+
+		for _, shape := range shapes {
+			got := historySearchStatement(work, shape)
+			want := shape.columns + ` ` + callHistoryFrom + ` WHERE ` + where + shape.tail
+
+			if got != want {
+				t.Errorf("the inventory reads %s as\n\t%s\nbut its search's filter over the history's joins "+
+					"composes\n\t%s", work.label+shape.suffix, got, want)
+			}
+		}
+	}
+
+	// Each inventoried statement is carried under one name.
+	labels := map[string]int{}
+
+	for _, entry := range inventory {
+		labels[entry.label]++
+	}
+
+	for label, times := range labels {
+		if times > 1 {
+			t.Errorf("the inventory carries %s %d times", label, times)
+		}
+	}
+
+	// Each entry is classed by what its statement does to the history.
+	for _, entry := range inventory {
+		kind := "write"
+		if strings.HasPrefix(entry.statement, "SELECT") {
+			kind = "read"
+		}
+
+		if entry.kind != kind {
+			t.Errorf("the inventory calls %s a %s, but %s is a %s statement",
+				entry.label, entry.kind, firstLineOf(entry.statement), kind)
+		}
+	}
+
+	// The inventoried list and the statements the measured works issue beside it name every statement
+	// the measured works issue: nothing a measured work hands the database is left unnamed, and every
+	// entry either list names is a statement its own probe really hands the database.
+	inventoried := map[string]bool{}
+	listed := map[string]bool{}
+
+	for _, entry := range inventory {
+		inventoried[entry.statement] = true
+	}
+
+	for _, entry := range outside {
+		listed[entry.statement] = true
+	}
+
+	for probe, statements := range measured {
+		for _, statement := range statements {
+			if !inventoried[statement] && !listed[statement] {
+				t.Errorf("%s issues %s, which the inventory neither carries nor lists outside",
+					probe, firstLineOf(statement))
+			}
+		}
+	}
+
+	for _, entry := range inventory {
+		if !slices.Contains(measured[entry.probe], entry.statement) {
+			t.Errorf("the inventoried statement %s, read by %s as %s, is not a statement %s issues",
+				firstLineOf(entry.statement), entry.label, entry.probe, entry.probe)
+		}
+	}
+
+	for _, entry := range outside {
+		if !slices.Contains(measured[entry.probe], entry.statement) {
+			t.Errorf("the outside statement %s, attributed to %s, is not a statement %s issues: %s",
+				firstLineOf(entry.statement), entry.probe, entry.probe, entry.reason)
+		}
+	}
+
+	// The inventory is the whole measured set and nothing beside it: the reads of the twelve measured
+	// searches, which the reports time as 34 named reads, plus the 19 reads and writes the reports name
+	// under their own names.
+	if got := len(inventory); got != 53 {
+		t.Errorf("the inventory carries %d statements, not the 53 the reports time", got)
+	}
+
+	if got := len(inventory) - len(historiedReadsAndWrites()); got != 34 {
+		t.Errorf("the measured searches contribute %d inventoried reads, not the 34 the reports time for "+
+			"their %d searches", got, len(works))
+	}
+
+	for kind, want := range map[string]int{"read": 48, "write": 5} {
+		got := 0
+
+		for _, entry := range inventory {
+			if entry.kind == kind {
+				got++
+			}
+		}
+
+		if got != want {
+			t.Errorf("the inventory carries %d %s statements, not the %d the reports name", got, kind, want)
+		}
+	}
 }
