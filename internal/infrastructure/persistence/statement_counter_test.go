@@ -102,6 +102,16 @@ func (c *statementCounter) reset() {
 	c.queries = nil
 }
 
+// statements reads back what has been recorded, copied under the lock, so a test can name the
+// statements a piece of work ran without reaching into the counter while its connection is still
+// recording.
+func (c *statementCounter) statements() []string {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	return append([]string{}, c.queries...)
+}
+
 // countedConnector opens the sqlite file through the very driver the server opens
 // it with, and wraps each connection so every statement passes the counter on its
 // way to the database.
@@ -245,4 +255,48 @@ func openCountedSchemaDatabase(t *testing.T) (*sql.DB, *statementCounter) {
 	counter.reset()
 
 	return db, counter
+}
+
+// openCountedLegacyDatabase opens the database the legacy server wrote through the counting driver,
+// so a test can name the statements a startup step ran against tables that already hold the rows an
+// earlier server wrote.
+func openCountedLegacyDatabase(t *testing.T) (*sql.DB, *statementCounter) {
+	t.Helper()
+
+	counter := &statementCounter{}
+
+	dsn := fmt.Sprintf("file:%s?_pragma=foreign_keys=on&_pragma=busy_timeout%%3d10000",
+		filepath.Join(t.TempDir(), "rdio-scanner.db"))
+
+	db := sql.OpenDB(countedConnector{dsn: dsn, counter: counter})
+
+	t.Cleanup(func() { db.Close() })
+
+	for _, statement := range append(append([]string{}, legacySchema...), legacyRows...) {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatalf("the recorded statement %s does not run: %v", firstLineOf(statement), err)
+		}
+	}
+
+	counter.reset()
+
+	return db, counter
+}
+
+// statementsLike reads back the recorded statements that carry the given text, whatever its case,
+// each named by the first line of it. This is how a test says a piece of work ran no kind of
+// statement at all, rather than merely reporting none.
+func statementsLike(counter *statementCounter, want string) []string {
+	counter.mutex.Lock()
+	defer counter.mutex.Unlock()
+
+	found := []string{}
+
+	for _, query := range counter.queries {
+		if strings.Contains(strings.ToUpper(query), strings.ToUpper(want)) {
+			found = append(found, firstLineOf(query))
+		}
+	}
+
+	return found
 }

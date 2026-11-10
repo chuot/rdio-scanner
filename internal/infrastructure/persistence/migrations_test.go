@@ -17,15 +17,19 @@ package persistence
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"rdio-scanner/internal/domain"
 )
@@ -405,6 +409,255 @@ func TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing(t *testing.T) {
 	if got, want := readTableNames(t, db), archivedTables; !equalStrings(got, want) {
 		t.Errorf("the tables of a fresh database:\n  got  %v\n  want %v", got, want)
 	}
+}
+
+// The pass adds keys and columns and nothing else: the rows of the database it upgrades stay where the
+// earlier server left them, table for table and row for row, and the table its configuration read
+// starts from holds nothing when the pass begins.
+func TestMigrationKeepsRowsAndStartsFromAnEmptyOptionTable(t *testing.T) {
+	db, ran := openCountedLegacyDatabase(t)
+
+	if _, err := db.Exec(`DELETE FROM "options"`); err != nil {
+		t.Fatalf(`DELETE FROM "options": %v`, err)
+	}
+
+	if got := countRows(t, db, "options"); got != 0 {
+		t.Fatalf("the fixture's option table holds %d rows, want none: every option the pass writes is one "+
+			"it read from a table that is on its way out, so a row already there would be read as one the pass "+
+			"wrote", got)
+	}
+
+	ran.reset()
+
+	tables := readTableNames(t, db)
+
+	columns := map[string][]string{}
+	counts := map[string]int{}
+
+	for _, name := range tables {
+		columns[name] = tableColumns(t, db, name)
+		counts[name] = countRows(t, db, name)
+	}
+
+	digest := rowDigest(t, db, columns)
+
+	migrateLines(t, db)
+
+	after := readTableNames(t, db)
+
+	for _, name := range tables {
+		if !hasString(after, name) {
+			t.Errorf("the pass left %s behind, want every table the earlier server wrote kept under the same "+
+				"name", name)
+
+			continue
+		}
+
+		if got := countRows(t, db, name); got != counts[name] {
+			t.Errorf("the pass leaves %d rows in %s where it found %d", got, name, counts[name])
+		}
+	}
+
+	// The digest reads the columns each table held before the pass: the pass adds a column to two of
+	// these tables, and a row that grew a column is the same row.
+	if got := rowDigest(t, db, columns); got != digest {
+		t.Errorf("the pass changed the rows it found: %s before, %s after", digest, got)
+	}
+
+	if got := countRows(t, db, "options"); got != 0 {
+		t.Errorf("the pass leaves %d rows in the option table, want none: no statement that adds a call history "+
+			"key writes a row", got)
+	}
+
+	// Nothing in the pass takes a table apart and puts it back together: every statement it runs over a
+	// table the earlier server wrote adds a column or a key, and the counts and the digest above say the
+	// rows survived.
+	if found := statementsLike(ran, "DROP"); len(found) != 0 {
+		t.Errorf("the pass ran %v, want no statement that removes anything the earlier server left behind", found)
+	}
+}
+
+// The set is chosen and proven in the state a real database is in, so nothing in the pass or in the
+// step that adds the keys refreshes planner statistics: a database left to its own planner is what the
+// budgets were measured against, and a statistics table is one this server does not own.
+func TestMigrateIssuesNoAnalyzeAnywhere(t *testing.T) {
+	db, ran := openCountedLegacyDatabase(t)
+
+	s := newStore(db, DialectSqlite)
+
+	ctx := context.Background()
+
+	migrateLines(t, db)
+
+	if err := ensureCallIndexSet(ctx, s, func(string, string) {}); err != nil {
+		t.Fatalf("ensureCallIndexSet: %v", err)
+	}
+
+	if found := statementsLike(ran, "ANALYZE"); len(found) != 0 {
+		t.Errorf("the pass and the step ran %v, want no statement that refreshes planner statistics", found)
+	}
+
+	for _, dialect := range []Dialect{DialectSqlite, DialectMariadb, DialectMysql, DialectPostgresql} {
+		for _, member := range callIndexSet {
+			statement := callIndexCreateStatement(dialect, member)
+
+			if strings.Contains(strings.ToUpper(statement), "ANALYZE") {
+				t.Errorf("%s builds %s for %s, want a create that refreshes no planner statistics",
+					dialect, statement, member.name)
+			}
+		}
+	}
+
+	if got := plannerStatisticsTables(t, db); len(got) != 0 {
+		t.Errorf("after the pass and the step the database carries the statistics tables %v, want none", got)
+	}
+
+	// The machine check reads the files the startup pass is written in. What a test cannot see is a
+	// statement a later change writes into a step: this walk says no file the server builds carries the
+	// statement, so the guarantee is not only about the statements this run happened to issue.
+	if written, sources := analyzeStatementsInPackage(); len(written) != 0 {
+		t.Errorf("%v build an update of planner statistics into %v, want the pass and the step to leave the "+
+			"planner alone", written, sources)
+	} else if len(sources) == 0 {
+		t.Fatalf("the check of the package's own files read none, so it proved nothing")
+	}
+}
+
+// analyzeStatementsInPackage reads the files of the package the startup pass is written in and returns
+// the files that carry the update statement, with every file it read. The statement is looked for as
+// the word the database spells it as, so a file that merely talks about planner statistics is not
+// reported.
+func analyzeStatementsInPackage() ([]string, []string) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		return nil, nil
+	}
+
+	written := []string{}
+	read := []string{}
+
+	for _, entry := range entries {
+		name := entry.Name()
+
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+
+		body, err := os.ReadFile(name)
+		if err != nil {
+			return written, read
+		}
+
+		read = append(read, name)
+
+		for _, word := range strings.FieldsFunc(string(body), func(r rune) bool {
+			return r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r)
+		}) {
+			if word == "ANALYZE" {
+				written = append(written, name)
+
+				break
+			}
+		}
+	}
+
+	return written, read
+}
+
+// tableColumns names the columns one table carries, in the order it carries them.
+func tableColumns(t *testing.T, db *sql.DB, table string) []string {
+	t.Helper()
+
+	rows, err := db.Query(`SELECT "name" FROM pragma_table_info(?) ORDER BY "cid"`, table)
+	if err != nil {
+		t.Fatalf("reading the columns of %s: %v", table, err)
+	}
+
+	defer rows.Close()
+
+	names := []string{}
+
+	for rows.Next() {
+		var name string
+
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("reading a column of %s: %v", table, err)
+		}
+
+		names = append(names, name)
+	}
+
+	if err := rows.Err(); err != nil {
+		t.Fatalf("reading the columns of %s: %v", table, err)
+	}
+
+	return names
+}
+
+// rowDigest hashes each named table's row count and every row of it, with every value read as text and
+// each row read through the columns named for its table, so a test can say a pass that adds keys and
+// columns left the rows themselves where they were.
+func rowDigest(t *testing.T, db *sql.DB, columns map[string][]string) string {
+	t.Helper()
+
+	names := []string{}
+
+	for name := range columns {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	hash := sha256.New()
+
+	for _, name := range names {
+		quoted := make([]string, 0, len(columns[name]))
+
+		for _, column := range columns[name] {
+			quoted = append(quoted, `"`+column+`"`)
+		}
+
+		rows := readRows(t, db, `SELECT `+strings.Join(quoted, ", ")+` FROM "`+name+`" ORDER BY 1`)
+
+		fmt.Fprintf(hash, "%s %d\n", name, len(rows))
+
+		for _, row := range rows {
+			fmt.Fprintf(hash, "%s %s\n", name, strings.Join(row, " | "))
+		}
+	}
+
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
+// plannerStatisticsTables names the tables a database keeps planner statistics in, which is what an
+// update of those statistics leaves behind.
+func plannerStatisticsTables(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+
+	rows, err := db.Query(`SELECT "name" FROM "sqlite_master" WHERE "name" LIKE 'sqlite_stat%' ORDER BY "name"`)
+	if err != nil {
+		t.Fatalf("looking for the tables that hold planner statistics: %v", err)
+	}
+
+	defer rows.Close()
+
+	names := []string{}
+
+	for rows.Next() {
+		var name string
+
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("reading the name of a table that holds planner statistics: %v", err)
+		}
+
+		names = append(names, name)
+	}
+
+	if err := rows.Err(); err != nil {
+		t.Fatalf("reading the tables that hold planner statistics: %v", err)
+	}
+
+	return names
 }
 
 // The deployment that swaps one server binary for the other on a database
