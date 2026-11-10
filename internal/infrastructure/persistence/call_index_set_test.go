@@ -1797,3 +1797,413 @@ func TestStatementInventoryMatchesTheHandlerBuilders(t *testing.T) {
 		}
 	}
 }
+
+// measuredSetNames lists the ten call history keys in the order the set documents them. The list is written
+// out here instead of read back from the set, because each key the measurements turned down leaves a hole in
+// it: adding an eleventh key, or handing one of these ten a column list a measurement rejected, has to be
+// written here too before it can pass.
+func measuredSetNames() []string {
+	return []string{
+		"callfrequencies_call",
+		"callpatches_call",
+		"callunits_call",
+		"delayed_call",
+		"talkgroups_system_ref",
+		"talkgroups_tag",
+		"talkgroupgroups_talkgroup",
+		"talkgroupgroups_group",
+		"sites_system",
+		"calls_timestamp_cover",
+	}
+}
+
+// rejectedCallIndexShapes names every column list on the calls table that was measured and turned down: the
+// pair key led by the talkgroup, the pair keys led by the system in the two orders that were not chosen, and
+// the timestamp-led keys that stop short of the covering form. Each is a key a later reader could be tempted
+// to add, and none of them earned a place.
+func rejectedCallIndexShapes() []indexSpec {
+	return []indexSpec{
+		{name: "calls_talkgroup_pair", table: "calls", columns: []string{"talkgroupId", "timestamp"}},
+		{name: "calls_system_pair", table: "calls", columns: []string{"systemId", "timestamp"}},
+		{name: "calls_system_pair_before_timestamp", table: "calls", columns: []string{"systemId", "timestamp", "talkgroupId"}},
+		{name: "calls_timestamp_only", table: "calls", columns: []string{"timestamp"}},
+		{name: "calls_timestamp_and_call", table: "calls", columns: []string{"timestamp", "callId"}},
+		{name: "calls_timestamp_lead_short_of_the_cover", table: "calls", columns: []string{"timestamp", "callId", "audioLength"}},
+	}
+}
+
+// shippedPairIndex is the key on the calls table the server shipped with. It is not a member of the set: the
+// schema copies declare it, and the step finds it and leaves it alone.
+func shippedPairIndex() indexSpec {
+	return indexSpec{
+		name:    "calls_idx",
+		table:   "calls",
+		columns: []string{"systemId", "siteRef", "talkgroupId", "timestamp"},
+	}
+}
+
+// setTableNames lists each table the set names once, in the order the set first names it.
+func setTableNames() []string {
+	tables := []string{}
+	seen := map[string]bool{}
+
+	for _, member := range callIndexSet {
+		if !seen[member.table] {
+			seen[member.table] = true
+
+			tables = append(tables, member.table)
+		}
+	}
+
+	return tables
+}
+
+// automaticIndexNames names the keys the database made for itself on the given tables. SQLite reports one for
+// a primary key or a uniqueness rule the table declares, and the engine gives it a name no one asked for.
+func automaticIndexNames(t *testing.T, db *sql.DB, tables []string) []string {
+	t.Helper()
+
+	found := []string{}
+
+	for _, table := range tables {
+		rows, err := db.Query(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'index' AND "tbl_name" = ? AND "name" LIKE 'sqlite_autoindex_%' ORDER BY "name"`, table)
+		if err != nil {
+			t.Fatalf("looking for the keys the database made on %s: %v", table, err)
+		}
+
+		names := []string{}
+
+		for rows.Next() {
+			var name string
+
+			if err := rows.Scan(&name); err != nil {
+				rows.Close()
+
+				t.Fatalf("reading the name of a key the database made on %s: %v", table, err)
+			}
+
+			names = append(names, name)
+		}
+
+		if err := rows.Err(); err != nil {
+			rows.Close()
+
+			t.Fatalf("reading the keys the database made on %s: %v", table, err)
+		}
+
+		rows.Close()
+
+		found = append(found, names...)
+	}
+
+	return found
+}
+
+// columnsHeldOnce reports how many of the given keys carry one column list, in index order.
+func columnsHeldOnce(indexes []indexSpec, columns []string) int {
+	held := 0
+
+	for _, index := range indexes {
+		if slices.Equal(index.columns, columns) {
+			held++
+		}
+	}
+
+	return held
+}
+
+// duplicatedColumnLists names each column list that more than one of the given keys carries. Two keys over
+// the same columns cost the insert path twice and the read path nothing, so an empty list is what a table
+// the set has been applied to should show.
+func duplicatedColumnLists(indexes []indexSpec) []string {
+	counts := map[string]int{}
+	order := []string{}
+
+	for _, index := range indexes {
+		list := strings.Join(index.columns, ", ")
+
+		if counts[list] == 0 {
+			order = append(order, list)
+		}
+
+		counts[list]++
+	}
+
+	duplicated := []string{}
+
+	for _, list := range order {
+		if counts[list] > 1 {
+			duplicated = append(duplicated, list)
+		}
+	}
+
+	return duplicated
+}
+
+// The set is exactly the measured set, on a database that has never run ANALYZE: the state a deployment is in
+// when it starts, and the state every figure that chose these keys was taken in. The keys the measurements
+// turned down are named here so that adding one of them later fails a test that says which measurement said
+// no.
+func TestCallIndexSetCarriesNoSystemPairIndex(t *testing.T) {
+	db := migratedLegacyDatabase(t)
+
+	s := newStore(db, DialectSqlite)
+
+	ctx := context.Background()
+
+	if got := plannerStatisticsTables(t, db); len(got) != 0 {
+		t.Fatalf("the database holds the tables %v that hold planner statistics, want none: every figure behind "+
+			"this set was read from a database the planner never measured", got)
+	}
+
+	if got := setMemberNames(); !slices.Equal(got, measuredSetNames()) {
+		t.Fatalf("the set declares (%s), want the ten measured keys (%s)",
+			strings.Join(got, ", "), strings.Join(measuredSetNames(), ", "))
+	}
+
+	if missing, err := missingCallIndexes(ctx, s); err != nil {
+		t.Fatalf("missingCallIndexes: %v", err)
+	} else if got := missingNames(missing); len(got) != 0 {
+		t.Fatalf("the probe reports (%s) missing from a database the startup pass has run over, want all ten "+
+			"present", strings.Join(got, ", "))
+	}
+
+	// None of the ten is a key the database chose on its own: an automatic key covers the columns a table
+	// happens to declare unique, which is not the columns the history reads ask for.
+	if found := automaticIndexNames(t, db, setTableNames()); len(found) != 0 {
+		t.Fatalf("the set's tables hold the keys the database made for itself %v, want every key on them named "+
+			"by the schema copies or by the step", found)
+	}
+
+	carries := []indexSpec{}
+
+	for _, table := range setTableNames() {
+		indexes, err := hasCallIndexShape(ctx, s, table)
+		if err != nil {
+			t.Fatalf("hasCallIndexShape(%s): %v", table, err)
+		}
+
+		carries = append(carries, indexes...)
+	}
+
+	calls := []indexSpec{}
+
+	for _, index := range carries {
+		if index.table == "calls" {
+			calls = append(calls, index)
+		}
+	}
+
+	// Every rejected form is named, and none of them is a member of the set or a key the calls table ends
+	// up carrying.
+	for _, rejected := range rejectedCallIndexShapes() {
+		for _, member := range callIndexSet {
+			if member.table == rejected.table && slices.Equal(member.columns, rejected.columns) {
+				t.Errorf("the set carries %s over (%s), which is the rejected form %s",
+					member.name, strings.Join(member.columns, ", "), rejected.name)
+			}
+		}
+
+		for _, index := range calls {
+			if slices.Equal(index.columns, rejected.columns) {
+				t.Errorf("the calls table holds %s over (%s), which is the rejected form %s: no measurement gave "+
+					"that list a place", index.name, strings.Join(index.columns, ", "), rejected.name)
+			}
+		}
+	}
+
+	timestampLed := []string{}
+	systemLed := []string{}
+
+	for _, index := range calls {
+		if len(index.columns) > 0 && index.columns[0] == "timestamp" {
+			timestampLed = append(timestampLed, index.name)
+		}
+
+		if len(index.columns) > 0 && index.columns[0] == "systemId" {
+			systemLed = append(systemLed, index.name)
+		}
+	}
+
+	if len(timestampLed) != 1 || timestampLed[0] != coveringKeyMember().name {
+		t.Errorf("the calls table leads with the timestamp in %v, want the covering key %s alone",
+			timestampLed, coveringKeyMember().name)
+	}
+
+	if want := []string{"timestamp", "callId", "audioLength", "systemId", "talkgroupId"}; !slices.Equal(coveringKeyMember().columns, want) {
+		t.Errorf("the covering key carries (%s), want every column the history reads report: (%s)",
+			strings.Join(coveringKeyMember().columns, ", "), strings.Join(want, ", "))
+	}
+
+	if len(systemLed) != 1 || systemLed[0] != shippedPairIndex().name {
+		t.Errorf("the calls table leads with the system in %v, want the shipped %s alone",
+			systemLed, shippedPairIndex().name)
+	}
+
+	// The two keys the calls table ends with, in the words the database holds them in: the shipped pair key
+	// with the columns it shipped with, and the covering key the step adds. No third key, and no full-text
+	// definition of any kind.
+	definitions := indexDefinitions(t, db, "calls")
+
+	if !slices.Equal(definitions, []string{shippedPairDefinition, coveringKeyDefinition}) {
+		t.Errorf("the calls table carries %v, want exactly %s and %s",
+			definitions, shippedPairIndex().name, coveringKeyMember().name)
+	}
+
+	dialects := []Dialect{DialectSqlite, DialectMariadb, DialectMysql, DialectPostgresql}
+
+	for _, member := range callIndexSet {
+		for _, dialect := range dialects {
+			statement := callIndexCreateStatement(dialect, member)
+
+			upper := strings.ToUpper(statement)
+
+			if strings.Contains(upper, "USING") || strings.Contains(upper, "FULLTEXT") || strings.Contains(upper, " FTS") {
+				t.Errorf("%s builds %s for %s, want a plain key over a column list: the talkgroup search path "+
+					"stays a scan", dialect, statement, member.name)
+			}
+		}
+	}
+}
+
+// No column list on the calls table is held by two keys, whatever those keys are named. The engines that
+// build a key for a foreign key on their own each give it a name of their own, so the only comparison that
+// holds on every backend is over the columns a finished key carries.
+func TestNoColumnListIsIndexedTwice(t *testing.T) {
+	db := migratedLegacyDatabase(t)
+
+	s := newStore(db, DialectSqlite)
+
+	ctx := context.Background()
+
+	carries := []indexSpec{}
+
+	for _, table := range setTableNames() {
+		indexes, err := hasCallIndexShape(ctx, s, table)
+		if err != nil {
+			t.Fatalf("hasCallIndexShape(%s): %v", table, err)
+		}
+
+		if got := duplicatedColumnLists(indexes); len(got) != 0 {
+			t.Errorf("%s holds %v over the same columns twice, want one key per column list", table, got)
+		}
+
+		carries = append(carries, indexes...)
+	}
+
+	calls := []indexSpec{}
+
+	for _, index := range carries {
+		if index.table == "calls" {
+			calls = append(calls, index)
+		}
+	}
+
+	if got := duplicatedColumnLists(calls); len(got) != 0 {
+		t.Errorf("the calls table holds %v over the same columns twice, want the shipped pair list and the "+
+			"covering list held once each", got)
+	}
+
+	// The shipped pair key keeps its own list, and the set's covering key is held once: the set declares no
+	// second key over either of those lists.
+	if got := columnsHeldOnce(calls, shippedPairIndex().columns); got != 1 {
+		t.Errorf("the calls table holds the shipped list %d times, want once in %s", got, shippedPairIndex().name)
+	}
+
+	if got := columnsHeldOnce(calls, coveringKeyMember().columns); got != 1 {
+		t.Errorf("the calls table holds the covering list %d times, want once in %s", got, coveringKeyMember().name)
+	}
+
+	// A database that already carries the covering list under a name the set does not use is a deployment
+	// that added the key by hand. The step finds it by the columns it holds, creates no second key over the
+	// same list, and reports the other nine.
+	planted := openLegacyDatabase(t)
+
+	p := newStore(planted, DialectSqlite)
+
+	if err := ensureCallAudioLengthColumn(ctx, p); err != nil {
+		t.Fatalf("ensureCallAudioLengthColumn: %v", err)
+	}
+
+	handBuilt := `CREATE INDEX "calls_history_by_hand" ON "calls" ("timestamp","callId","audioLength","systemId","talkgroupId")`
+
+	if _, err := planted.Exec(handBuilt); err != nil {
+		t.Fatalf("%s: %v", firstLineOf(handBuilt), err)
+	}
+
+	if missing, err := missingCallIndexes(ctx, p); err != nil {
+		t.Fatalf("missingCallIndexes: %v", err)
+	} else {
+		got := missingNames(missing)
+
+		if columnsHeldOnce(missing, coveringKeyMember().columns) != 0 {
+			t.Fatalf("the probe reports (%s) missing, which holds the covering list: the key that already carries "+
+				"it is %s", strings.Join(got, ", "), "calls_history_by_hand")
+		}
+
+		want := []string{}
+
+		for _, member := range callIndexSet {
+			if member.table != "calls" {
+				want = append(want, member.name)
+			}
+		}
+
+		if !slices.Equal(got, want) {
+			t.Fatalf("the probe reports (%s) missing, want the nine keys beside the covering one", strings.Join(got, ", "))
+		}
+	}
+
+	reported := []progressLine{}
+
+	if err := ensureCallIndexSet(ctx, p, func(level, message string) {
+		reported = append(reported, progressLine{level: level, message: message})
+	}); err != nil {
+		t.Fatalf("ensureCallIndexSet: %v", err)
+	}
+
+	if len(reported) != len(callIndexSet)-1 {
+		t.Errorf("the step reported %v, want one line for each of the nine keys beside the covering one", reported)
+	}
+
+	for _, line := range reported {
+		if strings.Contains(line.message, coveringKeyMember().name) {
+			t.Errorf("the step reported %s, want no line creating the covering key: the hand-built key already "+
+				"holds that list", line.message)
+		}
+	}
+
+	held, err := hasCallIndexShape(ctx, p, "calls")
+	if err != nil {
+		t.Fatalf("hasCallIndexShape(calls): %v", err)
+	}
+
+	if got := indexShapes(held); !slices.Equal(got, indexShapes([]indexSpec{shippedPairIndex(),
+		{name: "calls_history_by_hand", table: "calls", columns: coveringKeyMember().columns}})) {
+		t.Errorf("the calls table ends with %v, want the shipped pair key and the hand-built key and no key "+
+			"the step added over a list either one already holds", got)
+	}
+
+	if got := duplicatedColumnLists(held); len(got) != 0 {
+		t.Errorf("after the step the calls table holds %v over the same columns twice, want the covering list "+
+			"held once by the key that was there first", got)
+	}
+
+	// The four tables that hang off a call each take exactly one key over the call they belong to, the key a
+	// backend that indexes a foreign key makes for itself too. On a database the legacy server wrote none of
+	// them exists before the step, and none of them appears twice after it.
+	for _, table := range []string{"callFrequencies", "callPatches", "callUnits", "delayed"} {
+		indexes, err := hasCallIndexShape(ctx, p, table)
+		if err != nil {
+			t.Fatalf("hasCallIndexShape(%s): %v", table, err)
+		}
+
+		if got := columnsHeldOnce(indexes, []string{"callId"}); got != 1 {
+			t.Errorf("%s holds a key over (callId) %d times after the step, want once", table, got)
+		}
+
+		if got := duplicatedColumnLists(indexes); len(got) != 0 {
+			t.Errorf("%s holds %v over the same columns twice, want one key per column list", table, got)
+		}
+	}
+}
