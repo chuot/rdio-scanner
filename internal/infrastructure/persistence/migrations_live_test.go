@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -809,5 +810,124 @@ func TestMigrateLiveOnPostgreSQLAdvancesTheMigratedGroupCounter(t *testing.T) {
 	if added <= highest {
 		t.Errorf("the group added on PostgreSQL is stored with the identifier %d, want a number past the highest migrated group identifier %d",
 			added, highest)
+	}
+}
+
+// The set's probe is read against an engine rather than against a recorded list, because
+// whether a foreign key's own key serves one of the set's column lists is a fact about the
+// engine: on MariaDB eight of the ten lists are already carried by the keys its foreign keys
+// make, and on PostgreSQL a foreign key makes no key at all. Both backends are brought to
+// the state the startup step meets — the recorded v6.6.3 deployment seeded, the dialect's own
+// schema copy applied, the recording-length column stage and the search index run — and what
+// the probe reports as missing is what the copy and the engine's own keys do not carry.
+func TestCallIndexSetProbeLiveOnMariaDBNamesTheKeysItsForeignKeysAlreadyCarry(t *testing.T) {
+	liveCallIndexProbe(t, DialectMariadb)
+}
+
+func TestCallIndexSetProbeLiveOnPostgreSQLNamesTheCoveringKeyAlone(t *testing.T) {
+	liveCallIndexProbe(t, DialectPostgresql)
+}
+
+func liveCallIndexProbe(t *testing.T, dialect Dialect) {
+	t.Helper()
+
+	db := liveDatabase(t, dialect)
+
+	ctx := context.Background()
+
+	s := newStore(db, dialect)
+
+	if err := ApplySchema(ctx, db, dialect); err != nil {
+		t.Fatalf("ApplySchema on %s: %v", dialect, err)
+	}
+
+	// The covering key indexes the recording-length column, so the stage that adds it runs
+	// first here exactly as it does in the startup pass, and the search index shares the
+	// table with the covering key.
+	if err := ensureCallAudioLengthColumn(ctx, s); err != nil {
+		t.Fatalf("ensureCallAudioLengthColumn on %s: %v", dialect, err)
+	}
+
+	if err := ensureCallsSearchIndex(ctx, s); err != nil {
+		t.Fatalf("ensureCallsSearchIndex on %s: %v", dialect, err)
+	}
+
+	missing, err := missingCallIndexes(ctx, s)
+	if err != nil {
+		t.Fatalf("missingCallIndexes on %s: %v", dialect, err)
+	}
+
+	// The report is the set's own order, so the talkgroup pair, which the set names before
+	// the covering key, is reported before it.
+	want := []string{"calls_timestamp_cover"}
+
+	if dialect == DialectMariadb || dialect == DialectMysql {
+		// The talkgroup lookup pair is the one member no foreign key carries there: the key
+		// the schema's reference makes covers the table's system column alone, which is a
+		// prefix of the pair and not the pair.
+		want = []string{"talkgroups_system_ref", "calls_timestamp_cover"}
+	}
+
+	got := missingNames(missing)
+
+	if !slices.Equal(got, want) {
+		t.Errorf("missingCallIndexes on %s reports (%s), want (%s): every other member of the set "+
+			"is carried over its whole column list, by the copied statements on PostgreSQL and by "+
+			"the keys the foreign keys make on MariaDB",
+			dialect, strings.Join(got, ", "), strings.Join(want, ", "))
+	}
+
+	carries, err := hasCallIndexShape(ctx, s, "calls")
+	if err != nil {
+		t.Fatalf("hasCallIndexShape(calls) on %s: %v", dialect, err)
+	}
+
+	// The pair keys this set excludes are not there under any name, and the shipped search
+	// index is found under its own.
+	for _, name := range []string{"calls_system_ts", "calls_talkgroup_ts"} {
+		for _, index := range carries {
+			if index.name == name {
+				t.Errorf("%s carries %s over (%s) on %s, a key this set does not name",
+					dialect, name, strings.Join(index.columns, ", "), "calls")
+			}
+		}
+	}
+
+	found := false
+
+	for _, index := range carries {
+		if index.name == "calls_idx" {
+			found = true
+		}
+	}
+
+	if !found {
+		t.Errorf("hasCallIndexShape(calls) on %s reports (%s), wanting the shipped search index "+
+			"among the table's indexes", dialect, strings.Join(indexShapes(carries), ", "))
+	}
+
+	if dialect != DialectMariadb && dialect != DialectMysql {
+		return
+	}
+
+	// The delayed table's key is the case the comparison has to fold: the column is declared
+	// `callID` in the copy that makes the table there while its foreign key names the same
+	// column `callId`, and it is that key the member is left out for.
+	carries, err = hasCallIndexShape(ctx, s, "delayed")
+	if err != nil {
+		t.Fatalf("hasCallIndexShape(delayed) on %s: %v", dialect, err)
+	}
+
+	folded := false
+
+	for _, index := range carries {
+		if len(index.columns) == 1 && strings.EqualFold(index.columns[0], "callId") {
+			folded = true
+		}
+	}
+
+	if !folded {
+		t.Errorf("hasCallIndexShape(delayed) on %s reports (%s), wanting a key over the call "+
+			"column as the engine spells that column's name", dialect, strings.Join(indexShapes(carries), ", "))
 	}
 }
