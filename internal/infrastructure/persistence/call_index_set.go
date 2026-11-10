@@ -17,7 +17,10 @@ package persistence
 
 import (
 	"context"
+	"fmt"
 	"strings"
+
+	"rdio-scanner/internal/domain"
 )
 
 // indexSpec names one secondary index: the name it is created under, the table it
@@ -145,43 +148,89 @@ func hasCallIndexShape(ctx context.Context, s store, table string) ([]indexSpec,
 	return indexes, nil
 }
 
-// missingCallIndexes reports the members of the set no index on their table already
-// carries over their whole column list, in the order the set names them. Each table is
-// read from the catalog once however many members sit on it. Names play no part: the
-// comparison is the ordered column list, so a key a foreign key clause made counts as
-// serving a member while a key over a longer list, a key that shares only a prefix with
-// one, and a key that carries the same columns in another order serve nothing.
-func missingCallIndexes(ctx context.Context, s store) ([]indexSpec, error) {
-	// On MySQL and MariaDB an index's columns answer in the spelling the table declares
-	// them with, and a schema copy can declare one column another way than the clause
-	// beside it does; the shipped delayed table is that case. The other two backends
-	// compare names exactly, because what they answer is what was written.
-	folded := s.dialect == DialectMariadb || s.dialect == DialectMysql
+// callIndexCarrying is one reading of the catalog over the whole set: the indexes each table the
+// set names carries, filed under that table's name, and the members no index on their own table
+// carries over their whole column list. The probe and the startup step read the same one reading,
+// so a start that creates keys and a test that reports what is lacking ask the database the same
+// questions the same number of times.
+type callIndexCarrying struct {
+	carried map[string][]indexSpec
+	missing []indexSpec
 
-	carried := map[string][]indexSpec{}
+	// folded says whether this backend's catalog answers identifiers in a spelling that can
+	// differ from the one they were written with, which is the case on MySQL and MariaDB: on those
+	// two every comparison here ignores case, and on the other two it does not.
+	folded bool
+}
 
-	missing := []indexSpec{}
+// nameHeld reports the index on a member's table that already carries the member's own name,
+// together with the columns that index holds. A member reaches this question only when no key on
+// its table carries its list, so a name found here belongs to a key of another shape: one an
+// earlier release made, or one someone made by hand.
+func (c callIndexCarrying) nameHeld(member indexSpec) (indexSpec, bool) {
+	for _, index := range c.carried[member.table] {
+		if c.folded {
+			if strings.EqualFold(index.name, member.name) {
+				return index, true
+			}
+
+			continue
+		}
+
+		if index.name == member.name {
+			return index, true
+		}
+	}
+
+	return indexSpec{}, false
+}
+
+// carryCallIndexes reads every table the set names once and answers which members their tables do
+// not carry, in the order the set names them. Names play no part in that answer: the comparison is
+// the ordered column list, so a key a foreign key clause made counts as serving a member while a
+// key over a longer list, a key that shares only a prefix with one, and a key that carries the same
+// columns in another order serve nothing.
+func carryCallIndexes(ctx context.Context, s store) (callIndexCarrying, error) {
+	// On MySQL and MariaDB an index's columns answer in the spelling the table declares them
+	// with, and a schema copy can declare one column another way than the clause beside it does;
+	// the shipped delayed table is that case. The other two backends compare names exactly,
+	// because what they answer is what was written.
+	carrying := callIndexCarrying{
+		carried: map[string][]indexSpec{},
+		folded:  s.dialect == DialectMariadb || s.dialect == DialectMysql,
+	}
 
 	for _, member := range callIndexSet {
-		indexes, ok := carried[member.table]
+		indexes, ok := carrying.carried[member.table]
 
 		if !ok {
 			var err error
 
 			indexes, err = hasCallIndexShape(ctx, s, member.table)
 			if err != nil {
-				return nil, err
+				return callIndexCarrying{}, err
 			}
 
-			carried[member.table] = indexes
+			carrying.carried[member.table] = indexes
 		}
 
-		if !carriesColumnList(indexes, member.columns, folded) {
-			missing = append(missing, member)
+		if !carriesColumnList(indexes, member.columns, carrying.folded) {
+			carrying.missing = append(carrying.missing, member)
 		}
 	}
 
-	return missing, nil
+	return carrying, nil
+}
+
+// missingCallIndexes reports the members of the set no index on their table already carries over
+// their whole column list, in the order the set names them.
+func missingCallIndexes(ctx context.Context, s store) ([]indexSpec, error) {
+	carrying, err := carryCallIndexes(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+
+	return carrying.missing, nil
 }
 
 // carriesColumnList reports whether any of a table's indexes carries exactly this list:
@@ -216,4 +265,92 @@ func carriesColumnList(indexes []indexSpec, columns []string, folded bool) bool 
 	}
 
 	return false
+}
+
+// ensureCallIndexSet creates whatever members of the call index set a backend does not carry yet,
+// and creates nothing else. A column list the catalog already carries under any name is left alone,
+// because a key a foreign key clause made over the same columns serves the same reads and a second
+// one over them costs writes and space for nothing. Nothing here drops, renames or recreates an
+// index: a name the probe finds is left alone whatever its columns turn out to carry, so the pair
+// index the server shipped with keeps the shape it shipped with. The statements run one at a time,
+// outside any transaction, so a database another part of the server is already using is not held
+// under a write lock for longer than one key build takes. There is nothing to undo afterwards, and
+// no planner statistics are refreshed on the way through.
+func ensureCallIndexSet(ctx context.Context, s store, progress Progress) error {
+	const section, operation = "migration", "ensureCallIndexSet"
+
+	carrying, err := carryCallIndexes(ctx, s)
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	// A start that finds the set already in place reads the catalog and stops there: no statement,
+	// no log line, no failure.
+	if len(carrying.missing) == 0 {
+		return nil
+	}
+
+	present := map[string]bool{}
+
+	for _, member := range carrying.missing {
+		// A table that is not there ends that member's part of the step doing nothing: whether a
+		// database has a table is decided by the schema statements, not by an index step.
+		exists, ok := present[member.table]
+
+		if !ok {
+			exists, err = tableExists(ctx, s, member.table)
+			if err != nil {
+				return operationError(section, operation, err)
+			}
+
+			present[member.table] = exists
+		}
+
+		if !exists {
+			continue
+		}
+
+		// The name this key would be created under belongs to a key of another shape. The database
+		// is left exactly as it is and the operator is told: the member cannot be created without
+		// taking that other key's name, and a second key beside it would hold columns the set does
+		// not name.
+		if held, taken := carrying.nameHeld(member); taken {
+			progress(domain.LogLevelWarn, fmt.Sprintf(
+				"the name %s already belongs to an index on %s over (%s): the call history key over (%s) is not created",
+				member.name, member.table, strings.Join(held.columns, ", "), strings.Join(member.columns, ", "),
+			))
+
+			continue
+		}
+
+		statement := callIndexCreateStatement(s.dialect, member)
+
+		if _, err := s.exec(ctx, statement); err != nil {
+			return statementError(section, operation, err, statement)
+		}
+
+		progress(domain.LogLevelInfo, fmt.Sprintf("created the call history index %s on %s over (%s)",
+			member.name, member.table, strings.Join(member.columns, ", ")))
+	}
+
+	return nil
+}
+
+// callIndexCreateStatement builds the one statement that gives a backend one member of the set. The
+// identifiers carry the double quoting the schema copies use, which the MySQL and MariaDB data
+// sources put in ANSI mode. `IF NOT EXISTS` is the spelling SQLite, MariaDB and PostgreSQL accept;
+// MySQL has no such spelling, and there the key is asked for plainly the way the options key index
+// is, because this step only runs a create the catalog probe has already said is needed.
+func callIndexCreateStatement(dialect Dialect, member indexSpec) string {
+	columns := make([]string, 0, len(member.columns))
+
+	for _, column := range member.columns {
+		columns = append(columns, `"`+column+`"`)
+	}
+
+	if dialect == DialectMysql {
+		return fmt.Sprintf(`CREATE INDEX "%s" ON "%s" (%s)`, member.name, member.table, strings.Join(columns, ","))
+	}
+
+	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS "%s" ON "%s" (%s)`, member.name, member.table, strings.Join(columns, ","))
 }
