@@ -409,8 +409,9 @@ func TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing(t *testing.T) {
 
 // The deployment that swaps one server binary for the other on a database
 // the legacy server already migrated: no v6 row moves and no word is said,
-// and the only changes are the log source column, the two log-search indexes,
-// and the migration archive and its unique index.
+// and the only changes are the two columns the startup pass adds, the two
+// log-search indexes, the nine call-history index keys the schema copy
+// declares, and the migration archive and its unique index.
 func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -423,14 +424,14 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 
 	after := readSchemaObjects(t, db)
 
-	if len(after) != len(before)+5 {
-		t.Fatalf("a v7 database gained %d schema objects, want the two log indexes, the options key index, and the migration archive with its index", len(after)-len(before))
+	if len(after) != len(before)+14 {
+		t.Fatalf("a v7 database gained %d schema objects, want the two log indexes, the options key index, the migration archive with its index, and the nine index keys the schema copy declares", len(after)-len(before))
 	}
 
 	// The logs and calls tables are the objects allowed to read differently
 	// afterwards, and only because each gained a column; every other table, index
 	// and trigger is byte-identical, and the only new objects are the two
-	// log-search indexes and the archive.
+	// log-search indexes, the archive, and the index keys the schema copy declares.
 	for _, object := range before {
 		if isLogsTable(object) || isCallsTable(object) {
 			continue
@@ -451,13 +452,31 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 		added = append(added, object)
 	}
 
-	if len(added) != 5 ||
-		!isLogIndex(added[0], "logs_source_idx") ||
-		!isLogIndex(added[1], "logs_time_idx") ||
-		!isMigrationArchiveIndex(added[2]) ||
-		!isLogIndex(added[3], "options_key") ||
-		!isMigrationArchiveTable(added[4]) {
-		t.Errorf("the schema objects a v7 database gained: %v, want logs_source_idx, logs_time_idx, the options_key index, the migrationArchive table, and its migration_archive_table_row index", added)
+	// The gained objects come back sorted by kind and name, so each is looked for by its
+	// name together with the kind the pass creates it as, and the list must hold nothing
+	// else. The logs and calls tables are already excluded from added, because each of
+	// them gained a column instead of being new.
+	gained := schemaObjectNames(added)
+
+	want := []string{
+		"index callfrequencies_call",
+		"index callpatches_call",
+		"index callunits_call",
+		"index delayed_call",
+		"index logs_source_idx",
+		"index logs_time_idx",
+		"index migration_archive_table_row",
+		"index options_key",
+		"index sites_system",
+		"index talkgroupgroups_group",
+		"index talkgroupgroups_talkgroup",
+		"index talkgroups_system_ref",
+		"index talkgroups_tag",
+		"table migrationArchive",
+	}
+
+	if !equalStrings(gained, want) {
+		t.Errorf("a v7 database gained %v, want %v", gained, want)
 	}
 
 	if !hasString(after, `index logs_source_idx `+logIndexDefinition(t, db, "logs_source_idx")) {

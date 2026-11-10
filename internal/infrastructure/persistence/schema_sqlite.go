@@ -200,4 +200,21 @@ var sqliteSchema = []string{
     "unitTo" integer NOT NULL DEFAULT 0,
     FOREIGN KEY ("systemId") REFERENCES "systems" ("systemId") ON DELETE CASCADE ON UPDATE CASCADE
   );`,
+
+	// The timestamp-led covering key is the one member of the call index set the copied
+	// schema does not carry: it indexes the recording length column, which a database the
+	// legacy server wrote gains only after this copy has been applied. A create over a
+	// column the table does not have yet aborts the whole apply on PostgreSQL, and SQLite
+	// accepts it and then answers that column's own name instead of the row's value for
+	// every row written before the column stage ran. The startup pass that adds the column
+	// creates this key, on every backend, after the column is there.
+	`CREATE INDEX IF NOT EXISTS "callfrequencies_call" ON "callFrequencies" ("callId");`,
+	`CREATE INDEX IF NOT EXISTS "callpatches_call" ON "callPatches" ("callId");`,
+	`CREATE INDEX IF NOT EXISTS "callunits_call" ON "callUnits" ("callId");`,
+	`CREATE INDEX IF NOT EXISTS "delayed_call" ON "delayed" ("callId");`,
+	`CREATE INDEX IF NOT EXISTS "talkgroups_system_ref" ON "talkgroups" ("systemId","talkgroupRef");`,
+	`CREATE INDEX IF NOT EXISTS "talkgroups_tag" ON "talkgroups" ("tagId");`,
+	`CREATE INDEX IF NOT EXISTS "talkgroupgroups_talkgroup" ON "talkgroupGroups" ("talkgroupId");`,
+	`CREATE INDEX IF NOT EXISTS "talkgroupgroups_group" ON "talkgroupGroups" ("groupId");`,
+	`CREATE INDEX IF NOT EXISTS "sites_system" ON "sites" ("systemId");`,
 }

@@ -594,11 +594,16 @@ func readUnits(ctx context.Context, tx transaction, systemID uint64) (domain.Uni
 // talkgroupsReadQuery is the one statement in this file spelled two ways: the aggregate that
 // folds a talkgroup's group rows into one value is named differently by the backends. The value
 // the query is filtered by is always a placeholder.
+//
+// The aggregate names the order it folds in. Left unnamed, the value arrives in whatever order the
+// chosen plan produced, which was the stored row order on PostgreSQL and an index order on SQLite,
+// so the same configuration answered one way on one backend and another way on the other. Naming
+// the order costs one more sort key on a read that already sorts the join rows.
 func talkgroupsReadQuery(dialect Dialect) string {
-	aggregate := `GROUP_CONCAT(COALESCE(tg."groupId", 0))`
+	aggregate := `GROUP_CONCAT(COALESCE(tg."groupId", 0) ORDER BY tg."groupId")`
 
 	if dialect == DialectPostgresql {
-		aggregate = `STRING_AGG(CAST(COALESCE(tg."groupId", 0) AS text), ',')`
+		aggregate = `STRING_AGG(CAST(COALESCE(tg."groupId", 0) AS text), ',' ORDER BY tg."groupId")`
 	}
 
 	return `SELECT t."talkgroupId", t."alert", t."delay", t."frequency", t."label", t."led", t."name", t."order", t."tagId", t."talkgroupRef", t."type", ` + aggregate + ` FROM "talkgroups" AS t LEFT JOIN "talkgroupGroups" AS tg ON tg."talkgroupId" = t."talkgroupId" WHERE t."systemId" = ? GROUP BY t."talkgroupId"`
