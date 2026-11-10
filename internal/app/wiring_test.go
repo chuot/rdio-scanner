@@ -103,6 +103,50 @@ func TestAServerTheServiceManagerStartedSaysItsLogEntriesToTheManager(t *testing
 	}
 }
 
+// What the startup pass says about what it added is said through the copy the
+// server was told to speak through, at the level the line carries: a run the
+// service manager started hears it there and keeps its terminal silent, as it
+// does for every other entry.
+func TestWhatTheStartupPassSaysIsSaidThroughTheConfiguredEcho(t *testing.T) {
+	var terminal bytes.Buffer
+
+	manager := &recordedServiceLogger{}
+
+	srv := testServerUnderTheServiceManager(t, &terminal, manager)
+
+	// The one key a database this server builds for itself does not already carry.
+	const message = "created the call history index calls_timestamp_cover on calls over (timestamp, callId, audioLength, systemId, talkgroupId)"
+
+	if !manager.has(domain.LogLevelInfo, "info database: "+message) {
+		t.Errorf("the service manager's log holds %q, want the line the startup pass says for the call history "+
+			"key it adds, at info under the part of the server that owns it", manager.String())
+	}
+
+	if terminal.Len() != 0 {
+		t.Errorf("the terminal holds %q, want a server running as a service to have nothing to say to one while "+
+			"the startup pass runs", terminal.String())
+	}
+
+	if !hasLogMessage(t, srv.db, message) {
+		t.Errorf("the log view does not hold the line the startup pass said")
+	}
+}
+
+// A run in a terminal hears the same line, in the shape every other line that
+// run says has.
+func TestWhatTheStartupPassSaysReachesATerminalRun(t *testing.T) {
+	var terminal bytes.Buffer
+
+	testServerOn(t, &terminal)
+
+	const line = "info database: created the call history index calls_timestamp_cover on calls over (timestamp, callId, audioLength, systemId, talkgroupId)"
+
+	if !bytes.Contains(terminal.Bytes(), []byte(line)) {
+		t.Errorf("the terminal holds %q, want the line naming the call history key the startup pass adds, with its "+
+			"level and the part of the server that owns it", terminal.String())
+	}
+}
+
 // each entry reaches the manager's log at the level it is filed under,
 // including levels with no word for them.
 func TestTheServiceLogTakesEachEntryAtTheLevelItIsFiledUnder(t *testing.T) {

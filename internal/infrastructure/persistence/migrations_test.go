@@ -305,11 +305,13 @@ func TestMigrateAnnouncesEachV6TableItFoundInLegacyOrder(t *testing.T) {
 // The level half of the report: the level lets an operator narrow to the
 // rows the pass could not carry and the damage it could not repair, and on a
 // damaged deployment the report is written on every start, so an entry buried
-// at the level of every ingested call is one nobody finds.
+// at the level of every ingested call is one nobody finds. The pass says three
+// kinds of line: the table it is carrying, the key it added, and what it could
+// not carry or repair, and each has to read as one of them.
 func TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems(t *testing.T) {
 	// The clean fixture and the one with the rows the pass cannot read: the
 	// second is where the lines the archive adds are said, and a line the pass
-	// says has to be classifiable as one of the two things the pass says.
+	// says has to be classifiable as one of the kinds the pass says.
 	for _, db := range []*sql.DB{openLegacyV6Database(t), openLegacyV6PartialDatabase(t)} {
 		lines := migrateLines(t, db)
 
@@ -320,6 +322,13 @@ func TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems(t *te
 			case strings.HasSuffix(line.message, "..."):
 				if line.level != domain.LogLevelInfo {
 					t.Errorf("%q is filed under %q, want a notice: the pass found that table and carried it",
+						line.message, line.level)
+				}
+
+			case strings.HasPrefix(line.message, "created the call history index "):
+				if line.level != domain.LogLevelInfo {
+					t.Errorf("%q is filed under %q, want a notice: a key the pass added to a table the "+
+						"deployment is already using is something the operator should see coming",
 						line.message, line.level)
 				}
 
@@ -335,7 +344,7 @@ func TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems(t *te
 				problems++
 
 			default:
-				t.Errorf("%q is filed under %q, which is neither an announcement nor a problem: the pass says nothing else, so a line it says has to read as one of those two",
+				t.Errorf("%q is filed under %q, which is neither an announcement, nor a key the pass added, nor a problem: the pass says nothing else, so a line it says has to read as one of those three",
 					line.message, line.level)
 			}
 		}
@@ -397,13 +406,15 @@ func TestMigrateSaysEveryRowItCouldNotCarryAndEveryTableItLeftBehind(t *testing.
 }
 
 // The case a deployment of this server that has never run is in: there are
-// no v6 tables, so the pass creates the schema and then does and says
-// nothing.
-func TestMigrateOnAFreshDatabaseMigratesNothingAndSaysNothing(t *testing.T) {
+// no v6 tables, so the pass creates the schema, adds the one call history key
+// the copied statements leave out, and says nothing but the line that key is.
+func TestMigrateOnAFreshDatabaseMigratesNothingAndSaysOnlyTheCallHistoryKey(t *testing.T) {
 	db := openEmptyDatabase(t)
 
-	if progress := migrateDatabase(t, db); len(progress) != 0 {
-		t.Errorf("a fresh database was announced as migrating: %v", progress)
+	want := []string{createdCoveringKeyLine}
+
+	if progress := migrateDatabase(t, db); !equalStrings(progress, want) {
+		t.Errorf("a fresh database was announced as %v, want the covering key the startup pass adds and nothing else", progress)
 	}
 
 	if got, want := readTableNames(t, db), archivedTables; !equalStrings(got, want) {
@@ -661,30 +672,29 @@ func plannerStatisticsTables(t *testing.T, db *sql.DB) []string {
 }
 
 // The deployment that swaps one server binary for the other on a database
-// the legacy server already migrated: no v6 row moves and no word is said,
-// and the only changes are the two columns the startup pass adds, the two
-// log-search indexes, the nine call-history index keys the schema copy
-// declares, and the migration archive and its unique index.
+// the legacy server already migrated: no v6 row moves, and the only things
+// the pass says and does are the call history key it adds and the columns,
+// indexes and archive the startup steps create beside it.
 func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 	db := openLegacyDatabase(t)
 
 	before := readSchemaObjects(t, db)
 	beforeRows := readLogRows(t, db)
 
-	if progress := migrateDatabase(t, db); len(progress) != 0 {
-		t.Errorf("a v7 database was announced as migrating: %v", progress)
+	if progress := migrateDatabase(t, db); !equalStrings(progress, []string{createdCoveringKeyLine}) {
+		t.Errorf("a v7 database was announced as %v, want only the call history key the pass adds", progress)
 	}
 
 	after := readSchemaObjects(t, db)
 
-	if len(after) != len(before)+14 {
-		t.Fatalf("a v7 database gained %d schema objects, want the two log indexes, the options key index, the migration archive with its index, and the nine index keys the schema copy declares", len(after)-len(before))
+	if len(after) != len(before)+15 {
+		t.Fatalf("a v7 database gained %d schema objects, want the two log indexes, the options key index, the migration archive with its index, the nine index keys the schema copy declares, and the covering key the startup step adds", len(after)-len(before))
 	}
 
 	// The logs and calls tables are the objects allowed to read differently
 	// afterwards, and only because each gained a column; every other table, index
 	// and trigger is byte-identical, and the only new objects are the two
-	// log-search indexes, the archive, and the index keys the schema copy declares.
+	// log-search indexes, the archive, and the call history keys the pass adds.
 	for _, object := range before {
 		if isLogsTable(object) || isCallsTable(object) {
 			continue
@@ -714,6 +724,7 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 	want := []string{
 		"index callfrequencies_call",
 		"index callpatches_call",
+		"index calls_timestamp_cover",
 		"index callunits_call",
 		"index delayed_call",
 		"index logs_source_idx",
@@ -3377,8 +3388,8 @@ func TestMigrateDeduplicatesDuplicateOptionRowsKeepingTheLastWritten(t *testing.
 		}
 	}
 
-	if progress := migrateDatabase(t, db); len(progress) != 0 {
-		t.Errorf("the pass announced: %v", progress)
+	if progress := migrateDatabase(t, db); !equalStrings(progress, []string{createdCoveringKeyLine}) {
+		t.Errorf("the pass announced: %v, want only the covering key line the startup pass adds", progress)
 	}
 
 	var rows int
@@ -3413,8 +3424,8 @@ func TestMigrateGivesAFreshDatabaseTheUniqueOptionKeyIndex(t *testing.T) {
 
 	defer db.Close()
 
-	if progress := migrateDatabase(t, db); len(progress) != 0 {
-		t.Errorf("the pass announced: %v", progress)
+	if progress := migrateDatabase(t, db); !equalStrings(progress, []string{createdCoveringKeyLine}) {
+		t.Errorf("the pass announced: %v, want only the covering key line the startup pass adds", progress)
 	}
 
 	if _, err := db.Exec(`INSERT INTO "options" ("key", "value") VALUES ('branding', '"one"')`); err != nil {

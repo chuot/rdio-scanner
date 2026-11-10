@@ -44,8 +44,9 @@ type Progress func(level, message string)
 //
 // Stages that add columns or indexes this server owns run before the pass: the
 // log source column, the call audio length column, the calls search index, the
-// migration archive, and the options key index are additive steps kept out of
-// the dialect schemas. A database the legacy server already migrated can still
+// call history index set, the migration archive, and the options key index are
+// additive steps kept out of the dialect schemas. A database the legacy server
+// already migrated can still
 // hold damage this pass will not touch, because the v6 rows it read from are
 // gone, so reportMigrationDamage reads what is left at the end of the startup
 // pass, before the server starts answering from it.
@@ -88,6 +89,15 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 	// is applied on every start, so the index belongs to a step that probes the
 	// catalog instead of to the copied DDL.
 	if err := ensureCallsSearchIndex(ctx, s); err != nil {
+		return operationError("database", "migrate", err)
+	}
+
+	// The call history index set is added here and nowhere else: the copied statements declare nine
+	// of its keys, the tenth indexes the recording-length column the stage above has just added, and
+	// the carry stages below move rows into tables these keys serve. The step reads the catalog and
+	// creates only what is missing, and names each key it creates, so a start that finds the set
+	// present says nothing and changes nothing.
+	if err := ensureCallIndexSet(ctx, s, progress); err != nil {
 		return operationError("database", "migrate", err)
 	}
 

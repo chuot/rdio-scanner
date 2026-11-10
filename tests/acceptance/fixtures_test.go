@@ -23,6 +23,12 @@ import (
 // capturedRuns are the captured whole-server states a dirwatch run left
 // behind, recorded table by table, held as Go data beside the tests that
 // replay them and keyed by the name the test asks them under.
+//
+// Both log lists start with the line the startup pass says for the call
+// history key it adds to a database that did not carry it. A line the pass
+// says is filed under the source the pass writes under, which is one the
+// comparison keeps, so the capture holds it first: it is said before the
+// server has ingested anything.
 var capturedRuns = map[string]string{
 	"dirwatch-autopopulate.json": `{
   "calls": [
@@ -68,6 +74,10 @@ var capturedRuns = map[string]string{
     }
   ],
   "logs": [
+    {
+      "level": "info",
+      "message": "created the call history index calls_timestamp_cover on calls over (timestamp, callId, audioLength, systemId, talkgroupId)"
+    },
     {
       "level": "warn",
       "message": "the server generated a new administrator signing secret, which ends every session that was open before it"
@@ -429,6 +439,10 @@ var capturedRuns = map[string]string{
     }
   ],
   "logs": [
+    {
+      "level": "info",
+      "message": "created the call history index calls_timestamp_cover on calls over (timestamp, callId, audioLength, systemId, talkgroupId)"
+    },
     {
       "level": "warn",
       "message": "the server generated a new administrator signing secret, which ends every session that was open before it"

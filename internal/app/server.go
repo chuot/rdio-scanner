@@ -159,6 +159,18 @@ type Server struct {
 	stopFailed error
 }
 
+// echoTarget is the copy this server says its lines through: the one its
+// configuration names, or its own console when the configuration names none.
+// It is read from the configuration rather than held, so the lines said before
+// the wiring runs are said through the same copy as the entries filed after it.
+func (s *Server) echoTarget() LogEcho {
+	if s.config.Echo != nil {
+		return s.config.Echo
+	}
+
+	return s.console
+}
+
 // New opens the database the configuration names, brings it to this server's schema,
 // seeds what a fresh deployment starts with, and wires everything to everything else.
 // It starts nothing: a caller that finds the assembly unusable has nothing to undo.
@@ -222,10 +234,11 @@ func New(config Config) (*Server, error) {
 	migrationLines := []domain.LogEntry{}
 
 	if err := persistence.Migrate(ctx, db, dialect, srv.clock, func(level, message string) {
-		// Said out loud in the shape every other line the server says has, so the word an
-		// operator greps for finds this line too. It is not the echo of an entry: there is no
-		// entry yet, which is why the level and the subsystem are put on it here.
-		srv.console.println(renderLogEntry(level, domain.LogSourceDatabase, message))
+		// Said through the copy this server says its lines through, in the shape every other
+		// line has, so the word an operator greps for finds this line wherever the server was
+		// told to say what it has to say. It is not the echo of an entry: there is no entry
+		// yet, which is why the level and the subsystem are put on it here.
+		srv.echoTarget().Echo(level, domain.LogSourceDatabase, message)
 
 		migrationLines = append(migrationLines, domain.LogEntry{Level: level, Message: message})
 	}); err != nil {
@@ -328,11 +341,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 	// Every log entry the server writes is also said out loud, which is what an operator
 	// running the server in a terminal expects. A server running as a service says them to
 	// the manager instead, at the level each entry is filed under.
-	echo := s.config.Echo
-
-	if echo == nil {
-		echo = s.console
-	}
+	echo := s.echoTarget()
 
 	s.logs = &loggedEvents{logs: logs, echo: echo}
 

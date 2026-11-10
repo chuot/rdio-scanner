@@ -50,7 +50,9 @@ func searchIndexDefinitions(t *testing.T, db *sql.DB) []string {
 }
 
 // A calls table that does not carry the search index gets it from the startup pass,
-// over the column order the history filter's statements are written against.
+// over the column order the history filter's statements are written against, and the
+// same pass gives it the covering key the call history set adds: those two are the
+// only keys the table ends with.
 func TestMigrateGivesACallsTableWithoutTheSearchIndexOne(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -64,8 +66,11 @@ func TestMigrateGivesACallsTableWithoutTheSearchIndexOne(t *testing.T) {
 
 	definitions := searchIndexDefinitions(t, db)
 
-	if len(definitions) != 1 || definitions[0] != callsSearchIndexCreate {
-		t.Errorf("the migrated calls table carries %v, want exactly %s", definitions, callsSearchIndexCreate)
+	want := []string{callsSearchIndexCreate, coveringKeyDefinition}
+
+	if !equalStrings(definitions, want) {
+		t.Errorf("the migrated calls table carries %v, want the search index the pass creates and the "+
+			"covering key the call history set adds, in that order: %v", definitions, want)
 	}
 }
 
@@ -101,11 +106,16 @@ func TestMigrateAddingTheCallsSearchIndexTwiceIsTheSameAsOnce(t *testing.T) {
 }
 
 // A calls table that already carries the index keeps the one it has: the step asks the
-// database what it already has and adds only what is missing.
+// database what it already has and adds only what is missing, which after the call
+// history step is the covering key and nothing else.
 func TestMigrateLeavesACallsTableThatAlreadyHasTheSearchIndexAlone(t *testing.T) {
 	db := openLegacyDatabase(t)
 
 	before := searchIndexDefinitions(t, db)
+
+	if len(before) != 1 || before[0] != callsSearchIndexCreate {
+		t.Fatalf("the calls table the earlier server wrote carries %v, want the search index that server built", before)
+	}
 
 	if err := Migrate(context.Background(), db, DialectSqlite, fixedClock{migrationInstant}, nil); err != nil {
 		t.Fatalf("Migrate: %v", err)
@@ -113,14 +123,11 @@ func TestMigrateLeavesACallsTableThatAlreadyHasTheSearchIndexAlone(t *testing.T)
 
 	after := searchIndexDefinitions(t, db)
 
-	if len(before) != len(after) {
-		t.Fatalf("the migration changed the indexes of the calls table: %d before, %d after", len(before), len(after))
-	}
+	want := []string{before[0], coveringKeyDefinition}
 
-	for i := range before {
-		if before[i] != after[i] {
-			t.Errorf("index %d changed\nbefore: %s\nafter: %s", i, before[i], after[i])
-		}
+	if !equalStrings(after, want) {
+		t.Errorf("the migration left the calls table carrying %v, want the search index it arrived with, "+
+			"byte for byte, with the covering key the call history set adds beside it: %v", after, want)
 	}
 }
 

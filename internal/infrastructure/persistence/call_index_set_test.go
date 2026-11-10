@@ -448,6 +448,23 @@ const shippedPairDefinition = `CREATE INDEX "calls_idx" ON "calls" ("systemId","
 
 const coveringKeyDefinition = `CREATE INDEX "calls_timestamp_cover" ON "calls" ("timestamp","callId","audioLength","systemId","talkgroupId")`
 
+// coveringKeyMember is the set's key on the calls table, the one member the copied schema
+// statements do not declare. A database that already carries the other nine gains exactly that
+// one from the startup step.
+func coveringKeyMember() indexSpec {
+	for _, member := range callIndexSet {
+		if member.table == "calls" {
+			return member
+		}
+	}
+
+	return indexSpec{name: "calls_timestamp_cover", table: "calls"}
+}
+
+// createdCoveringKeyLine is the one line a database that already carries the other nine call history
+// keys hears from the startup pass.
+var createdCoveringKeyLine = createdLine(coveringKeyMember()).message
+
 // The state an upgrade is in: a database the legacy server wrote, carrying its own pair index and the
 // rows that index was built for, and none of the set. That fixture declares foreign keys but creates
 // one index, and a foreign key on SQLite makes no index of its own, so every member has to be created
@@ -629,14 +646,36 @@ func TestMigratedCallsTableReadsItsRecordingLengthThroughTheCoveringKey(t *testi
 	ctx := context.Background()
 
 	// The startup pass adds the keys its copied statements declare and the column the covering key
-	// carries; the set's step then adds that key. That order is the one the pass runs them in, and it
-	// is what keeps a row an earlier server wrote readable.
-	if lines := migrateLines(t, db); len(lines) != 0 {
-		t.Errorf("the pass reported %v over a database with nothing to migrate", lines)
+	// carries, and because the pass runs the set's own step the line naming that key is all it says
+	// over a database with nothing to migrate. Running the step again afterwards is what a restart
+	// does, and it has nothing left to add and nothing to say.
+	lines := migrateLines(t, db)
+
+	wantLines := []progressLine{{level: domain.LogLevelInfo, message: createdCoveringKeyLine}}
+
+	if len(lines) != len(wantLines) {
+		t.Fatalf("the pass reported %v over a database with nothing to migrate, want only the line naming "+
+			"the covering key it adds", lines)
 	}
 
-	if err := ensureCallIndexSet(ctx, s, func(string, string) {}); err != nil {
+	for i := range wantLines {
+		if lines[i] != wantLines[i] {
+			t.Errorf("line %d:\n  got  %q under %q\n  want %q under %q",
+				i+1, lines[i].message, lines[i].level, wantLines[i].message, wantLines[i].level)
+		}
+	}
+
+	reported := []progressLine{}
+
+	if err := ensureCallIndexSet(ctx, s, func(level, message string) {
+		reported = append(reported, progressLine{level: level, message: message})
+	}); err != nil {
 		t.Fatalf("ensureCallIndexSet: %v", err)
+	}
+
+	if len(reported) != 0 {
+		t.Errorf("the set's step over a database the pass already brought up reported: %v, want it to read "+
+			"the catalog and add nothing", reported)
 	}
 
 	if got := indexDefinitions(t, db, "calls"); !slices.Contains(got, coveringKeyDefinition) {
