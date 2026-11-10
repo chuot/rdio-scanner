@@ -931,3 +931,90 @@ func liveCallIndexProbe(t *testing.T, dialect Dialect) {
 			"column as the engine spells that column's name", dialect, strings.Join(indexShapes(carries), ", "))
 	}
 }
+
+// A legacy-written deployment taken through the whole startup pass ends holding every member
+// of the call history set. This is the measurement the dialects whose schema copy declares no
+// key over the recording-length column need: what each backend carries afterwards is the nine
+// keys the copy declares, the keys its own foreign keys make, and the one key the startup pass
+// creates after the column stage.
+func TestMigrateLiveOnMariaDBLeavesTheCallHistorySetOnTheMigratedDatabase(t *testing.T) {
+	liveCallIndexSetAfterMigrate(t, DialectMariadb)
+}
+
+func TestMigrateLiveOnPostgreSQLLeavesTheCallHistorySetOnTheMigratedDatabase(t *testing.T) {
+	liveCallIndexSetAfterMigrate(t, DialectPostgresql)
+}
+
+func liveCallIndexSetAfterMigrate(t *testing.T, dialect Dialect) {
+	t.Helper()
+
+	db := liveDatabase(t, dialect)
+
+	ctx := context.Background()
+
+	s := newStore(db, dialect)
+
+	lines := liveMigrate(t, db, dialect)
+
+	cover := coveringKeyMember()
+
+	// The covering key belongs to no reference the schema declares, so neither the copied
+	// statements nor a foreign key makes it on either backend: the pass names the key it adds.
+	created := false
+
+	said := []string{}
+
+	for _, line := range lines {
+		said = append(said, line.level+" "+line.message)
+
+		if line.level == domain.LogLevelInfo && strings.Contains(line.message, cover.name) {
+			created = true
+		}
+	}
+
+	if !created {
+		t.Errorf("the pass on %s said (%s), want the line naming the covering key it creates on the calls "+
+			"table: that key indexes the recording-length column, which this deployment gains from the pass "+
+			"itself, so nothing else here can create it", dialect, strings.Join(said, " | "))
+	}
+
+	missing, err := missingCallIndexes(ctx, s)
+	if err != nil {
+		t.Fatalf("missingCallIndexes on %s: %v", dialect, err)
+	}
+
+	if got := missingNames(missing); len(got) != 0 {
+		t.Errorf("the migrated database on %s lacks (%s) of the call history set, wanting nothing missing: "+
+			"every member is carried over its whole column list, by the copied statements, by the keys the "+
+			"backend's own foreign keys make, or by the covering key the pass creates",
+			dialect, strings.Join(got, ", "))
+	}
+
+	// The key is read under its own name and over its own column list, because a key of that
+	// shape is only ever made on purpose.
+	carries, err := hasCallIndexShape(ctx, s, cover.table)
+	if err != nil {
+		t.Fatalf("hasCallIndexShape(calls) on %s: %v", dialect, err)
+	}
+
+	found := false
+
+	for _, index := range carries {
+		if !strings.EqualFold(index.name, cover.name) {
+			continue
+		}
+
+		found = true
+
+		if !carriesColumnList(carries, cover.columns, true) {
+			t.Errorf("%s carries %s on calls, and the migrated calls table reports (%s): the key the pass "+
+				"creates has to carry the columns the history reads report, in the order the set names them",
+				dialect, index.name, strings.Join(indexShapes(carries), ", "))
+		}
+	}
+
+	if !found {
+		t.Errorf("the migrated calls table on %s reports (%s), want %s among its indexes",
+			dialect, strings.Join(indexShapes(carries), ", "), cover.name)
+	}
+}
