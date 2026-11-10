@@ -1858,6 +1858,25 @@ func setTableNames() []string {
 	return tables
 }
 
+// keysTheSetNamesOn lists the keys the set declares over one table, and on the calls table the shipped pair
+// key the schema copies declare as well. The list is what the catalogue over that table has to answer, so the
+// names are read from the set rather than written out again here.
+func keysTheSetNamesOn(table string) []indexSpec {
+	keys := []indexSpec{}
+
+	for _, member := range callIndexSet {
+		if member.table == table {
+			keys = append(keys, member)
+		}
+	}
+
+	if table == "calls" {
+		keys = append(keys, shippedPairIndex())
+	}
+
+	return keys
+}
+
 // automaticIndexNames names the keys the database made for itself on the given tables. SQLite reports one for
 // a primary key or a uniqueness rule the table declares, and the engine gives it a name no one asked for.
 func automaticIndexNames(t *testing.T, db *sql.DB, tables []string) []string {
@@ -1975,12 +1994,20 @@ func TestCallIndexSetCarriesNoSystemPairIndex(t *testing.T) {
 			"by the schema copies or by the step", found)
 	}
 
+	// Every key on the tables the set names, read table by table: exactly the keys the set declares, and on
+	// the calls table the shipped pair key beside them. An eleventh key, on any of those tables and under any
+	// name, is written here before it can pass.
 	carries := []indexSpec{}
 
 	for _, table := range setTableNames() {
 		indexes, err := hasCallIndexShape(ctx, s, table)
 		if err != nil {
 			t.Fatalf("hasCallIndexShape(%s): %v", table, err)
+		}
+
+		if got := indexShapes(indexes); !slices.Equal(got, indexShapes(keysTheSetNamesOn(table))) {
+			t.Errorf("%s holds %v, want the keys the set names on it and the shipped pair key there: %v",
+				table, got, indexShapes(keysTheSetNamesOn(table)))
 		}
 
 		carries = append(carries, indexes...)
