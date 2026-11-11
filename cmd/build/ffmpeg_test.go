@@ -1268,14 +1268,14 @@ func TestTheFfmpegCacheKeyChangesWithEverythingThatChangesTheCompile(t *testing.
 	// release run takes minutes, and a manifest gaining fields must not
 	// drop the entries an unchanged compile produced.
 	want := map[string]string{
-		"freebsd-amd64": "0c3fe1cc043cf2e23badfc2e2cd27fb2ff45799a41e83585e625d9d88ab2cfdb",
-		"linux-386":     "4fa360ed32fc35aac0bdf1c71af8c0c91b5bacef74f21fc63621860ba2cb26f2",
-		"linux-amd64":   "ee9978d311d5295b68bf9f127e46f57d4bd09718ea825d9e23af501fe7e618f4",
-		"linux-arm":     "b930c19847ec5113a62b6c586dd4ba6fcf024991bb49eb1a5e0041a957635a0e",
-		"linux-arm64":   "54502ed7df6cb70c8e62b0846194e9a3a22228b37cb1008bde0feb8cc7bb2c4f",
-		"macos-amd64":   "4589b1ae72c2119c0d5b22ecac97db6a534442b5b1c8af0dd481becd2748372e",
-		"macos-arm64":   "24dce1ba6cec79937d8e8943ef1706b869086351c127e387c54789faa3823a4a",
-		"windows-amd64": "3b080ebdd130d75caf4a3414213b2cddc12a0bf248ae7069983dd866a3a6d105",
+		"freebsd-amd64": "d037463aef0761b248d33ff1a006444d23d2292d532980490538b571afcfc9cd",
+		"linux-386":     "02015cb9df73f976d6ee4f3242cf101d2b5b2769ac09616f3372865c54bc3ee8",
+		"linux-amd64":   "4c0ad5aadfac275f4fa7089364f88990cdc30c76291d61c78cb7ddf95d2a0228",
+		"linux-arm":     "83a04a840f2e2e0fc922a4c227945755d9fea31afd72f133d0917cbd123d0a20",
+		"linux-arm64":   "107937f70c66676dcaffc2a5dcdd08a70da364d779f291192f3f03a531b72658",
+		"macos-amd64":   "19905d373ea53f22e7ae33b19b1733b36e5c61421f63cc1a8f8efad614743fa3",
+		"macos-arm64":   "2f9e22ec4c3c6bec05f56c77c9c300c9b0fb28e53ee74a2b408d3414ab3ec276",
+		"windows-amd64": "976d8fae29136c55e4fdea7d3d18ef403ed6e395969aeb475cd2ca4c2a71c8b6",
 	}
 
 	for _, target := range []string{"freebsd-amd64", "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "macos-amd64", "macos-arm64", "windows-amd64"} {
@@ -1680,12 +1680,13 @@ func TestTheBuildSaysWhatTheFfmpegItCompiledIsAndUnderWhatLicence(t *testing.T) 
 		t.Error("the licence text names osabi_freebsd for a record that stopped naming it as something the build reads")
 	}
 
-	// And the codecs: the notice names what the recipe selects, so a recipe that stops selecting an encoder
-	// stops the notice promising it.
-	changed.Recipe = aRecipeWithout(changed.Recipe, "--enable-encoder=aac")
+	// And the codecs: the notice names what the recipe selects, so a recipe that stops
+	// selecting a codec stops the notice promising it. The recipe names a codec in more
+	// than one switch — a decoder, an encoder, a demuxer — so the mutation takes them all.
+	changed.Recipe = aRecipeWithoutCodecsNamed(changed.Recipe, "aac")
 
 	if text := ffmpegLicence(changed, "freebsd-amd64"); strings.Contains(text, "aac") {
-		t.Error("the licence text promises an aac encoder to a recipe that stopped enabling one")
+		t.Error("the licence text promises a codec to a recipe that stopped enabling every switch for it")
 	}
 }
 
@@ -1730,6 +1731,23 @@ func aRecipeWithout(recipe []string, flag string) []string {
 
 	for _, one := range recipe {
 		if one == flag {
+			continue
+		}
+
+		kept = append(kept, one)
+	}
+
+	return kept
+}
+
+// aRecipeWithoutCodecsNamed is the recipe with every switch that names the codec taken
+// out. One codec is selected by more than a decoder — a decoder, an encoder, and a
+// demuxer all name it — and a notice that keeps any of them still promises the codec.
+func aRecipeWithoutCodecsNamed(recipe []string, codec string) []string {
+	kept := []string{}
+
+	for _, one := range recipe {
+		if name := one[strings.LastIndex(one, "=")+1:]; strings.HasPrefix(name, codec) {
 			continue
 		}
 

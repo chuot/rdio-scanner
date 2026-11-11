@@ -95,12 +95,76 @@ type checkInput struct {
 //go:embed assets/tone.mp3
 var toneMP3 []byte
 
+// The recordings below are the gate's own one-second tone written into each
+// container this recipe opens, committed under assets/ and read the way the MP3
+// above is read. Each `Mime` in checkInputs is the label the dirwatch gives a file
+// with that extension: `mime.TypeByExtension`, the same call the watch makes, so an
+// extension the standard library does not name labels the recording with nothing.
+
+//go:embed assets/tone.m4a
+var toneM4A []byte
+
+//go:embed assets/tone-m4a-frag.m4a
+var toneM4AFragmented []byte
+
+//go:embed assets/tone.aac
+var toneADTS []byte
+
+//go:embed assets/tone.mp2
+var toneMP2 []byte
+
+//go:embed assets/tone-ima.wav
+var toneADPCMIMA []byte
+
+//go:embed assets/tone.flac
+var toneFLAC []byte
+
+//go:embed assets/tone-vorbis.ogg
+var toneOggVorbis []byte
+
+//go:embed assets/tone-opus.webm
+var toneWebMOpus []byte
+
+//go:embed assets/tone.wma
+var toneWMA []byte
+
+//go:embed assets/tone.aiff
+var toneAIFF []byte
+
+//go:embed assets/tone.voc
+var toneCreativeVoice []byte
+
+//go:embed assets/tone.w64
+var toneW64 []byte
+
+//go:embed assets/tone.mov
+var toneQuickTime []byte
+
+//go:embed assets/tone-video.mp4
+var toneMP4WithVideo []byte
+
 // checkInputs are the recordings the dirwatch hands the converter: the same
-// one-second tone as a WAV and as an MP3, so the trimmed build decodes both.
+// one-second tone as a WAV and as an MP3, and that tone again in each container the
+// recipe compiles a demuxer and a decoder for. The WAV is the one the check writes
+// itself, the rest are the committed files above.
 func checkInputs() []checkInput {
 	return []checkInput{
 		{Name: "wav", Mime: "audio/wav", Body: aToneWAV()},
 		{Name: "mp3", Mime: "audio/mpeg", Body: toneMP3},
+		{Name: "m4a", Mime: "audio/mp4", Body: toneM4A},
+		{Name: "m4a-fragmented", Mime: "audio/mp4", Body: toneM4AFragmented},
+		{Name: "adts", Mime: "audio/aac", Body: toneADTS},
+		{Name: "mp2", Mime: "audio/mp2", Body: toneMP2},
+		{Name: "wav-adpcm", Mime: "audio/wav", Body: toneADPCMIMA},
+		{Name: "flac", Mime: "audio/flac", Body: toneFLAC},
+		{Name: "ogg-vorbis", Mime: "audio/ogg", Body: toneOggVorbis},
+		{Name: "webm-opus", Mime: "audio/webm", Body: toneWebMOpus},
+		{Name: "wma", Mime: "audio/x-ms-wma", Body: toneWMA},
+		{Name: "aiff", Mime: "audio/x-aiff", Body: toneAIFF},
+		{Name: "voc", Mime: "audio/x-voc", Body: toneCreativeVoice},
+		{Name: "w64", Mime: "", Body: toneW64},
+		{Name: "mov", Mime: "video/quicktime", Body: toneQuickTime},
+		{Name: "mp4-with-video", Mime: "video/mp4", Body: toneMP4WithVideo},
 	}
 }
 

@@ -16,6 +16,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"os"
@@ -157,12 +158,15 @@ func TestTheFFMPEGCheckRunsTheCompiledFfmpegThroughTheConvertersOwnArgumentList(
 
 	ran := stand.asked("/ffmpeg-9.0.2/ffmpeg")
 
-	// The check runs the compiled program seven times: six conversions, and one question about what the
-	// program registers.
+	// The check runs the compiled program once for each recording at each level, and
+	// one more time to ask what the program registers.
 	conversions, registry := splitTheCodecProbe(ran)
 
-	if len(conversions) != 6 {
-		t.Fatalf("the check ran the compiled ffmpeg %d times, want the three conversion levels from a WAV and from an MP3", len(conversions))
+	if want := len(theCheckFixtures) * len(theConversionLevels); len(conversions) != want {
+		t.Fatalf(
+			"the check ran the compiled ffmpeg %d times, want the %d conversion levels from each of the %d recordings it names",
+			len(conversions), len(theConversionLevels), len(theCheckFixtures),
+		)
 	}
 
 	if len(registry) != 1 {
@@ -299,8 +303,8 @@ func TestTheFFMPEGCheckProbesTheConvertedRecordingAsAFile(t *testing.T) {
 		t.Fatalf("the ffmpeg check refused a working ffmpeg: %v", err)
 	}
 
-	if len(probed) != 6 {
-		t.Fatalf("the check probed %d recordings, want one for each it converted", len(probed))
+	if want := len(theCheckFixtures) * len(theConversionLevels); len(probed) != want {
+		t.Fatalf("the check probed %d recordings, want one for each of the %d conversions it runs", len(probed), want)
 	}
 
 	for _, line := range probed {
@@ -313,29 +317,142 @@ func TestTheFFMPEGCheckProbesTheConvertedRecordingAsAFile(t *testing.T) {
 	}
 }
 
-// the check feeds ffmpeg the recordings the dirwatch hands the converter: the same
-// tone as a WAV and as an MP3.
+// aCheckFixture is one recording the gate feeds the compiled ffmpeg. `Mime` is the label
+// the dirwatch gives a file of that extension — `mime.TypeByExtension`, the same call the
+// watch makes, so an extension the standard library does not name labels the recording
+// with nothing. `At` is where in the file its marker sits, because a box-based container
+// names its type after the size of its first box, and each Marker is what this machine
+// read off the file it authored. A fixture with no file is written by the check itself.
+type aCheckFixture struct {
+	Name   string
+	File   string
+	Mime   string
+	At     int
+	Marker []byte
+}
+
+// theCheckFixtures are the recordings the gate feeds the compiled ffmpeg: one for each
+// container the recipe's decoders and demuxers open, each one second of the tone the gate
+// already generates, so the only thing a fixture varies is the container and the codec it
+// carries.
+var theCheckFixtures = []aCheckFixture{
+	{Name: "wav", Mime: "audio/wav", Marker: []byte("RIFF")},
+	{Name: "mp3", File: "tone.mp3", Mime: "audio/mpeg", Marker: []byte("ID3")},
+	{Name: "m4a", File: "tone.m4a", Mime: "audio/mp4", At: 4, Marker: []byte("ftyp")},
+	{Name: "m4a-fragmented", File: "tone-m4a-frag.m4a", Mime: "audio/mp4", At: 4, Marker: []byte("ftyp")},
+	{Name: "adts", File: "tone.aac", Mime: "audio/aac", Marker: []byte{0xff, 0xf1}},
+	{Name: "mp2", File: "tone.mp2", Mime: "audio/mp2", Marker: []byte{0xff, 0xf5}},
+	{Name: "wav-adpcm", File: "tone-ima.wav", Mime: "audio/wav", Marker: []byte("RIFF")},
+	{Name: "flac", File: "tone.flac", Mime: "audio/flac", Marker: []byte("fLaC")},
+	{Name: "ogg-vorbis", File: "tone-vorbis.ogg", Mime: "audio/ogg", Marker: []byte("OggS")},
+	{Name: "webm-opus", File: "tone-opus.webm", Mime: "audio/webm", Marker: []byte{0x1a, 0x45, 0xdf, 0xa3}},
+	{Name: "wma", File: "tone.wma", Mime: "audio/x-ms-wma", Marker: []byte{0x30, 0x26, 0xb2, 0x75}},
+	{Name: "aiff", File: "tone.aiff", Mime: "audio/x-aiff", Marker: []byte("FORM")},
+	{Name: "voc", File: "tone.voc", Mime: "audio/x-voc", Marker: []byte("Creative Voice")},
+	{Name: "w64", File: "tone.w64", Mime: "", Marker: theW64Marker},
+	{Name: "mov", File: "tone.mov", Mime: "video/quicktime", At: 4, Marker: []byte("ftyp")},
+	{Name: "mp4-with-video", File: "tone-video.mp4", Mime: "video/mp4", At: 4, Marker: []byte("ftyp")},
+}
+
+// theW64Marker is the whole of a W64 file's first box header: the four bytes a RIFF wav
+// fills with "RIFF", followed by the GUID that says this one is sixty-four bit.
+var theW64Marker = []byte{
+	'r', 'i', 'f', 'f',
+	0x2e, 0x91, 0xcf, 0x11, 0xa5, 0xd6, 0x28, 0xdb, 0x04, 0xc1, 0x00, 0x00,
+}
+
+// aCheckFixtureNamed finds the named fixture in the table above.
+func aCheckFixtureNamed(name string) (aCheckFixture, bool) {
+	for _, fixture := range theCheckFixtures {
+		if fixture.Name == name {
+			return fixture, true
+		}
+	}
+
+	return aCheckFixture{}, false
+}
+
+// the check feeds ffmpeg one recording for each container the recipe opens: the same
+// tone in a wav, an mp3, the m4a pair, raw ADTS, mp2, an ADPCM wav, Flac, Ogg Vorbis,
+// WebM Opus, an ASF WMA, an AIFF, a Creative Voice file, a W64, a QuickTime mov, and an
+// mp4 that carries a video stream beside its audio.
 func TestTheFFMPEGCheckFeedsItTheRecordingsTheServerAccepts(t *testing.T) {
 	inputs := checkInputs()
 
-	if len(inputs) != 2 {
-		t.Fatalf("the check feeds ffmpeg %d recordings, want a WAV and an MP3", len(inputs))
+	if len(inputs) != len(theCheckFixtures) {
+		t.Fatalf(
+			"the check feeds ffmpeg %d recordings, want one for each container the recipe opens, which is %d",
+			len(inputs), len(theCheckFixtures),
+		)
 	}
 
-	want := map[string]string{"wav": "audio/wav", "mp3": "audio/mpeg"}
+	fed := map[string]bool{}
 
 	for _, in := range inputs {
-		if len(in.Body) == 0 {
-			t.Errorf("%s is empty", in.Name)
+		fixture, ok := aCheckFixtureNamed(in.Name)
+		if !ok {
+			t.Errorf("the check feeds ffmpeg a %s recording, which is not a container the gate names", in.Name)
+
+			continue
 		}
 
-		if want[in.Name] != in.Mime {
-			t.Errorf("%s is %s, want %s", in.Name, in.Mime, want[in.Name])
+		fed[in.Name] = true
+
+		if len(in.Body) <= fixture.At {
+			t.Errorf(
+				"the check feeds ffmpeg a %s recording that is %d bytes, too short to carry the %s marker",
+				in.Name, len(in.Body), fixture.Name,
+			)
+
+			continue
+		}
+
+		head := in.Body[fixture.At:]
+
+		if !bytes.HasPrefix(head, fixture.Marker) {
+			t.Errorf(
+				"the check feeds ffmpeg a %s recording carrying % x at byte %d, want the marker % x",
+				in.Name, head[:min(len(head), len(fixture.Marker))], fixture.At, fixture.Marker,
+			)
+		}
+
+		if in.Mime != fixture.Mime {
+			t.Errorf("%s is labelled %q, want the label the watch gives that extension, %q", in.Name, in.Mime, fixture.Mime)
 		}
 	}
 
-	if _, err := os.Stat(filepath.Join("assets", "tone.mp3")); err != nil {
-		t.Error("the check has no MP3 recording to feed ffmpeg")
+	for _, fixture := range theCheckFixtures {
+		if !fed[fixture.Name] {
+			t.Errorf("the check does not feed ffmpeg a %s recording", fixture.Name)
+
+			continue
+		}
+
+		if fixture.File == "" {
+			continue
+		}
+
+		body, err := os.ReadFile(filepath.Join("assets", fixture.File))
+		if err != nil {
+			t.Errorf("the gate has no %s to feed ffmpeg: %v", fixture.File, err)
+
+			continue
+		}
+
+		if len(body) <= fixture.At {
+			t.Errorf("%s is %d bytes, which is not far enough into it to carry its marker", fixture.File, len(body))
+
+			continue
+		}
+
+		head := body[fixture.At:]
+
+		if !bytes.HasPrefix(head, fixture.Marker) {
+			t.Errorf(
+				"%s carries % x at byte %d, want the %s marker % x: the recording this machine authored is the file the gate must keep",
+				fixture.File, head[:min(len(head), len(fixture.Marker))], fixture.At, fixture.Name, fixture.Marker,
+			)
+		}
 	}
 }
 
