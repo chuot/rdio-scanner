@@ -38,6 +38,7 @@ This policy applies to:
 - The rdio-scanner codebase
 - Documentation
 - Any related scripts or tooling included in the repository
+- The two mobile applications, the one on Google Play and the one on the App Store, whose reports these forms track
 
 It does **not** cover:
 

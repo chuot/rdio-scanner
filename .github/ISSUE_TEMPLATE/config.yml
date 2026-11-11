@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question or share an idea in Discussions
+    url: https://github.com/chuot/rdio-scanner/discussions
+    about: Where a how-to question, a general question, and an idea that is not yet a request belong.
+  - name: Report a security problem
+    url: https://github.com/chuot/rdio-scanner/security/policy
+    about: Where a suspected vulnerability goes instead of to an issue, with the private contact the policy publishes.

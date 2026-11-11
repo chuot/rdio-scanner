@@ -1,0 +1,179 @@
+name: Bug report
+description: A problem with the Rdio Scanner server, its administration interface, its listening screen, or its documentation.
+labels:
+  - bug
+assignees:
+  - chuot
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form is for the open-source project in this repository. A problem with either of the mobile applications belongs in the Native app report form instead, and a how-to question belongs in the Discussions link on the new-issue page.
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Before you write
+      description: Both answers change what the person who reads your report can do with it.
+      options:
+      - label: I searched the open and closed issues and found nothing that already covers this.
+        required: true
+      - label: This concerns the server, the administration interface, or the listening screen in a browser, not the mobile applications.
+        required: true
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which part of the project is the problem in?
+      description: Name the part you were using when you hit it. If you cannot tell, choose Not sure and the rest of your answers narrow it down.
+      options:
+      - The server (call ingest, audio conversion, uploads, the API, the flags)
+      - The administration interface
+      - The listening screen
+      - Documentation
+      - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Which version of Rdio Scanner are you running?
+      description: The binary prints it when run with the -version flag, the administration status read page shows it, and a release archive carries it in its own name.
+      placeholder: For example 8.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os-arch
+    attributes:
+      label: Which operating system and architecture runs the server?
+      description: This is the machine the server runs on, not the one you browse from.
+      options:
+      - FreeBSD (amd64)
+      - Linux (386)
+      - Linux (amd64)
+      - Linux (arm)
+      - Linux (arm64)
+      - macOS (amd64)
+      - macOS (arm64)
+      - Windows (amd64)
+    validations:
+      required: true
+  - type: dropdown
+    id: install-route
+    attributes:
+      label: How did the server get onto that machine?
+      description: Name the route you followed when you installed it.
+      options:
+      - A release archive from the releases page
+      - The container image on Docker Hub
+      - A container image built from this repository's Containerfile
+      - This repository's build tool
+      - A plain go build
+      - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: database
+    attributes:
+      label: Which database engine does the deployment use?
+      description: The administration interface shows the configured engine.
+      options:
+      - SQLite
+      - MariaDB
+      - MySQL
+      - PostgreSQL
+      - Not applicable
+      - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: listener-access
+    attributes:
+      label: How does a listener reach the server?
+      description: Choose every route that describes how you reach it. This is where a problem with audio, a broken page, or a refused connection usually lives.
+      multiple: true
+      options:
+      - The main port, on the default port 3000
+      - TLS with the certificate flags
+      - TLS with the automatic certificate
+      - Behind a reverse proxy
+      - Not applicable
+      - Not sure
+    validations:
+      required: false
+  - type: dropdown
+    id: recorder-route
+    attributes:
+      label: Which recorder feeds the server, and how does its audio get there?
+      description: One answer for the recorder and the route its audio takes. A deployment with no recorder attached is an answer here, not a blank.
+      options:
+      - Trunk Recorder - uploaded to the server through an upload endpoint
+      - Trunk Recorder - into a watched directory of type trunk-recorder
+      - RTLSDR-Airband - into a watched directory of type default, with the frequency in the name
+      - SDRTrunk - into a watched directory of type sdr-trunk
+      - voxcall - uploaded to the server through an upload endpoint
+      - ProScan - into a watched directory of type default
+      - DSDPlus Fast Lane - into a watched directory of type dsdplus
+      - Forwarded from another Rdio Scanner deployment
+      - Another recorder, not on this list
+      - Not applicable
+      - Not sure
+    validations:
+      required: false
+  - type: dropdown
+    id: browsers
+    attributes:
+      label: Which browsers show the problem?
+      description: Choose every browser you tried. A listening-screen problem can belong to the browser rather than to the server.
+      multiple: true
+      options:
+      - Chrome or another Chromium browser
+      - Firefox
+      - Safari
+      - Edge
+      - A phone or tablet browser
+      - Not applicable
+      - Not sure
+    validations:
+      required: false
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happens, and what should happen instead?
+      description: Write the behaviour you saw and the behaviour you expected. Both, because a report that only says something broke cannot be answered.
+      placeholder: The call you made, what came back, and what you expected
+    validations:
+      required: true
+      min_length: 20
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps from a clean start
+      description: Number the steps, starting from a deployment that is not already mid-problem, and name the option, flag, or endpoint each step uses.
+      placeholder: 1. Start the server with your usual flags 2. Open the listening screen 3. Compare what you hear with what you expect
+    validations:
+      required: true
+      min_length: 20
+  - type: textarea
+    id: logs
+    attributes:
+      label: The Warning and Error lines
+      description: Paste them as they read, with the timestamps. The same log appears in three places, the administration interface at /admin/, the console the server runs on through journalctl -u rdio-scanner, and the logs table in the database.
+      render: console
+    validations:
+      required: false
+  - type: upload
+    id: attachments
+    attributes:
+      label: A log file, a screenshot, or an exported configuration
+      description: Optional. A file says more than a transcript when the problem follows a specific recording or a specific configuration.
+    validations:
+      required: false
+      accept: .zip,.gz,.tar.gz,.png,.jpg,.jpeg,.webp,.pdf,.log,.txt,.json
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else
+      description: How often it happens, whether it started with an update, and anything you have already tried.
+    validations:
+      required: false

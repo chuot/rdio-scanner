@@ -10,7 +10,9 @@ Support requests or general questions are welcome on the [Rdio Scanner Discussio
 
 We use [GitHub Issues](https://github.com/chuot/rdio-scanner/issues) to track bugs and feature requests.
 
-Open an [issue](https://github.com/chuot/rdio-scanner/issues) that best describes the bug or feature request.
+Opening an issue starts from the [issue chooser](https://github.com/chuot/rdio-scanner/issues/new/choose), which offers three forms: **Bug report** for the server, the administration interface, the listening screen in a browser, and the documentation; **Feature request** for a change you would like this project to make; and **Native app report** for the two mobile applications, the one on Google Play and the one on the App Store, which are published outside this repository. A blank issue is not offered, so every report arrives through the form that asks what its own answers need.
+
+A suspected vulnerability goes to neither the chooser nor any of the three forms: the [security policy](https://github.com/chuot/rdio-scanner/security/policy) states how to report it privately.
 
 For **bugs**, describe the environment in which you encounter it and explain step by step how to reproduce them.
 

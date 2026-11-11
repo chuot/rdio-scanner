@@ -1,0 +1,124 @@
+name: Native app report
+description: A problem with, or a suggestion for, the Rdio Scanner application on Google Play or the App Store.
+labels:
+  - native
+assignees:
+  - chuot
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form is for the two mobile applications: the one published on Google Play and the one published on the App Store. Reports are tracked here because neither application is built from this repository, and no pull request here changes them. A problem with the server the application talks to belongs in the Bug report form, and a suspected vulnerability goes to the published security policy instead of to an issue.
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Before you write
+      description: Both answers change what the person who reads your report can do with it.
+      options:
+      - label: I searched the open and closed issues and found nothing that already covers this.
+        required: true
+      - label: This concerns the application on Google Play or the App Store. A problem with the server itself belongs in the Bug report form.
+        required: true
+    validations:
+      required: true
+  - type: dropdown
+    id: store
+    attributes:
+      label: Which application is this?
+      description: Name the store you installed it from. Choose Both when the same behaviour is wrong on each.
+      options:
+      - Android (Google Play)
+      - iOS (App Store)
+      - Both
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: Which version of the application is installed?
+      description: The application shows its own version in its settings screen, and no document here carries it.
+      placeholder: For example 1.0.3
+    validations:
+      required: true
+  - type: input
+    id: server-version
+    attributes:
+      label: Which version of the server does it talk to?
+      description: The administration status read page shows it, and whoever runs the deployment can also read it from the server itself. Leave it blank when you do not run the deployment.
+      placeholder: For example 8.0.0
+    validations:
+      required: false
+  - type: input
+    id: device
+    attributes:
+      label: Which device shows the problem?
+      description: The model, so the report can be matched to the hardware it appeared on.
+      placeholder: For example Pixel 9 or iPhone 16
+    validations:
+      required: true
+  - type: input
+    id: mobile-os
+    attributes:
+      label: Which mobile operating system, and which version?
+      description: The system name and the version the device reports about itself.
+      placeholder: For example Android 15 or iOS 18
+    validations:
+      required: true
+  - type: dropdown
+    id: server-access
+    attributes:
+      label: How does the application reach the server?
+      description: Choose every route you have tried. The network boundary is where most of these reports live.
+      multiple: true
+      options:
+      - On the same local network as the server
+      - Over the internet with HTTPS
+      - Over a mobile data network
+      - Through a hostname or a reverse proxy
+      - Not sure
+    validations:
+      required: false
+  - type: dropdown
+    id: browser-comparison
+    attributes:
+      label: Does the listening screen on the same device show the same thing?
+      description: Open the listening screen in a browser on this device. It reads the same server, so the answer separates an application problem from a server or network problem.
+      options:
+      - The same problem appears in the listening screen on this device
+      - The listening screen on this device works
+      - I have not tried
+    validations:
+      required: false
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happens, and what should happen instead?
+      description: Write the behaviour you saw and the behaviour you expected. A suggestion asks the same two things, what you cannot do today and what you would rather do.
+      placeholder: The screen you were on, what the application did, and what you expected
+    validations:
+      required: true
+      min_length: 20
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps from a fresh start
+      description: Number the steps starting from the moment you open the application, and name the screen or the call each step reaches.
+      placeholder: 1. Open the application 2. Go to the screen you named 3. Compare what you see with what you expect
+    validations:
+      required: true
+      min_length: 20
+  - type: upload
+    id: attachments
+    attributes:
+      label: A screenshot or a recording from the application
+      description: Optional. A short screen recording says more than a transcript when the problem follows a gesture or a screen.
+    validations:
+      required: false
+      accept: .png,.jpg,.jpeg,.webp,.mp4,.mov,.webm,.log,.txt
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else
+      description: How often it happens, whether it started after an update, and anything you have already tried.
+    validations:
+      required: false

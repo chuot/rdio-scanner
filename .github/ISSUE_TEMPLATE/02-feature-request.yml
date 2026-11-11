@@ -1,0 +1,106 @@
+name: Feature request
+description: A change you would like the open-source Rdio Scanner project to make.
+labels:
+  - enhancement
+assignees:
+  - chuot
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form is for the open-source project in this repository. Something you want either of the mobile applications to do belongs in the Native app report form instead, and an idea you have not shaped yet belongs in the Discussions link on the new-issue page.
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Before you write
+      description: Both answers change how the owner can treat the request.
+      options:
+      - label: I searched the open and closed issues and the Discussions, and found nothing that already asks for this.
+        required: true
+      - label: This concerns the open-source project in this repository, not the mobile applications.
+        required: true
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which part of the project would this change?
+      description: Name the part you would use it in. If you cannot tell, choose Not sure and the rest of your answers narrow it down.
+      options:
+      - The server (call ingest, audio conversion, uploads, the API, the flags)
+      - The administration interface
+      - The listening screen
+      - Documentation
+      - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is the problem you have today?
+      description: Describe what you cannot do now, before describing any feature. A request that starts from a problem is one the person who reads it can answer.
+      placeholder: The situation you are in, and what gets in the way of it
+    validations:
+      required: true
+      min_length: 30
+  - type: textarea
+    id: use-case
+    attributes:
+      label: What would you do with it, and how often?
+      description: A request with a use case attached is a request that can be scheduled. Without one, the honest answer is usually a how-to reply.
+      placeholder: How often it would matter, over a day, a week, or a deployment
+    validations:
+      required: true
+      min_length: 30
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: How you would solve it
+      description: Optional. Write it if you have a shape in mind, and leave it blank if you would rather the solution follow from the problem.
+      placeholder: The option, screen, or endpoint you would add, and what it would do
+    validations:
+      required: false
+      min_length: 20
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
+      description: The workaround you live with, and any other approach you considered and set aside.
+      placeholder: The route you take now, and why it is not enough
+    validations:
+      required: false
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Which release targets would this change help?
+      description: Choose Every release target this project publishes when the change helps the whole release matrix, or name the targets you run yourself.
+      multiple: true
+      options:
+      - Every release target this project publishes
+      - FreeBSD (amd64)
+      - Linux (386)
+      - Linux (amd64)
+      - Linux (arm)
+      - Linux (arm64)
+      - macOS (amd64)
+      - macOS (arm64)
+      - Windows (amd64)
+      - Not sure
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Which version do you run today?
+      description: The binary prints it when run with the -version flag, and the administration status read page shows it. It tells the owner what the request would have to work against.
+      placeholder: For example 8.0.0
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: How you run the deployment
+      description: The recorder, the database engine, how a listener reaches the server, and the machine it all runs on. A typical deployment runs on a Raspberry Pi 3 or newer, and disk is what needs budgeting.
+      placeholder: Recorder and ingest route, database engine, listener route, and the machine
+    validations:
+      required: false
