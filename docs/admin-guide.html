@@ -613,8 +613,10 @@ footer.site .signoff {
     From either path, the ingest is the same. It resolves the system, site, talkgroup, and unit named in the
     metadata against your configuration: with <em>Auto populate</em> on, an identity the configuration does
     not know is created on the spot; with it off, the call is refused, and the log says why. Where the
-    <em>Audio conversion</em> option asks for it, the ingest converts the audio to AAC in an m4a container —
-    small files that play in a browser — and files the call, with its audio, in the database.
+    <em>Audio conversion</em> option asks for it, the ingest reads the audio however the recording arrived and
+    writes it as AAC in an m4a container — small files that play in a browser — and files the call, with its
+    audio, in the database. The server works on the audio itself, not on the file the source sent, so a
+    recording does not have to arrive in a format a browser plays.
   </p>
 
   <aside class="note">
@@ -2460,8 +2462,8 @@ rm -f ${basename}.*</code></pre>
     <thead><tr><th scope="col">Mode</th><th scope="col">What the server does with a recording</th></tr></thead>
     <tbody>
       <tr><td>Disabled</td><td>Stores the recording exactly as it arrived and runs nothing. A recording the browser cannot play is a recording the listener cannot play.</td></tr>
-      <tr><td>Enabled without normalization</td><td>Converts to AAC at 32 kbit/s. Loudness is whatever the recorder captured.</td></tr>
-      <tr><td>Enabled with normalization</td><td>Converts, and applies ffmpeg's loudness normalization to the result, with a three-second pad so a short transmission is not clipped by the filter.</td></tr>
+      <tr><td>Enabled without normalization</td><td>Reads whatever audio the source sent and writes it as AAC at 32 kbit/s in an m4a container. Loudness is whatever the recorder captured.</td></tr>
+      <tr><td>Enabled with normalization</td><td>Reads and writes the same way, and applies ffmpeg's loudness normalization to the result, with a three-second pad so a short transmission is not clipped by the filter.</td></tr>
       <tr><td>Enabled with loud normalization</td><td>The same, with the loudness target fixed: −16 LUFS integrated, −1.5 dBTP true peak, 11 LU loudness range. This is the mode for a deployment whose recordings come from recorders with wildly different gains.</td></tr>
     </tbody>
   </table>
@@ -2483,6 +2485,10 @@ rm -f ${basename}.*</code></pre>
     sent, so playback depends on what your browser accepts — and the
     <a href="#ch-27-reference">troubleshooting checklist</a> starts by
     switching the mode back to <strong>MP3</strong> if calls stop appearing.</li>
+    <li>a recording whose audio the converter cannot read is stored exactly as
+    it arrived, the call is still filed, and the <code>ffmpeg</code> entry the
+    ingest writes carries the reason the converter gave, at the end of it: see
+    <a href="#ch-14-logs">the log</a>.</li>
   </ul>
 
   <h3>Retention</h3>
