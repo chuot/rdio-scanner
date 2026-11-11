@@ -391,3 +391,152 @@ func TestAStoppedCallerKeepsTheOriginalRecording(t *testing.T) {
 		t.Errorf("the recording was changed by a conversion its caller stopped")
 	}
 }
+
+// aRecordingBuiltWithTheMachine writes a file with the machine's own ffmpeg, from
+// its tone and colour sources: the containers these three tests are about are not
+// fixtures in the repository, they are the shape of a recording tool's output.
+func aRecordingBuiltWithTheMachine(t *testing.T, name string, args ...string) []byte {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), name)
+
+	command := exec.Command("ffmpeg", append([]string{"-hide_banner", "-loglevel", "error"}, append(args, append([]string{"-y"}, path)...)...)...)
+
+	out, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("building %s: %v\n%s", name, err, out)
+	}
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading %s: %v", name, err)
+	}
+
+	if len(body) == 0 {
+		t.Fatalf("building %s wrote nothing", name)
+	}
+
+	return body
+}
+
+// aRecordingCarryingVideo is a one second tone with a 64x64 black video stream beside it, the
+// shape a recording tool that writes video and audio into one mp4 produces. The index is written
+// at the front of the file, because the server hands every recording to ffmpeg on a pipe with no
+// way back to the head of it.
+func aRecordingCarryingVideo(t *testing.T) []byte {
+	t.Helper()
+
+	return aRecordingBuiltWithTheMachine(t, "camera.mp4",
+		"-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+		"-f", "lavfi", "-i", "color=c=black:s=64x64:r=10:duration=1",
+		"-map", "0:a", "-map", "1:v",
+		"-c:a", "aac", "-c:v", "mpeg4", "-shortest",
+		"-movflags", "+faststart",
+	)
+}
+
+// aRecordingWithNoAudio is the video stream on its own: a file that arrives as a
+// recording and carries nothing a call could hear.
+func aRecordingWithNoAudio(t *testing.T) []byte {
+	t.Helper()
+
+	return aRecordingBuiltWithTheMachine(t, "camera.mp4",
+		"-f", "lavfi", "-i", "color=c=black:s=64x64:r=10:duration=1",
+		"-c:v", "mpeg4",
+		"-movflags", "+faststart",
+	)
+}
+
+// aRecordingWithTwoAudioStreams is the Matroska file with a mono one second tone as its first
+// audio stream and a stereo two second tone as its second, and the default flag on the second:
+// the file ffmpeg's own choice of the best stream answers with the second one.
+func aRecordingWithTwoAudioStreams(t *testing.T) []byte {
+	t.Helper()
+
+	return aRecordingBuiltWithTheMachine(t, "two.mkv",
+		"-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+		"-f", "lavfi", "-i", "sine=frequency=660:duration=2",
+		"-filter_complex", "[1:a]pan=stereo|c0=c0|c1=c0[stereo]",
+		"-map", "0:a", "-map", "[stereo]",
+		"-c:a", "aac",
+		"-disposition:a:0", "0",
+		"-disposition:a:1", "default",
+	)
+}
+
+// TestARecordingThatCarriesVideoBesideItsAudioIsStoredAsItsAudio is the mp4 a
+// recording tool wrote with its picture beside its sound: the call is stored as
+// its audio, because this build compiles no video encoder and has no business
+// keeping a picture.
+func TestARecordingThatCarriesVideoBesideItsAudioIsStoredAsItsAudio(t *testing.T) {
+	converter := installedConverter(t)
+
+	in := ports.AudioFile{Filename: "camera.mp4", Mime: "audio/mp4", Data: aRecordingCarryingVideo(t)}
+
+	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
+	if err != nil {
+		t.Fatalf("converting a recording that carries video beside its audio: %v", err)
+	}
+
+	streams := probe(t, writeConverted(t, converted), "-show_entries", "stream=codec_type", "-of", "csv=p=0")
+
+	if streams != "audio" {
+		t.Errorf("the stored recording carries the streams %q, want its audio alone: the file it was given carries a one second tone and a 64x64 video stream, and this build compiles no video encoder", streams)
+	}
+}
+
+// TestARecordingWithNoAudioStreamIsRefusedAndKeepsWhatItArrivedWith is the file
+// that arrived as a recording and carries nothing a call could hear: the failure
+// is reported, and the bytes the call was given are kept.
+func TestARecordingWithNoAudioStreamIsRefusedAndKeepsWhatItArrivedWith(t *testing.T) {
+	converter := installedConverter(t)
+
+	body := aRecordingWithNoAudio(t)
+
+	in := ports.AudioFile{Filename: "camera.mp4", Mime: "audio/mp4", Data: body}
+
+	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
+	if err == nil {
+		t.Fatalf("a recording with no audio stream was stored as %q %q in %d bytes, want the conversion refused: a recording with nothing to hear is not a call", converted.Filename, converted.Mime, len(converted.Data))
+	}
+
+	if !strings.Contains(err.Error(), "ffmpeg") {
+		t.Errorf("Convert = %v, want what the program said about the recording", err)
+	}
+
+	if converted.Filename != "camera.mp4" || !bytes.Equal(converted.Data, body) {
+		t.Errorf("the recording is presented as %q, want the bytes it arrived with kept when nothing converted them", converted.Filename)
+	}
+}
+
+// TestARecordingWithTwoAudioStreamsStoresTheFirstOne is the recording whose file
+// carries more than one audio stream: the stored call is the server's choice, the
+// stream the file lists first, and not ffmpeg's choice of the stream it rates the
+// best one.
+func TestARecordingWithTwoAudioStreamsStoresTheFirstOne(t *testing.T) {
+	converter := installedConverter(t)
+
+	in := ports.AudioFile{Filename: "two.mkv", Mime: "audio/x-matroska", Data: aRecordingWithTwoAudioStreams(t)}
+
+	converted, err := converter.Convert(context.Background(), in, domain.AudioConversionEnabled, nil)
+	if err != nil {
+		t.Fatalf("converting a recording with two audio streams: %v", err)
+	}
+
+	path := writeConverted(t, converted)
+
+	channels := probe(t, path, "-show_entries", "stream=channels", "-of", "csv=p=0")
+
+	raw := probe(t, path, "-show_entries", "format=duration", "-of", "default=nw=1:nk=1")
+
+	duration, err := time.ParseDuration(raw + "s")
+	if err != nil {
+		t.Fatalf("the stored recording's duration is %q: %v", raw, err)
+	}
+
+	const theFirstAudioStream = 1 * time.Second
+
+	if channels != "1" || duration < theFirstAudioStream/2 || duration > 3*theFirstAudioStream/2 {
+		t.Errorf("the stored recording has %q channel and lasts %v, want the first audio stream: the file it was given carries a mono one second tone first and a stereo two second tone marked the default stream, which is the stream ffmpeg picks when it is left to choose", channels, duration)
+	}
+}

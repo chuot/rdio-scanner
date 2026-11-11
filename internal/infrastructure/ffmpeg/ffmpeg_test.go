@@ -19,9 +19,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -533,6 +535,74 @@ func TestTheDateTagOfACallStampedByTheClockNamesOnlyTheInstant(t *testing.T) {
 
 	if strings.Contains(date, " m=") {
 		t.Errorf("the date tag = %q, want only the instant the call happened: the reading of the server's own clock is debug, and it is written into a file that outlives the server", date)
+	}
+}
+
+// TestTheConverterAsksForTheAudioStreamAndNothingElse is the whole argument list
+// the program is given: the recording arrives on the pipe, the container's video
+// stream is set aside because this build compiles no video encoder, the first
+// audio stream is named so that the stored recording is this server's choice and
+// not ffmpeg's choice of the best stream it can find, and the tags, filters and
+// output switches follow in the order the stored recording is built from them.
+func TestTheConverterAsksForTheAudioStreamAndNothingElse(t *testing.T) {
+	tags := &ports.AudioMetadata{
+		Album:  "Ground",
+		Artist: "Car 4",
+		Date:   time.Date(2026, 10, 6, 16, 0, 0, 0, time.UTC),
+		Genre:  "Dispatch",
+		Title:  "Dispatch 1",
+	}
+
+	levels := []struct {
+		name     string
+		mode     uint
+		loudnorm bool
+		filter   string
+	}{
+		{"the level that runs no filter", domain.AudioConversionEnabled, false, ""},
+		{"the plain level", domain.AudioConversionEnabled, true, ""},
+		{"the norm level", domain.AudioConversionEnabledNorm, true, "apad=whole_dur=3s,loudnorm"},
+		{"the loudnorm level", domain.AudioConversionEnabledLoudNorm, true, "apad=whole_dur=3s,loudnorm=I=-16:TP=-1.5:LRA=11"},
+	}
+
+	for _, level := range levels {
+		for _, call := range []struct {
+			name     string
+			metadata *ports.AudioMetadata
+		}{
+			{"a call on a talkgroup with a tag", tags},
+			{"a call on a talkgroup with no tag", nil},
+		} {
+			want := []string{"-i", "-", "-vn", "-map", "0:a:0"}
+
+			if call.metadata != nil {
+				want = append(want,
+					"-metadata", fmt.Sprintf("album=%v", call.metadata.Album),
+					"-metadata", fmt.Sprintf("artist=%v", call.metadata.Artist),
+					"-metadata", fmt.Sprintf("date=%v", call.metadata.Date),
+					"-metadata", fmt.Sprintf("genre=%v", call.metadata.Genre),
+					"-metadata", fmt.Sprintf("title=%v", call.metadata.Title),
+				)
+			}
+
+			if level.filter != "" {
+				want = append(want, "-af", level.filter)
+			}
+
+			want = append(want,
+				"-c:a", "aac",
+				"-b:a", "32k",
+				"-movflags", "frag_keyframe+empty_moov",
+				"-f", "ipod",
+				"-",
+			)
+
+			got := Arguments(level.mode, call.metadata, level.loudnorm)
+
+			if !slices.Equal(got, want) {
+				t.Errorf("%s for %s: the program is given %q, want the recording read from the pipe with its video stream set aside and its first audio stream named, and nothing else moved", level.name, call.name, got)
+			}
+		}
 	}
 }
 

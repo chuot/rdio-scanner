@@ -124,11 +124,17 @@ func hasLoudnorm(filters string) bool {
 }
 
 // Arguments returns the argument list the converter gives ffmpeg for one
-// recording: the recording arrives on the pipe and leaves on it, and the
-// tags and filters are the ones this recording and this ffmpeg ask for. The
-// build's ffmpeg check runs against this same list.
+// recording: the recording arrives on the pipe and leaves on it, its first audio
+// stream is the one stored and its video stream is left out, and the tags and
+// filters are the ones this recording and this ffmpeg ask for. The build's ffmpeg
+// check runs against this same list.
 func Arguments(mode uint, metadata *ports.AudioMetadata, loudnorm bool) []string {
-	args := []string{"-i", "-"}
+	// The recording's audio is what this server stores, and it is named rather than
+	// left to ffmpeg: a container that carries video beside its audio is refused by a
+	// build that compiles no video encoder unless the video stream is set aside first,
+	// and a file with more than one audio stream otherwise gets whichever stream ffmpeg
+	// rates the best one instead of the one this server picked.
+	args := []string{"-i", "-", "-vn", "-map", "0:a:0"}
 
 	// The tags are written only for a talkgroup that has a tag.
 	if metadata != nil {
