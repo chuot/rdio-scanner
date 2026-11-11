@@ -556,11 +556,40 @@ func TestTheManifestCarriesNoDigestOfAnyProgram(t *testing.T) {
 	}
 }
 
+// An encoder with no matching decoder is a build that writes a recording it cannot read back. The server
+// converts to AAC, and a recording that already arrived as AAC, or as an m4a this same server wrote earlier,
+// needs the decoder half: without it the run stops at "Decoding requested, but no decoder found for: aac"
+// and nothing is converted.
+func TestTheRecipeCarriesADecoderForEveryEncoderItEnables(t *testing.T) {
+	recipe := ReadManifest().Recipe
+
+	decoders := map[string]bool{}
+
+	for _, flag := range recipe {
+		if name, named := strings.CutPrefix(flag, "--enable-decoder="); named {
+			decoders[name] = true
+		}
+	}
+
+	for _, flag := range recipe {
+		name, encoder := strings.CutPrefix(flag, "--enable-encoder=")
+		if !encoder {
+			continue
+		}
+
+		if !decoders[name] {
+			t.Errorf("the recipe enables the %s encoder and no %s decoder, so the recording it writes is audio this build cannot read", name, name)
+		}
+	}
+}
+
 // What the converter asks of ffmpeg is what the recipe has to keep enabling: leaving one of these out
 // is the kind of edit configure accepts and the conversion then fails. The two buffer filters are not on
 // this list and the recipe does not name them, because ffmpeg compiles abuffer and abuffersink with no
 // configure guard of its own and every build carries them — which is why the pinned release answers
-// --enable-filter=abuffer and --enable-filter=abuffersink with "did not match anything".
+// --enable-filter=abuffer and --enable-filter=abuffersink with "did not match anything". The input side is
+// the containers and codecs a deployment can hand the server, and not only the wav and mp3 the converter
+// was first built for.
 func TestTheRecipeCarriesWhatTheConverterAsksOfFfmpeg(t *testing.T) {
 	recipe := ReadManifest().Recipe
 
@@ -573,6 +602,23 @@ func TestTheRecipeCarriesWhatTheConverterAsksOfFfmpeg(t *testing.T) {
 		"--enable-filter=apad",
 		"--enable-filter=loudnorm",
 		"--enable-muxer=ipod",
+
+		"--enable-demuxer=aac",
+		"--enable-demuxer=aiff",
+		"--enable-demuxer=asf",
+		"--enable-demuxer=au",
+		"--enable-demuxer=caf",
+		"--enable-demuxer=flac",
+		"--enable-demuxer=matroska",
+		"--enable-demuxer=ogg",
+		"--enable-demuxer=voc",
+		"--enable-demuxer=w64",
+
+		"--enable-decoder=aac",
+		"--enable-decoder=flac",
+		"--enable-decoder=mp2",
+		"--enable-decoder=opus",
+		"--enable-decoder=vorbis",
 	}
 
 	for _, flag := range want {
@@ -582,10 +628,11 @@ func TestTheRecipeCarriesWhatTheConverterAsksOfFfmpeg(t *testing.T) {
 	}
 }
 
-// The pinned release reports these three switches as matching no component at all: configure prints
+// The pinned release reports these four switches as matching no component at all: configure prints
 // "Option --enable-... did not match anything" for each one, and the trimmed build converts audio with the
-// same codec list and the same recording whether they are carried or not. A switch that selects nothing is
-// indistinguishable, to the next reader, from a switch a conversion depends on, so it is not carried.
+// same codec list and the same recording whether they are carried or not. pcm_ulaw is not the ulaw decoder,
+// which the release names pcm_mulaw, and a switch that selects nothing is indistinguishable, to the next
+// reader, from a switch a conversion depends on, so it is not carried.
 func TestTheRecipeCarriesNoSwitchThatSelectsNothing(t *testing.T) {
 	recipe := ReadManifest().Recipe
 
@@ -593,6 +640,7 @@ func TestTheRecipeCarriesNoSwitchThatSelectsNothing(t *testing.T) {
 		"--enable-muxer=json",
 		"--enable-filter=abuffer",
 		"--enable-filter=abuffersink",
+		"--enable-decoder=pcm_ulaw",
 	} {
 		if hasFlag(recipe, selectsNothing) {
 			t.Errorf("the recipe carries %s, which the pinned release reports as matching nothing", selectsNothing)
@@ -659,30 +707,66 @@ func TestTheRecipeEnablesNoVideoComponent(t *testing.T) {
 // encoder, muxers and filters the converter's argument list runs, and the pipe, fd and file protocols
 // the server hands the recording in and out on. ffprobe answers with its own json writer and not with a
 // muxer the recipe enables, and ffmpeg compiles its buffer filters without a switch, so neither belongs
-// on this list.
+// on this list. The demuxers and decoders below are the containers and codecs a deployment can hand the
+// server, which is wider than the wav and mp3 the converter was first built for: a recording that arrives
+// as an m4a, an Ogg, a Matroska or an ASF file, or as raw ADTS, has to be read before it is written out
+// again as AAC.
 var theAudioComponents = map[string]bool{
 	"protocol=pipe": true,
 	"protocol=fd":   true,
 	"protocol=file": true,
 
-	"demuxer=wav": true,
-	"demuxer=mp3": true,
-	"demuxer=mov": true,
+	"demuxer=wav":      true,
+	"demuxer=mp3":      true,
+	"demuxer=mov":      true,
+	"demuxer=aac":      true,
+	"demuxer=flac":     true,
+	"demuxer=ogg":      true,
+	"demuxer=matroska": true,
+	"demuxer=asf":      true,
+	"demuxer=aiff":     true,
+	"demuxer=caf":      true,
+	"demuxer=au":       true,
+	"demuxer=voc":      true,
+	"demuxer=w64":      true,
 
-	"decoder=pcm_s16le": true,
-	"decoder=pcm_s16be": true,
-	"decoder=pcm_s24le": true,
-	"decoder=pcm_f32le": true,
-	"decoder=pcm_mulaw": true,
-	"decoder=pcm_alaw":  true,
-	"decoder=mp3float":  true,
-	"decoder=mp3":       true,
-	"encoder=aac":       true,
-	"muxer=ipod":        true,
-	"filter=aformat":    true,
-	"filter=aresample":  true,
-	"filter=apad":       true,
-	"filter=loudnorm":   true,
+	"decoder=pcm_s16le":     true,
+	"decoder=pcm_s16be":     true,
+	"decoder=pcm_s24le":     true,
+	"decoder=pcm_s24be":     true,
+	"decoder=pcm_s32le":     true,
+	"decoder=pcm_s32be":     true,
+	"decoder=pcm_f32le":     true,
+	"decoder=pcm_f32be":     true,
+	"decoder=pcm_f64le":     true,
+	"decoder=pcm_u8":        true,
+	"decoder=pcm_s8":        true,
+	"decoder=pcm_u16le":     true,
+	"decoder=pcm_u16be":     true,
+	"decoder=pcm_mulaw":     true,
+	"decoder=pcm_alaw":      true,
+	"decoder=mp3float":      true,
+	"decoder=mp3":           true,
+	"decoder=mp2float":      true,
+	"decoder=mp2":           true,
+	"decoder=aac":           true,
+	"decoder=aac_fixed":     true,
+	"decoder=flac":          true,
+	"decoder=vorbis":        true,
+	"decoder=opus":          true,
+	"decoder=wmav1":         true,
+	"decoder=wmav2":         true,
+	"decoder=gsm":           true,
+	"decoder=gsm_ms":        true,
+	"decoder=adpcm_ima_wav": true,
+	"decoder=adpcm_ima_qt":  true,
+	"decoder=adpcm_ms":      true,
+	"encoder=aac":           true,
+	"muxer=ipod":            true,
+	"filter=aformat":        true,
+	"filter=aresample":      true,
+	"filter=apad":           true,
+	"filter=loudnorm":       true,
 }
 
 // theComponentKinds are the component names configure is given with `--enable-<kind>=<name>`. A flag
