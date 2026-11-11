@@ -2234,3 +2234,1045 @@ func TestNoColumnListIsIndexedTwice(t *testing.T) {
 		}
 	}
 }
+
+// The plan assertions below ask the migrated database how it would run each statement the server issues
+// for the call history, and read the answer out of the database rather than out of a copy of an earlier
+// run. Each placeholder of an inventoried statement is filled with a value the fixture holds for the
+// column that placeholder is compared with, so the plan a test reads is the plan the read gets when the
+// server runs it with its own values.
+
+const (
+	// coveringKeyIndex names the key every history read is written against.
+	coveringKeyIndex = "calls_timestamp_cover"
+
+	// shippedPairIndexName names the key the shipped database already carries over the system, site,
+	// talkgroup and timestamp of a call.
+	shippedPairIndexName = "calls_idx"
+
+	// delayedKeyIndex names the key the delayed table is read, joined and dropped through.
+	delayedKeyIndex = "delayed_call"
+)
+
+// queryBuiltIndexMarkers name the ways a database answers a query with an index it made for that query
+// alone. None of them appears in a plan over a database that carries the set.
+var queryBuiltIndexMarkers = []string{
+	"AUTOMATIC COVERING INDEX",
+	"AUTOMATIC PARTIAL COVERING INDEX",
+	"BLOOM FILTER",
+}
+
+// historyPlanValues answers, for each column the inventoried statements compare a placeholder with, the
+// values the migrated fixture holds for that column, in the order the fixture stores them.
+func historyPlanValues(t *testing.T, db *sql.DB, span historySpan) map[string][]any {
+	t.Helper()
+
+	values := map[string][]any{
+		"LIMIT":     {25},
+		"OFFSET":    {0},
+		"timestamp": {millisOf(span.dayFrom), millisOf(span.newest)},
+	}
+
+	for _, column := range []struct{ table, name string }{
+		{table: "systems", name: "systemId"},
+		{table: "systems", name: "systemRef"},
+		{table: "talkgroups", name: "talkgroupId"},
+		{table: "talkgroups", name: "talkgroupRef"},
+		{table: "sites", name: "siteRef"},
+		{table: "calls", name: "callId"},
+		{table: "groups", name: "groupId"},
+		{table: "tags", name: "tagId"},
+	} {
+		query := `SELECT "` + column.name + `" FROM "` + column.table + `"`
+
+		rows, err := db.Query(query)
+		if err != nil {
+			t.Fatalf("reading the %s values the fixture holds: %v", column.name, err)
+		}
+
+		found := []any{}
+
+		for rows.Next() {
+			var value int64
+
+			if err := rows.Scan(&value); err != nil {
+				rows.Close()
+
+				t.Fatalf("reading a %s value the fixture holds: %v", column.name, err)
+			}
+
+			found = append(found, value)
+		}
+
+		rows.Close()
+
+		if err := rows.Err(); err != nil {
+			t.Fatalf("reading the %s values the fixture holds: %v", column.name, err)
+		}
+
+		if len(found) == 0 {
+			t.Fatalf("the fixture holds no value of %s.%s to bind", column.table, column.name)
+		}
+
+		values[column.name] = found
+	}
+
+	return values
+}
+
+// planArgumentsFor fills every placeholder of one inventoried statement with a value the fixture holds
+// for the column that placeholder is compared with. Where a statement compares one column several times,
+// the fixture's own values for it are used in turn, so a filter naming three talkgroups is measured
+// against three talkgroups the fixture stores.
+func planArgumentsFor(statement string, values map[string][]any) []any {
+	args := []any{}
+
+	taken := map[string]int{}
+
+	for {
+		next := strings.Index(statement, "?")
+		if next < 0 {
+			return args
+		}
+
+		column := placeholderColumn(statement[:next])
+
+		statement = statement[next+1:]
+
+		cycle := values[column]
+		if len(cycle) == 0 {
+			cycle = []any{1}
+		}
+
+		args = append(args, cycle[taken[column]%len(cycle)])
+
+		taken[column]++
+	}
+}
+
+// placeholderColumn answers which column the placeholder that follows a statement's prefix is compared
+// with, which is the last quoted name that prefix carries. A limit and an offset are the two placeholders
+// a statement carries without a column in front of them.
+func placeholderColumn(prefix string) string {
+	if strings.HasSuffix(prefix, "LIMIT ") {
+		return "LIMIT"
+	}
+
+	if strings.HasSuffix(prefix, "OFFSET ") {
+		return "OFFSET"
+	}
+
+	end := strings.LastIndex(prefix, `"`)
+	if end < 0 {
+		return ""
+	}
+
+	start := strings.LastIndex(prefix[:end], `"`)
+	if start < 0 {
+		return ""
+	}
+
+	return prefix[start+1 : end]
+}
+
+// planForStatement answers how the database would run one statement, in the shape the measurements record
+// a plan: each step of the answer joined into one text.
+func planForStatement(t *testing.T, db *sql.DB, statement string, values map[string][]any) string {
+	t.Helper()
+
+	return strings.Join(queryPlan(t, db, statement, planArgumentsFor(statement, values)...), " / ")
+}
+
+// planForLabel explains the inventoried statement one label names.
+func planForLabel(t *testing.T, db *sql.DB, inventory []inventoriedStatement, values map[string][]any, label string) string {
+	t.Helper()
+
+	return planForStatement(t, db, inventoriedStatementFor(t, inventory, label).statement, values)
+}
+
+// inventoriedStatementFor answers the one inventoried statement a label names.
+func inventoriedStatementFor(t *testing.T, inventory []inventoriedStatement, label string) inventoriedStatement {
+	t.Helper()
+
+	for _, entry := range inventory {
+		if entry.label == label {
+			return entry
+		}
+	}
+
+	t.Fatalf("the statement inventory carries no statement labelled %s", label)
+
+	return inventoriedStatement{}
+}
+
+// statementOutsideTheInventory answers the one statement outside the inventoried list that carries the
+// given text, which is how a test reads the plan of a guard or a configuration read that no measurement
+// times.
+func statementOutsideTheInventory(t *testing.T, outside []unmeasuredStatement, fragment string) string {
+	t.Helper()
+
+	found := []string{}
+
+	for _, entry := range outside {
+		if strings.Contains(entry.statement, fragment) {
+			found = append(found, entry.statement)
+		}
+	}
+
+	if len(found) != 1 {
+		t.Fatalf("%d statements outside the inventoried list carry %s, want exactly one: %v",
+			len(found), fragment, found)
+	}
+
+	return found[0]
+}
+
+// planWalksIndex reports whether the plan reaches the named index at all, whichever step of it does so.
+func planWalksIndex(plan, index string) bool {
+	return strings.Contains(plan, "INDEX "+index)
+}
+
+// planSeeksIndexOn reports whether the plan seeks the named index with a constraint on the given column,
+// which is what a key does when it answers a filter rather than only covering the rows it walks.
+func planSeeksIndexOn(plan, index, column string) bool {
+	return strings.Contains(plan, "INDEX "+index+" ("+column)
+}
+
+// assertNothingBuiltForTheQuery fails when a plan answers with an index the database made for that query
+// instead of reaching a key the set names.
+func assertNothingBuiltForTheQuery(t *testing.T, label, plan string) {
+	t.Helper()
+
+	for _, marker := range queryBuiltIndexMarkers {
+		if strings.Contains(plan, marker) {
+			t.Errorf("the %s read would run as %s: %s means the database builds an index for this query "+
+				"instead of reaching one the set names", label, plan, marker)
+		}
+	}
+}
+
+// historyReadSortsTheHistory reports whether a read that puts its rows in timestamp order needs a sort of
+// its own to do it. A grouped aggregate orders its own groups, which is not the history being sorted.
+func historyReadSortsTheHistory(plan, statement string) bool {
+	if strings.Contains(statement, "GROUP BY") {
+		return false
+	}
+
+	return strings.Contains(plan, "USE TEMP B-TREE FOR ORDER BY")
+}
+
+// namedCallHistoryKeys lists every key a plan over the call history is allowed to reach: the ten members of
+// the set, and the pair key the shipped schema already declares over the calls table.
+func namedCallHistoryKeys() []string {
+	names := []string{shippedPairIndexName}
+
+	return append(names, setMemberNames()...)
+}
+
+// planIndexNames lists the keys a plan reaches, in the order its steps reach them, without repeating one.
+func planIndexNames(plan string) []string {
+	names := []string{}
+
+	for _, step := range strings.Split(plan, " / ") {
+		_, rest, found := strings.Cut(step, " USING COVERING INDEX ")
+
+		if !found {
+			_, rest, found = strings.Cut(step, " USING INDEX ")
+
+			if !found {
+				continue
+			}
+		}
+
+		name, _, _ := strings.Cut(rest, " ")
+
+		name, _, _ = strings.Cut(name, "(")
+
+		if name == "" || hasString(names, name) {
+			continue
+		}
+
+		names = append(names, name)
+	}
+
+	return names
+}
+
+// planSeeksAPrimaryKey reports whether a plan reaches a table through the key that table is stored in.
+func planSeeksAPrimaryKey(plan string) bool {
+	return strings.Contains(plan, "USING INTEGER PRIMARY KEY") || strings.Contains(plan, "USING INDEX sqlite_autoindex")
+}
+
+// planStepsForTable answers the steps of a plan that read one table or the alias it is read under.
+func planStepsForTable(plan, table string) []string {
+	steps := []string{}
+
+	for _, step := range strings.Split(plan, " / ") {
+		fields := strings.Fields(step)
+
+		if len(fields) < 2 {
+			continue
+		}
+
+		if fields[0] != "SCAN" && fields[0] != "SEARCH" {
+			continue
+		}
+
+		if fields[1] != table {
+			continue
+		}
+
+		steps = append(steps, strings.TrimSpace(step))
+	}
+
+	return steps
+}
+
+// planWalksTablesWithoutAnIndex answers the steps of a plan that read a table from its rows instead of from a
+// key, which is what a table walk looks like in a plan.
+func planWalksTablesWithoutAnIndex(plan string) []string {
+	walked := []string{}
+
+	for _, step := range strings.Split(plan, " / ") {
+		fields := strings.Fields(step)
+
+		if len(fields) < 2 {
+			continue
+		}
+
+		if fields[0] != "SCAN" && fields[0] != "SEARCH" {
+			continue
+		}
+
+		if strings.Contains(step, " USING ") {
+			continue
+		}
+
+		walked = append(walked, strings.TrimSpace(step))
+	}
+
+	return walked
+}
+
+// planScansAKey reports whether a plan reads a key in its own order, which is what a read that a key's column
+// list cannot narrow still gets when the key covers the columns it needs.
+func planScansAKey(plan, table string) bool {
+	for _, step := range planStepsForTable(plan, table) {
+		if strings.HasPrefix(step, "SCAN ") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// planConstraintForTable answers the constraints one plan step narrows its key with, which are the parts of a
+// read's filters a key answers by seeking instead of by walking.
+func planConstraintForTable(plan, table string) string {
+	for _, step := range planStepsForTable(plan, table) {
+		start := strings.Index(step, " (")
+		if start < 0 {
+			continue
+		}
+
+		return strings.TrimSuffix(strings.TrimPrefix(step[start:], " ("), ")")
+	}
+
+	return ""
+}
+
+// assertPlanHasStep fails when a plan does not carry one step exactly as the measurements recorded it.
+func assertPlanHasStep(t *testing.T, label, plan, want string) {
+	t.Helper()
+
+	if !hasString(strings.Split(plan, " / "), want) {
+		t.Errorf("the %s read would run as %s, want a step of %s", label, plan, want)
+	}
+}
+
+// TestEveryHistoryReadReachesItsIndex asks the migrated database how it would run every read the server issues
+// for the call history. Each read reaches a key the set names or the key a table is stored in, no read walks a
+// table the set gives a key, no read sorts the history with a tree built for that query, and no plan carries a
+// key the database made for the query. A calls key led by systemId, which is a shape the measurements turned
+// down, is found by the probe, left alone by the step, and changes no read's plan.
+func TestEveryHistoryReadReachesItsIndex(t *testing.T) {
+	db := migratedLegacyDatabase(t)
+
+	s := newStore(db, DialectSqlite)
+
+	ctx := context.Background()
+
+	span := historySpanOfTheDatabase(t, db)
+
+	values := historyPlanValues(t, db, span)
+
+	inventory := callHistoryStatementInventory(span)
+
+	planned := map[string]string{}
+
+	allowed := namedCallHistoryKeys()
+
+	for _, entry := range inventory {
+		if entry.kind != "read" {
+			continue
+		}
+
+		plan := planForStatement(t, db, entry.statement, values)
+
+		planned[entry.label] = plan
+
+		assertNothingBuiltForTheQuery(t, entry.label, plan)
+
+		if len(planIndexNames(plan)) == 0 && !planSeeksAPrimaryKey(plan) {
+			t.Errorf("the %s read would run as %s: it reaches no key the set names and no table's own key", entry.label, plan)
+		}
+
+		if walked := planWalksTablesWithoutAnIndex(plan); len(walked) != 0 {
+			t.Errorf("the %s read would run as %s: it walks %v where the set names a key", entry.label, plan, walked)
+		}
+
+		for _, name := range planIndexNames(plan) {
+			if !hasString(allowed, name) {
+				t.Errorf("the %s read would run as %s through %s, which is not a key the set names", entry.label, plan, name)
+			}
+		}
+
+		if historyReadSortsTheHistory(plan, entry.statement) {
+			t.Errorf("the %s read would run as %s: it sorts the history with a tree built for that query", entry.label, plan)
+		}
+	}
+
+	// The unfiltered page, and the oldest and newest call of the history beside it: the covering key answers
+	// all three in its own order, which is the order the history is read in.
+	for _, label := range []string{"all page 25", "all span oldest", "all span newest"} {
+		assertPlanHasStep(t, label, planned[label], "SCAN c USING COVERING INDEX "+coveringKeyIndex)
+	}
+
+	// The count of the whole history has no filter a key could narrow, so it walks the pair key the shipped
+	// database already carries, whose first column every history read filters on.
+	assertPlanHasStep(t, "all count", planned["all count"], "SEARCH c USING COVERING INDEX "+shippedPairIndexName+" (systemId>?)")
+
+	// The pair page and the pair count. A pair key over the system and the talkgroup was measured and turned
+	// down, so these two reads reach a key the set names, and either that key answers their order or they sort.
+	for _, label := range []string{"system talkgroup page 25", "system talkgroup count", "system page 25", "system count"} {
+		plan := planned[label]
+
+		if !planWalksIndex(plan, coveringKeyIndex) && !planWalksIndex(plan, shippedPairIndexName) {
+			t.Errorf("the %s read would run as %s: neither the covering key nor the shipped pair key answers it", label, plan)
+		}
+	}
+
+	// A read bounded by a dated range is narrowed by the covering key on the timestamp it is bounded by.
+	for _, label := range []string{
+		"day page 25", "day count", "day span oldest", "day span newest",
+		"search tag window page 25", "search tag window count", "search tag window span oldest", "search tag window span newest",
+		"search talkgroup window page 25", "search talkgroup window count", "search talkgroup window span oldest",
+		"search talkgroup window span newest",
+	} {
+		plan := planned[label]
+
+		if !planSeeksIndexOn(plan, coveringKeyIndex, "timestamp") {
+			t.Errorf("the %s read would run as %s: the covering key is not narrowed on the timestamp that bounds it", label, plan)
+		}
+	}
+
+	// The status counts and the recent window are the reads a caller runs on every refresh, and each one is
+	// bounded by a timestamp the covering key is narrowed on.
+	for _, label := range []string{"status count 2m", "status hours 24h", "status tallies 15m"} {
+		plan := planned[label]
+
+		if !planSeeksIndexOn(plan, coveringKeyIndex, "timestamp") {
+			t.Errorf("the %s read would run as %s: the covering key is not narrowed on the timestamp that bounds it", label, plan)
+		}
+	}
+
+	for _, label := range []string{"recent 10", "recent 200"} {
+		plan := planned[label]
+
+		if !planWalksIndex(plan, coveringKeyIndex) {
+			t.Errorf("the %s read would run as %s: the covering key does not answer it", label, plan)
+		}
+
+		if !planScansAKey(plan, "c") && !planSeeksIndexOn(plan, coveringKeyIndex, "timestamp") {
+			t.Errorf("the %s read would run as %s: the key that answers it is neither scanned nor narrowed", label, plan)
+		}
+	}
+
+	// The reads a measured search issues beside the reads a report times are planned too, so a filter shape
+	// only those reads carry cannot reach a table walk unnoticed.
+	for _, entry := range statementsOutsideTheReports(span) {
+		if !strings.Contains(entry.statement, `FROM "calls" AS c`) {
+			continue
+		}
+
+		plan := planForStatement(t, db, entry.statement, values)
+
+		assertNothingBuiltForTheQuery(t, entry.probe, plan)
+
+		if !planWalksIndex(plan, coveringKeyIndex) && !planWalksIndex(plan, shippedPairIndexName) {
+			t.Errorf("the read outside the inventoried list (%s) would run as %s: neither the covering key nor the shipped "+
+				"pair key answers it", entry.reason, plan)
+		}
+
+		if walked := planWalksTablesWithoutAnIndex(plan); len(walked) != 0 {
+			t.Errorf("the read outside the inventoried list (%s) would run as %s: it walks %v where the set names a key",
+				entry.reason, plan, walked)
+		}
+
+		if historyReadSortsTheHistory(plan, entry.statement) {
+			t.Errorf("the read outside the inventoried list (%s) would run as %s: it sorts the history with a tree built "+
+				"for that query", entry.reason, plan)
+		}
+	}
+
+	// A calls key led by systemId beside the set: the shape the measurements turned down, planted here to show
+	// the probe finds it, the step leaves it alone, and it changes nothing about how the by-system reads run.
+	bySystem := []string{
+		"system page 25", "system count", "system span oldest", "system span newest",
+		"system talkgroup page 25", "system talkgroup count", "system talkgroup span oldest", "system talkgroup span newest",
+	}
+
+	before := map[string]string{}
+
+	for _, label := range bySystem {
+		before[label] = planned[label]
+	}
+
+	const plantedKey = "calls_system_ts"
+
+	const plantedDefinition = `CREATE INDEX "calls_system_ts" ON "calls" ("systemId","timestamp")`
+
+	if _, err := db.Exec(`CREATE INDEX "` + plantedKey + `" ON "calls" ("systemId","timestamp")`); err != nil {
+		t.Fatalf("planting a calls key led by systemId: %v", err)
+	}
+
+	carries, err := hasCallIndexShape(ctx, s, "calls")
+	if err != nil {
+		t.Fatalf("hasCallIndexShape(calls) beside a planted key: %v", err)
+	}
+
+	found := []string{}
+
+	for _, index := range carries {
+		found = append(found, index.name)
+	}
+
+	if !hasString(found, plantedKey) {
+		t.Fatalf("the probe finds %v on the calls table beside a planted key, want it to name %s", found, plantedKey)
+	}
+
+	missing, err := missingCallIndexes(ctx, s)
+	if err != nil {
+		t.Fatalf("missingCallIndexes beside a planted key: %v", err)
+	}
+
+	if got := missingNames(missing); len(got) != 0 {
+		t.Errorf("the set reports %v missing beside a planted key, want the planted key to be neither wanted nor removed", got)
+	}
+
+	reported := []progressLine{}
+
+	if err := ensureCallIndexSet(ctx, s, func(level, message string) {
+		reported = append(reported, progressLine{level: level, message: message})
+	}); err != nil {
+		t.Fatalf("ensureCallIndexSet beside a planted key: %v", err)
+	}
+
+	if len(reported) != 0 {
+		t.Errorf("the step reports %v beside a planted key, want it to add nothing", reported)
+	}
+
+	definitions := indexDefinitions(t, db, "calls")
+
+	if want := []string{shippedPairDefinition, plantedDefinition, coveringKeyDefinition}; !slices.Equal(definitions, want) {
+		t.Errorf("the calls table carries %v after the step beside a planted key, want the planted key, the shipped pair "+
+			"key and the covering key, each with the statement that made it", definitions)
+	}
+
+	for _, label := range bySystem {
+		plan := planForLabel(t, db, callHistoryStatementInventory(span), values, label)
+
+		if plan != before[label] {
+			t.Errorf("the %s read runs as %s beside a calls key led by systemId, and as %s without it: the planted key "+
+				"changes how the read runs, and the set names no key over those columns", label, plan, before[label])
+		}
+
+		if !planWalksIndex(plan, coveringKeyIndex) && !planWalksIndex(plan, shippedPairIndexName) {
+			t.Errorf("the %s read would run as %s beside a planted key: the covering key no longer answers it", label, plan)
+		}
+	}
+}
+
+// statementsOfTheConfigurationWrites returns the writes a configuration save or a retention prune makes beside
+// the statements a report times, each named the way the plan assertions name it.
+func statementsOfTheConfigurationWrites() []inventoriedStatement {
+	return []inventoriedStatement{
+		{
+			label:     "prune delete",
+			probe:     "DeleteCallsBefore",
+			kind:      "write",
+			statement: `DELETE FROM "calls" WHERE "timestamp" < ?`,
+		},
+		{
+			label:     "call drop",
+			probe:     "DeleteCall",
+			kind:      "write",
+			statement: `DELETE FROM "calls" WHERE "callId" = ?`,
+		},
+		{
+			label:     "talkgroup drop",
+			probe:     "SaveSystemTalkgroups",
+			kind:      "write",
+			statement: `DELETE FROM "talkgroups" WHERE "talkgroupId" IN (?)`,
+		},
+		{
+			label:     "tag drop",
+			probe:     "SaveTags",
+			kind:      "write",
+			statement: `DELETE FROM "tags" WHERE "tagId" IN (?)`,
+		},
+		{
+			label:     "group drop",
+			probe:     "SaveGroups",
+			kind:      "write",
+			statement: `DELETE FROM "groups" WHERE "groupId" IN (?)`,
+		},
+		{
+			label:     "site drop",
+			probe:     "SaveSystemSites",
+			kind:      "write",
+			statement: `DELETE FROM "sites" WHERE "siteId" IN (?)`,
+		},
+		{
+			label:     "unit drop",
+			probe:     "SaveSystemUnits",
+			kind:      "write",
+			statement: `DELETE FROM "units" WHERE "unitId" IN (?)`,
+		},
+		{
+			label:     "system drop",
+			probe:     "SaveSystems",
+			kind:      "write",
+			statement: `DELETE FROM "systems" WHERE "systemId" IN (?)`,
+		},
+		{
+			label:     "group link drop",
+			probe:     "SaveSystemTalkgroups",
+			kind:      "write",
+			statement: `DELETE FROM "talkgroupGroups" WHERE "talkgroupId" = ? AND "groupId" IN (?)`,
+		},
+		{
+			label:     "group link add",
+			probe:     "SaveSystemTalkgroups",
+			kind:      "write",
+			statement: `INSERT INTO "talkgroupGroups" ("groupId", "talkgroupId") VALUES (?, ?)`,
+		},
+		{
+			label:     "delayed clear",
+			probe:     "ClearDelayed",
+			kind:      "write",
+			statement: `DELETE FROM "delayed"`,
+		},
+	}
+}
+
+// TestChildReadsAndCascadeReachTheirIndexes asks how the database would run the reads of one call's frequencies,
+// patches and units, the retention prune with the deletes its cascades make, and the deletes a configuration save
+// makes to the tables those calls hang from. Each reaches a key the set names or the key its own table is stored
+// in, and none of them builds a key for the delete it is running. Each delete is explained and not run, so the
+// fixture the other assertions read is left as it is.
+func TestChildReadsAndCascadeReachTheirIndexes(t *testing.T) {
+	db := migratedLegacyDatabase(t)
+
+	span := historySpanOfTheDatabase(t, db)
+
+	values := historyPlanValues(t, db, span)
+
+	inventory := callHistoryStatementInventory(span)
+
+	writes := statementsOfTheConfigurationWrites()
+
+	// The rows hanging from one call are read through the key each of those tables carries over the call it
+	// belongs to.
+	for _, one := range []struct{ label, index string }{
+		{label: "frequencies by call", index: "callfrequencies_call"},
+		{label: "patches by call", index: "callpatches_call"},
+		{label: "units by call", index: "callunits_call"},
+	} {
+		plan := planForLabel(t, db, inventory, values, one.label)
+
+		assertNothingBuiltForTheQuery(t, one.label, plan)
+
+		if !planSeeksIndexOn(plan, one.index, "callId") {
+			t.Errorf("the %s read would run as %s: %s is not narrowed on the call its rows belong to",
+				one.label, plan, one.index)
+		}
+	}
+
+	// The keys each of those tables, and the delay list beside them, carries over the call a row belongs to.
+	callChildKeys := []struct{ index, column string }{
+		{index: delayedKeyIndex, column: "callId"},
+		{index: "callunits_call", column: "callId"},
+		{index: "callpatches_call", column: "callId"},
+		{index: "callfrequencies_call", column: "callId"},
+	}
+
+	// The retention prune deletes the calls older than a timestamp, which is the range the covering key is
+	// narrowed on, and the cascades that follow each reach the key of the table they delete from.
+	prune := planForLabel(t, db, writes, values, "prune delete")
+
+	assertNothingBuiltForTheQuery(t, "prune delete", prune)
+
+	assertPlanHasStep(t, "prune delete", prune, "SEARCH calls USING COVERING INDEX "+coveringKeyIndex+" (timestamp<?)")
+
+	for _, key := range callChildKeys {
+		if !planSeeksIndexOn(prune, key.index, key.column) {
+			t.Errorf("the prune delete would run as %s: the cascade to %s does not reach the key over the call its "+
+				"rows belong to", prune, key.index)
+		}
+	}
+
+	// The delete of one call finds that call by the key the calls table is stored in, and the cascades beside it
+	// reach the same child keys the prune's do.
+	dropOne := planForLabel(t, db, writes, values, "call drop")
+
+	assertNothingBuiltForTheQuery(t, "call drop", dropOne)
+
+	if !planSeeksAPrimaryKey(dropOne) {
+		t.Errorf("the delete of one call would run as %s: the call is not found by the key its own table is stored in",
+			dropOne)
+	}
+
+	if walked := planWalksTablesWithoutAnIndex(dropOne); len(walked) != 0 {
+		t.Errorf("the delete of one call would run as %s: it walks %v where the set names a key", dropOne, walked)
+	}
+
+	for _, key := range callChildKeys {
+		if !planSeeksIndexOn(dropOne, key.index, key.column) {
+			t.Errorf("the delete of one call would run as %s: the cascade to %s does not reach the key over the call "+
+				"its rows belong to", dropOne, key.index)
+		}
+	}
+
+	// A delete of a system, a talkgroup, a tag or a group reaches the key of each table its cascades read. Each
+	// of these is explained, so the rows the cascade would remove stay where they are.
+	for _, one := range []struct{ label, index, column string }{
+		{label: "talkgroup drop", index: "talkgroupgroups_talkgroup", column: "talkgroupId"},
+		{label: "tag drop", index: "talkgroups_tag", column: "tagId"},
+		{label: "group drop", index: "talkgroupgroups_group", column: "groupId"},
+		{label: "system drop", index: "talkgroups_system_ref", column: "systemId"},
+		{label: "system drop", index: "sites_system", column: "systemId"},
+		{label: "group link drop", index: "talkgroupgroups_group", column: "groupId"},
+	} {
+		plan := planForLabel(t, db, writes, values, one.label)
+
+		assertNothingBuiltForTheQuery(t, one.label, plan)
+
+		if !planSeeksIndexOn(plan, one.index, one.column) {
+			t.Errorf("the %s would run as %s: %s is not narrowed on %s", one.label, plan, one.index, one.column)
+		}
+	}
+
+	// The calls a parent delete cascades into are read through a key the set names: the covering key for the
+	// calls of one talkgroup, the shipped pair key for the calls of one system.
+	if plan := planForLabel(t, db, writes, values, "talkgroup drop"); !planWalksIndex(plan, coveringKeyIndex) {
+		t.Errorf("the talkgroup delete would run as %s: its calls are not read through the covering key", plan)
+	}
+
+	if plan := planForLabel(t, db, writes, values, "system drop"); !planWalksIndex(plan, shippedPairIndexName) {
+		t.Errorf("the system delete would run as %s: its calls are not read through the shipped pair key", plan)
+	}
+
+	// A delete of one row a table is keyed by finds that row by the key the table is stored in, and the tables
+	// hanging from it reach their own keys.
+	for _, label := range []string{"site drop", "unit drop", "talkgroup drop", "tag drop", "group drop", "system drop"} {
+		plan := planForLabel(t, db, writes, values, label)
+
+		if !planSeeksAPrimaryKey(plan) {
+			t.Errorf("the %s would run as %s: the row is not found by the key its own table is stored in", label, plan)
+		}
+	}
+
+	// An insert names no key in its plan: the engine adds the row to the table and to every key over it, and the
+	// keys it has to maintain are the ones the catalogue test finds. What an insert must not do is answer with a
+	// key it made for the query it is running.
+	for _, entry := range append(inventory, writes...) {
+		if entry.kind != "write" {
+			continue
+		}
+
+		plan := planForStatement(t, db, entry.statement, values)
+
+		assertNothingBuiltForTheQuery(t, entry.label, plan)
+
+		if entry.label == "delayed drop" || strings.HasPrefix(entry.statement, "DELETE FROM") {
+			continue
+		}
+
+		if plan != "" {
+			t.Errorf("the %s would run as %s: an insert names no key in its plan, want the plan to name no step",
+				entry.label, plan)
+		}
+	}
+}
+
+// TestDelayedJoinUsesTheNamedDelayedIndex covers the join every history read carries, the delay list's own reads
+// and deletes, and the duplicate guard a saved call is checked against. The join reaches the key the delay list
+// carries over the call it names, and no read or delete in this group builds a key for the query it is running.
+func TestDelayedJoinUsesTheNamedDelayedIndex(t *testing.T) {
+	db := migratedLegacyDatabase(t)
+
+	span := historySpanOfTheDatabase(t, db)
+
+	values := historyPlanValues(t, db, span)
+
+	inventory := callHistoryStatementInventory(span)
+
+	// Every history read joins the delay list to answer that a call still waiting is not part of the history,
+	// and each of those joins reaches the delay list's key by the call it looks for.
+	const delayedJoinStep = "SEARCH d USING COVERING INDEX " + delayedKeyIndex + " (callId=?) LEFT-JOIN"
+
+	joined := 0
+
+	for _, entry := range inventory {
+		if entry.kind != "read" || !strings.Contains(entry.statement, `LEFT JOIN "delayed" AS d`) {
+			continue
+		}
+
+		joined++
+
+		plan := planForStatement(t, db, entry.statement, values)
+
+		assertNothingBuiltForTheQuery(t, entry.label, plan)
+
+		if !hasString(strings.Split(plan, " / "), delayedJoinStep) {
+			t.Errorf("the %s read would run as %s, want the join to the delay list to run as %s", entry.label, plan,
+				delayedJoinStep)
+		}
+	}
+
+	if joined == 0 {
+		t.Fatal("the inventoried statements carry no read that joins the delay list")
+	}
+
+	// A call taken off the delay list is found by that key, and the whole delay list is read along it.
+	assertPlanHasStep(t, "delayed drop", planForLabel(t, db, inventory, values, "delayed drop"),
+		"SEARCH delayed USING COVERING INDEX "+delayedKeyIndex+" (callId=?)")
+
+	assertPlanHasStep(t, "delayed list", planForLabel(t, db, inventory, values, "delayed list"),
+		"SCAN delayed USING INDEX "+delayedKeyIndex)
+
+	// The delay list emptied entirely has no filter to narrow a key with, so it reads the table, and it still
+	// builds nothing for the delete it runs.
+	cleared := planForLabel(t, db, statementsOfTheConfigurationWrites(), values, "delayed clear")
+
+	assertPlanHasStep(t, "delayed clear", cleared, "SCAN delayed")
+
+	assertNothingBuiltForTheQuery(t, "delayed clear", cleared)
+
+	// The duplicate guard reads the calls a saved call could be a duplicate of. Its filters are the columns of
+	// the pair key the shipped database carries, and the read carries no join to the delay list, so that key
+	// answers the whole read.
+	guard := planForLabel(t, db, inventory, values, "duplicate check")
+
+	assertNothingBuiltForTheQuery(t, "duplicate check", guard)
+
+	assertPlanHasStep(t, "duplicate check", guard, "SEARCH c USING COVERING INDEX "+shippedPairIndexName+
+		" (systemId=? AND siteRef=? AND talkgroupId=? AND timestamp>? AND timestamp<?)")
+
+	if strings.Contains(inventoriedStatementFor(t, inventory, "duplicate check").statement, `"delayed"`) {
+		t.Error("the duplicate guard reads the delay list, which is not the read the measurements name")
+	}
+
+	// The state the key was measured for: on a database that lost the delay list's key, the same join builds a
+	// key for the query it belongs to, which is what every read above is asserted not to do.
+	without := migratedLegacyDatabase(t)
+
+	if _, err := without.Exec(`DROP INDEX "` + delayedKeyIndex + `"`); err != nil {
+		t.Fatalf("removing the key the delay list is read through: %v", err)
+	}
+
+	spanWithout := historySpanOfTheDatabase(t, without)
+
+	planWithout := planForLabel(t, without, callHistoryStatementInventory(spanWithout),
+		historyPlanValues(t, without, spanWithout), "all page 25")
+
+	for _, marker := range []string{"BLOOM FILTER ON d (callId=?)", "SEARCH d USING AUTOMATIC COVERING INDEX (callId=?)"} {
+		if !strings.Contains(planWithout, marker) {
+			t.Errorf("the whole-history page without the delay list's key would run as %s, want it to answer with %s: "+
+				"the assertion above only bites if losing that key makes the join build a key for itself", planWithout,
+				marker)
+		}
+	}
+}
+
+// TestLookupAndJoinReadsReachTheirKeys covers the reads a configuration save and a configuration read run beside
+// the history: the talkgroup a call names is looked up through the key over the system it belongs to and its
+// reference, both sides of the group-membership table are read through their own keys, the sites of a system are
+// read through the key over that system, and a guard for one row reaches the key its table is stored in.
+func TestLookupAndJoinReadsReachTheirKeys(t *testing.T) {
+	db := migratedLegacyDatabase(t)
+
+	span := historySpanOfTheDatabase(t, db)
+
+	values := historyPlanValues(t, db, span)
+
+	inventory := callHistoryStatementInventory(span)
+
+	outside := statementsOutsideTheReports(span)
+
+	// The talkgroup a saved call names is found by the key over the system it belongs to and the reference it
+	// carries there.
+	lookup := planForLabel(t, db, inventory, values, "talkgroup lookup")
+
+	assertNothingBuiltForTheQuery(t, "talkgroup lookup", lookup)
+
+	if !planSeeksIndexOn(lookup, "talkgroups_system_ref", "systemId") {
+		t.Errorf("the talkgroup lookup would run as %s: it is not narrowed on the system the talkgroup belongs to", lookup)
+	}
+
+	if !strings.Contains(planConstraintForTable(lookup, "talkgroups"), "talkgroupRef=?") {
+		t.Errorf("the talkgroup lookup would run as %s: the key it reaches is not narrowed on the reference the "+
+			"talkgroup carries on that system", lookup)
+	}
+
+	// Both sides of the group-membership table are read through the key over that side.
+	members := planForLabel(t, db, inventory, values, "group members")
+
+	assertNothingBuiltForTheQuery(t, "group members", members)
+
+	if !planSeeksIndexOn(members, "talkgroupgroups_talkgroup", "talkgroupId") {
+		t.Errorf("the members of a group would run as %s: the membership table is not narrowed on the talkgroup it "+
+			"is read for", members)
+	}
+
+	guard := planForStatement(t, db, statementOutsideTheInventory(t, outside,
+		`FROM "talkgroupGroups" WHERE "talkgroupId" = ? AND "groupId" = ?`), values)
+
+	assertNothingBuiltForTheQuery(t, "group link guard", guard)
+
+	if !planSeeksIndexOn(guard, "talkgroupgroups_group", "groupId") {
+		t.Errorf("the guard a group link is checked against would run as %s: the membership table is not narrowed on "+
+			"the group the link names", guard)
+	}
+
+	// The stored talkgroups of a system, and the talkgroups of a system a configuration read answers with the
+	// groups each of them belongs to, reach the key over the system and the key over the membership side.
+	stored := planForStatement(t, db, statementOutsideTheInventory(t, outside,
+		`SELECT "talkgroupId" FROM "talkgroups" WHERE "systemId" = ?`), values)
+
+	assertNothingBuiltForTheQuery(t, "stored talkgroups of a system", stored)
+
+	if !planSeeksIndexOn(stored, "talkgroups_system_ref", "systemId") {
+		t.Errorf("the stored talkgroups of a system would run as %s: they are not narrowed on the system they belong to",
+			stored)
+	}
+
+	aggregate := planForLabel(t, db, inventory, values, "talkgroups by system")
+
+	assertNothingBuiltForTheQuery(t, "talkgroups by system", aggregate)
+
+	if !planSeeksIndexOn(aggregate, "talkgroups_system_ref", "systemId") {
+		t.Errorf("the talkgroups of a system would run as %s: they are not narrowed on the system they belong to",
+			aggregate)
+	}
+
+	if !planSeeksIndexOn(aggregate, "talkgroupgroups_talkgroup", "talkgroupId") {
+		t.Errorf("the talkgroups of a system would run as %s: the groups named beside each of them are not read "+
+			"through the key over the membership side", aggregate)
+	}
+
+	// The sites of a system are read through the key over that system.
+	sites := planForStatement(t, db, statementOutsideTheInventory(t, outside, `FROM "sites" WHERE "systemId" = ?`), values)
+
+	assertNothingBuiltForTheQuery(t, "stored sites of a system", sites)
+
+	if !planSeeksIndexOn(sites, "sites_system", "systemId") {
+		t.Errorf("the sites of a system would run as %s: they are not narrowed on the system they belong to", sites)
+	}
+
+	// A guard for one row reaches the key that table is stored in, which is the shortest read that table can get.
+	for _, fragment := range []string{
+		`SELECT COUNT(*) FROM "systems" WHERE "systemId" = ?`,
+		`SELECT COUNT(*) FROM "talkgroups" WHERE "talkgroupId" = ?`,
+	} {
+		plan := planForStatement(t, db, statementOutsideTheInventory(t, outside, fragment), values)
+
+		assertNothingBuiltForTheQuery(t, fragment, plan)
+
+		if !planSeeksAPrimaryKey(plan) {
+			t.Errorf("%s would run as %s: the guard does not reach the key its own table is stored in", fragment, plan)
+		}
+	}
+
+	// One call read back by its identifier reaches the calls table, its system and its talkgroup by the keys those
+	// three tables are stored in.
+	one := planForLabel(t, db, inventory, values, "call by id")
+
+	assertNothingBuiltForTheQuery(t, "call by id", one)
+
+	for _, table := range []string{"c", "s", "t"} {
+		steps := planStepsForTable(one, table)
+
+		if len(steps) != 1 || !strings.Contains(steps[0], "USING INTEGER PRIMARY KEY") {
+			t.Errorf("the call read back by its identifier would run as %s: %s is not read by the key its own table "+
+				"is stored in", one, table)
+		}
+	}
+}
+
+// TestTalkgroupSearchReadStaysUnindexed records the two reads the set does not serve: the page of one system and
+// one talkgroup, and the windowed read a talkgroup search runs. Neither is given a key of its own, so the key
+// that answers each is scanned or narrowed only on the timestamp the read is bounded by, and the pair filter is
+// answered while the rows are walked. The shape of the history filters is pinned by the test that reads the set
+// itself, which is what keeps these two reads from being handed a key of their own later.
+func TestTalkgroupSearchReadStaysUnindexed(t *testing.T) {
+	db := migratedLegacyDatabase(t)
+
+	span := historySpanOfTheDatabase(t, db)
+
+	values := historyPlanValues(t, db, span)
+
+	inventory := callHistoryStatementInventory(span)
+
+	unserved := []string{
+		"system talkgroup page 25",
+		"search talkgroup window page 25",
+		"search talkgroup window count",
+		"search talkgroup window span oldest",
+		"search talkgroup window span newest",
+	}
+
+	for _, label := range unserved {
+		entry := inventoriedStatementFor(t, inventory, label)
+
+		plan := planForStatement(t, db, entry.statement, values)
+
+		assertNothingBuiltForTheQuery(t, label, plan)
+
+		if !planWalksIndex(plan, coveringKeyIndex) && !planWalksIndex(plan, shippedPairIndexName) {
+			t.Errorf("the %s read would run as %s: no key the set names answers it", label, plan)
+		}
+
+		if !planScansAKey(plan, "c") && !planSeeksIndexOn(plan, coveringKeyIndex, "timestamp") &&
+			!historyReadSortsTheHistory(plan, entry.statement) {
+			t.Errorf("the %s read would run as %s: the read neither scans a key, nor is narrowed on the timestamp "+
+				"that bounds it, nor sorts, so a key the set does not name appears to answer it", label, plan)
+		}
+
+		// The pair filter is not what a key is narrowed on: only a timestamp a read is bounded by is.
+		constraint := planConstraintForTable(plan, "c")
+
+		for _, term := range strings.Split(constraint, " AND ") {
+			if term != "" && !strings.Contains(term, "timestamp") {
+				t.Errorf("the %s read would run as %s: %s narrows a key with a column no key of the set carries in "+
+					"that order", label, plan, term)
+			}
+		}
+
+		for _, name := range planIndexNames(plan) {
+			if !hasString(namedCallHistoryKeys(), name) {
+				t.Errorf("the %s read would run as %s through %s, which is not a key the set names", label, plan, name)
+			}
+		}
+	}
+}
