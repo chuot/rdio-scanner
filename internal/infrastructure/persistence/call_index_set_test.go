@@ -19,6 +19,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"slices"
 	"strings"
 	"testing"
@@ -3275,4 +3276,597 @@ func TestTalkgroupSearchReadStaysUnindexed(t *testing.T) {
 			}
 		}
 	}
+}
+
+// The history a read budget is judged against is the shape a long-running deployment reaches: ninety days
+// of calls across twelve systems, three hundred talkgroups on each, six hundred talkgroup units, and a
+// skewed share of the traffic on a handful of talkgroups. One shape at every scale, because the lookup
+// tables keep their sizes as the call count grows, which is what makes a smaller fixture the same world
+// with fewer calls per talkgroup and a cheaper read to answer.
+const (
+	historyFixtureDays         = 90
+	historyFixtureSystems      = 12
+	historyFixtureTalkgroups   = 300
+	historyFixtureSites        = 4
+	historyFixtureGroups       = 120
+	historyFixtureTags         = 40
+	historyFixtureUnits        = 600
+	historyFixtureAudioBytes   = 4096
+	historyFixturePatchPercent = 10
+
+	// historyFixtureDelayedShare is how much of the history the queue holds back: one call in three
+	// hundred, which is the share the sixty-thousand-call history carries when two hundred of its calls
+	// are held. The held calls are the most recent ones, and keeping the share fixed as the history grows
+	// is what leaves a day's worth of calls for a day-bounded read to answer at every scale.
+	historyFixtureDelayedShare = 300
+
+	// historyFixtureSeedRows is how many calls one seeding statement carries. One row per statement is the
+	// right shape for a forty-row deployment, because a failure names the row; a hundred rows of a call
+	// table is a statement of a few hundred kilobytes, which every backend here accepts at its defaults.
+	historyFixtureSeedRows = 100
+)
+
+// historyFixtureSystem and historyFixtureTalkgroup carry the two identifiers each history filter is
+// built from: the row a lookup table stores a system or a talkgroup as, and the reference the caller
+// names it by.
+type historyFixtureSystem struct {
+	id  int64
+	ref int
+}
+
+type historyFixtureTalkgroup struct {
+	id     int64
+	ref    int
+	system int64
+}
+
+// historyFixtureWorld is the configuration half of the history: the systems and their sites, the
+// talkgroups with their tags, the groups that hold them, and the units a call names. The calls themselves
+// are built beside it, oldest first, so callId order and timestamp order agree the way they do in a live
+// archive.
+type historyFixtureWorld struct {
+	systems    []historyFixtureSystem
+	talkgroups []historyFixtureTalkgroup
+	sites      []int64
+	units      []int64
+}
+
+// historyFixtureDatabase returns a database holding the given number of calls in that shape, in the state
+// every budget is judged in: the set created over it, and no table holding planner statistics.
+//
+// The database is built from the shipped schema rather than carried across a migration, which is the state
+// a deployment that has finished its startup pass is in. The covering key arrives from the step that
+// creates it, after the column it indexes exists, exactly as it does on a migrated deployment.
+func historyFixtureDatabase(t *testing.T, calls int) *sql.DB {
+	t.Helper()
+
+	db := openSchemaDatabase(t)
+
+	ctx := context.Background()
+
+	rng := rand.New(rand.NewSource(1))
+
+	world := seedHistoryLookups(t, ctx, db, rng)
+
+	seedHistoryCalls(t, ctx, db, world, rng, calls)
+
+	if err := ensureCallIndexSet(ctx, newStore(db, DialectSqlite), func(level, message string) {
+		t.Logf("ensureCallIndexSet over the history fixture: %s %s", level, message)
+	}); err != nil {
+		t.Fatalf("ensureCallIndexSet over the history fixture: %v", err)
+	}
+
+	if found := plannerStatisticsTables(t, db); len(found) != 0 {
+		t.Fatalf("the history fixture carries %v, so its reads are not measured in the state every budget "+
+			"is stated in", found)
+	}
+
+	return db
+}
+
+// seedHistoryLookups fills the configuration tables the history joins against. Talkgroup references
+// follow production's numbering, where the leading digits place a talkgroup on its system, which is what
+// makes the pair filters the history view builds name references a caller could really be shown.
+func seedHistoryLookups(t *testing.T, ctx context.Context, db *sql.DB, rng *rand.Rand) historyFixtureWorld {
+	t.Helper()
+
+	world := historyFixtureWorld{}
+
+	for i := range historyFixtureSystems {
+		ref := 1001 + i
+
+		res, err := db.ExecContext(ctx,
+			`INSERT INTO "systems" ("label", "delay", "order", "systemRef", "type") VALUES(?, ?, ?, ?, ?)`,
+			fmt.Sprintf("System %02d", i+1), 0, i, ref, "type-1")
+		if err != nil {
+			t.Fatalf("seeding system %d: %v", ref, err)
+		}
+
+		id, err := res.LastInsertId()
+		if err != nil {
+			t.Fatalf("reading the system %d the fixture stores: %v", ref, err)
+		}
+
+		world.systems = append(world.systems, historyFixtureSystem{id: id, ref: ref})
+
+		for s := range historyFixtureSites {
+			siteRef := int64((i+1)*100 + s + 1)
+
+			if _, err := db.ExecContext(ctx,
+				`INSERT INTO "sites" ("label", "order", "siteRef", "systemId") VALUES(?, ?, ?, ?)`,
+				fmt.Sprintf("Site %03d", siteRef), s, siteRef, id); err != nil {
+				t.Fatalf("seeding site %d: %v", siteRef, err)
+			}
+
+			world.sites = append(world.sites, siteRef)
+		}
+	}
+
+	for i := range historyFixtureTags {
+		if _, err := db.ExecContext(ctx, `INSERT INTO "tags" ("label", "order") VALUES(?, ?)`,
+			fmt.Sprintf("tag-%02d", i+1), i); err != nil {
+			t.Fatalf("seeding tag %d: %v", i+1, err)
+		}
+	}
+
+	for i := range historyFixtureGroups {
+		if _, err := db.ExecContext(ctx, `INSERT INTO "groups" ("label", "order") VALUES(?, ?)`,
+			fmt.Sprintf("group-%03d", i+1), i); err != nil {
+			t.Fatalf("seeding group %d: %v", i+1, err)
+		}
+	}
+
+	tagIDs := columnValues(t, ctx, db, `SELECT "tagId" FROM "tags" ORDER BY "tagId"`, "tags")
+
+	groupIDs := columnValues(t, ctx, db, `SELECT "groupId" FROM "groups" ORDER BY "groupId"`, "groups")
+
+	for _, sys := range world.systems {
+		for i := range historyFixtureTalkgroups {
+			ref := 10_000 + sys.ref*1000 + i + 1
+
+			res, err := db.ExecContext(ctx,
+				`INSERT INTO "talkgroups" ("delay", "frequency", "label", "name", "order", "systemId", `+
+					`"tagId", "talkgroupRef", "type") VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				0, 851_000_000+i*12_500, fmt.Sprintf("label-%04d", ref), fmt.Sprintf("Talkgroup %04d", ref),
+				i, sys.id, tagIDs[(i*7)%len(tagIDs)], ref, "type-2")
+			if err != nil {
+				t.Fatalf("seeding talkgroup %d: %v", ref, err)
+			}
+
+			id, err := res.LastInsertId()
+			if err != nil {
+				t.Fatalf("reading the talkgroup %d the fixture stores: %v", ref, err)
+			}
+
+			world.talkgroups = append(world.talkgroups, historyFixtureTalkgroup{id: id, ref: ref, system: sys.id})
+		}
+	}
+
+	// Group membership is the reverse index the group filter reads: four talkgroups per group, taken from
+	// the history's own talkgroups so a group named by a caller has calls behind it.
+	for i, groupID := range groupIDs {
+		start := (i * 5) % len(world.talkgroups)
+
+		for k := range 4 {
+			talkgroup := world.talkgroups[(start+k)%len(world.talkgroups)]
+
+			if _, err := db.ExecContext(ctx,
+				`INSERT INTO "talkgroupGroups" ("groupId", "talkgroupId") VALUES(?, ?)`,
+				groupID, talkgroup.id); err != nil {
+				t.Fatalf("seeding group %d's talkgroups: %v", groupID, err)
+			}
+		}
+	}
+
+	for i := range historyFixtureUnits {
+		ref := int64(20_000 + i)
+
+		if _, err := db.ExecContext(ctx,
+			`INSERT INTO "units" ("label", "order", "systemId", "unitRef") VALUES(?, ?, ?, ?)`,
+			fmt.Sprintf("Unit-%05d", ref), i, world.systems[i%len(world.systems)].id, ref); err != nil {
+			t.Fatalf("seeding unit %d: %v", ref, err)
+		}
+
+		world.units = append(world.units, ref)
+	}
+
+	return world
+}
+
+// seedHistoryCalls writes the history and the rows that hang off each call. Talkgroup choice is skewed,
+// because a handful of talkgroups carry most of a deployment's traffic, which is what a per-talkgroup key
+// would be measured against; the calls a search has to anti-join out of its results are the most recent
+// ones, which is the state a live queue is in.
+func seedHistoryCalls(t *testing.T, ctx context.Context, db *sql.DB, world historyFixtureWorld, rng *rand.Rand, calls int) {
+	t.Helper()
+
+	newest := time.Now().UTC().Truncate(time.Second)
+	oldest := newest.Add(-historyFixtureDays * 24 * time.Hour)
+
+	span := newest.UnixMilli() - oldest.UnixMilli()
+
+	audio := make([]byte, historyFixtureAudioBytes)
+	for i := range audio {
+		audio[i] = byte(i)
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("beginning the transaction that seeds %d calls: %v", calls, err)
+	}
+
+	defer tx.Rollback()
+
+	// Every call is planned before any row is written, so a child row can name a call that is already in
+	// the table when that child is inserted, and the identifiers of a batch stay in the order the history
+	// is stored in.
+	ids := make([]int64, calls)
+	talkgroups := make([]historyFixtureTalkgroup, calls)
+	sites := make([]int64, calls)
+	timestamps := make([]int64, calls)
+
+	for i := range calls {
+		talkgroup := world.talkgroups[historyFixtureZipf(len(world.talkgroups), rng)]
+
+		ids[i] = int64(i + 1)
+		talkgroups[i] = talkgroup
+		sites[i] = world.sites[int(talkgroup.system)%len(world.sites)]
+		timestamps[i] = oldest.UnixMilli() + int64(i)*span/int64(calls) + int64(rng.Intn(1000))
+	}
+
+	written := newHistoryFixtureBatch(t, tx, "calls",
+		"callId", "audio", "audioFilename", "audioLength", "audioMime", "siteRef", "systemId", "talkgroupId", "timestamp")
+
+	for i := range calls {
+		written.add(ids[i], audio, fmt.Sprintf("rdio-%d.wav", i), 10_000+rng.Intn(30_000), "audio/wav",
+			sites[i], talkgroups[i].system, talkgroups[i].id, timestamps[i])
+	}
+
+	written.flush()
+
+	children := newHistoryFixtureBatch(t, tx, "callFrequencies",
+		"callId", "dbm", "errors", "frequency", "offset", "spikes")
+
+	for i := range calls {
+		for range 1 + rng.Intn(2) {
+			children.add(ids[i], -100.0, 0, 851_000_000+rng.Intn(1_000_000), 0.0, 0)
+		}
+	}
+
+	children.flush()
+
+	units := newHistoryFixtureBatch(t, tx, "callUnits", "callId", "offset", "unitRef")
+
+	for i := range calls {
+		for range 1 + rng.Intn(3) {
+			units.add(ids[i], rng.Float64()*5_000, world.units[rng.Intn(len(world.units))])
+		}
+	}
+
+	units.flush()
+
+	patches := newHistoryFixtureBatch(t, tx, "callPatches", "callId", "talkgroupId")
+
+	for i := range calls {
+		if rng.Intn(100) >= historyFixturePatchPercent {
+			continue
+		}
+
+		other := world.talkgroups[historyFixtureZipf(len(world.talkgroups), rng)]
+		if other.id == talkgroups[i].id {
+			continue
+		}
+
+		patches.add(ids[i], other.id)
+	}
+
+	patches.flush()
+
+	// The held calls are the most recent ones, which is the state a live queue is in when a search page has
+	// to anti-join them out of the rows it reads.
+	held := calls / historyFixtureDelayedShare
+	if held < 1 {
+		held = 1
+	}
+
+	heldRows := newHistoryFixtureBatch(t, tx, "delayed", "callId", "timestamp")
+
+	for i := calls - held; i < calls; i++ {
+		heldRows.add(ids[i], timestamps[i])
+	}
+
+	heldRows.flush()
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("committing %d calls into the history fixture: %v", calls, err)
+	}
+
+	if got := countRows(t, db, "calls"); got != calls {
+		t.Fatalf("the history fixture holds %d calls, want %d", got, calls)
+	}
+
+	for _, table := range []string{"callFrequencies", "callUnits", "callPatches", "delayed"} {
+		if got := countRows(t, db, table); got == 0 {
+			t.Fatalf("the history fixture holds no %s rows", table)
+		}
+	}
+
+	t.Logf("the history fixture holds %d calls over %d days, %d of them held back by the queue, against the "+
+		"%d systems and %d talkgroups of one deployment", calls, historyFixtureDays, held,
+		historyFixtureSystems, len(world.talkgroups))
+}
+
+// historyFixtureBatch collects the rows one seeding statement carries and writes them together, because a
+// table of a hundred thousand single-row statements measures the harness writing them rather than the
+// reads the fixture is built to time. A failure names the table it was writing into.
+type historyFixtureBatch struct {
+	t       *testing.T
+	tx      *sql.Tx
+	table   string
+	columns []string
+	rows    []string
+	args    []any
+}
+
+func newHistoryFixtureBatch(t *testing.T, tx *sql.Tx, table string, columns ...string) *historyFixtureBatch {
+	t.Helper()
+
+	return &historyFixtureBatch{t: t, tx: tx, table: table, columns: columns}
+}
+
+// add holds one row, and writes what the batch has collected once it carries a full statement's worth.
+func (b *historyFixtureBatch) add(row ...any) {
+	if len(row) != len(b.columns) {
+		b.t.Fatalf("seeding %s: the row carries %d values against the %d columns it names", b.table, len(row), len(b.columns))
+	}
+
+	holders := make([]string, 0, len(row))
+
+	for range row {
+		holders = append(holders, "?")
+	}
+
+	b.rows = append(b.rows, "("+strings.Join(holders, ", ")+")")
+	b.args = append(b.args, row...)
+
+	if len(b.rows) == historyFixtureSeedRows {
+		b.flush()
+	}
+}
+
+// flush writes the rows the batch is holding and empties it, so the next table starts a fresh statement.
+func (b *historyFixtureBatch) flush() {
+	b.t.Helper()
+
+	if len(b.rows) == 0 {
+		return
+	}
+
+	names := make([]string, 0, len(b.columns))
+
+	for _, column := range b.columns {
+		names = append(names, `"`+column+`"`)
+	}
+
+	statement := `INSERT INTO "` + b.table + `" (` + strings.Join(names, ", ") + `) VALUES ` +
+		strings.Join(b.rows, ", ")
+
+	if _, err := b.tx.Exec(statement, b.args...); err != nil {
+		b.t.Fatalf("seeding %d rows of %s: %v", len(b.rows), b.table, err)
+	}
+
+	b.rows = b.rows[:0]
+	b.args = b.args[:0]
+}
+
+// historyFixtureZipf picks which talkgroup a call belongs to: half of the traffic lands on the busiest
+// twentieth of them, four tenths more on the next tenth, and the rest is spread over the whole set, which
+// is the share a deployment's traffic actually takes.
+func historyFixtureZipf(n int, rng *rand.Rand) int {
+	r := rng.Float64()
+
+	if r < 0.5 {
+		return rng.Intn(n / 20)
+	}
+
+	if r < 0.9 {
+		return n/20 + rng.Intn(n/10)
+	}
+
+	return rng.Intn(n)
+}
+
+// columnValues reads one column of a configuration table in the order the table stores it.
+func columnValues(t *testing.T, ctx context.Context, db *sql.DB, statement, table string) []int64 {
+	t.Helper()
+
+	rows, err := db.QueryContext(ctx, statement)
+	if err != nil {
+		t.Fatalf("reading the identifiers of %s: %v", table, err)
+	}
+
+	defer rows.Close()
+
+	found := []int64{}
+
+	for rows.Next() {
+		var value int64
+
+		if err := rows.Scan(&value); err != nil {
+			t.Fatalf("reading an identifier of %s: %v", table, err)
+		}
+
+		found = append(found, value)
+	}
+
+	if err := rows.Err(); err != nil {
+		t.Fatalf("reading the identifiers of %s: %v", table, err)
+	}
+
+	if len(found) == 0 {
+		t.Fatalf("the history fixture holds no %s rows to build a history against", table)
+	}
+
+	return found
+}
+
+// historyBudgetScale and historyUpperBudgetScale are the two scales the specification states its read
+// figures at. A fixture smaller than the lower of them is judged against the lower scale's figures, which
+// is the stricter of the two ways a count is budgeted.
+const (
+	historyBudgetScale      = 60_000
+	historyUpperBudgetScale = 150_000
+)
+
+// historyReadBudget answers the ceiling the specification sets for the read one label names at a given
+// number of calls. The figures the budget table states are absolute ceilings rather than speed-up factors,
+// and a read the table does not name at a scale is judged against the ceiling that table sets for that
+// shape of read at that scale: a page or a span inside five milliseconds, a count inside one hundred
+// milliseconds at sixty thousand calls and one hundred and twenty at one hundred and fifty thousand, and a
+// count bounded by a day inside fifteen milliseconds wherever it is read. A write carries no ceiling: the
+// table sets none, and the cost of the delete a retention pass runs is budgeted by its own test.
+func historyReadBudget(label string, calls int) time.Duration {
+	if strings.HasSuffix(label, " count") {
+		if label == "day count" {
+			return 15 * time.Millisecond
+		}
+
+		if calls > historyBudgetScale {
+			return 120 * time.Millisecond
+		}
+
+		return 100 * time.Millisecond
+	}
+
+	return 5 * time.Millisecond
+}
+
+// historyReadTiming is what one read costs on a fixture: the middle of the samples taken for it, which is
+// the shape every figure in the specification is stated in, and the slowest of them.
+type historyReadTiming struct {
+	median time.Duration
+	worst  time.Duration
+}
+
+// measureHistoryReads runs every inventoried read a fixed number of times over the fixture and answers
+// what each costs. The samples are taken in rounds so a read is measured more than once against the same
+// index set, and a budget is judged against the middle sample rather than the slowest one, because a
+// history read is measured against a page it walks and the spread between two samples of one read is the
+// noise floor every figure here is read against.
+func measureHistoryReads(t *testing.T, db *sql.DB, inventory []inventoriedStatement, values map[string][]any) map[string]historyReadTiming {
+	t.Helper()
+
+	const rounds = 3
+	const samplesPerRound = 5
+
+	samples := map[string][]time.Duration{}
+
+	for round := range rounds {
+		for _, entry := range inventory {
+			if entry.kind != "read" {
+				continue
+			}
+
+			args := planArgumentsFor(entry.statement, values)
+
+			started := time.Now()
+
+			rows, err := db.Query(entry.statement, args...)
+			if err != nil {
+				t.Fatalf("running the %s read: %v", entry.label, err)
+			}
+
+			found := 0
+
+			for rows.Next() {
+				found++
+			}
+
+			rows.Close()
+
+			if err := rows.Err(); err != nil {
+				t.Fatalf("reading the rows the %s read answers: %v", entry.label, err)
+			}
+
+			taken := time.Since(started)
+
+			samples[entry.label] = append(samples[entry.label], taken)
+
+			t.Logf("round %d: the %s read answers %d rows in %s", round+1, entry.label, found, taken)
+		}
+	}
+
+	timings := map[string]historyReadTiming{}
+
+	for label, times := range samples {
+		slices.Sort(times)
+
+		timings[label] = historyReadTiming{median: times[len(times)/2], worst: times[len(times)-1]}
+	}
+
+	return timings
+}
+
+// assertHistoryReadsWithinTheirBudgets is the check every scale of the history is judged by: each
+// inventoried read reaches a key the set names rather than one the database builds for that read, no read
+// sorts the history it walks, and the middle of its samples stays inside the ceiling the specification sets
+// for that shape of read at that scale.
+func assertHistoryReadsWithinTheirBudgets(t *testing.T, db *sql.DB, inventory []inventoriedStatement,
+	values map[string][]any, calls int) {
+	t.Helper()
+
+	for _, entry := range inventory {
+		if entry.kind != "read" {
+			continue
+		}
+
+		plan := planForStatement(t, db, entry.statement, values)
+
+		t.Logf("the %s read runs as %s", entry.label, plan)
+
+		assertNothingBuiltForTheQuery(t, entry.label, plan)
+
+		if historyReadSortsTheHistory(plan, entry.statement) {
+			t.Errorf("the %s read would run as %s: it sorts the history it reads instead of reading it in "+
+				"the order a key of the set stores it", entry.label, plan)
+		}
+	}
+
+	timings := measureHistoryReads(t, db, inventory, values)
+
+	for _, entry := range inventory {
+		if entry.kind != "read" {
+			continue
+		}
+
+		got := timings[entry.label]
+		ceiling := historyReadBudget(entry.label, calls)
+
+		t.Logf("at %d calls the %s read costs %s (slowest sample %s) against the %s ceiling a read of that "+
+			"shape carries at that scale", calls, entry.label, got.median, got.worst, ceiling)
+
+		if got.median > ceiling {
+			t.Errorf("the %s read costs %s at %d calls, against the %s ceiling a read of that shape carries "+
+				"at that scale: its slowest sample cost %s", entry.label, got.median, calls, ceiling, got.worst)
+		}
+	}
+}
+
+// TestHistoryReadsStayWithinTheirBudgetsAtTenThousandCalls holds every inventoried read of a deployment's
+// history inside the ceiling its shape carries, on a fixture large enough that walking the history without
+// a key is what a read would actually cost. The plan-shape tests read the same statements over a
+// forty-call database, where a read is cheap enough that a plan choice could go unnoticed; the budgets are
+// what make a read that loses its key fail instead of merely looking worse in a plan.
+func TestHistoryReadsStayWithinTheirBudgetsAtTenThousandCalls(t *testing.T) {
+	const calls = 10_000
+
+	db := historyFixtureDatabase(t, calls)
+
+	span := historySpanOfTheDatabase(t, db)
+
+	values := historyPlanValues(t, db, span)
+
+	inventory := callHistoryStatementInventory(span)
+
+	assertHistoryReadsWithinTheirBudgets(t, db, inventory, values, calls)
 }
