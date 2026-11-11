@@ -75,6 +75,7 @@ var (
 	guardFiles = []string{
 		"README.md",
 		"CHANGELOG.md",
+		"CODE_OF_CONDUCT.md",
 		"COMPILING.md",
 		"CONTRIBUTING.md",
 		"ICAA.md",

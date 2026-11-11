@@ -5,7 +5,7 @@ _For contributions to the rdio-scanner project (<https://github.com/chuot/rdio-s
 Thank you for your interest in contributing to **rdio-scanner**, an open-source project owned and maintained by **Saubeo Solutions** (<https://saubeo.solutions>).
 This Contributor Agreement explains the rights you transfer to Saubeo Solutions when you submit contributions.
 
-By submitting a pull request, patch, or contribution to this Project, **you accept and agree to the terms of this Agreement**. Maintainers may also require explicit sign-off for some or all contributions.
+By submitting a pull request, patch, or contribution to this Project, **you accept and agree to the terms of this Agreement**.
 
 ---
 

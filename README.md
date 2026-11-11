@@ -86,9 +86,9 @@ You can enjoy Rdio Scanner on the go on your mobile device with the native app.
 
 ## Contributing
 
-Please read the [contribution guidelines](./CONTRIBUTING.md) before submitting a contribution. By
-submitting a contribution to this repository, you agree to the terms of the
-[Individual Contributor Assignment Agreement](./ICAA.md).
+Please read the [contribution guidelines](./CONTRIBUTING.md) and the
+[code of conduct](./CODE_OF_CONDUCT.md) before submitting a contribution. By submitting a contribution to this
+repository, you agree to the terms of the [Individual Contributor Assignment Agreement](./ICAA.md).
 
 ## License
 
