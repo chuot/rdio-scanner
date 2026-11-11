@@ -188,11 +188,21 @@ func (converter *Converter) Convert(ctx context.Context, in ports.AudioFile, mod
 
 	if err := command.Run(); err != nil {
 		// A conversion that failed is reported with what ffmpeg said, and the
-		// recording is kept either way; and why.
+		// recording is kept either way; and why. ffmpeg states the reason at the
+		// end of its transcript, after its own banner and build settings, so the
+		// budget is spent on the tail of what it said: the first 512 bytes of a
+		// real refusal are the banner, and the reason never reaches the log.
+		// A program that could not be run at all writes no transcript, and the
+		// error the run itself gave is the only thing that says why nothing
+		// converted; it stands in for the transcript rather than being added to it.
 		report := stderr.String()
 
+		if strings.TrimSpace(report) == "" {
+			report = err.Error()
+		}
+
 		if len(report) > 512 {
-			report = report[:512]
+			report = report[len(report)-512:]
 		}
 
 		return in, fmt.Errorf("ffmpeg: %s", strings.TrimSpace(domain.SanitizeText(report, 0)))

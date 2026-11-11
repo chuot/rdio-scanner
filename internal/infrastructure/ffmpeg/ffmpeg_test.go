@@ -400,8 +400,8 @@ func TestAProgramWhoseFilterProbeFailsIsReportedAsNoConverterOnce(t *testing.T) 
 }
 
 // TestTheConverterReportsAFailingProgramShortAndQuiet: ffmpeg's stderr on a
-// failure is written into the server's log line, and the report keeps the
-// first 512 bytes and nothing that can forge a log entry.
+// failure is written into the server's log line, and the report keeps the last
+// 512 bytes and nothing that can forge a log entry.
 func TestTheConverterReportsAFailingProgramShortAndQuiet(t *testing.T) {
 	flood := strings.Repeat("x", 2000) + "\\nsecond\\nline\\t\\033[31mred\\033[0m\\n"
 
