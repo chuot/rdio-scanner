@@ -60,3 +60,31 @@ func TestUnitsByIDAndOrder(t *testing.T) {
 		t.Errorf("Ordered() = %v, want A then B", got)
 	}
 }
+
+// TestUnitDamagedByMigration pins the shape of a row the legacy migration created rather than a deployment
+// named: a radio reference, a label that is that reference written out as a decimal number, and no range. The
+// rows this rule names are the ones a maintenance run may remove, so each survivor is a case of its own.
+func TestUnitDamagedByMigration(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		unit Unit
+		want bool
+	}{
+		{name: "a unit labelled with the number it was migrated from", unit: Unit{ID: 1, Label: "47003", UnitRef: 47003}, want: true},
+		{name: "the same shape at a small reference", unit: Unit{ID: 2, Label: "1", UnitRef: 1}, want: true},
+		{name: "a range the operator described", unit: Unit{ID: 3, Label: "Fleet 47", UnitRef: 47003, UnitFrom: 47003, UnitTo: 47999}, want: false},
+		{name: "a range labelled with its own reference", unit: Unit{ID: 4, Label: "47003", UnitRef: 47003, UnitFrom: 47003, UnitTo: 47999}, want: false},
+		{name: "a unit labelled by hand", unit: Unit{ID: 5, Label: "Car", UnitRef: 47003}, want: false},
+		{name: "a unit with no radio reference and no label", unit: Unit{ID: 6}, want: false},
+		{name: "a unit with no radio reference and a number for a label", unit: Unit{ID: 7, Label: "0"}, want: false},
+		{name: "a unit with no radio reference and a name for a label", unit: Unit{ID: 8, Label: "Dispatch", UnitFrom: 47003, UnitTo: 47999}, want: false},
+		{name: "a label with the reference padded", unit: Unit{ID: 9, Label: "047003", UnitRef: 47003}, want: false},
+		{name: "a label with the reference and a trailing space", unit: Unit{ID: 10, Label: "47003 ", UnitRef: 47003}, want: false},
+		{name: "the unit a real deployment had configured before it was migrated", unit: Unit{ID: 11, Label: "test", UnitRef: 1}, want: false},
+		{name: "a damaged row saved with the display order the ingest writes", unit: Unit{ID: 12, Label: "47003", UnitRef: 47003, Order: 0}, want: true},
+	} {
+		if got := tc.unit.DamagedByMigration(); got != tc.want {
+			t.Errorf("%s: unit %+v reports damaged %v, want %v", tc.name, tc.unit, got, tc.want)
+		}
+	}
+}

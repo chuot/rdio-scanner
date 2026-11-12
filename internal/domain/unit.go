@@ -15,7 +15,10 @@
 
 package domain
 
-import "sort"
+import (
+	"sort"
+	"strconv"
+)
 
 // Unit names a radio unit of a system. UnitFrom and UnitTo describe a range of unit
 // references the label covers; both are zero for a single unit.
@@ -27,6 +30,26 @@ type Unit struct {
 	UnitRef  uint
 	UnitFrom uint
 	UnitTo   uint
+}
+
+// DamagedByMigration reports whether the row is one the legacy migration created rather
+// than one an operator named: a radio reference, a label that is that reference written out
+// as a plain decimal number, and no range in UnitFrom and UnitTo. The three parts are the
+// whole rule; the reference alone is not enough, because an operator who describes a unit
+// keeps its reference, and a range is how a described unit covers many references. Display
+// order is deliberately left out: the ingest saves every unit it creates with order 0, so a
+// row at order 0 is this server's own work just as easily as a migrated one, and reading it
+// as a marker would read this server's own rows as migrated ones.
+func (unit Unit) DamagedByMigration() bool {
+	if unit.UnitRef == 0 {
+		return false
+	}
+
+	if unit.UnitFrom != 0 || unit.UnitTo != 0 {
+		return false
+	}
+
+	return unit.Label == strconv.FormatUint(uint64(unit.UnitRef), 10)
 }
 
 // ApplyMap reads a unit out of an administrator configuration payload, keeping the
