@@ -18,6 +18,7 @@ package persistence
 import (
 	"context"
 	"database/sql"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -37,24 +38,42 @@ func (c fixedClock) Now() time.Time { return c.at }
 // and could not carry, so dropping the v6 table never destroys a row; it lives in the
 // migration pass, not in the dialect schemas.
 
-// The archive table exists on every database the pass runs on, fresh or inherited,
-// with the unique index that makes re-archiving a surviving v6 table hold each row once.
-func TestMigrateGivesEveryDatabaseTheMigrationArchive(t *testing.T) {
+// The archive table is created where one of the legacy table names is present for the pass to read a
+// row out of, with the unique index that makes re-archiving a surviving v6 table hold each row once. A
+// database holding none of them — a fresh one, or one the legacy server left at v7 — has nothing to
+// archive and gains no table from a start.
+func TestMigrateCreatesTheMigrationArchiveOnlyWhereALegacyTableIsPresent(t *testing.T) {
 	fresh := openEmptyDatabase(t)
 
 	migrateDatabase(t, fresh)
 
-	assertMigrationArchive(t, fresh, "a fresh database")
+	if hasMigrationArchiveTable(t, fresh) {
+		t.Errorf("a pass over a database holding none of the legacy table names created the migration archive, want nothing archived for a database with nothing to migrate: %v",
+			readTableNames(t, fresh))
+	}
 
-	inherited := openLegacyDatabase(t)
+	inherited := openLegacyV6Database(t)
 
 	migrateDatabase(t, inherited)
 
-	assertMigrationArchive(t, inherited, "a database the legacy server wrote")
+	assertMigrationArchive(t, inherited, "a database the legacy server wrote rows into")
+
+	// A database the legacy server left at v7 holds none of the table names this pass reads, and it is
+	// the state a deployment that has been through the earlier server's own migration is in: nothing
+	// left to archive, and no table built for it by a start.
+	v7 := openLegacyDatabase(t)
+
+	migrateDatabase(t, v7)
+
+	if hasMigrationArchiveTable(t, v7) {
+		t.Errorf("a pass over a database the legacy server left at v7 created the migration archive, want it left as the other server wrote it: %v",
+			readTableNames(t, v7))
+	}
 }
 
-// Creating the archive is idempotent: a second migration pass leaves the table and
-// its rows unchanged.
+// Creating the archive is idempotent, and it is the migration pass that creates it: the schema step
+// is the legacy server's and gives no database the archive, whether or not that database has a
+// legacy table for the pass to read.
 func TestApplySchemaAloneDoesNotCreateTheMigrationArchive(t *testing.T) {
 	db := openEmptyDatabase(t)
 
@@ -70,13 +89,22 @@ func TestApplySchemaAloneDoesNotCreateTheMigrationArchive(t *testing.T) {
 }
 
 // TestMigrationArchiveIsUnchangedByASecondMigration is the idempotence every step of the startup pass
-// is held to: the step that creates the archive creates it once.
+// is held to: the step that creates the archive creates it once. It is held against a database the
+// legacy server wrote rows into, which is the deployment the archive is created for, and against the
+// rows the first pass archived as well as the table that holds them.
 func TestMigrationArchiveIsUnchangedByASecondMigration(t *testing.T) {
-	db := openEmptyDatabase(t)
+	db := openLegacyV6Database(t)
 
 	migrateDatabase(t, db)
 
+	assertMigrationArchive(t, db, "a database the legacy server wrote after the first pass")
+
 	before := readSchemaObjects(t, db)
+	archived := readRows(t, db, `SELECT "tableName","rowId","reason","contents","archivedAt" FROM "migrationArchive" ORDER BY "tableName","rowId"`)
+
+	if len(archived) == 0 {
+		t.Fatalf("the first pass archived nothing into the archive it created, want the v6 rows it could not carry")
+	}
 
 	migrateDatabase(t, db)
 
@@ -90,6 +118,38 @@ func TestMigrationArchiveIsUnchangedByASecondMigration(t *testing.T) {
 		if before[i] != after[i] {
 			t.Errorf("schema object %d changed on the second migration\nafter one: %s\nafter two: %s", i, before[i], after[i])
 		}
+	}
+
+	assertMigrationArchive(t, db, "a database the legacy server wrote after the second pass")
+
+	if again := readRows(t, db, `SELECT "tableName","rowId","reason","contents","archivedAt" FROM "migrationArchive" ORDER BY "tableName","rowId"`); !reflect.DeepEqual(archived, again) {
+		t.Errorf("the second migration changed the archive's rows:\n  after one: %v\n  after two: %v", archived, again)
+	}
+}
+
+// An archive table that already stands, with rows in it, stands through a pass that finds nothing to
+// create: the gate asks only whether to build the table, and the record an earlier migration left is
+// neither replaced nor emptied by a later start.
+func TestMigrationLeavesAStandingMigrationArchiveStanding(t *testing.T) {
+	db := openEmptyDatabase(t)
+
+	if err := ApplySchema(context.Background(), db, DialectSqlite); err != nil {
+		t.Fatalf("ApplySchema: %v", err)
+	}
+
+	createMigrationArchive(t, db)
+
+	if err := archiveRowInto(t, db, "rdioScannerTalkgroups", 405, "its system 10009 is not in this database", map[string]any{"_id": 405}); err != nil {
+		t.Fatalf("archiving the fixture's row: %v", err)
+	}
+
+	migrateDatabase(t, db)
+
+	assertMigrationArchive(t, db, "a deployment whose archive table already stood before the pass")
+
+	if got := countRows(t, db, "migrationArchive"); got != 1 {
+		t.Errorf("the pass left %d rows in the archive that already stood, want the 1 row it held: %v",
+			got, readRows(t, db, `SELECT "tableName","rowId","reason" FROM "migrationArchive" ORDER BY "tableName","rowId"`))
 	}
 }
 
@@ -134,6 +194,11 @@ func TestArchiveRowHoldsTheRowThePassCouldNotCarry(t *testing.T) {
 	db := openEmptyDatabase(t)
 
 	migrateDatabase(t, db)
+
+	// The pass creates the archive only where a legacy table is present to read from, and this
+	// database holds none: the test is about the row the pass could not carry, so it asks for the
+	// table the pass would have created for it.
+	createMigrationArchive(t, db)
 
 	s := newStore(db, DialectSqlite)
 	s.clock = fixedClock{migrationInstant}
@@ -185,6 +250,10 @@ func TestArchivingTheSameRowTwiceHoldsItOnce(t *testing.T) {
 	db := openEmptyDatabase(t)
 
 	migrateDatabase(t, db)
+
+	// As above: the archive is present here because the test needs it, not because this database has
+	// a legacy table for the pass to read.
+	createMigrationArchive(t, db)
 
 	s := newStore(db, DialectSqlite)
 	s.clock = fixedClock{migrationInstant}
@@ -240,17 +309,7 @@ func TestArchiveRowIsRefusedWhenTheArchiveIsNotThere(t *testing.T) {
 func assertMigrationArchive(t *testing.T, db *sql.DB, which string) {
 	t.Helper()
 
-	found := false
-
-	for _, name := range readTableNames(t, db) {
-		if name == "migrationArchive" {
-			found = true
-
-			break
-		}
-	}
-
-	if !found {
+	if !hasMigrationArchiveTable(t, db) {
 		t.Fatalf("%s has no migrationArchive table after the migration", which)
 	}
 
@@ -261,6 +320,53 @@ func assertMigrationArchive(t *testing.T, db *sql.DB, which string) {
 	if err := db.QueryRow(query).Scan(&index); err != nil {
 		t.Fatalf("%s has no migration_archive_table_row index: every archived row has to be held exactly once: %v", which, err)
 	}
+}
+
+// hasMigrationArchiveTable reports whether the deployment holds the archive table at all, which is
+// the question both the migration's gate and the clearing ask before either touches it.
+func hasMigrationArchiveTable(t *testing.T, db *sql.DB) bool {
+	t.Helper()
+
+	for _, name := range readTableNames(t, db) {
+		if name == "migrationArchive" {
+			return true
+		}
+	}
+
+	return false
+}
+
+// createMigrationArchive runs the migration's own archive step directly, for a test that needs a
+// deployment whose archive table already stands without seeding a legacy table to make the pass build
+// one. The step is idempotent, so a fixture may ask for it as many times as it likes.
+func createMigrationArchive(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	if err := ensureMigrationArchive(context.Background(), newStore(db, DialectSqlite)); err != nil {
+		t.Fatalf("creating the migration archive: %v", err)
+	}
+}
+
+// archiveRowInto writes one archived row through the transaction shape the migration pass uses, for a
+// test that needs an archive holding a row rather than an archive the pass filled.
+func archiveRowInto(t *testing.T, db *sql.DB, table string, rowID int64, reason string, contents map[string]any) error {
+	t.Helper()
+
+	s := newStore(db, DialectSqlite)
+	s.clock = fixedClock{migrationInstant}
+
+	tx, err := s.begin(context.Background())
+	if err != nil {
+		return err
+	}
+
+	if err := archiveRow(context.Background(), tx, table, rowID, reason, contents); err != nil {
+		tx.rollback()
+
+		return err
+	}
+
+	return tx.commit()
 }
 
 // archivedRows reads what the archive holds for one v6 table, identity first, so a test can name the
