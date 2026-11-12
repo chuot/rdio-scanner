@@ -424,6 +424,87 @@ func TestTheGuideTellsAVersion6AdministratorWhatChanged(t *testing.T) {
 	}
 }
 
+// colourFields are the four administrator fields that offer a colour, each with the sentence
+// that says where its level sits in the order a call's colour is read.
+type colourField struct {
+	caption string
+	order   string
+}
+
+var colourFields = []colourField{
+	{
+		caption: "The system row",
+		order:   "It wins over the talkgroup's own colour and loses to a group or a tag the talkgroup carries.",
+	},
+	{
+		caption: "The talkgroup row",
+		order:   "It is the last level read, so it colours the call only when no group, tag, or system colours it.",
+	},
+	{
+		caption: "The group row",
+		order:   "It is the first level read, so it wins over its tag's, its system's, and each talkgroup's own colour.",
+	},
+	{
+		caption: "The tag row",
+		order:   "It wins over the system's and the talkgroup's colour and loses to a group's.",
+	},
+}
+
+// colourFieldRow returns the colour row of one of the guide's field tables as plain text,
+// with the whitespace the document wraps its cells with collapsed away.
+func colourFieldRow(t *testing.T, body, caption string) string {
+	t.Helper()
+
+	for _, row := range regexp.MustCompile(`(?is)<tr\b.*?</tr>`).FindAllString(tableWithCaption(t, body, caption), -1) {
+		if strings.Contains(row, "<td>Led Color</td>") {
+			return strings.Join(strings.Fields(stripTags(row)), " ")
+		}
+	}
+
+	t.Fatalf("the table captioned %q carries no Led Color row", caption)
+
+	return ""
+}
+
+// where an administrator sets colours, the guide names the order those levels are read in,
+// what a level left at its default leaves the listener with, and that the configuration a
+// listener is sent already carries the resolved colour instead of an empty field.
+func TestTheGuideSaysWhichColourWinsAtEachLevelThatOffersOne(t *testing.T) {
+	body := guidePath(t)
+
+	const leftAlone = "Left alone, it colours nothing, and a call no level colours shows green."
+
+	for _, field := range colourFields {
+		row := colourFieldRow(t, body, field.caption)
+
+		if !strings.Contains(row, field.order) {
+			t.Errorf("the colour row of %q does not state where its level sits in the order: %q is missing", field.caption, field.order)
+		}
+
+		if !strings.Contains(row, leftAlone) {
+			t.Errorf("the colour row of %q does not name the colour a call ends with: %q is missing", field.caption, leftAlone)
+		}
+	}
+
+	chapter := strings.Join(strings.Fields(stripTags(chapterOf(t, body, "ch-11-systems-sites-talkgroups-units"))), " ")
+
+	for _, stated := range []string{
+		"the group a talkgroup belongs to, then its tag, then its system, then the talkgroup itself",
+		"a call that none of the four colours shows in green",
+		"carrying a colour rather than an empty one for the listener to resolve",
+		"a system's entry carries the colour you chose for it, or green when you chose none",
+		"a talkgroup's entry carries the colour that order resolves to for that talkgroup",
+	} {
+		if !strings.Contains(chapter, stated) {
+			t.Errorf("chapter 11 does not say %q", stated)
+		}
+	}
+
+	if !strings.Contains(words(tableWithCaption(t, body, "Where groups and tags are used")), "The assignment order is group, then tag, then system, then talkgroup.") {
+		t.Errorf("the chapter 12 table that names where groups and tags are used no longer states the assignment order")
+	}
+}
+
 // serverFlag is one flag the composition root registers, with the default expression the source writes.
 type serverFlag struct {
 	name string

@@ -2134,7 +2134,7 @@ rm -f ${basename}.*</code></pre>
       <tr><td>Label</td><td>The name listeners see, on the main screen and in the search panel.</td></tr>
       <tr><td>Type</td><td>The system's modulation or trunking standard: AM, DMR, FM, NFM, NXDN, P25, Provoice, SmartNet, Tetra, or no type. It is shown with the system; nothing in the server's behaviour depends on it.</td></tr>
       <tr><td>Audio alert</td><td>An alert tone prefixed to every call assigned to this system. The alerts are the named oscillator sequences the server knows; they are listed in <a href="#ch-16-rest-api">chapter 16</a>.</td></tr>
-      <tr><td>Led Color</td><td>The colour a listener's display shows for this system's calls. The default is green.</td></tr>
+      <tr><td>Led Color</td><td>The colour a listener's display shows for this system's calls. It wins over the talkgroup's own colour and loses to a group or a tag the talkgroup carries. Left alone, it colours nothing, and a call no level colours shows green.</td></tr>
       <tr><td>Auto Populate</td><td>Creates this system's talkgroups and units when a recording names ones you have not configured. It works beside the server-wide option: see <a href="#ch-10-getting-audio-in">auto populate</a>.</td></tr>
       <tr><td>Delay</td><td>Minutes this system's calls are held before they are propagated to listeners.</td></tr>
       <tr><td>Blacklists</td><td>A comma-separated list of talkgroup references this system refuses: every call whose system and talkgroup resolve is refused when the talkgroup's reference is in the list, auto populate enabled or not. The <strong>Blacklist talkgroup</strong> action of the Talkgroups section appends a reference here and stores it with that talkgroup's rows in the click. This section saves the list the server holds: saving a system after blacklisting one of its talkgroups keeps the entry, and a list you were writing in this field and had not saved is replaced by the entry the click stores, which the click tells you.</td></tr>
@@ -2185,7 +2185,7 @@ rm -f ${basename}.*</code></pre>
       <tr><td>Groups</td><td>The groups this talkgroup belongs to, ticked in place. A talkgroup in no group is selected on its own and nowhere else.</td></tr>
       <tr><td>Tag</td><td>The one tag this talkgroup carries, chosen from the Tags section.</td></tr>
       <tr><td>Audio alert</td><td>An alert tone prefixed to this talkgroup's calls.</td></tr>
-      <tr><td>Led Color</td><td>The colour this talkgroup's calls show in a listener's display.</td></tr>
+      <tr><td>Led Color</td><td>The colour this talkgroup's calls show in a listener's display. It is the last level read, so it colours the call only when no group, tag, or system colours it. Left alone, it colours nothing, and a call no level colours shows green.</td></tr>
       <tr><td>Type</td><td>The talkgroup's channel type, shown to listeners.</td></tr>
       <tr><td>Frequency</td><td>A fake frequency in hertz shown on the main screen, for a talkgroup the recorder reports no frequency for.</td></tr>
       <tr><td>Delay</td><td>Minutes this talkgroup's calls are held before they are propagated to listeners.</td></tr>
@@ -2274,6 +2274,20 @@ rm -f ${basename}.*</code></pre>
     a group greys its talkgroups' names out.</li>
   </ul>
 
+  <p>
+    The four colour fields are read in one order wherever a listener's display
+    paints a call: the group a talkgroup belongs to, then its tag, then its
+    system, then the talkgroup itself. A level left at its default colours
+    nothing, and a call that none of the four colours shows in
+    <strong>green</strong>. The server works that order out before it sends a
+    listener its configuration, so the system and talkgroup entries of that
+    configuration arrive carrying a colour rather than an empty one for the
+    listener to resolve: a system's entry carries the colour you chose for it,
+    or green when you chose none, and a talkgroup's entry carries the colour
+    that order resolves to for that talkgroup. The group and tag listings carry
+    what you stored, and a group or tag you left alone carries no colour at all.
+  </p>
+
   <h3>Importing the list</h3>
 
   <p>
@@ -2320,7 +2334,7 @@ rm -f ${basename}.*</code></pre>
     <tbody>
       <tr><td>Label</td><td>Required. The name shown on the listener's main screen, in the search panel, and in the select panel.</td></tr>
       <tr><td>Audio alert</td><td>An alert tone prefixed to every call assigned to this group. It wins over the system's and the talkgroup's alert.</td></tr>
-      <tr><td>Led Color</td><td>The colour this group's calls show, winning over the system's colour. The default is green.</td></tr>
+      <tr><td>Led Color</td><td>The colour this group's calls show. It is the first level read, so it wins over its tag's, its system's, and each talkgroup's own colour. Left alone, it colours nothing, and a call no level colours shows green.</td></tr>
       <tr><td>Delete Group</td><td>Removes the group. The talkgroups that were in it stay, and become members of no group.</td></tr>
     </tbody>
   </table>
@@ -2359,7 +2373,7 @@ rm -f ${basename}.*</code></pre>
     <tbody>
       <tr><td>Label</td><td>Required. The name shown on the listener's main screen and in the search panel.</td></tr>
       <tr><td>Audio alert</td><td>An alert tone prefixed to every call on a talkgroup carrying this tag. It wins over the system's and the talkgroup's alert, and loses to the group's.</td></tr>
-      <tr><td>Led Color</td><td>The colour calls on a talkgroup with this tag show, winning over the system's colour.</td></tr>
+      <tr><td>Led Color</td><td>The colour calls on a talkgroup with this tag show. It wins over the system's and the talkgroup's colour and loses to a group's. Left alone, it colours nothing, and a call no level colours shows green.</td></tr>
       <tr><td>Delete Tag</td><td>Removes the tag. Talkgroups that carried it are left untagged.</td></tr>
     </tbody>
   </table>
