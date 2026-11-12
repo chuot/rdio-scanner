@@ -192,6 +192,7 @@ func TestKnownLogSourcesAreTheDeclaredVocabulary(t *testing.T) {
 		LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,
 		LogSourceIngest, LogSourceLogin, LogSourceAccess, LogSourceLivefeed, LogSourceFFmpeg,
 		LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin, LogSourceMcp,
+		LogSourceMaintenance,
 		LogSourceCalls, LogSourceLegacy,
 	}
 
@@ -217,6 +218,7 @@ func TestEveryLogSourceSaysWhetherAWriterWritesIt(t *testing.T) {
 		LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,
 		LogSourceIngest, LogSourceLogin, LogSourceAccess, LogSourceLivefeed, LogSourceFFmpeg,
 		LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin, LogSourceMcp,
+		LogSourceMaintenance,
 	}
 
 	// calls is the name this feature found rather than the one it designed: the legacy server's call
@@ -250,6 +252,33 @@ func TestEveryLogSourceSaysWhetherAWriterWritesIt(t *testing.T) {
 	if LogSourceIsWritten(LogSource("nonsense")) {
 		t.Errorf("LogSourceIsWritten(nonsense) = true, want false: a name outside the vocabulary is not a part " +
 			"of this server")
+	}
+}
+
+// TestTheMaintenanceSourceIsANameThisServerWrites pins the subsystem a maintenance run files its
+// removals under: it is in the vocabulary, it is classified as a part of this server that writes
+// entries rather than a name only the backfill reaches, and the closed vocabulary still refuses a
+// name that is not one — a maintenance run's filter is a subsystem, not a free-text search.
+func TestTheMaintenanceSourceIsANameThisServerWrites(t *testing.T) {
+	if !IsKnownLogSource(LogSourceMaintenance) {
+		t.Fatalf("%q is not in the vocabulary, so the log view cannot offer it and a writer cannot file "+
+			"under it", LogSourceMaintenance)
+	}
+
+	if !LogSourceIsWritten(LogSourceMaintenance) {
+		t.Errorf("LogSourceIsWritten(%q) = false, want true: what a maintenance run removed is a record this "+
+			"server writes, not a leftover from the previous one", LogSourceMaintenance)
+	}
+
+	// The run's own name, and the near misses a reader reaches for instead.
+	for _, name := range []string{"vacuum", "maintenance_run", "Maintenance", "maintain", "migration damage"} {
+		if IsKnownLogSource(LogSource(name)) {
+			t.Errorf("IsKnownLogSource(%q) = true, want false: %s is a subsystem and the vocabulary stays closed", name, LogSourceMaintenance)
+		}
+	}
+
+	if _, ok := ParseLogSource("maintenance"); !ok {
+		t.Errorf("ParseLogSource(\"maintenance\") = false, want the filter the log view sends to read as %s", LogSourceMaintenance)
 	}
 }
 

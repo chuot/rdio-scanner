@@ -714,6 +714,58 @@ func TestSearchLogsBySource(t *testing.T) {
 	}
 }
 
+// A maintenance run's removals are the record a deployment cleared months ago is explained from, so the
+// subsystem they are filed under has to reach the log view the way every other subsystem's entries do:
+// stored with that subsystem, returned by a filter for it, and counted beside the other subsystems.
+func TestAppendLogStoresAMaintenanceEntryAndTheLogSearchFindsIt(t *testing.T) {
+	logs := NewLogs(openMigratedLegacyDatabase(t, "logs"), DialectSqlite)
+
+	store := []domain.LogEntry{
+		{DateTime: time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC), Level: domain.LogLevelWarn, Source: domain.LogSourceMaintenance, Message: `removed unit "6789" carrying the radio number 6789, of system 101`},
+		{DateTime: time.Date(2026, 3, 14, 9, 1, 0, 0, time.UTC), Level: domain.LogLevelWarn, Source: domain.LogSourceMaintenance, Message: "dropped the table rdioScannerCalls, which held 8 rows"},
+		{DateTime: time.Date(2026, 3, 14, 9, 2, 0, 0, time.UTC), Level: domain.LogLevelInfo, Source: domain.LogSourceDatabase, Message: "migrating the database from version 6.6.3"},
+	}
+
+	for _, entry := range store {
+		if err := logs.AppendLog(context.Background(), entry); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	page, err := logs.SearchLogs(context.Background(), domain.LogSearch{
+		Source: domain.LogSourceMaintenance, Limit: domain.DefaultLogSearchLimit, Ascending: true,
+	})
+	if err != nil {
+		t.Fatalf("SearchLogs: %v", err)
+	}
+
+	if page.Count != 2 || len(page.Results) != 2 {
+		t.Fatalf("a search for %s matched %d entries and returned %d, want the 2 entries the run filed: %v",
+			domain.LogSourceMaintenance, page.Count, len(page.Results), page.Results)
+	}
+
+	for _, entry := range page.Results {
+		if entry.Source != domain.LogSourceMaintenance {
+			t.Errorf("the log view returned an entry with source %q under a %s filter", entry.Source, domain.LogSourceMaintenance)
+		}
+
+		if entry.Level != domain.LogLevelWarn {
+			t.Errorf("the entry %q carries level %q, want it stored at the warn level", entry.Message, entry.Level)
+		}
+	}
+
+	countsBySource := map[domain.LogSource]uint64{}
+
+	for _, count := range page.SourceCounts {
+		countsBySource[count.Source] = count.Count
+	}
+
+	if countsBySource[domain.LogSourceMaintenance] != 2 {
+		t.Errorf("the log view counts %d %s entries, want the 2 the run filed: %v",
+			countsBySource[domain.LogSourceMaintenance], domain.LogSourceMaintenance, page.SourceCounts)
+	}
+}
+
 // A text search matches a substring of the message, case-insensitively, and the % and _
 // of the submitted text match themselves.
 func TestSearchLogsByTextMatchesASubstringOfTheMessage(t *testing.T) {

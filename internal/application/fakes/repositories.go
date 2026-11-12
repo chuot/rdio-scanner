@@ -1370,3 +1370,47 @@ func (tallies *LogTallies) TallyLogLevels(ctx context.Context, from time.Time) (
 
 	return tallies.Stored, nil
 }
+
+// Maintenance is the fake the maintenance run is tested against. Like the real clearing, it answers
+// with what went rather than deciding what is in problem: a test hands it the report the run produces
+// and asserts what the handler did about it.
+type Maintenance struct {
+	// Report is the account the fake hands back, whether the run asked it to clear or only to read.
+	Report ports.MigrationDamageReport
+
+	// Failure, when set, is what both the clearing and the reading answer with, so a test can fail the
+	// deployment out from under a run.
+	Failure error
+
+	// Cleared counts the clearings the run asked for. A report-only run must leave it at zero.
+	Cleared int
+
+	// Reads counts the readings the run asked for. A clearing must leave it at zero: it clears the
+	// deployment rather than reading it aside.
+	Reads int
+}
+
+var _ ports.MigrationClearer = (*Maintenance)(nil)
+var _ ports.MigrationDamageReader = (*Maintenance)(nil)
+
+// ClearMigrationDamage records that a run asked for a clearing and answers with the account.
+func (maintenance *Maintenance) ClearMigrationDamage(ctx context.Context) (ports.MigrationDamageReport, error) {
+	maintenance.Cleared++
+
+	if maintenance.Failure != nil {
+		return ports.MigrationDamageReport{}, maintenance.Failure
+	}
+
+	return maintenance.Report, nil
+}
+
+// ReadMigrationDamage records that a run asked what a clearing would name, and changes nothing.
+func (maintenance *Maintenance) ReadMigrationDamage(ctx context.Context) (ports.MigrationDamageReport, error) {
+	maintenance.Reads++
+
+	if maintenance.Failure != nil {
+		return ports.MigrationDamageReport{}, maintenance.Failure
+	}
+
+	return maintenance.Report, nil
+}

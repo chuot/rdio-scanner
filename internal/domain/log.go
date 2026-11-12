@@ -58,6 +58,12 @@ const (
 	// question has to have a name to filter by.
 	LogSourceMcp LogSource = "mcp"
 
+	// LogSourceMaintenance names what an operator-initiated maintenance run did to the deployment: the
+	// rows it removed and the tables it dropped. It is its own name and not the database's because the two
+	// answer different questions — what the server did on its own at startup, and what it did because a
+	// person ran the switch — and a deployment cleared months ago is explained by these entries alone.
+	LogSourceMaintenance LogSource = "maintenance"
+
 	// LogSourceCalls names the call repository of the server this one replaced. No writer here files under
 	// it: see backfillOnlyLogSources.
 	LogSourceCalls LogSource = "calls"
@@ -75,6 +81,7 @@ var writtenLogSources = []LogSource{
 	LogSourceServer, LogSourceConfig, LogSourceDirwatch, LogSourceDownstream, LogSourceDelayer,
 	LogSourceIngest, LogSourceLogin, LogSourceAccess, LogSourceLivefeed, LogSourceFFmpeg,
 	LogSourceUpload, LogSourcePrune, LogSourceLogs, LogSourceDatabase, LogSourceAdmin, LogSourceMcp,
+	LogSourceMaintenance,
 }
 
 // backfillOnlyLogSources are vocabulary names no writer of this server

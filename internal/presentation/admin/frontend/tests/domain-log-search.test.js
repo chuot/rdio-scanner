@@ -30,6 +30,34 @@ test('the subsystem filter offers every subsystem the server has', () => {
   }
 });
 
+// a maintenance run files what it removed under its own subsystem, and the operator has to be able
+// to filter the log for it: the choice is offered, it reads as a subsystem, and it sits with the
+// subsystems this server writes rather than after the names only a migrated database carries.
+test('the log view offers the maintenance subsystem among the subsystems this server writes', () => {
+  const offered = logSearchFilterOptions().slice(1);
+  const values = offered.map(([value]) => value);
+
+  const at = values.indexOf('maintenance');
+
+  assert.notEqual(at, -1, 'the subsystem filter does not offer maintenance, so a cleared deployment cannot be looked up in the log');
+
+  const label = offered[at][1];
+
+  assert.ok(label.trim().length > 0, 'the maintenance subsystem is offered with an empty label');
+  assert.equal(label, 'Maintenance', 'the maintenance subsystem is shown as something other than the name an operator uses for it');
+
+  // The vocabulary lists what this server writes first, and the names only a database migrated from
+  // the previous server carries last. What a run of this server removed belongs in the first group.
+  const written = values.slice(0, values.indexOf('calls'));
+
+  assert.ok(written.includes('maintenance'), `maintenance is offered at position ${at + 1}, after the subsystems no writer in this server files under: ${values}`);
+  assert.ok(values.indexOf('admin') < at, 'maintenance is offered before Administration, which this server has listed for longer than it has had maintenance runs');
+
+  assert.deepEqual(logSourceCounts([{ source: 'maintenance', count: 6 }]), [
+    { source: 'maintenance', label: 'Maintenance', count: 6 },
+  ]);
+});
+
 test('the filters produce the request the search is asked with', () => {
   const options = logSearchOptions({
     pageIndex: 0,

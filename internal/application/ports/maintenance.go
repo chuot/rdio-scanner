@@ -16,6 +16,7 @@
 package ports
 
 import (
+	"context"
 	"time"
 
 	"rdio-scanner/internal/domain"
@@ -54,4 +55,18 @@ type ArchivedRow struct {
 type DroppedTable struct {
 	Name string
 	Rows int
+}
+
+// MigrationClearer is the maintenance clearing itself: it removes the records a legacy migration left
+// in problem from the deployment and answers with what went. It is reached only from an operator's
+// maintenance run, never from a server start, a scheduled pass, or an endpoint.
+type MigrationClearer interface {
+	ClearMigrationDamage(ctx context.Context) (MigrationDamageReport, error)
+}
+
+// MigrationDamageReader answers the same question without changing the deployment: it reports the unit
+// rows, the archive rows, and the legacy tables a clearing would name and remove, so an operator can
+// read the list before deciding to run it. It removes nothing and files nothing.
+type MigrationDamageReader interface {
+	ReadMigrationDamage(ctx context.Context) (MigrationDamageReport, error)
 }

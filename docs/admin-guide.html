@@ -2610,6 +2610,7 @@ rm -f ${basename}.*</code></pre>
       <tr><td><code>database</code></td><td>Database</td><td>The database migration: what it migrated, what it refused, and what it left damaged.</td></tr>
       <tr><td><code>admin</code></td><td>Administration</td><td>The administrator account: a password changed or not changed, a user added or removed, a new signing secret, the administration interface's own connection — joined, ended, or presenting a session token this server did not issue — and a request from the administrator whose body the server could not read.</td></tr>
       <tr><td><code>mcp</code></td><td>Assistant surface</td><td>The Model Context Protocol endpoint, when it is enabled: a caller it would not let in, named by the address the request came from; a capability refusing a caller; a capability that changed the deployment; and the endpoint's own transport trouble. It files no entry for a read an assistant was entitled to, and no entry ever carries a credential.</td></tr>
+      <tr><td><code>maintenance</code></td><td>Maintenance</td><td>What a maintenance run cleared from the deployment: the unit rows carrying their own radio number as their label, the tables the previous server left standing, and the archive that held what the migration could not carry. Each removal is one entry, and a run that cleared nothing files nothing.</td></tr>
       <tr><td><code>calls</code></td><td>Calls</td><td>A call an operator acted on, such as pinning one. The current server writes nothing under this name; on a database upgraded from the previous server it holds the entries that server wrote.</td></tr>
       <tr><td><code>legacy</code></td><td>From the previous server</td><td>Entries that arrived before this field existed, or from a server that does not write it.</td></tr>
     </tbody>
@@ -4537,6 +4538,7 @@ $ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
       <tr><td><em>Live feed</em></td><td><code>livefeed</code></td><td>The listener connections and what they are sent</td></tr>
       <tr><td><em>Log search</em></td><td><code>logs</code></td><td>The log view's own failures</td></tr>
       <tr><td><em>Logins</em></td><td><code>login</code></td><td>The administrator's logins, refusals, and lockouts</td></tr>
+      <tr><td><em>Maintenance</em></td><td><code>maintenance</code></td><td>What a maintenance run cleared: damaged units, the tables the previous server left standing, the migration archive</td></tr>
       <tr><td><em>Retention</em></td><td><code>prune</code></td><td>The retention pass, what it removed, and what stopped it</td></tr>
       <tr><td><em>Server</em></td><td><code>server</code></td><td>Startup, the addresses it answers on, shutdown, and the failures that stop it</td></tr>
       <tr><td><em>Uploads</em></td><td><code>upload</code></td><td>The upload endpoints and the bodies they read</td></tr>

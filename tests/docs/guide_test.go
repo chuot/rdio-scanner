@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"rdio-scanner/internal/domain"
 )
 
 // these checks hold the administrator guide to one self-contained file: it carries
@@ -732,6 +734,102 @@ var sectionGuideChapters = map[string]string{
 	"Logs":        "ch-14-logs",
 	"Tools":       "ch-15-tools",
 	"OpenAPI":     "ch-16-rest-api",
+}
+
+// the log chapter tabulates every subsystem the server files entries under, and the reference
+// chapter indexes the same list: a subsystem an operator can filter on and cannot find in the guide
+// is a subsystem nobody filters on. Both tables are pinned to the vocabulary the server declares,
+// the chapter's in the server's own order and the index in the order a reader scans it.
+func TestTheGuideTabulatesEverySubsystemTheServerFilesEntriesUnder(t *testing.T) {
+	body := guidePath(t)
+
+	want := domain.KnownLogSources()
+
+	chapter := regexp.MustCompile(`(?is)<tr><td><code>([a-z]+)</code></td><td>([^<]+)</td><td>(.+?)</td></tr>`).
+		FindAllStringSubmatch(tableWithCaption(t, body, "Every subsystem the server files entries under, and what it reports"), -1)
+
+	index := regexp.MustCompile(`(?is)<tr><td><em>([^<]+)</em></td><td><code>([a-z]+)</code></td><td>(.+?)</td></tr>`).
+		FindAllStringSubmatch(tableWithCaption(t, body, "The subsystems, alphabetically, with the name the log view shows and the name the filter uses"), -1)
+
+	if len(chapter) != len(want) {
+		t.Fatalf("the log chapter tabulates %d subsystems and the server files entries under %d: %v",
+			len(chapter), len(want), guideTableNames(chapter, 1))
+	}
+
+	shown := map[string]string{}
+
+	for i, source := range want {
+		name := chapter[i][1]
+
+		if name != string(source) {
+			t.Errorf("the log chapter's row %d names %q, want %q: the table is read in the order the server "+
+				"lists the subsystems, so a mismatch is one missing and another moved to take its place",
+				i+1, name, source)
+
+			continue
+		}
+
+		label := strings.TrimSpace(chapter[i][2])
+
+		if label == "" {
+			t.Errorf("the log chapter shows %s with no label, and a filter choice nobody can read is one nobody uses", source)
+		}
+
+		if strings.TrimSpace(stripTags(chapter[i][3])) == "" {
+			t.Errorf("the log chapter says nothing about what %s reports, so an operator cannot tell what to filter for", source)
+		}
+
+		shown[string(source)] = label
+	}
+
+	if len(index) != len(want) {
+		t.Fatalf("the reference index lists %d subsystems and the server files entries under %d: %v",
+			len(index), len(want), guideTableNames(index, 2))
+	}
+
+	order := []string{}
+
+	for _, row := range index {
+		name := row[2]
+
+		if _, ok := shown[name]; !ok {
+			t.Errorf("the reference index lists %q, which the log chapter does not tabulate under the server's vocabulary", name)
+
+			continue
+		}
+
+		label := strings.TrimSpace(row[1])
+
+		if label != shown[name] {
+			t.Errorf("the reference index shows %s as %q and the log chapter shows it as %q: the two tables the "+
+				"same operator reads name one subsystem two ways", name, label, shown[name])
+		}
+
+		if strings.TrimSpace(stripTags(row[3])) == "" {
+			t.Errorf("the reference index names %s with no line about what it covers", name)
+		}
+
+		order = append(order, label)
+	}
+
+	if scanned := append([]string{}, order...); !sort.SliceIsSorted(scanned, func(i, j int) bool {
+		return strings.ToLower(scanned[i]) < strings.ToLower(scanned[j])
+	}) {
+		t.Errorf("the reference index is captioned as the subsystems alphabetically and lists them %v: a reader "+
+			"scanning for one name misses it", order)
+	}
+}
+
+// guideTableNames collects one column of a parsed table, so a short table can name what it holds
+// where a whole row would only add noise.
+func guideTableNames(rows [][]string, column int) []string {
+	out := []string{}
+
+	for _, row := range rows {
+		out = append(out, row[column])
+	}
+
+	return out
 }
 
 // every flag and default the guide tabulates is one the server accepts and starts with,

@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
+	"time"
 
 	"rdio-scanner/internal/domain"
 )
@@ -518,6 +519,57 @@ func TestEverySourceTheBackfillReachesIsOneTheServerHas(t *testing.T) {
 			t.Errorf("%q is offered by the log view and recorded as a name only the backfill reaches, and the "+
 				"backfill produces nothing under it: an operator filtering for it is always told nothing "+
 				"happened", source)
+		}
+	}
+}
+
+// A maintenance run's entries are the account of a deployment cleared months ago, so they have to
+// survive the next start with their subsystem intact: the row is stored under the name it was filed
+// under, and the startup pass that names nameless rows leaves it alone.
+func TestAMaintenanceEntryIsStoredUnderItsSubsystemAndASubsequentStartKeepsIt(t *testing.T) {
+	db := openMigratedLegacyDatabase(t, "logs")
+
+	defer db.Close()
+
+	store := []domain.LogEntry{
+		{
+			DateTime: time.Date(2026, 3, 14, 9, 0, 0, 0, time.UTC),
+			Level:    domain.LogLevelWarn,
+			Source:   domain.LogSourceMaintenance,
+			Message:  `removed unit "6789" carrying the radio number 6789, of system 101`,
+		},
+		{
+			DateTime: time.Date(2026, 3, 14, 9, 1, 0, 0, time.UTC),
+			Level:    domain.LogLevelWarn,
+			Source:   domain.LogSourceMaintenance,
+			Message:  "dropped the table rdioScannerCalls, which held 8 rows",
+		},
+	}
+
+	logs := NewLogs(db, DialectSqlite)
+
+	for _, entry := range store {
+		if err := logs.AppendLog(context.Background(), entry); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	if err := ensureLogSourceColumn(context.Background(), newStore(db, DialectSqlite)); err != nil {
+		t.Fatalf("the start after the clearing: %v", err)
+	}
+
+	for _, entry := range store {
+		var source string
+
+		// The message is what identifies the row: the startup pass itself files entries in the same
+		// table, and only the run's own lines are what this check is about.
+		if err := db.QueryRow(`SELECT "source" FROM "logs" WHERE "message" = ?`, entry.Message).Scan(&source); err != nil {
+			t.Fatalf("reading the entry the run filed under %s: %v", entry.Source, err)
+		}
+
+		if domain.LogSource(source) != domain.LogSourceMaintenance {
+			t.Errorf("the entry %q is stored under %q, want %s: the startup pass re-files a row that already "+
+				"names its subsystem", entry.Message, source, domain.LogSourceMaintenance)
 		}
 	}
 }
