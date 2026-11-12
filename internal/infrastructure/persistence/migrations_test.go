@@ -256,11 +256,22 @@ func hasV6Table(t *testing.T, db *sql.DB, table string) bool {
 	return false
 }
 
-// A v6 database comes out holding exactly the v7 schema's tables, none of
-// the v6 tables left behind; the archive and its unique index are the pass's
-// own, and ApplySchema may not add them to a database the other server wrote.
+// A v6 database comes out holding exactly the v7 schema's tables, none of the
+// v6 tables left behind; the archive and its unique index are the pass's own,
+// created where one of the legacy tables was there to read a row out of, and
+// ApplySchema may not add them to a database the other server wrote.
 var archivedTables = func() []string {
 	tables := append(append([]string{}, legacyTables...), "migrationArchive")
+
+	sort.Strings(tables)
+
+	return tables
+}()
+
+// liveTablesOnly are the tables a database gains when the pass finds none of the
+// legacy table names to read: the live tables, with no archive built beside them.
+var liveTablesOnly = func() []string {
+	tables := append([]string{}, legacyTables...)
 
 	sort.Strings(tables)
 
@@ -417,7 +428,9 @@ func TestMigrateOnAFreshDatabaseMigratesNothingAndSaysOnlyTheCallHistoryKey(t *t
 		t.Errorf("a fresh database was announced as %v, want the covering key the startup pass adds and nothing else", progress)
 	}
 
-	if got, want := readTableNames(t, db), archivedTables; !equalStrings(got, want) {
+	// The archive belongs to a deployment holding a table the pass can read a row out of, and a fresh
+	// database holds none: the tables it gains are the live ones and nothing archived beside them.
+	if got, want := readTableNames(t, db), liveTablesOnly; !equalStrings(got, want) {
 		t.Errorf("the tables of a fresh database:\n  got  %v\n  want %v", got, want)
 	}
 }
@@ -673,8 +686,9 @@ func plannerStatisticsTables(t *testing.T, db *sql.DB) []string {
 
 // The deployment that swaps one server binary for the other on a database
 // the legacy server already migrated: no v6 row moves, and the only things
-// the pass says and does are the call history key it adds and the columns,
-// indexes and archive the startup steps create beside it.
+// the pass says and does are the call history key it adds and the columns and
+// indexes the startup steps create beside it. A database the legacy server left
+// at v7 holds none of the table names the pass reads, so it gains no archive.
 func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 	db := openLegacyDatabase(t)
 
@@ -687,14 +701,14 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 
 	after := readSchemaObjects(t, db)
 
-	if len(after) != len(before)+15 {
-		t.Fatalf("a v7 database gained %d schema objects, want the two log indexes, the options key index, the migration archive with its index, the nine index keys the schema copy declares, and the covering key the startup step adds", len(after)-len(before))
+	if len(after) != len(before)+13 {
+		t.Fatalf("a v7 database gained %d schema objects, want the two log indexes, the options key index, the nine index keys the schema copy declares, and the covering key the startup step adds", len(after)-len(before))
 	}
 
 	// The logs and calls tables are the objects allowed to read differently
 	// afterwards, and only because each gained a column; every other table, index
 	// and trigger is byte-identical, and the only new objects are the two
-	// log-search indexes, the archive, and the call history keys the pass adds.
+	// log-search indexes and the call history keys the pass adds.
 	for _, object := range before {
 		if isLogsTable(object) || isCallsTable(object) {
 			continue
@@ -729,14 +743,12 @@ func TestMigrateOnALegacyWrittenV7DatabaseMigratesNothing(t *testing.T) {
 		"index delayed_call",
 		"index logs_source_idx",
 		"index logs_time_idx",
-		"index migration_archive_table_row",
 		"index options_key",
 		"index sites_system",
 		"index talkgroupgroups_group",
 		"index talkgroupgroups_talkgroup",
 		"index talkgroups_system_ref",
 		"index talkgroups_tag",
-		"table migrationArchive",
 	}
 
 	if !equalStrings(gained, want) {

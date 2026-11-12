@@ -102,9 +102,20 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 	}
 
 	// The migration archive is created here, not in the dialect schemas, the step
-	// runs before any v6 table is read.
-	if err := ensureMigrationArchive(ctx, s); err != nil {
+	// runs before any v6 table is read, and the probe that decides it asks for the
+	// legacy tables this pass reads: the only rows the archive ever holds are the
+	// rows a carry step could not carry out of those tables, so a deployment holding
+	// none of them has nothing to archive and gains no table. A table that already
+	// stands stands on with its rows whatever the probe answers.
+	present, err := legacyTablesPresent(ctx, s)
+	if err != nil {
 		return operationError("database", "migrate", err)
+	}
+
+	if present {
+		if err := ensureMigrationArchive(ctx, s); err != nil {
+			return operationError("database", "migrate", err)
+		}
 	}
 
 	// The options table gets its one-row-per-key rule before any step writes option
