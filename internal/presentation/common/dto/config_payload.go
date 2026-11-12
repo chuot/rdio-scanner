@@ -40,12 +40,19 @@ func (payload ConfigPayload) MarshalJSON() ([]byte, error) {
 
 	systems := visibleSystems(view, payload.Snapshot.Groups, payload.Snapshot.Tags)
 
+	// The group listing and the colour every talkgroup entry carries are resolved
+	// over one ordered group collection, so the group that decides a talkgroup's
+	// colour is always the group that listener's own listing puts first.
+	groups := orderedGroups(systems, payload.Snapshot.Groups)
+
+	resolveTalkgroupLEDs(systems, groups)
+
 	body := map[string]any{
 		"alerts":             alertTones,
 		"branding":           options.Branding,
 		"email":              options.Email,
 		"groups":             groupsMap(systems, payload.Snapshot.Groups),
-		"groupsData":         groupList(systems, payload.Snapshot.Groups),
+		"groupsData":         groupEntries(groups),
 		"keypadBeeps":        keypadBeeps(options.KeypadBeeps),
 		"showListenersCount": options.ShowListenersCount,
 		"systems":            systemEntries(systems),
@@ -59,8 +66,15 @@ func (payload ConfigPayload) MarshalJSON() ([]byte, error) {
 // visibleSystem is one system as a listener sees it, plus what the group and
 // tag listings need and the entry itself does not carry.
 type visibleSystem struct {
-	Entry      map[string]any
-	SystemRef  uint
+	Entry     map[string]any
+	SystemRef uint
+
+	// LED is the colour the system stores, which its talkgroups read as a
+	// candidate for the colour their own entries carry. The system entry names
+	// that colour too, and the server's default when the stored value is empty
+	// or a name the server does not know.
+	LED string
+
 	Talkgroups []visibleTalkgroup
 }
 
@@ -77,6 +91,13 @@ type visibleTalkgroup struct {
 	Groups []string
 
 	Tag string
+
+	// LED is the colour the talkgroup stores and TagLED the colour its tag
+	// stores. Both are candidates for the colour the entry carries, and both
+	// stay as the server stores them: a resolved colour is written into the
+	// entry and never back into these.
+	LED    string
+	TagLED string
 }
 
 // visibleSystems turns the systems one listener may see into the entries that listener receives.
@@ -115,7 +136,6 @@ func visibleSystems(view domain.Systems, groups domain.Groups, tags domain.Tags)
 					"group":     group,
 					"groups":    labels,
 					"label":     talkgroup.Label,
-					"led":       talkgroup.LED,
 					"name":      talkgroup.Name,
 					"order":     talkgroup.Order,
 					"tag":       tag.Label,
@@ -125,6 +145,8 @@ func visibleSystems(view domain.Systems, groups domain.Groups, tags domain.Tags)
 				Group:  group,
 				Groups: labels,
 				Tag:    tag.Label,
+				LED:    talkgroup.LED,
+				TagLED: tag.LED,
 			})
 		}
 
@@ -133,13 +155,14 @@ func visibleSystems(view domain.Systems, groups domain.Groups, tags domain.Tags)
 				"id":         system.SystemRef,
 				"alert":      system.Alert,
 				"label":      system.Label,
-				"led":        system.LED,
+				"led":        domain.EffectiveLEDColor(system.LED),
 				"order":      system.Order,
 				"talkgroups": talkgroupEntries(talkgroups),
 				"units":      unitEntries(system.Units),
 				"type":       system.Kind,
 			},
 			SystemRef:  system.SystemRef,
+			LED:        system.LED,
 			Talkgroups: talkgroups,
 		})
 	}
@@ -226,10 +249,11 @@ func unitEntries(units domain.Units) []map[string]any {
 	return out
 }
 
-// groupList is the groups this listener's talkgroups use, in first-seen
+// orderedGroups is the groups this listener's talkgroups use, in first-seen
 // order, each named once, including groups that are only ever a talkgroup's
-// second group.
-func groupList(systems []visibleSystem, groups domain.Groups) []map[string]any {
+// second group. It is the one order both the group listing and the colour a
+// talkgroup's entry carries are read from.
+func orderedGroups(systems []visibleSystem, groups domain.Groups) []domain.Group {
 	out := []domain.Group{}
 
 	for _, system := range systems {
@@ -247,7 +271,34 @@ func groupList(systems []visibleSystem, groups domain.Groups) []map[string]any {
 		}
 	}
 
-	return groupEntries(out)
+	return out
+}
+
+// resolveTalkgroupLEDs writes the colour each talkgroup entry carries: the first
+// colour found among the groups that talkgroup belongs to in listing order, then
+// its tag, then its system, then the talkgroup itself, and green when none of
+// those names a colour the server knows.
+//
+// Only stored colours are candidates. A system that stores no colour is an empty
+// candidate its talkgroups skip, never the green that system's own entry answers:
+// folding that default in would put a server's default ahead of a talkgroup's own
+// colour.
+func resolveTalkgroupLEDs(systems []visibleSystem, groups []domain.Group) {
+	for _, system := range systems {
+		for i, talkgroup := range system.Talkgroups {
+			candidates := []string{}
+
+			for _, group := range groups {
+				if containsLabel(talkgroup.Groups, group.Label) {
+					candidates = append(candidates, group.LED)
+				}
+			}
+
+			candidates = append(candidates, talkgroup.TagLED, system.LED, talkgroup.LED)
+
+			system.Talkgroups[i].Entry["led"] = domain.EffectiveLEDColor(candidates...)
+		}
+	}
 }
 
 func groupsMap(systems []visibleSystem, groups domain.Groups) map[string]map[uint][]uint {
@@ -392,6 +443,17 @@ func tagEntries(tags []domain.Tag) []map[string]any {
 func containsGroup(list []domain.Group, want domain.Group) bool {
 	for _, group := range list {
 		if group == want {
+			return true
+		}
+	}
+
+	return false
+}
+
+// containsLabel reports whether a talkgroup's group labels name one group.
+func containsLabel(labels []string, want string) bool {
+	for _, label := range labels {
+		if label == want {
 			return true
 		}
 	}

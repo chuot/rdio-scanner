@@ -1,7 +1,8 @@
-// the status light: the colour an administrator configured at a
-// group, tag, system, or talkgroup shows while that call plays,
-// green when the call carries none, and it keeps its colour while
-// the feed is paused. domain/alert-priority picks the colour.
+// the status light: the colour the server resolved for a call shows while that call
+// plays, green when nothing was configured, and the light keeps its colour while the
+// feed is paused. The server names a colour on every system and talkgroup entry it
+// sends, and folds the system colour into the talkgroup entry. domain/alert-priority
+// picks the colour from what the call carries.
 
 import './dom-shim.js';
 
@@ -30,13 +31,15 @@ function classes(call, { pause = false } = {}) {
 }
 
 describe('presentation/listener/rdio-status — the colour a call carries', () => {
+  // Each call below is a call the server has resolved: an administrator stored a colour at
+  // one or more levels, and the talkgroup entry carries the colour that came out on top.
   it('shows a group colour, which wins over every other level', () => {
     assert.deepEqual(
       classes({
         groupsData: [{ label: 'Fire', led: 'red' }],
         tagData: { label: 'T1', led: 'blue' },
         systemData: { label: 'SYS1', led: 'cyan' },
-        talkgroupData: { label: 'TG1', led: 'orange' },
+        talkgroupData: { label: 'TG1', led: 'red' },
       }),
       ['led', 'on', 'red'],
     );
@@ -48,7 +51,7 @@ describe('presentation/listener/rdio-status — the colour a call carries', () =
         groupsData: [{ label: 'Fire' }],
         tagData: { label: 'T1', led: 'blue' },
         systemData: { label: 'SYS1', led: 'cyan' },
-        talkgroupData: { label: 'TG1', led: 'orange' },
+        talkgroupData: { label: 'TG1', led: 'blue' },
       }),
       ['led', 'on', 'blue'],
     );
@@ -60,7 +63,7 @@ describe('presentation/listener/rdio-status — the colour a call carries', () =
         groupsData: [{ label: 'Fire' }],
         tagData: { label: 'T1' },
         systemData: { label: 'SYS1', led: 'cyan' },
-        talkgroupData: { label: 'TG1', led: 'orange' },
+        talkgroupData: { label: 'TG1', led: 'cyan' },
       }),
       ['led', 'on', 'cyan'],
     );
@@ -71,7 +74,7 @@ describe('presentation/listener/rdio-status — the colour a call carries', () =
       classes({
         groupsData: [{ label: 'Fire' }],
         tagData: { label: 'T1' },
-        systemData: { label: 'SYS1' },
+        systemData: { label: 'SYS1', led: 'green' },
         talkgroupData: { label: 'TG1', led: 'orange' },
       }),
       ['led', 'on', 'orange'],
@@ -83,14 +86,17 @@ describe('presentation/listener/rdio-status — the colour a call carries', () =
       classes({
         groupsData: [{ label: 'Fire' }],
         tagData: { label: 'T1' },
-        systemData: { label: 'SYS1' },
-        talkgroupData: { label: 'TG1' },
+        systemData: { label: 'SYS1', led: 'green' },
+        talkgroupData: { label: 'TG1', led: 'green' },
       }),
       ['led', 'on', 'green'],
     );
   });
 
   it('shows green for a colour the eight the light knows do not include', () => {
+    // A group entry carries what the administrator stored, so a name outside the eight
+    // reaches the light verbatim; the light still answers green.
+    assert.deepEqual(classes({ groupsData: [{ label: 'Fire', led: 'pink' }] }), ['led', 'on', 'green']);
     assert.deepEqual(classes({ talkgroupData: { label: 'TG1', led: 'pink' } }), ['led', 'on', 'green']);
   });
 

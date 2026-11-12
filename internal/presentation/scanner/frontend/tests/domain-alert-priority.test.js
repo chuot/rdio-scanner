@@ -1,4 +1,5 @@
-// tests for domain/alert-priority: group, tag, system, talkgroup ordering
+// tests for domain/alert-priority: the alert order group, tag, system, talkgroup, and the
+// colour order the resolved payload gives the chain, group, tag, talkgroup
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
@@ -60,10 +61,10 @@ describe('domain/alert-priority — group → tag → system → talkgroup', () 
     });
 });
 
-describe('domain/alert-priority — LED color resolution', () => {
+describe('domain/alert-priority — LED color resolution: group → tag → talkgroup', () => {
     const colors = ['blue', 'cyan', 'green', 'magenta', 'orange', 'red', 'white', 'yellow'];
 
-    it('group led wins, then tag, system, talkgroup', () => {
+    it('group led wins, then tag, then talkgroup', () => {
         assert.equal(
             resolveLedColor({
                 groupsData: [{ led: 'red' }],
@@ -80,7 +81,11 @@ describe('domain/alert-priority — LED color resolution', () => {
         );
 
         assert.equal(
-            resolveLedColor({ groupsData: [], systemData: { led: 'cyan' }, talkgroupData: { led: 'orange' } }, colors),
+            resolveLedColor({
+                groupsData: [],
+                systemData: { led: 'cyan' },
+                talkgroupData: { led: 'cyan' },
+            }, colors),
             'cyan',
         );
 
@@ -94,6 +99,109 @@ describe('domain/alert-priority — LED color resolution', () => {
         assert.equal(resolveLedColor({ groupsData: [] }, colors), 'green');
         assert.equal(resolveLedColor({ talkgroupData: { led: 'pink' } }, colors), 'green');
     });
+});
+
+describe('domain/alert-priority — the colour the server resolved into the payload', () => {
+    const colors = ['blue', 'cyan', 'green', 'magenta', 'orange', 'red', 'white', 'yellow'];
+
+    // Every call here is the shape a listener receives from the server: a system entry
+    // carrying a colour, a talkgroup entry carrying the colour the server resolved for that
+    // talkgroup, and group and tag entries carrying what the administrator stored.
+    const rows = [
+        {
+            name: 'a coloured group answers although its system entry carries the default',
+            call: {
+                groupsData: [{ id: 1, label: 'Fire', led: 'red' }],
+                systemData: { id: 10, label: 'Metro', led: 'green' },
+                talkgroupData: { id: 100, label: 'Fire 1', led: 'red' },
+            },
+            want: 'red',
+        },
+        {
+            name: 'a talkgroup storing a colour answers under a system that stores none',
+            call: {
+                groupsData: [{ id: 1, label: 'Fire' }],
+                tagData: { id: 20, label: 'Dispatch' },
+                systemData: { id: 10, label: 'Metro', led: 'green' },
+                talkgroupData: { id: 100, label: 'Fire 1', led: 'red' },
+            },
+            want: 'red',
+        },
+        {
+            name: 'a coloured system answers through the talkgroup entry it folds into',
+            call: {
+                groupsData: [],
+                tagData: { id: 20, label: 'Dispatch' },
+                systemData: { id: 10, label: 'Metro', led: 'cyan' },
+                talkgroupData: { id: 100, label: 'Fire 1', led: 'cyan' },
+            },
+            want: 'cyan',
+        },
+        {
+            name: 'a coloured tag answers under a system that stores none',
+            call: {
+                groupsData: [],
+                tagData: { id: 20, label: 'Dispatch', led: 'blue' },
+                systemData: { id: 10, label: 'Metro', led: 'green' },
+                talkgroupData: { id: 100, label: 'Fire 1', led: 'blue' },
+            },
+            want: 'blue',
+        },
+        {
+            name: 'a coloured group outranks a coloured system',
+            call: {
+                groupsData: [{ id: 1, label: 'Fire', led: 'red' }, { id: 2, label: 'Ground' }],
+                systemData: { id: 10, label: 'Metro', led: 'magenta' },
+                talkgroupData: { id: 100, label: 'Fire 1', led: 'red' },
+            },
+            want: 'red',
+        },
+        {
+            name: 'the default answers when no level stores a colour',
+            call: {
+                groupsData: [{ id: 1, label: 'Fire' }],
+                tagData: { id: 20, label: 'Dispatch' },
+                systemData: { id: 10, label: 'Metro', led: 'green' },
+                talkgroupData: { id: 100, label: 'Fire 1', led: 'green' },
+            },
+            want: 'green',
+        },
+        {
+            name: 'a group storing a name outside the eight answers green, as it does today',
+            call: {
+                groupsData: [{ id: 1, label: 'Fire', led: 'pink' }],
+                systemData: { id: 10, label: 'Metro', led: 'green' },
+                talkgroupData: { id: 100, label: 'Fire 1', led: 'red' },
+            },
+            want: 'green',
+        },
+        {
+            name: 'a tag storing a name outside the eight answers green, as it does today',
+            call: {
+                groupsData: [{ id: 1, label: 'Fire' }],
+                tagData: { id: 20, label: 'Dispatch', led: 'pink' },
+                systemData: { id: 10, label: 'Metro', led: 'green' },
+                talkgroupData: { id: 100, label: 'Fire 1', led: 'red' },
+            },
+            want: 'green',
+        },
+        {
+            name: 'a system storing a name outside the eight lets its talkgroup answer',
+            call: {
+                groupsData: [],
+                tagData: { id: 20, label: 'Dispatch' },
+                systemData: { id: 10, label: 'Metro', led: 'green' },
+                talkgroupData: { id: 100, label: 'Fire 1', led: 'red' },
+            },
+            want: 'red',
+        },
+    ];
+
+    for (const row of rows) {
+        it(row.name, () => {
+            assert.equal(resolveLedColor(row.call, colors), row.want);
+        });
+    }
 });
 
 describe('domain/alert-priority — the tone sequence the call carries', () => {

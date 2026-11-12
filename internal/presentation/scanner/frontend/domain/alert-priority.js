@@ -1,5 +1,8 @@
-// Alert and LED color priority resolution: group, then tag, then
-// system, then talkgroup.
+// Alert priority resolution: group, then tag, then system, then talkgroup.
+//
+// LED colour resolution reads group, then tag, then talkgroup. The server folds the system
+// colour into the talkgroup entry of the configuration it sends, so that entry always names
+// a colour and the colour chain has no system level to read.
 
 export function resolveAlert(call, config) {
   for (const groupData of call?.groupsData ?? []) {
@@ -33,14 +36,13 @@ export function resolveAlertSequence(call, config) {
 
 export const LED_COLORS = ['blue', 'cyan', 'green', 'magenta', 'orange', 'red', 'white', 'yellow'];
 
+// the colour to light an LED with, from the levels the configuration leaves on the
+// call; the server has already resolved its own default into the talkgroup entry, so a
+// name outside the eight is no colour and the answer is green.
 export function resolveLedColor(call, colors = LED_COLORS) {
   const group = (call?.groupsData ?? []).find((g) => g.led);
 
-  const color =
-    group?.led ||
-    call?.tagData?.led ||
-    call?.systemData?.led ||
-    call?.talkgroupData?.led;
+  const color = group?.led || call?.tagData?.led || call?.talkgroupData?.led;
 
   return color && colors.includes(color) ? color : 'green';
 }

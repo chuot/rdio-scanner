@@ -219,6 +219,232 @@ func TestConfigPayloadCarriesOnlyTheOptionsAListenerIsTold(t *testing.T) {
 	}
 }
 
+// TestConfigPayloadNamesAColourAtTheSystemLevel proves a system entry always names a
+// colour a listener can light an LED with: the colour the system stores when the server
+// knows the name, and green when it stores no colour or one the server does not know.
+func TestConfigPayloadNamesAColourAtTheSystemLevel(t *testing.T) {
+	snapshot := captureSnapshot()
+
+	// Three systems in one payload, one answer each: a system that stores no
+	// colour, one that stores a colour the server names, one that stores one it
+	// does not.
+	snapshot.Systems = append(snapshot.Systems, domain.System{
+		ID: 3, SystemRef: 10003, Label: "Airport", Order: 3,
+	})
+
+	snapshot.Systems[0].LED = ""
+	snapshot.Systems[1].LED = "red"
+	snapshot.Systems[2].LED = "pink"
+
+	config := decodeConfig(t, ConfigPayload{Snapshot: snapshot})
+
+	for _, tc := range []struct {
+		label string
+		want  string
+	}{
+		{label: "Grand Metro", want: "green"},
+		{label: "Harbour", want: "red"},
+		{label: "Airport", want: "green"},
+	} {
+		if got := ledOf(t, systemEntryOf(t, config, tc.label), "the "+tc.label+" system entry"); got != tc.want {
+			t.Errorf("the %q system entry carries led %q, want %q", tc.label, got, tc.want)
+		}
+	}
+}
+
+// TestConfigPayloadNamesTheResolvedColourForATalkgroupEntry proves a talkgroup entry names
+// the colour the server resolves for that talkgroup — its group, then its tag, then its
+// system, then the talkgroup itself, skipping a candidate the server does not know — and
+// that the system candidate is the colour the system stores and never the green that
+// system's own entry answers.
+func TestConfigPayloadNamesTheResolvedColourForATalkgroupEntry(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		group      string
+		tag        string
+		system     string
+		talkgroup  string
+		wantEntry  string
+		wantSystem string
+	}{
+		{name: "nothing configured at all", wantEntry: "green", wantSystem: "green"},
+		{name: "the group alone", group: "red", wantEntry: "red", wantSystem: "green"},
+		{name: "the tag alone", tag: "red", wantEntry: "red", wantSystem: "green"},
+		{name: "the system alone", system: "red", wantEntry: "red", wantSystem: "red"},
+		{name: "the talkgroup alone, beside a system entry that answers the default", talkgroup: "red", wantEntry: "red", wantSystem: "green"},
+		{name: "the group over the tag", group: "red", tag: "white", wantEntry: "red", wantSystem: "green"},
+		{name: "the group over the system", group: "red", system: "magenta", wantEntry: "red", wantSystem: "magenta"},
+		{name: "the group over the talkgroup", group: "red", talkgroup: "yellow", wantEntry: "red", wantSystem: "green"},
+		{name: "the tag over the system", tag: "white", system: "magenta", wantEntry: "white", wantSystem: "magenta"},
+		{name: "the tag over the talkgroup", tag: "white", talkgroup: "yellow", wantEntry: "white", wantSystem: "green"},
+		{name: "the system over the talkgroup", system: "magenta", talkgroup: "yellow", wantEntry: "magenta", wantSystem: "magenta"},
+		{name: "every level coloured", group: "red", tag: "white", system: "magenta", talkgroup: "yellow", wantEntry: "red", wantSystem: "magenta"},
+		{name: "the talkgroup stores a name the server does not know", talkgroup: "pink", wantEntry: "green", wantSystem: "green"},
+		{name: "the group stores a name the server does not know, past which the talkgroup answers", group: "pink", talkgroup: "red", wantEntry: "red", wantSystem: "green"},
+		{name: "the tag stores a name the server does not know, past which the talkgroup answers", tag: "pink", talkgroup: "red", wantEntry: "red", wantSystem: "green"},
+		{name: "the group stores a name the server does not know, past which the tag answers", group: "pink", tag: "blue", wantEntry: "blue", wantSystem: "green"},
+		{name: "the system stores a name the server does not know", system: "pink", wantEntry: "green", wantSystem: "green"},
+		{name: "the system stores a name the server does not know, past which the talkgroup answers", system: "pink", talkgroup: "red", wantEntry: "red", wantSystem: "green"},
+		{name: "no candidate anywhere is one the server knows", group: "pink", tag: "pink", system: "pink", talkgroup: "pink", wantEntry: "green", wantSystem: "green"},
+	} {
+		snapshot := ladderSnapshot()
+
+		snapshot.Groups[0].LED = tc.group
+		snapshot.Tags[0].LED = tc.tag
+		snapshot.Systems[0].LED = tc.system
+		snapshot.Systems[0].Talkgroups[0].LED = tc.talkgroup
+
+		config := decodeConfig(t, ConfigPayload{Snapshot: snapshot})
+
+		if got := ledOf(t, talkgroupEntryOf(t, config, 3000100), "the talkgroup entry"); got != tc.wantEntry {
+			t.Errorf("%s: the talkgroup entry carries led %q, want %q", tc.name, got, tc.wantEntry)
+		}
+
+		if got := ledOf(t, systemEntryOf(t, config, "Ladder"), "the Ladder system entry"); got != tc.wantSystem {
+			t.Errorf("%s: the system entry carries led %q, want %q", tc.name, got, tc.wantSystem)
+		}
+	}
+}
+
+// TestConfigPayloadResolvesATalkgroupsColourFromTheGroupListing proves the group
+// candidates are walked in the order the payload's own group listing puts them: for a group
+// several talkgroups belong to, that is where the group first appears anywhere, which is not
+// the place a given talkgroup's own entry happens to list it in.
+func TestConfigPayloadResolvesATalkgroupsColourFromTheGroupListing(t *testing.T) {
+	config := decodeConfig(t, ConfigPayload{Snapshot: sharedGroupSnapshot()})
+
+	if got, want := jsonOf(t, config["groupsData"]), `[{"id":11,"label":"Shared","led":"blue"},{"id":12,"label":"Own","led":"red"}]`; got != want {
+		t.Fatalf("the group listing =\n  %s\nwant\n  %s", got, want)
+	}
+
+	// Bravo belongs to both groups and names Own first in its own entry, while
+	// Alpha, which comes first in the payload, belongs only to Shared.
+	entry := talkgroupEntryOf(t, config, 3000200)
+
+	if got, want := jsonOf(t, entry["groups"]), `["Own","Shared"]`; got != want {
+		t.Errorf("the talkgroup entry lists its groups as %s, want %s: the order that talkgroup's own record carries them in", got, want)
+	}
+
+	if entry["group"] != "Own" {
+		t.Errorf("the talkgroup entry names %v as its group, want Own, the first label of its own record", entry["group"])
+	}
+
+	if got := ledOf(t, entry, "the Bravo talkgroup entry"); got != "blue" {
+		t.Errorf("the talkgroup entry carries led %q, want blue: Shared is the first coloured group in the listing, ahead of Own, which that entry lists first", got)
+	}
+
+	if got, want := ledOf(t, talkgroupEntryOf(t, config, 3000100), "the Alpha talkgroup entry"), "blue"; got != want {
+		t.Errorf("the shared group's other talkgroup carries led %q, want %q", got, want)
+	}
+}
+
+// TestConfigPayloadWritesTheGroupAndTagListingsAsTheServerStoresThem pins the two listings
+// this feature leaves alone: a group or tag with no colour carries no led key at all, and a
+// stored name the server does not know reaches the listing exactly as it was written.
+func TestConfigPayloadWritesTheGroupAndTagListingsAsTheServerStoresThem(t *testing.T) {
+	snapshot := captureSnapshot()
+
+	snapshot.Groups[0].LED = "pink"   // Air, a name the server does not know
+	snapshot.Groups[6].LED = "orange" // Ground
+	snapshot.Groups[2].LED = ""       // Fire
+	snapshot.Tags[0].LED = "pink"     // Air Traffic Control
+	snapshot.Tags[2].LED = ""         // Fire Dispatch
+
+	entries := map[string]map[string]any{}
+
+	for _, key := range []string{"groupsData", "tagsData"} {
+		for _, raw := range listOf(t, decodeConfig(t, ConfigPayload{Snapshot: snapshot}), key) {
+			entry := objectOf(t, raw)
+
+			label, ok := entry["label"].(string)
+			if !ok {
+				t.Fatalf("a %s entry has label %#v, want a name", key, entry["label"])
+			}
+
+			entries[label] = entry
+		}
+	}
+
+	for _, tc := range []struct {
+		label string
+		want  string
+	}{
+		{label: "Air", want: "pink"},
+		{label: "Ground", want: "orange"},
+		{label: "Fire", want: ""},
+		{label: "Air Traffic Control", want: "pink"},
+		{label: "Fire Dispatch", want: ""},
+	} {
+		entry, ok := entries[tc.label]
+		if !ok {
+			t.Fatalf("the listings carry no entry for %q, which a talkgroup of this listener belongs to", tc.label)
+		}
+
+		value, present := entry["led"]
+
+		if tc.want == "" {
+			if present {
+				t.Errorf("the %q listing entry carries led %v, want no led key at all", tc.label, value)
+			}
+
+			continue
+		}
+
+		if !present {
+			t.Errorf("the %q listing entry carries no led key, want %q", tc.label, tc.want)
+		} else if value != tc.want {
+			t.Errorf("the %q listing entry carries led %v, want %q", tc.label, value, tc.want)
+		}
+	}
+}
+
+// ladderSnapshot is a configuration small enough for one colour rule to be read in it: one
+// system, one talkgroup under it, and that talkgroup's one group and one tag. The tests over
+// it set one colour per level.
+func ladderSnapshot() ports.ConfigSnapshot {
+	return ports.ConfigSnapshot{
+		Groups: domain.Groups{{ID: 11, Label: "Ladder Group"}},
+		Tags:   domain.Tags{{ID: 21, Label: "Ladder Tag"}},
+		Systems: domain.Systems{
+			{
+				ID: 31, SystemRef: 20001, Label: "Ladder", Order: 1,
+				Talkgroups: domain.Talkgroups{
+					{ID: 41, TalkgroupRef: 3000100, Label: "Ladder Talkgroup", Name: "Ladder 1", GroupIDs: []uint64{11}, TagID: 21},
+				},
+			},
+		},
+		Options: domain.Options{Branding: "Ladder", SortTalkgroups: true},
+	}
+}
+
+// sharedGroupSnapshot is two systems whose talkgroups both belong to Shared, which the
+// payload's group listing therefore sees first, while the second talkgroup's own record
+// names its own group first.
+func sharedGroupSnapshot() ports.ConfigSnapshot {
+	return ports.ConfigSnapshot{
+		Groups: domain.Groups{
+			{ID: 11, Label: "Shared", LED: "blue"},
+			{ID: 12, Label: "Own", LED: "red"},
+		},
+		Tags: domain.Tags{{ID: 21, Label: "Shared Tag"}},
+		Systems: domain.Systems{
+			{
+				ID: 31, SystemRef: 20001, Label: "First", Order: 1,
+				Talkgroups: domain.Talkgroups{
+					{ID: 41, TalkgroupRef: 3000100, Label: "Alpha", Name: "Alpha 1", GroupIDs: []uint64{11}, TagID: 21},
+				},
+			},
+			{
+				ID: 32, SystemRef: 20002, Label: "Second", Order: 2,
+				Talkgroups: domain.Talkgroups{
+					{ID: 42, TalkgroupRef: 3000200, Label: "Bravo", Name: "Bravo 1", GroupIDs: []uint64{12, 11}, TagID: 21},
+				},
+			},
+		},
+		Options: domain.Options{Branding: "Shared Groups", SortTalkgroups: true},
+	}
+}
+
 // captureSnapshot is the configuration the capture script put on the server, as the server holds it
 // after reading it back out of its own database.
 //
@@ -388,4 +614,63 @@ func sameRefs(got []uint, want []uint) bool {
 	}
 
 	return true
+}
+
+// systemEntryOf finds the system entry the payload carries under a given label.
+func systemEntryOf(t *testing.T, config map[string]any, label string) map[string]any {
+	t.Helper()
+
+	for _, raw := range listOf(t, config, "systems") {
+		entry := objectOf(t, raw)
+
+		if entry["label"] == label {
+			return entry
+		}
+	}
+
+	t.Fatalf("the payload carries no system named %q", label)
+
+	return nil
+}
+
+// talkgroupEntryOf finds the talkgroup entry the payload carries for a given reference.
+func talkgroupEntryOf(t *testing.T, config map[string]any, ref uint) map[string]any {
+	t.Helper()
+
+	for _, system := range listOf(t, config, "systems") {
+		for _, raw := range listOf(t, system, "talkgroups") {
+			entry := objectOf(t, raw)
+
+			number, ok := entry["id"].(json.Number)
+			if !ok {
+				t.Fatalf("a talkgroup entry's id is %#v, want a number", entry["id"])
+			}
+
+			value, err := number.Int64()
+			if err != nil {
+				t.Fatalf("a talkgroup entry's id is %s, want a whole number", number)
+			}
+
+			if uint(value) == ref {
+				return entry
+			}
+		}
+	}
+
+	t.Fatalf("the payload carries no talkgroup %d", ref)
+
+	return nil
+}
+
+// ledOf reads the colour an entry carries and names the entry it came from, which is how the
+// colour tests say which level answered wrong.
+func ledOf(t *testing.T, entry map[string]any, from string) string {
+	t.Helper()
+
+	value, ok := entry["led"].(string)
+	if !ok {
+		t.Fatalf("%s carries led %#v, want a colour name", from, entry["led"])
+	}
+
+	return value
 }
