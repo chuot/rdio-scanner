@@ -1395,6 +1395,199 @@ func TestACacheEntryWithNoLicenceStoredCannotSayHowItsPairWasProved(t *testing.T
 	}
 }
 
+// A warm cache entry a build from before the notice had this name left behind is a pair this run
+// already has. It is read, reused, and published as it stands, and the entry it reused is left
+// holding the notice under the name this build writes.
+func TestACacheEntryHoldingTheOlderNoticeNameIsStillReused(t *testing.T) {
+	repo := t.TempDir()
+
+	const proved = "proved by the run that compiled this pair, at the name that build wrote"
+
+	aWarmCacheEntryFromBeforeTheNoticeRename(t, repo, "freebsd-amd64", proved)
+
+	paths := ffmpegPathsFor(repo, bundle.ReadManifest(), "freebsd-amd64")
+
+	// The pair as the entry holds it, read before the run so the run cannot have written it.
+	cached := map[string][]byte{}
+
+	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
+		body, err := os.ReadFile(paths.cachedProgram(name))
+		if err != nil {
+			t.Fatalf("reading the cached %s: %v", name, err)
+		}
+
+		cached[name] = body
+	}
+
+	tl, out := aBuildCompilingInAContainer(t, repo, "freebsd-amd64", func(t *testing.T, dir string, name string) {
+		anELFProgramWrittenTo(t, dir, name, theMeasuredFreeBSDPair)
+	})
+
+	if _, err := tl.runFFmpeg(options{target: "freebsd-amd64"}, out); err != nil {
+		t.Fatalf("the build refused the target: %v\n%s", err, out.String())
+	}
+
+	said := out.String()
+
+	if !strings.Contains(said, "reusing the ffmpeg compiled for freebsd-amd64") {
+		t.Errorf("the build did not reuse the cache entry that holds its pair under the older notice name:\n%s", said)
+	}
+
+	if strings.Contains(said, "no proof") {
+		t.Errorf("the build refused to reuse a cache entry that does name its proof, under the name its build wrote:\n%s", said)
+	}
+
+	// Nothing compiled, so no scratch tree was made for a container to compile in, and the entry's own
+	// pair is what the bundle directory now holds, byte for byte.
+	if aFileIsThere(paths.scratch) {
+		t.Errorf("the reused entry left a scratch tree %s behind: a plan that compiles nothing mounts nothing", paths.scratch)
+	}
+
+	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
+		published, err := os.ReadFile(filepath.Join(paths.bundle, name))
+		if err != nil {
+			t.Fatalf("reading the published %s: %v\n%s", name, err, said)
+		}
+
+		if !bytes.Equal(published, cached[name]) {
+			t.Errorf("the published %s is not the bytes the cache entry held: the pair was produced again", name)
+		}
+	}
+
+	notice, err := os.ReadFile(filepath.Join(paths.bundle, "FFMPEG.txt"))
+	if err != nil {
+		t.Fatalf("the bundle directory holds no %s: %v\n%s", "FFMPEG.txt", err, said)
+	}
+
+	if string(notice) != proved {
+		t.Errorf("the published notice is not the text the reused entry stored:\n%s", notice)
+	}
+}
+
+// The entry that was read is settled as it is read: the notice it held moves to the name this build
+// writes, carrying the same bytes, because the next run looks in this entry and finds it there.
+func TestAReusedEntrySettlesItsNoticeToTheNameThisBuildWrites(t *testing.T) {
+	repo := t.TempDir()
+
+	const proved = "proved by the run that compiled this pair, at the name that build wrote"
+
+	aWarmCacheEntryFromBeforeTheNoticeRename(t, repo, "freebsd-amd64", proved)
+
+	paths := ffmpegPathsFor(repo, bundle.ReadManifest(), "freebsd-amd64")
+
+	tl, out := aBuildCompilingInAContainer(t, repo, "freebsd-amd64", func(t *testing.T, dir string, name string) {
+		anELFProgramWrittenTo(t, dir, name, theMeasuredFreeBSDPair)
+	})
+
+	if _, err := tl.runFFmpeg(options{target: "freebsd-amd64"}, out); err != nil {
+		t.Fatalf("the build refused the target: %v\n%s", err, out.String())
+	}
+
+	body, err := os.ReadFile(filepath.Join(paths.cached, "FFMPEG.txt"))
+	if err != nil {
+		t.Fatalf("the cache entry this run reused holds no %s beside its pair: %v\n%s", "FFMPEG.txt", err, out.String())
+	}
+
+	if string(body) != proved {
+		t.Errorf("the settled notice is not the text the entry stored:\n%s", body)
+	}
+
+	if aFileIsThere(filepath.Join(paths.cached, "LICENCE.md")) {
+		t.Errorf("the cache entry still holds %s next to the settled notice: the entry a later run reads holds one notice, under the name this build writes", "LICENCE.md")
+	}
+}
+
+// The same entry, already holding the notice under this build's own name, is reused the same way.
+func TestAReusedEntryHoldingTheNoticeUnderThisBuildsNameBeholdsTheSame(t *testing.T) {
+	repo := t.TempDir()
+
+	const proved = "proved by the run that compiled this pair, at the name this build writes"
+
+	aCacheEntryFor(t, repo, "freebsd-amd64", proved)
+
+	paths := ffmpegPathsFor(repo, bundle.ReadManifest(), "freebsd-amd64")
+
+	tl, out := aBuildCompilingInAContainer(t, repo, "freebsd-amd64", func(t *testing.T, dir string, name string) {
+		anELFProgramWrittenTo(t, dir, name, theMeasuredFreeBSDPair)
+	})
+
+	if _, err := tl.runFFmpeg(options{target: "freebsd-amd64"}, out); err != nil {
+		t.Fatalf("the build refused the target: %v\n%s", err, out.String())
+	}
+
+	said := out.String()
+
+	if !strings.Contains(said, "reusing the ffmpeg compiled for freebsd-amd64") {
+		t.Errorf("the build did not reuse the cache entry that names its proof under this build's name:\n%s", said)
+	}
+
+	if aFileIsThere(paths.scratch) {
+		t.Errorf("the reused entry left a scratch tree %s behind: a plan that compiles nothing mounts nothing", paths.scratch)
+	}
+
+	body, err := os.ReadFile(filepath.Join(paths.cached, "FFMPEG.txt"))
+	if err != nil {
+		t.Fatalf("the cache entry this run reused holds no %s beside its pair: %v\n%s", "FFMPEG.txt", err, said)
+	}
+
+	if string(body) != proved {
+		t.Errorf("the notice in the reused entry changed: this run composes nothing of its own about a pair it did not compile:\n%s", body)
+	}
+}
+
+// A pair with no notice under either name is still the pair that names no proof: the gate that
+// accepts the older name does not make an entry reusable on the strength of its binaries alone.
+func TestAReusedEntryWithNoNoticeUnderEitherNameIsStillRefused(t *testing.T) {
+	repo := t.TempDir()
+
+	aCacheEntryFor(t, repo, "freebsd-amd64", "")
+
+	paths := ffmpegPathsFor(repo, bundle.ReadManifest(), "freebsd-amd64")
+
+	tl, out := aBuildCompilingInAContainer(t, repo, "freebsd-amd64", func(t *testing.T, dir string, name string) {
+		anELFProgramWrittenTo(t, dir, name, theMeasuredFreeBSDPair)
+	})
+
+	if _, err := tl.runFFmpeg(options{target: "freebsd-amd64"}, out); err != nil {
+		t.Fatalf("the build refused the target: %v\n%s", err, out.String())
+	}
+
+	said := out.String()
+
+	if !strings.Contains(said, "no proof") {
+		t.Errorf("the build reused or said nothing about a cache entry holding its pair and no notice:\n%s", said)
+	}
+
+	if strings.Contains(said, "reusing") {
+		t.Errorf("the build reused a cache entry that names no proof of the pair it holds:\n%s", said)
+	}
+
+	_, err := theLicenceInTheCache(paths, "freebsd-amd64")
+	if err == nil {
+		t.Fatal("a run read a cache entry that stores no proof of its pair and said nothing")
+	}
+
+	if !strings.Contains(err.Error(), "no licence") {
+		t.Errorf("the refusal %q does not say the entry stores no licence text", err.Error())
+	}
+}
+
+// aWarmCacheEntryFromBeforeTheNoticeRename seeds the warm cache entries this machine holds today: the
+// pair, and beside it the notice under the name a build wrote before this one named it.
+func aWarmCacheEntryFromBeforeTheNoticeRename(t *testing.T, repo string, target string, licence string) {
+	t.Helper()
+
+	aCacheEntryFor(t, repo, target, licence)
+
+	paths := ffmpegPathsFor(repo, bundle.ReadManifest(), target)
+
+	old := filepath.Join(paths.cached, "LICENCE.md")
+
+	if err := os.Rename(filepath.Join(paths.cached, ffmpegLicenceName), old); err != nil {
+		t.Fatalf("moving the fixture notice to the name an earlier build wrote: %v", err)
+	}
+}
+
 // aCacheEntryFor seeds the cache entry one target's recipe keys: the gzipped pair, and the licence
 // text the run that compiled them wrote beside those binaries. An empty licence leaves the entry
 // holding the pair with nothing that says how those binaries were proved.
@@ -1433,7 +1626,7 @@ func aCacheEntryFor(t *testing.T, repo string, target string, licence string) {
 	}
 
 	if licence != "" {
-		if err := os.WriteFile(filepath.Join(paths.cached, "LICENCE.md"), []byte(licence), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(paths.cached, ffmpegLicenceName), []byte(licence), 0o644); err != nil {
 			t.Fatalf("writing the licence beside the cached pair: %v", err)
 		}
 	}
