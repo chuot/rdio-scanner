@@ -991,20 +991,20 @@ func adoptSuppliedFFmpeg(paths ffmpegPaths, target string, licence string) error
 		return fmt.Errorf("the build cannot prepare %s: %w", paths.cached, err)
 	}
 
-	for _, name := range []string{"ffmpeg", "ffprobe"} {
-		drop := filepath.Join(paths.bundle, name+programSuffix(target))
+	for _, one := range theCarriedPair {
+		drop := filepath.Join(paths.bundle, one.program+programSuffix(target))
 
 		body, err := os.ReadFile(drop)
 		if err != nil {
-			return fmt.Errorf("the supplied %s for %s cannot be read: %w", name, target, err)
+			return fmt.Errorf("the supplied %s for %s cannot be read: %w", one.program, target, err)
 		}
 
-		if err := writeGzip(paths.cachedProgram(name+".gz"), body); err != nil {
+		if err := writeGzip(paths.cachedProgram(one.archive), body); err != nil {
 			return err
 		}
 
 		if err := os.Remove(drop); err != nil {
-			return fmt.Errorf("the build cannot take the supplied %s out of %s: %w", name, paths.bundle, err)
+			return fmt.Errorf("the build cannot take the supplied %s out of %s: %w", one.program, paths.bundle, err)
 		}
 	}
 
@@ -1275,6 +1275,24 @@ func configureStep(repo string, paths ffmpegPaths, image string, manifest bundle
 	}
 }
 
+// theCarriedPair is the converter pair this build caches and publishes, named both ways it is known: the
+// program a target's operating system runs, which is what a compile produces and what a maintainer drops,
+// and the archive that pair is stored under, which is what this build's cache holds and what a finished
+// server asks for when it looks for the ffmpeg it carries. The archive names are read from the package that
+// reads them out of a server binary, so the build publishes what that lookup asks for rather than a name it
+// composed for itself; the program names belong to the build, because only the build names a file it compiles.
+var theCarriedPair = []struct {
+	// program is the name a target's operating system gives the file this build compiles or a maintainer
+	// drops, before the suffix that target puts on a program it runs is added to it.
+	program string
+
+	// archive is the name this build's cache and the bundle directory hold the compressed program under.
+	archive string
+}{
+	{"ffmpeg", bundle.FFmpegArchive},
+	{"ffprobe", bundle.FFprobeArchive},
+}
+
 // programSuffix is what a target's operating system puts on the end of a program it runs.
 func programSuffix(target string) string {
 	if strings.HasPrefix(target, "windows-") {
@@ -1378,7 +1396,9 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	// the run that compiled them left its own licence text beside them. An entry warmed by a build that
 	// kept that text under the older name is such an entry: it names its proof, only at a name this
 	// build no longer writes, and the run that reuses it settles the notice as it reads it.
-	pairIsCached := covered && aFileIsThere(paths.cachedProgram("ffmpeg.gz")) && aFileIsThere(paths.cachedProgram("ffprobe.gz"))
+	pairIsCached := covered &&
+		aFileIsThere(paths.cachedProgram(bundle.FFmpegArchive)) &&
+		aFileIsThere(paths.cachedProgram(bundle.FFprobeArchive))
 
 	noticeIsCached := aFileIsThere(filepath.Join(paths.cached, ffmpegLicenceName)) || aFileIsThere(filepath.Join(paths.cached, theNoticeNameAnEarlierBuildWrote))
 
@@ -1817,18 +1837,19 @@ func inContainer(program theContainerProgram, image string, scratch string) comm
 }
 
 // gzipCompiled puts the two programs the container produced into the cache, which is what makes a second
-// build with an unchanged recipe compile nothing at all.
+// build with an unchanged recipe compile nothing at all. What it reads is a program file, and what it writes
+// is the stored archive a server later looks for.
 func gzipCompiled(paths ffmpegPaths, manifest bundle.Manifest, target string) error {
 	suffix := programSuffix(target)
 	source := filepath.Join(paths.scratch, sourceDir(manifest))
 
-	for _, name := range []string{"ffmpeg", "ffprobe"} {
-		body, err := os.ReadFile(filepath.Join(source, name+suffix))
+	for _, one := range theCarriedPair {
+		body, err := os.ReadFile(filepath.Join(source, one.program+suffix))
 		if err != nil {
-			return fmt.Errorf("the build did not produce %s for %s: %w", name, target, err)
+			return fmt.Errorf("the build did not produce %s for %s: %w", one.program, target, err)
 		}
 
-		if err := writeGzip(paths.cachedProgram(name+".gz"), body); err != nil {
+		if err := writeGzip(paths.cachedProgram(one.archive), body); err != nil {
 			return err
 		}
 	}
@@ -1838,8 +1859,11 @@ func gzipCompiled(paths ffmpegPaths, manifest bundle.Manifest, target string) er
 
 // publishFFmpeg puts the binaries, and what a release archive has to say
 // about them, into the bundle directory the server embeds; the go build
-// placeholder stays. The licence text is passed in: the two ways a
-// target's ffmpeg comes to be say different and true things about it.
+// placeholder stays. The pair is written under the names the server asks for
+// when it looks for the ffmpeg it carries, which is why this build reads
+// those names from the package that reads them rather than naming them here.
+// The licence text is passed in: the two ways a target's ffmpeg comes to be
+// say different and true things about it.
 //
 // A notice an earlier build left in that directory under the name this one
 // no longer uses is taken out. The embed that puts the pair inside the
@@ -1851,14 +1875,14 @@ func publishFFmpeg(paths ffmpegPaths, manifest bundle.Manifest, target string, l
 		return fmt.Errorf("the build cannot prepare %s: %w", paths.bundle, err)
 	}
 
-	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
-		body, err := os.ReadFile(paths.cachedProgram(name))
+	for _, one := range theCarriedPair {
+		body, err := os.ReadFile(paths.cachedProgram(one.archive))
 		if err != nil {
-			return fmt.Errorf("the build has no %s for %s to embed: %w", strings.TrimSuffix(name, ".gz"), target, err)
+			return fmt.Errorf("the build has no %s for %s to embed: %w", one.program, target, err)
 		}
 
-		if err := os.WriteFile(filepath.Join(paths.bundle, name), body, 0644); err != nil {
-			return fmt.Errorf("the build cannot write %s into the bundle: %w", name, err)
+		if err := os.WriteFile(filepath.Join(paths.bundle, one.archive), body, 0644); err != nil {
+			return fmt.Errorf("the build cannot write %s into the bundle: %w", one.archive, err)
 		}
 	}
 
