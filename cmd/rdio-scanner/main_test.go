@@ -518,6 +518,367 @@ func TestVacuumModeRefusesASecondRunWhileTheFirstHoldsTheLock(t *testing.T) {
 	}
 }
 
+// A maintenance run clears the records the migration left in problem and then
+// compacts the file: it prints one line per removal, a count line for each class
+// it cleared, and the pages the compaction took back, and it exits 0. What an
+// operator wrote on purpose stays where it is, the deployment records each removal
+// under the maintenance subsystem, and each removal is said once.
+func TestMaintenanceRunClearsTheDamageThenCompactsTheFile(t *testing.T) {
+	base := t.TempDir()
+
+	// a server run builds the deployment, then a direct connection writes the
+	// records a migration leaves behind beside the rows a deployment named
+	srv, err := app.New(testConfigIn(base))
+	if err != nil {
+		t.Fatalf("app.New: %v", err)
+	}
+
+	if err := srv.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	db := openTestDatabase(t, base)
+
+	seedMaintenanceDamageFixture(t, db)
+
+	// a held port stands in for a running server on the configured address: the
+	// run never reaches for it
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("hold a port: %v", err)
+	}
+
+	defer ln.Close()
+
+	out := &bytes.Buffer{}
+
+	logOut := &bytes.Buffer{}
+
+	previous := log.Writer()
+	log.SetOutput(logOut)
+
+	defer log.SetOutput(previous)
+
+	code := run([]string{"-base_dir", base, "-listen", ln.Addr().String(), "-vacuum"}, out, noBundlesUnbuilt)
+	if code != 0 {
+		t.Fatalf("the maintenance run exited %d, want 0: %s", code, out.String())
+	}
+
+	text := out.String()
+
+	for _, want := range []string{
+		`removed unit "9001" carrying the radio number 9001, of system 901`,
+		`removed unit "9002" carrying the radio number 9002, of system 901`,
+		`removed 2 units labelled with their own radio numbers`,
+		"dropped the table rdioScannerDirWatches, which held 2 rows",
+		"dropped the migration archive, which held 1 row the migration could not carry",
+		"removed the archived row rdioScannerDirWatches 603: it holds no directory",
+		"vacuumed: ",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the run's report does not carry %q:\n%s", want, text)
+		}
+	}
+
+	// the state the run left is read through a connection opened after it, the way
+	// an operator reads a deployment they were told to come back and look at
+	verify := openTestDatabase(t, base)
+
+	// the deployment recorded each removal the run printed, under the maintenance
+	// subsystem, and the terminal did not print it a second time
+	logged := maintenanceLogMessages(t, verify)
+
+	for _, want := range []string{
+		`removed unit "9001" carrying the radio number 9001, of system 901`,
+		`removed unit "9002" carrying the radio number 9002, of system 901`,
+		"removed 2 units labelled with their own radio numbers",
+		"dropped the table rdioScannerDirWatches, which held 2 rows",
+		"dropped the migration archive, which held 1 row the migration could not carry",
+	} {
+		if !strings.Contains(logged, "warn "+want) {
+			t.Errorf("the deployment does not record %q at warn level under the maintenance subsystem:\n%s", want, logged)
+		}
+
+		if count := strings.Count(text, want); count != 1 {
+			t.Errorf("the run printed %q %d times, want once: the log entry is the record, the console is the one reading\n%s", want, count, text)
+		}
+
+		if strings.Contains(logOut.String(), want) {
+			t.Errorf("the run said %q through the logger as well as its report:\n%s", want, logOut.String())
+		}
+	}
+
+	// the rows a deployment named are untouched, and the rows the migration made
+	// are gone
+	for _, unitID := range []int{9001, 9002} {
+		if count := countRows(t, verify, "units", `"unitId" = ?`, unitID); count != 0 {
+			t.Errorf("the damaged unit %d is still stored %d times, want it removed", unitID, count)
+		}
+	}
+
+	for _, unitID := range []int{9003, 9004, 9005} {
+		if count := countRows(t, verify, "units", `"unitId" = ?`, unitID); count != 1 {
+			t.Errorf("unit %d is stored %d times, want the row an operator wrote untouched", unitID, count)
+		}
+	}
+
+	if count := countTables(t, verify, "rdioScannerDirWatches"); count != 0 {
+		t.Errorf("the legacy table the run named is still standing %d times, want it dropped", count)
+	}
+
+	if count := countTables(t, verify, migrationArchiveProbeTable); count != 0 {
+		t.Errorf("the migration archive the run named is still standing %d times, want it dropped", count)
+	}
+
+	// the compaction reclaimed the pages the dropped table and the removed rows
+	// released
+	var before, after, reclaimed int
+
+	reportLine := ""
+
+	for _, line := range strings.Split(text, "\n") {
+		if strings.HasPrefix(line, "vacuumed:") {
+			reportLine = line
+			break
+		}
+	}
+
+	if reportLine == "" {
+		t.Fatalf("the run's report does not carry the compaction line:\n%s", text)
+	}
+
+	if _, err := fmt.Sscanf(reportLine, "vacuumed: %d free pages, %d free pages, %d bytes reclaimed", &before, &after, &reclaimed); err != nil {
+		t.Fatalf("the compaction line does not match the report format (%v):\n%s", err, text)
+	}
+
+	if before == 0 {
+		t.Errorf("the report says 0 free pages before the compaction, want the pages the clearing released on record:\n%s", text)
+	}
+
+	if after != 0 || reclaimed <= 0 {
+		t.Errorf("the report says %d free pages and %d bytes reclaimed after the compaction, want none left and a positive figure", after, reclaimed)
+	}
+
+	if err := verify.QueryRow(`PRAGMA freelist_count`).Scan(&after); err != nil {
+		t.Fatalf("read the freelist back: %v", err)
+	}
+
+	if after != 0 {
+		t.Errorf("the file still carries %d free pages after the run, want them reclaimed", after)
+	}
+
+	// a second run over the same deployment has nothing left to name: the legacy
+	// table and the archive it re-read on every start are both gone
+	out = &bytes.Buffer{}
+
+	if code := run([]string{"-base_dir", base, "-listen", ln.Addr().String(), "-vacuum"}, out, noBundlesUnbuilt); code != 0 {
+		t.Fatalf("the second maintenance run exited %d, want 0: %s", code, out.String())
+	}
+
+	text = out.String()
+
+	for _, unwanted := range []string{"removed ", "dropped ", "would remove", "would drop"} {
+		if strings.Contains(text, unwanted) {
+			t.Errorf("the second run names removals (%q) on a deployment the first run already cleared:\n%s", unwanted, text)
+		}
+	}
+}
+
+// A dry run lists the same records a maintenance run would clear, marks each line
+// as what the run would do, and removes none of them: the damaged rows, the legacy
+// table, and the archive it re-reads on every start are all still there afterwards,
+// no compaction is reported, and nothing is filed in the log.
+func TestMaintenanceDryRunListsTheDamageAndRemovesNothing(t *testing.T) {
+	base := t.TempDir()
+
+	srv, err := app.New(testConfigIn(base))
+	if err != nil {
+		t.Fatalf("app.New: %v", err)
+	}
+
+	if err := srv.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	db := openTestDatabase(t, base)
+
+	seedMaintenanceDamageFixture(t, db)
+
+	out := &bytes.Buffer{}
+
+	logOut := &bytes.Buffer{}
+
+	previous := log.Writer()
+	log.SetOutput(logOut)
+
+	defer log.SetOutput(previous)
+
+	code := run([]string{"-base_dir", base, "-vacuum_dry_run"}, out, noBundlesUnbuilt)
+	if code != 0 {
+		t.Fatalf("the dry run exited %d, want 0: %s", code, out.String())
+	}
+
+	text := out.String()
+
+	for _, want := range []string{
+		`would remove unit "9001" carrying the radio number 9001, of system 901`,
+		`would remove unit "9002" carrying the radio number 9002, of system 901`,
+		"would remove 2 units labelled with their own radio numbers",
+		"would drop the table rdioScannerDirWatches, which held 2 rows",
+		"would drop the migration archive, which held 1 row the migration could not carry",
+		"would remove the archived row rdioScannerDirWatches 603: it holds no directory",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the dry run's listing does not carry %q:\n%s", want, text)
+		}
+	}
+
+	// every line of the listing is written in the words of what a run would do: none
+	// of them claims a removal that happened
+	for _, line := range strings.Split(text, "\n") {
+		for _, claimed := range []string{
+			"removed unit ",
+			"removed the archived row ",
+			"removed 2 units ",
+			"dropped the table ",
+			"dropped the migration archive ",
+		} {
+			if strings.HasPrefix(line, claimed) {
+				t.Errorf("the dry run claims %q, want the listing marked as what a run would do:\n%s", line, text)
+			}
+		}
+	}
+
+	if strings.Contains(text, "vacuumed:") {
+		t.Errorf("the dry run reported a compaction, want the listing alone:\n%s", text)
+	}
+
+	verify := openTestDatabase(t, base)
+
+	for _, unitID := range []int{9001, 9002, 9003, 9004, 9005} {
+		if count := countRows(t, verify, "units", `"unitId" = ?`, unitID); count != 1 {
+			t.Errorf("unit %d is stored %d times, want the dry run to leave every unit where it found it", unitID, count)
+		}
+	}
+
+	if count := countTables(t, verify, "rdioScannerDirWatches"); count != 1 {
+		t.Errorf("the legacy table is standing %d times after the dry run, want it untouched", count)
+	}
+
+	if count := countRows(t, verify, migrationArchiveProbeTable, `1 = 1`); count == 0 {
+		t.Error("the dry run left no archived row behind, want the archive it read still there")
+	}
+
+	if count := countRows(t, verify, "logs", `"source" = ?`, "maintenance"); count != 0 {
+		t.Errorf("the dry run filed %d log entries under the maintenance subsystem, want none: a listing an operator read is not a change that happened", count)
+	}
+}
+
+// migrationArchiveProbeTable is the table the migration writes the rows it cannot
+// carry into, named here so a test can look for it without reaching into the store.
+const migrationArchiveProbeTable = "migrationArchive"
+
+// seedMaintenanceDamageFixture fills a deployment built on sqlite with the records a
+// legacy migration leaves in problem, and with the rows an operator wrote on purpose
+// beside them: two units carrying their own radio numbers as their label, one unit
+// whose label says what it is, one that carries a range beside its number, and one
+// with no number at all. The legacy table holds one row this server cannot read —
+// the shape that keeps the table standing after a migration and leaves an archived
+// row for the next start to read again — and the probe table's deleted rows are the
+// free pages the compaction takes back.
+func seedMaintenanceDamageFixture(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	stmts := []string{
+		`INSERT INTO "systems" ("systemId", "label", "systemRef") VALUES (901, 'Grand Metro', 7001)`,
+		`INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef") VALUES (9001, '9001', 1, 901, 9001)`,
+		`INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef") VALUES (9002, '9002', 2, 901, 9002)`,
+		`INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef") VALUES (9003, 'Engine 12', 3, 901, 9003)`,
+		`INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef", "unitFrom", "unitTo") VALUES (9004, '9004', 4, 901, 9004, 9004, 9010)`,
+		`INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef") VALUES (9005, 'Mobile', 5, 901, 0)`,
+		"CREATE TABLE `rdioScannerDirWatches` (`_id` integer primary key autoincrement, `delay` integer default 0, `deleteAfter` tinyint(1) default 0, `directory` varchar(255) not null unique, `disabled` tinyint(1) default 0, `extension` varchar(255), `frequency` integer, `mask` varchar(255), `order` integer, `systemId` integer, `talkgroupId` integer, `type` varchar(255), `usePolling` tinyint(1) default 0)",
+		"INSERT INTO `rdioScannerDirWatches` VALUES(602,5,1,'/var/spool/default/1514002',1,'mp3',1514002000,'0755',2,10002,1514002,'default',1)",
+		"INSERT INTO `rdioScannerDirWatches` VALUES(603,0,0,'',0,'wav',1514999000,'0644',3,10001,1514999,'dsdPlus',0)",
+		"UPDATE `rdioScannerDirWatches` SET `delay` = 'not a delay' WHERE `_id` = 602",
+		`CREATE TABLE maintenance_probe (id INTEGER PRIMARY KEY, body TEXT NOT NULL)`,
+	}
+
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("%s: %v", stmt, err)
+		}
+	}
+
+	for range 500 {
+		if _, err := db.Exec(`INSERT INTO maintenance_probe (body) VALUES (?)`, strings.Repeat("x", 200)); err != nil {
+			t.Fatalf("seed a probe row: %v", err)
+		}
+	}
+
+	if _, err := db.Exec(`DELETE FROM maintenance_probe WHERE id % 2 = 0`); err != nil {
+		t.Fatalf("delete every other probe row: %v", err)
+	}
+}
+
+// maintenanceLogMessages reads back what the deployment recorded under the maintenance
+// subsystem, one line per entry, each line naming the level it was filed at.
+func maintenanceLogMessages(t *testing.T, db *sql.DB) string {
+	t.Helper()
+
+	rows, err := db.Query(`SELECT "level", "message" FROM "logs" WHERE "source" = ? ORDER BY "logid"`, "maintenance")
+	if err != nil {
+		t.Fatalf("read the maintenance log entries: %v", err)
+	}
+
+	defer rows.Close()
+
+	var messages []string
+
+	for rows.Next() {
+		var level, message string
+
+		if err := rows.Scan(&level, &message); err != nil {
+			t.Fatalf("read a maintenance log entry: %v", err)
+		}
+
+		messages = append(messages, level+" "+message)
+	}
+
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read the maintenance log entries: %v", err)
+	}
+
+	return strings.Join(messages, "\n")
+}
+
+// countRows counts the rows one table answers a condition with.
+func countRows(t *testing.T, db *sql.DB, table string, where string, args ...any) int {
+	t.Helper()
+
+	var count int
+
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM "%s" WHERE %s`, table, where)
+
+	if err := db.QueryRow(query, args...).Scan(&count); err != nil {
+		t.Fatalf("count the rows of %s: %v", table, err)
+	}
+
+	return count
+}
+
+// countTables counts the tables of a given name the deployment holds.
+func countTables(t *testing.T, db *sql.DB, name string) int {
+	t.Helper()
+
+	var count int
+
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE "type" = 'table' AND "name" = ?`, name).Scan(&count); err != nil {
+		t.Fatalf("look for the table %s: %v", name, err)
+	}
+
+	return count
+}
+
 // testConfigIn is the configuration a test builds a server from on a folder
 func testConfigIn(base string) app.Config {
 	return app.Config{

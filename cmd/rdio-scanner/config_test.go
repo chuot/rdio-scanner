@@ -17,7 +17,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -626,22 +625,85 @@ func TestConfigSaveWritesNoVacuumKey(t *testing.T) {
 	}
 }
 
-// the task rewrites one sqlite file, so a deployment on another database has
-// nothing for it to compact: the run is refused, naming the type, before any
-// connection opens. The decision waits for the ini overlay, because the type
-// the server would use can come from the operator's file rather than the
-// command line.
-func TestVacuumIsRefusedOnANonSqliteDatabase(t *testing.T) {
+// -vacuum_dry_run is the report-only half of the same one-shot: it parses to its
+// own field, and it asks for the maintenance run the way -vacuum does, so a dry run
+// reaches the same deployment, the same lock, and the same refusal while removing
+// nothing. Nothing turns either switch on by itself.
+func TestTheDryRunSwitchAsksForTheMaintenanceRunAndRemovesNothing(t *testing.T) {
+	cfg, _ := newTestConfig(t)
+
+	if cfg.VacuumDryRun {
+		t.Errorf("VacuumDryRun = %v, want off: a run removes nothing unless the operator asks for it", cfg.VacuumDryRun)
+	}
+
+	cfg, _ = newTestConfig(t, "-vacuum_dry_run")
+
+	if !cfg.VacuumDryRun {
+		t.Errorf("VacuumDryRun = %v, want on: -vacuum_dry_run asked for the listing", cfg.VacuumDryRun)
+	}
+
+	if !cfg.Vacuum {
+		t.Errorf("Vacuum = %v, want on beside -vacuum_dry_run: the dry run is the maintenance run told to report only", cfg.Vacuum)
+	}
+
+	cfg, _ = newTestConfig(t, "-vacuum")
+
+	if cfg.VacuumDryRun {
+		t.Errorf("VacuumDryRun = %v beside -vacuum, want off: the maintenance switch clears and compacts", cfg.VacuumDryRun)
+	}
+}
+
+// -config_save writes no key for the dry-run switch either: like the maintenance
+// switch before it, it is an action the operator takes, and a deployment that
+// reported once must not report on every start.
+func TestConfigSaveWritesNoDryRunKey(t *testing.T) {
+	cfg, _ := newTestConfig(t, "-vacuum_dry_run", "-config_save")
+
+	saved, err := os.ReadFile(filepath.Join(cfg.BaseDir, "rdio-scanner.ini"))
+	if err != nil {
+		t.Fatalf("read saved ini: %v", err)
+	}
+
+	if strings.Contains(string(saved), "vacuum") {
+		t.Errorf("saved ini =\n%q\nwant no vacuum line: a deployment that reported once must not report on every start", string(saved))
+	}
+}
+
+// The maintenance run clears on sqlite, MariaDB, MySQL, and PostgreSQL alike, so
+// neither of its switches is refused for a backend: only the compaction needs one
+// sqlite file, and the run says that half was skipped instead of the configuration
+// layer turning the whole run away before any connection opens. The decision still
+// waits for the ini overlay, because the backend the server would use can come from
+// the operator's file rather than the command line.
+func TestTheMaintenanceSwitchesAreNotRefusedForABackend(t *testing.T) {
 	for _, dbType := range []string{DbTypeMariadb, DbTypeMysql, DbTypePostgresql} {
-		t.Run(dbType+" named on the command line", func(t *testing.T) {
-			_, _, err := newConfig([]string{"-base_dir", t.TempDir(), "-vacuum", "-db_type", dbType}, "", &bytes.Buffer{})
-			if err == nil {
-				t.Fatalf("newConfig with -vacuum -db_type %s: want a refusal, got none", dbType)
+		t.Run("the maintenance switch over "+dbType+" named on the command line", func(t *testing.T) {
+			cfg, _, err := newConfig([]string{"-base_dir", t.TempDir(), "-vacuum", "-db_type", dbType}, "", &bytes.Buffer{})
+			if err != nil {
+				t.Fatalf("newConfig with -vacuum -db_type %s: %v, want the run accepted: it clears on every backend and says which half it skipped", dbType, err)
 			}
 
-			want := fmt.Sprintf("the vacuum task needs the sqlite database, not %s", dbType)
-			if err.Error() != want {
-				t.Errorf("refusal = %q, want %q", err.Error(), want)
+			if !cfg.Vacuum {
+				t.Errorf("Vacuum = %v, want on: -vacuum asked for the run over a %s deployment", cfg.Vacuum, dbType)
+			}
+
+			if cfg.VacuumDryRun {
+				t.Errorf("VacuumDryRun = %v, want off: -vacuum is the run that clears", cfg.VacuumDryRun)
+			}
+		})
+
+		t.Run("the dry-run switch over "+dbType+" named on the command line", func(t *testing.T) {
+			cfg, _, err := newConfig([]string{"-base_dir", t.TempDir(), "-vacuum_dry_run", "-db_type", dbType}, "", &bytes.Buffer{})
+			if err != nil {
+				t.Fatalf("newConfig with -vacuum_dry_run -db_type %s: %v, want the report-only run accepted over a %s deployment", dbType, err, dbType)
+			}
+
+			if !cfg.VacuumDryRun {
+				t.Errorf("VacuumDryRun = %v, want on: -vacuum_dry_run asked for the listing", cfg.VacuumDryRun)
+			}
+
+			if !cfg.Vacuum {
+				t.Errorf("Vacuum = %v, want on beside -vacuum_dry_run: the dry run is the maintenance run told to report only", cfg.Vacuum)
 			}
 		})
 	}
@@ -650,14 +712,13 @@ func TestVacuumIsRefusedOnANonSqliteDatabase(t *testing.T) {
 		baseDir := t.TempDir()
 		writeFile(t, filepath.Join(baseDir, "rdio-scanner.ini"), "db_type = mysql\ndb_host = db.internal\ndb_name = rdio\n")
 
-		_, _, err := newConfig([]string{"-base_dir", baseDir, "-vacuum"}, "", &bytes.Buffer{})
-		if err == nil {
-			t.Fatal("newConfig with -vacuum over an ini file that says db_type = mysql: want a refusal, got none")
+		cfg, _, err := newConfig([]string{"-base_dir", baseDir, "-vacuum"}, "", &bytes.Buffer{})
+		if err != nil {
+			t.Fatalf("newConfig with -vacuum over an ini file that says db_type = mysql: %v, want the run accepted over the backend the operator's file names", err)
 		}
 
-		want := "the vacuum task needs the sqlite database, not mysql"
-		if err.Error() != want {
-			t.Errorf("refusal = %q, want %q", err.Error(), want)
+		if cfg.DbType != DbTypeMysql {
+			t.Errorf("DbType = %q, want %q: the deployment is the backend the operator's file names, and the run says the compaction it skipped", cfg.DbType, DbTypeMysql)
 		}
 	})
 
@@ -665,14 +726,13 @@ func TestVacuumIsRefusedOnANonSqliteDatabase(t *testing.T) {
 		baseDir := t.TempDir()
 		writeFile(t, filepath.Join(baseDir, "rdio-scanner.ini"), "db_type = postgresql\n")
 
-		_, _, err := newConfig([]string{"-base_dir", baseDir, "-vacuum", "-db_type", DbTypeSqlite}, "", &bytes.Buffer{})
-		if err == nil {
-			t.Fatal("newConfig with -vacuum -db_type sqlite over an ini file that says db_type = postgresql: want a refusal, got none: the operator's file outranks the flag, so this deployment is postgresql")
+		cfg, _, err := newConfig([]string{"-base_dir", baseDir, "-vacuum", "-db_type", DbTypeSqlite}, "", &bytes.Buffer{})
+		if err != nil {
+			t.Fatalf("newConfig with -vacuum -db_type sqlite over an ini file that says db_type = postgresql: %v, want the run accepted: the operator's file outranks the flag, so this deployment is postgresql", err)
 		}
 
-		want := "the vacuum task needs the sqlite database, not postgresql"
-		if err.Error() != want {
-			t.Errorf("refusal = %q, want %q", err.Error(), want)
+		if cfg.DbType != DbTypePostgresql {
+			t.Errorf("DbType = %q, want %q: the operator's file outranks the flag, and the run clears there", cfg.DbType, DbTypePostgresql)
 		}
 	})
 

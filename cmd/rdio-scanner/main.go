@@ -99,11 +99,11 @@ func run(args []string, stdout io.Writer, unbuilt func() []string) int {
 		return controlService(config.ServiceAction)
 	}
 
-	// the vacuum mode is a one-shot that compacts the database and stops: it
-	// needs the deployment open and locked like the password mode, and nothing
-	// else, so it outranks it the same way.
+	// the maintenance mode is a one-shot that clears what a legacy migration left in
+	// problem, compacts what it can, and stops: it needs the deployment open and
+	// locked like the password mode, and nothing else, so it outranks it the same way.
 	if config.Vacuum {
-		return vacuumDatabase(config, stdout)
+		return maintenanceRun(config, stdout)
 	}
 
 	// the administrator password mode is a one-shot that needs the database and
@@ -201,10 +201,13 @@ func serverConfig(config *Config, out io.Writer, echo app.LogEcho) app.Config {
 	}
 }
 
-// vacuumDatabase is the -vacuum mode: open the deployment the same way the
-// server does, so the in-use refusal covers it, compact the sqlite file in
-// place, report what came back, and stop without serving.
-func vacuumDatabase(config *Config, stdout io.Writer) int {
+// maintenanceRun is the -vacuum mode: open the deployment the way the server does,
+// so the in-use refusal covers it, clear the records a legacy migration left in
+// problem, compact the file when the backend is a sqlite one the server can rewrite,
+// say what each half did, and stop without serving. The report-only switch reads the
+// same listing and stops there, because the operator asked what a run would do rather
+// than for it to be done.
+func maintenanceRun(config *Config, stdout io.Writer) int {
 	ctx := context.Background()
 
 	srv, err := app.New(serverConfig(config, os.Stderr, nil))
@@ -216,9 +219,9 @@ func vacuumDatabase(config *Config, stdout io.Writer) int {
 		return exitWithError(err)
 	}
 
-	fmt.Fprintf(stdout, "vacuuming %s\n", config.GetDbFilePath())
+	fmt.Fprintln(stdout, maintenanceHeader(config))
 
-	before, after, err := srv.Vacuum(ctx)
+	summary, err := maintenanceSummary(ctx, srv, config)
 	if err != nil {
 		srv.Close()
 
@@ -229,12 +232,60 @@ func vacuumDatabase(config *Config, stdout io.Writer) int {
 		return exitWithError(err)
 	}
 
-	reclaimed := (before.FreelistCount - after.FreelistCount) * before.PageSize
+	for _, line := range summary.Lines {
+		fmt.Fprintln(stdout, line)
+	}
+
+	// a backend the server cannot rewrite is named as the half that did not run,
+	// and a report-only run names neither half because the operator asked for
+	// neither.
+	if summary.CompactionSkip != "" {
+		fmt.Fprintln(stdout, summary.CompactionSkip)
+
+		return 0
+	}
+
+	if config.VacuumDryRun {
+		return 0
+	}
+
+	reclaimed := (summary.Before.FreelistCount - summary.After.FreelistCount) * summary.Before.PageSize
 
 	fmt.Fprintf(stdout, "vacuumed: %d free pages, %d free pages, %d bytes reclaimed\n",
-		before.FreelistCount, after.FreelistCount, reclaimed)
+		summary.Before.FreelistCount, summary.After.FreelistCount, reclaimed)
 
 	return 0
+}
+
+// maintenanceSummary asks the composition root for the half of the run the operator
+// asked for: the clearing with the compaction that follows it, or the listing that
+// stands in for both.
+func maintenanceSummary(ctx context.Context, srv *app.Server, config *Config) (app.MaintenanceSummary, error) {
+	if config.VacuumDryRun {
+		return srv.MaintainReportOnly(ctx)
+	}
+
+	return srv.Maintain(ctx)
+}
+
+// maintenanceHeader names the deployment the run works on, in the words that fit the
+// backend it works on and the half the operator asked for. A sqlite deployment is
+// named by the file the run rewrites; a database the server connects to is named by
+// its type, because the run has no file of its own to point at.
+func maintenanceHeader(config *Config) string {
+	if config.DbType != DbTypeSqlite {
+		if config.VacuumDryRun {
+			return fmt.Sprintf("reporting on the %s database", config.DbType)
+		}
+
+		return fmt.Sprintf("clearing the %s database", config.DbType)
+	}
+
+	if config.VacuumDryRun {
+		return fmt.Sprintf("reporting on %s", config.GetDbFilePath())
+	}
+
+	return fmt.Sprintf("vacuuming %s", config.GetDbFilePath())
 }
 
 // changeAdminPassword is the -admin_password mode: store the credential the

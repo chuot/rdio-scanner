@@ -81,9 +81,17 @@ type Config struct {
 	ServiceAction    string
 	NewAdminPassword string
 
-	// Vacuum asks for the one-shot compacting task: the composition root
-	// runs it and exits, so it never reaches the ini file.
+	// Vacuum asks for the one-shot maintenance run: the composition root clears
+	// what a legacy migration left in problem, compacts what it can, reports both,
+	// and exits, so it never reaches the ini file. It is not refused for a backend:
+	// the clearing runs on every backend the server writes, and the half the run
+	// cannot perform away from a sqlite file is named by the run itself.
 	Vacuum bool
+
+	// VacuumDryRun is the same run told to report only: it lists what the run would
+	// clear and removes nothing, and it carries the maintenance run with it because
+	// the listing is that run seen from the side instead of performed.
+	VacuumDryRun bool
 }
 
 // newConfig parses the command line and overlays the ini file. exePath is
@@ -120,7 +128,8 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	fs.StringVar(&config.DbUsername, "db_user", "", "database user name")
 	fs.StringVar(&config.Listen, "listen", defaultListen, "listening address")
 	fs.StringVar(&config.NewAdminPassword, "admin_password", "", "change admin password")
-	fs.BoolVar(&config.Vacuum, "vacuum", false, "compact the sqlite database and exit, refusing while another instance holds the deployment")
+	fs.BoolVar(&config.Vacuum, "vacuum", false, "clear the records a legacy migration left in problem, compact the sqlite database, report both, and exit, refusing while another instance holds the deployment")
+	fs.BoolVar(&config.VacuumDryRun, "vacuum_dry_run", false, "report what -vacuum would clear without removing, dropping, or compacting anything")
 	fs.StringVar(&config.SslAutoCert, "ssl_auto_cert", "", "domain name for Let's Encrypt automatic certificate")
 	fs.StringVar(&config.SslCertFile, "ssl_cert_file", "", "ssl PEM formated certificate")
 	fs.StringVar(&config.SslKeyFile, "ssl_key_file", "", "ssl PEM formated key")
@@ -135,6 +144,14 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 	config.Command = *command
 	config.CommandArgs = fs.Args()
 	config.ServiceAction = *serviceAction
+
+	// The dry run is the maintenance run told to report only, so it asks for the
+	// same deployment, the same claim, and the same refusal as -vacuum: the switch
+	// carries the run it describes rather than standing beside it, and the run keeps
+	// the switch to tell its two halves apart.
+	if config.VacuumDryRun {
+		config.Vacuum = true
+	}
 
 	// The default base directory is deliberately empty for a program sitting in a
 	// Go build cache, and an empty base directory is not inert: every relative
@@ -176,16 +193,6 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 
 	if !isDbTypeSupported(config.DbType) {
 		return nil, ModeExit, fmt.Errorf("unknown database type %s", config.DbType)
-	}
-
-	// The task rewrites one sqlite file, so a deployment on another database
-	// has nothing for it to compact, and connecting to that database to find
-	// that out is a connection the run never needed. The decision sits after
-	// the ini overlay because the type the server would use can come from the
-	// operator's file, and it outranks -cmd because the operator who typed
-	// -vacuum asked for the task, not a command.
-	if config.Vacuum && config.DbType != DbTypeSqlite {
-		return nil, ModeExit, fmt.Errorf("the vacuum task needs the sqlite database, not %s", config.DbType)
 	}
 
 	// A bcrypt cost outside 10 to 14 is a typo, and a typo here would hash

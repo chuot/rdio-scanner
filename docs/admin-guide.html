@@ -1145,7 +1145,8 @@ disagree.</p>
       <tr><td><code>-cmd</code></td><td class="default">none</td><td>Drive a server that is already running: log in, read and write the configuration, change the credential, add and remove listener accesses. It is a client of the public administration endpoints. See <a href="#ch-18-command-line-client">the command line client</a>.</td></tr>
       <tr><td><code>-config_save</code></td><td class="default"><code>false</code></td><td>Write the configuration file and stop.</td></tr>
       <tr><td><code>-service</code></td><td class="default">none</td><td>Run under the operating system's service manager: <code>install</code>, <code>uninstall</code>, <code>start</code>, <code>stop</code>, <code>restart</code>, and <code>run</code> as the service's own command. See <a href="#ch-21-running-as-a-service">Running as a service</a>.</td></tr>
-      <tr><td><code>-vacuum</code></td><td class="default"><code>false</code></td><td>Rewrite the sqlite database file in a compacted form and stop without starting a server. It refuses to run while another server holds the deployment. See <a href="#ch-07-database">the database</a>.</td></tr>
+      <tr><td><code>-vacuum</code></td><td class="default"><code>false</code></td><td>Clears the records a legacy migration left in problem — the units it left damaged, the <code>migrationArchive</code> table, and any legacy table it left standing — then compacts the sqlite database file, and stops without starting a server. It refuses to run while another server holds the deployment. See <a href="#ch-07-database">the database</a> and <a href="#ch-24-upgrading-and-migrating">upgrading and migrating</a>.</td></tr>
+      <tr><td><code>-vacuum_dry_run</code></td><td class="default"><code>false</code></td><td>Prints what <code>-vacuum</code> would clear and drop, and which compaction it would skip, and removes nothing, drops no table, and compacts nothing. It stops without starting a server. See <a href="#ch-24-upgrading-and-migrating">upgrading and migrating</a>.</td></tr>
       <tr><td><code>-version</code></td><td class="default"><code>false</code></td><td>Print the version and stop.</td></tr>
     </tbody>
   </table>
@@ -1337,7 +1338,10 @@ bcrypt_cost = 12</code></pre>
   <p>
     Each start re-runs the migration, and a row already archived simply archives as nothing rather than
     clashing, so a migration interrupted halfway resumes on its own. For a version 5 deployment, Chapter
-    24 gives the route in and the checks to make once the migration reports itself done.
+    24 gives the route in and the checks to make once the migration reports itself done, including
+    <a href="#ch-24-upgrading-and-migrating">what the one-shot <code>-vacuum</code> run clears</a> from a
+    migrated database: the archive, the units the migration left damaged, and the legacy tables a row the
+    migration could not read kept standing.
   </p>
 
   <h3>Keeping it healthy</h3>
@@ -4058,6 +4062,47 @@ $ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
     configuration the archive names, or leave the rows as a record of what was lost.
   </p>
 
+  <aside class="caution">
+    <div>
+      <p>
+        The archive is the only copy of the configuration a migration could not carry. The cleaning below
+        drops that table with every row in it, so read the archive and re-enter what it names before you
+        run it. The archive table exists only where a migration had something to put in it, so a
+        deployment whose migration carried everything has no <code>migrationArchive</code> table at all,
+        and the same <code>SELECT</code> answers an error on a deployment that never archived anything.
+      </p>
+    </div>
+  </aside>
+
+  <h3>Cleaning what the migration left behind</h3>
+
+  <p>
+    A first start migrates a database and leaves it as it stands: it does not clean one.
+    <code>-vacuum</code> is the one-shot that cleans, and it removes three things a migration leaves
+    behind: the units the migration left damaged, the <code>migrationArchive</code> table with every row
+    in it, and any legacy table the migration left standing because a row of it could not be read. The
+    run clears the records first and compacts the file afterwards, prints one line per removal and the
+    pages the compaction took back, and stops without starting a server. <code>-vacuum_dry_run</code>
+    prints that same listing as what the run would do, and removes nothing.
+  </p>
+
+  <p>
+    What a run leaves alone is what a deployment holds on purpose: a unit whose label is one you wrote, a
+    unit with a number range, a unit with no radio number of its own, and every recorded call. Only the
+    rows a migration created are removed, and no recording, system, talkgroup, or other record is
+    touched.
+  </p>
+
+  <p>
+    Two things a run takes away have no other copy. The row that made a legacy table stay standing has no
+    copy anywhere — the migration could not read it, so it was never archived, and the run drops that
+    table with it. An option value this release has no option of is gone with the row that held it: the
+    archive keeps it as text, and the configuration the new server reads has no setting to put it in. The
+    clearing runs on every backend the server writes. The compaction is the half that needs a sqlite
+    file: on MariaDB, MySQL, or PostgreSQL the run names the compaction it skipped and stops, and there
+    the database server's own tools do the rewriting.
+  </p>
+
   <h3>Coming from the version 5 program</h3>
 
   <p>
@@ -4506,7 +4551,8 @@ $ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
       <tr><td><code>-ssl_key_file &lt;file&gt;</code></td><td class="default">—</td><td>The PEM key that matches it. <a href="#ch-19-tls">19</a></td></tr>
       <tr><td><code>-ssl_listen &lt;address&gt;</code></td><td class="default">—</td><td>The https address. No port means 3000, so name <code>:443</code>. <a href="#ch-19-tls">19</a></td></tr>
       <tr><td><code>-trusted_proxies &lt;list&gt;</code></td><td class="default">—</td><td>The proxy addresses whose <code>X-Forwarded-For</code> the server believes, comma-separated, CIDR or bare. <a href="#ch-20-reverse-proxies">20</a></td></tr>
-      <tr><td><code>-vacuum</code></td><td class="default">off</td><td>Rewrites the sqlite database file in a compacted form and stops, refusing a deployment another server holds. <a href="#ch-07-database">7</a></td></tr>
+      <tr><td><code>-vacuum</code></td><td class="default">off</td><td>Clears the records a legacy migration left in problem, then compacts the sqlite database file, and stops, refusing a deployment another server holds. <a href="#ch-07-database">7</a>, <a href="#ch-24-upgrading-and-migrating">24</a></td></tr>
+      <tr><td><code>-vacuum_dry_run</code></td><td class="default">off</td><td>Prints what <code>-vacuum</code> would clear and drop and which compaction it would skip, and removes nothing, drops no table, and compacts nothing. <a href="#ch-24-upgrading-and-migrating">24</a></td></tr>
       <tr><td><code>-version</code></td><td class="default">off</td><td>Prints the version and stops. <a href="#ch-18-command-line-client">18</a></td></tr>
     </tbody>
   </table>

@@ -925,6 +925,115 @@ func TestTheFlagsTheGuideNamesOutsideItsTablesAreTheFlagsTheServerAccepts(t *tes
 	}
 }
 
+// maintenanceFlagRows are the two one-shot switches, each chapter that tabulates them, and
+// the sentences each chapter's row has to carry: the clearing comes before the compaction it
+// follows, and the report-only half says plainly that it removes nothing.
+var maintenanceFlagRows = map[string]map[string][]string{
+	"ch-06-flags-and-ini": {
+		"vacuum": {
+			"Clears the records a legacy migration left in problem",
+			"then compacts the sqlite database file",
+			"refuses to run while another server holds the deployment",
+		},
+		"vacuum_dry_run": {
+			"Prints what -vacuum would clear and drop",
+			"removes nothing, drops no table, and compacts nothing",
+		},
+	},
+	"ch-27-reference": {
+		"vacuum": {
+			"Clears the records a legacy migration left in problem",
+			"then compacts the sqlite database file",
+			"refusing a deployment another server holds",
+		},
+		"vacuum_dry_run": {
+			"Prints what -vacuum would clear and drop",
+			"removes nothing, drops no table, and compacts nothing",
+		},
+	},
+}
+
+// guideFlagRow returns one flag's row in a chapter's tables as the plain sentences a reader
+// sees, with the document's wrapping and markup collapsed away.
+func guideFlagRow(t *testing.T, body, chapter, name string) string {
+	t.Helper()
+
+	for _, table := range regexp.MustCompile(`(?is)<table\b.*?</table>`).FindAllString(chapterOf(t, body, chapter), -1) {
+		for _, row := range regexp.MustCompile(`(?is)<tr>.*?</tr>`).FindAllString(table, -1) {
+			if strings.Contains(row, "<code>-"+name+"</code>") {
+				return strings.Join(strings.Fields(stripTags(row)), " ")
+			}
+		}
+	}
+
+	t.Fatalf("the guide's chapter %q tabulates no row for the -%s flag", chapter, name)
+
+	return ""
+}
+
+// the one-shot maintenance switches are tabulated in both chapters a reader looks flags up
+// in, and each row says what that half of the run answers: a run clears what a migration left
+// in problem before it compacts, and the dry run lists the same records without touching them.
+func TestTheGuideTabulatesTheMaintenanceSwitchesAndWhatEachAnswers(t *testing.T) {
+	body := guidePath(t)
+
+	for _, chapter := range guideFlagChapters {
+		wants := maintenanceFlagRows[chapter]
+
+		for _, name := range []string{"vacuum", "vacuum_dry_run"} {
+			row := guideFlagRow(t, body, chapter, name)
+
+			for _, stated := range wants[name] {
+				if !strings.Contains(row, stated) {
+					t.Errorf("the guide's chapter %q does not say what the -%s switch answers: %q is missing from its row:\n%s",
+						chapter, name, stated, row)
+				}
+			}
+		}
+
+		// the order the row states is the order the run performs: the records go first, the
+		// file is rewritten afterwards
+		clears := strings.Index(guideFlagRow(t, body, chapter, "vacuum"), "Clears the records a legacy migration left in problem")
+		compacts := strings.Index(guideFlagRow(t, body, chapter, "vacuum"), "then compacts the sqlite database file")
+
+		if clears < 0 || compacts < 0 || clears > compacts {
+			t.Errorf("the guide's chapter %q states the -vacuum run's compaction before its clearing: a reader is told "+
+				"the file is rewritten before the records are removed:\n%s", chapter, guideFlagRow(t, body, chapter, "vacuum"))
+		}
+	}
+}
+
+// the migration chapter is where an operator decides whether to run the one-shot over an older
+// database, so it names what the run removes, what it leaves alone, and the copies a run takes
+// away with the rows that held them.
+var maintenanceRunWording = []string{
+	"removes three things a migration leaves behind",
+	"the migrationArchive table with every row in it",
+	"any legacy table the migration left standing",
+	"clears the records first and compacts the file afterwards",
+	"a unit whose label is one you wrote, a unit with a number range, a unit with no radio number of its own, and every recorded call",
+	"The archive is the only copy of the configuration a migration could not carry.",
+	"The archive table exists only where a migration had something to put in it",
+	"the same SELECT answers an error on a deployment that never archived anything",
+	"An option value this release has no option of is gone with the row that held it",
+	"The row that made a legacy table stay standing has no copy anywhere",
+	"on MariaDB, MySQL, or PostgreSQL the run names the compaction it skipped",
+}
+
+// the guide's migration chapter carries the same account the run prints at the terminal,
+// including the warning that some archived rows are the only copy there is.
+func TestTheGuideWarnsWhatAMaintenanceRunRemovesFromAnOlderDatabase(t *testing.T) {
+	body := guidePath(t)
+
+	chapter := strings.Join(strings.Fields(stripTags(chapterOf(t, body, "ch-24-upgrading-and-migrating"))), " ")
+
+	for _, stated := range maintenanceRunWording {
+		if !strings.Contains(chapter, stated) {
+			t.Errorf("the guide's migration chapter does not say what a maintenance run does: %q is missing", stated)
+		}
+	}
+}
+
 // httpMethods are the methods the contract publishes as operations; its websocket
 // entries are the listener's channel, not endpoints a client calls.
 var httpMethods = map[string]bool{
