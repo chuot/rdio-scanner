@@ -53,20 +53,22 @@ func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
 	licence := filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", target, "LICENCE.md")
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary the run compiled")
-	writeRepoFile(t, repo, guideSource, "the guide")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
 	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 	writeArchiveLicence(t, repo, target, "the licence")
 
 	// four files, four distinct times, on even seconds,
-	// the resolution the zip timestamp field carries
+	// the resolution the zip timestamp field carries.
+	// Each is read from the path the repository holds it at and enters the
+	// archive under its own name, the name the extracted folder holds.
 	want := []struct {
 		name     string
 		path     string
 		modified time.Time
 	}{
 		{"rdio-scanner", program, time.Date(2026, 3, 4, 5, 6, 8, 0, time.Local)},
-		{guideSource, guideSource, time.Date(2025, 1, 2, 3, 4, 6, 0, time.Local)},
-		{"docs/user-guide.html", "docs/user-guide.html", time.Date(2025, 2, 3, 4, 5, 7, 0, time.Local)},
+		{"admin-guide.html", "docs/admin-guide.html", time.Date(2025, 1, 2, 3, 4, 6, 0, time.Local)},
+		{"user-guide.html", "docs/user-guide.html", time.Date(2025, 2, 3, 4, 5, 7, 0, time.Local)},
 		{"FFMPEG.txt", licence, time.Date(2024, 11, 22, 9, 10, 12, 0, time.Local)},
 	}
 
@@ -132,7 +134,7 @@ func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
 }
 
 // the archive carries the program and the documents that operate it,
-// each at the name the repository writes it at
+// each entered under its own name beside the program
 func TestTheArchiveCarriesTheProgramTheGuidesAndTheLicenceOfTheFfmpegItCarries(t *testing.T) {
 	repo := t.TempDir()
 
@@ -148,10 +150,12 @@ func TestTheArchiveCarriesTheProgramTheGuidesAndTheLicenceOfTheFfmpegItCarries(t
 		t.Fatalf("archiveFiles: %v", err)
 	}
 
+	// the names a reader finds in the extracted folder, in the order the
+	// release writes them, with no directory in any of them
 	want := []string{
 		"rdio-scanner",
-		guideSource,
-		"docs/user-guide.html",
+		"admin-guide.html",
+		"user-guide.html",
 		"FFMPEG.txt",
 	}
 
@@ -165,7 +169,7 @@ func TestTheArchiveCarriesTheProgramTheGuidesAndTheLicenceOfTheFfmpegItCarries(t
 		}
 	}
 
-	// documents are found by name, not by position: the layout is the repository's own
+	// documents are found by name, not by position
 	licence := ""
 
 	for _, f := range files {
@@ -262,7 +266,7 @@ func TestTheGuidesInTheArchiveCarryEveryPictureInsideThemselves(t *testing.T) {
 	carried := 0
 
 	for _, f := range files {
-		if f.name != guideSource && f.name != "docs/user-guide.html" {
+		if f.name != "admin-guide.html" && f.name != "user-guide.html" {
 			continue
 		}
 
@@ -295,7 +299,8 @@ func TestTheGuidesInTheArchiveAreTheGuidesTheRepositoryHas(t *testing.T) {
 	target := releaseTargets[4].targetWord()
 
 	// the guides are read from the repository being built,
-	// so the archive is compared with the published bytes
+	// so the archive is compared with the published bytes.
+	// The map is keyed by the name the archive entry carries.
 	committed := map[string]string{}
 
 	for _, name := range []string{"admin-guide.html", "user-guide.html"} {
@@ -304,14 +309,13 @@ func TestTheGuidesInTheArchiveAreTheGuidesTheRepositoryHas(t *testing.T) {
 			t.Fatalf("the release has no docs/%s to carry: %v", name, err)
 		}
 
-		committed["docs/"+name] = string(body)
+		committed[name] = string(body)
+
+		writeRepoFile(t, repo, "docs/"+name, committed[name])
 	}
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary")
 
-	for _, name := range []string{guideSource, "docs/user-guide.html"} {
-		writeRepoFile(t, repo, name, committed[name])
-	}
 	writeArchiveLicence(t, repo, target, "the ffmpeg licence")
 
 	files, err := archiveFiles(repo, releaseTargets[4], defaultOutputPath(target))
@@ -339,9 +343,9 @@ func TestTheGuidesInTheArchiveAreTheGuidesTheRepositoryHas(t *testing.T) {
 	}
 }
 
-// a release missing either guide stops, naming the guide it refuses to ship without
+// a release missing either guide stops, naming the repository path it expected the guide at
 func TestAGuideThatIsNotInTheTreeStopsTheRelease(t *testing.T) {
-	guides := []string{guideSource, "docs/user-guide.html"}
+	guides := []string{"docs/admin-guide.html", "docs/user-guide.html"}
 
 	for _, missing := range guides {
 		repo := t.TempDir()
@@ -442,7 +446,7 @@ func TestTheArchiveOfATargetWhoseFfmpegWasAdoptedCarriesWhatItsFfmpegIs(t *testi
 
 	names := fileNames(files)
 
-	if strings.Join(names, " ") != strings.Join([]string{"rdio-scanner", guideSource, "docs/user-guide.html", "FFMPEG.txt"}, " ") {
+	if strings.Join(names, " ") != strings.Join([]string{"rdio-scanner", "admin-guide.html", "user-guide.html", "FFMPEG.txt"}, " ") {
 		t.Fatalf("the archive carries %v, want the program, the two guides and the licence", names)
 	}
 
@@ -624,10 +628,11 @@ func TestTheArchiveIsAStandardZipFile(t *testing.T) {
 		}
 	}
 
+	// the four names an extracted folder holds, in the order the release wrote them
 	want := []string{
 		"rdio-scanner",
-		guideSource,
-		"docs/user-guide.html",
+		"admin-guide.html",
+		"user-guide.html",
 		"FFMPEG.txt",
 	}
 
