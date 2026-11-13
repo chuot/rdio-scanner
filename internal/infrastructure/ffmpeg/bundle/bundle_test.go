@@ -26,11 +26,15 @@ import (
 // These are unit tests of the rule that decides whether a target carries a bundle. They are given a
 // directory they can see completely, so they say nothing about which target this machine happens to be.
 
-// A directory holding both programs is a bundle, whatever the way those programs came to be: the pair a build
-// run compiles and drops, and the pair somebody drops in themselves, end up in the same shape, and the server
-// materializes both the same way.
+// A directory holding the pair as the build stores it is a bundle, whatever the way those programs came to
+// be: the pair a build run compiles and drops, and the pair somebody drops in themselves, end up in the same
+// shape, and the server materializes both the same way. The two archives carry the same names for every
+// target, including a Windows one, because an archive is stored data and not a program a target's operating
+// system runs; that suffix belongs to the program files the server writes out. Both fixtures name the archives
+// as literals, because asking the package under test for the names it looks for would let the test follow the
+// code.
 func TestARecordedTargetCarriesABundle(t *testing.T) {
-	for _, dir := range []string{"linux-arm64", "macos-amd64", "macos-arm64", "freebsd-amd64"} {
+	for dir := range ReadManifest().Targets {
 		files := fstest.MapFS{
 			dir + "/ffmpeg.gz":  {Data: []byte("ffmpeg")},
 			dir + "/ffprobe.gz": {Data: []byte("ffprobe")},
@@ -38,13 +42,27 @@ func TestARecordedTargetCarriesABundle(t *testing.T) {
 
 		found, ok := lookup(files, dir)
 		if !ok {
-			t.Errorf("%s holds both programs and has no bundle", dir)
+			t.Errorf("%s holds the pair under the names the build stores it under and has no bundle", dir)
 			continue
 		}
 
 		if found.Dir != dir {
 			t.Errorf("the bundle is for %s, want %s", found.Dir, dir)
 		}
+	}
+}
+
+// The same rule from the other side: a target directory holding the pair under program names carries no
+// bundle. No build writes that shape, and a lookup that read it would let the stored pair and the program a
+// target runs be two different rules about the same two files.
+func TestATargetCarryingProgramNamedArchivesCarriesNoBundle(t *testing.T) {
+	files := fstest.MapFS{
+		"windows-amd64/ffmpeg.exe.gz":  {Data: []byte("ffmpeg")},
+		"windows-amd64/ffprobe.exe.gz": {Data: []byte("ffprobe")},
+	}
+
+	if _, ok := lookup(files, "windows-amd64"); ok {
+		t.Fatal("windows-amd64 holds the pair under program names and still reported a bundle")
 	}
 }
 
