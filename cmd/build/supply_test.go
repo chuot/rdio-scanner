@@ -971,7 +971,7 @@ func TestAMacOSRunReadsThePairItCompiledAndSaysWhatItReads(t *testing.T) {
 		}
 	}
 
-	if !aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
+	if !aFileIsThere(filepath.Join(paths.bundle, "FFMPEG.txt")) {
 		t.Errorf("the bundle carries no licence text for the pair the build read: %s", paths.bundle)
 	}
 }
@@ -1013,7 +1013,7 @@ func TestAMacOSRunKeepsNothingForAPairItsReadRefuses(t *testing.T) {
 		}
 	}
 
-	if aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
+	if aFileIsThere(filepath.Join(paths.bundle, "FFMPEG.txt")) {
 		t.Errorf("a licence text was written for a pair that was refused: %s", paths.bundle)
 	}
 }

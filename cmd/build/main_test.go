@@ -1683,13 +1683,13 @@ func TestTheNativeRunCompilesRunsTheBinariesAndPublishes(t *testing.T) {
 			}
 		}
 
-		if !aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
+		if !aFileIsThere(filepath.Join(paths.bundle, "FFMPEG.txt")) {
 			t.Errorf("%s: the bundle carries no licence text, and the archive quotes the one it ships", target)
 		}
 
 		// The licence text travels inside the cache entry, so a run reusing these
 		// binaries publishes this run's licence text.
-		if !aFileIsThere(filepath.Join(paths.cached, "LICENCE.md")) {
+		if !aFileIsThere(filepath.Join(paths.cached, "FFMPEG.txt")) {
 			t.Errorf("%s: the cache entry carries no licence text, so a reusing run has nothing to put in the archive", target)
 		}
 
@@ -1748,7 +1748,7 @@ func TestTheNativeRunPublishesNothingWhenTheRunOfTheBinariesFails(t *testing.T) 
 			}
 		}
 
-		if aFileIsThere(filepath.Join(paths.bundle, "LICENCE.md")) {
+		if aFileIsThere(filepath.Join(paths.bundle, "FFMPEG.txt")) {
 			t.Errorf("%s: the licence text names binaries the run refused", tc.name)
 		}
 

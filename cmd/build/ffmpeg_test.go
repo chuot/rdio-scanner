@@ -1362,7 +1362,7 @@ func TestTheLicencePublishedForAReusedPairIsTheTextStoredWithThatPair(t *testing
 		t.Fatalf("the build refused the target: %v\n%s", err, out.String())
 	}
 
-	body, err := os.ReadFile(filepath.Join(ffmpegPathsFor(repo, bundle.ReadManifest(), "freebsd-amd64").bundle, "LICENCE.md"))
+	body, err := os.ReadFile(filepath.Join(ffmpegPathsFor(repo, bundle.ReadManifest(), "freebsd-amd64").bundle, "FFMPEG.txt"))
 	if err != nil {
 		t.Fatalf("reading the licence the build published: %v\n%s", err, out.String())
 	}
@@ -1779,10 +1779,81 @@ func TestAReusedFfmpegIsPublishedTheWayAFreshOneIs(t *testing.T) {
 		t.Fatalf("the build refused to publish a compiled ffmpeg: %v", err)
 	}
 
-	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz", "LICENCE.md"} {
+	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz", "FFMPEG.txt"} {
 		if !aFileIsThere(filepath.Join(paths.bundle, name)) {
 			t.Errorf("%s is not in the bundle directory the server embeds", name)
 		}
+	}
+}
+
+// A bundle directory left standing by an earlier release holds the notice
+// under the name that notice used to have. A publish replaces the notice
+// and removes the file the replaced name left behind: the package that
+// embeds this directory takes every file in it, and no phase of the build
+// prunes it, so a leftover would ride inside every server built after it.
+func TestAPublishLeavesTheBundleDirectoryHoldingOnlyWhatItWrites(t *testing.T) {
+	repo := t.TempDir()
+	manifest := bundle.ReadManifest()
+
+	paths := ffmpegPathsFor(repo, manifest, "linux-arm64")
+
+	if err := os.MkdirAll(paths.cached, 0o755); err != nil {
+		t.Fatalf("making the cache entry for linux-arm64: %v", err)
+	}
+
+	for _, name := range []string{"ffmpeg.gz", "ffprobe.gz"} {
+		if err := os.WriteFile(filepath.Join(paths.cached, name), []byte("compiled"), 0o644); err != nil {
+			t.Fatalf("filling the cache entry with %s: %v", name, err)
+		}
+	}
+
+	// The directory a clone carries, with the notice an earlier release wrote.
+	if err := os.MkdirAll(paths.bundle, 0o755); err != nil {
+		t.Fatalf("making the bundle directory for linux-arm64: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(paths.bundle, ".gitkeep"), nil, 0o644); err != nil {
+		t.Fatalf("writing the placeholder that keeps a plain go build compiling: %v", err)
+	}
+
+	const left = "the notice an earlier release wrote, at the name it used then"
+
+	if err := os.WriteFile(filepath.Join(paths.bundle, "LICENCE.md"), []byte(left), 0o644); err != nil {
+		t.Fatalf("writing the notice the earlier release left: %v", err)
+	}
+
+	const published = "the notice this run composes"
+
+	if err := publishFFmpeg(paths, manifest, "linux-arm64", published); err != nil {
+		t.Fatalf("the build refused to publish a compiled ffmpeg: %v", err)
+	}
+
+	// The directory as it stands, read from disk rather than from what the
+	// publish reports having written. A directory listing comes sorted by name.
+	names := []string{}
+
+	entries, err := os.ReadDir(paths.bundle)
+	if err != nil {
+		t.Fatalf("reading the bundle directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+
+	want := []string{".gitkeep", "FFMPEG.txt", "ffmpeg.gz", "ffprobe.gz"}
+
+	if strings.Join(names, " ") != strings.Join(want, " ") {
+		t.Errorf("the bundle directory holds %v after a publish, want %v: a notice left at the name an older release used is embedded in every server built afterwards", names, want)
+	}
+
+	body, err := os.ReadFile(filepath.Join(paths.bundle, "FFMPEG.txt"))
+	if err != nil {
+		t.Fatalf("reading the notice the publish wrote: %v", err)
+	}
+
+	if string(body) != published {
+		t.Errorf("the notice the publish wrote is not the text it was given:\n%s", body)
 	}
 }
 
@@ -1983,7 +2054,7 @@ func TestSuppliedBinariesAreAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T)
 		}
 	}
 
-	for _, want := range []string{".gitkeep", "ffmpeg.gz", "ffprobe.gz", "LICENCE.md"} {
+	for _, want := range []string{".gitkeep", "ffmpeg.gz", "ffprobe.gz", "FFMPEG.txt"} {
 		if !theNamesCarry(names, want) {
 			t.Errorf("the bundle directory does not carry %s: %v", want, names)
 		}
@@ -1991,7 +2062,7 @@ func TestSuppliedBinariesAreAdoptedIntoTheDirectoryTheServerEmbeds(t *testing.T)
 
 	// The licence text travels with the cache entry: a run reusing the entry publishes the words the run
 	// that compiled the binaries wrote, and not words it composes about a compile it did not take part in.
-	if !aFileIsThere(filepath.Join(paths.cached, "LICENCE.md")) {
+	if !aFileIsThere(filepath.Join(paths.cached, "FFMPEG.txt")) {
 		t.Errorf("the cache entry %s carries no licence text, so a reusing run has nothing to put in the archive", paths.cached)
 	}
 
