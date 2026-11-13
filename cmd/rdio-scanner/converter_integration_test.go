@@ -187,6 +187,117 @@ func TestTheConversionReportsTheLengthTheConvertedRecordingIs(t *testing.T) {
 	}
 }
 
+// aDeploymentRunsThePairItsOwnBinaryCarried, read through the seam the server's startup uses rather
+// than through a path the test already holds, and with no ffmpeg reachable on the machine: a fallback to
+// the host's install could not run, and a notice about one would be the operator's only clue.
+func TestTheServerConvertsWithThePairItWroteOutOfItsOwnBinary(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	// Nothing but the pair written out of this binary can answer: the host's ffmpeg and ffprobe are
+	// unreachable by name, so a choice that fell back to them names programs this run cannot start.
+	t.Setenv("PATH", "")
+
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
+		if found, err := exec.LookPath(name); err == nil {
+			t.Fatalf("the tier cannot put this machine's own %s out of reach: %s still resolves to %s", name, name, found)
+		}
+	}
+
+	dir := t.TempDir()
+
+	ffmpegPath, ffprobePath, failure := bundledFFmpeg(dir)
+
+	if failure != "" {
+		t.Fatalf("the server's own startup could not write out the ffmpeg it carries: %s", failure)
+	}
+
+	if ffmpegPath == "" || ffprobePath == "" {
+		t.Fatal("the server's own startup found no ffmpeg to run: run `go run ./cmd/build ffmpeg` before this tier")
+	}
+
+	// the two programs are the ones this binary carried, named after the release they are and run from
+	// the folder the server wrote them into.
+	for _, program := range []struct {
+		what string
+		path string
+	}{
+		{"ffmpeg", ffmpegPath},
+		{"ffprobe", ffprobePath},
+	} {
+		if filepath.Dir(program.path) != dir {
+			t.Errorf("the server runs the %s it carries from %s, not from %s", program.what, program.path, dir)
+			continue
+		}
+
+		if want := program.what + "-" + manifest.FFmpeg; !strings.HasPrefix(filepath.Base(program.path), want) {
+			t.Errorf("the server runs the %s it carries as %s, not after the release it is: %s",
+				program.what, filepath.Base(program.path), want)
+		}
+	}
+
+	choice := theConverter(ffmpegPath, ffprobePath, failure)
+
+	if choice.Program != ffmpegPath {
+		t.Errorf("the server converts with %s, not the ffmpeg it wrote out of its own binary at %s", choice.Program, ffmpegPath)
+	}
+
+	if choice.ProbeProgram != ffprobePath {
+		t.Errorf("the server measures lengths with %s, not the ffprobe it wrote out of its own binary at %s", choice.ProbeProgram, ffprobePath)
+	}
+
+	if choice.Notice != "" {
+		t.Errorf("the server has something to tell the operator about a converter it did not fall back on: %s", choice.Notice)
+	}
+
+	wav := aRecordingFrom(t, dir, "tone.wav")
+
+	prober := choice.prober(dir)
+
+	// the carried ffprobe is what the server's own prober runs, because it is the only ffprobe this
+	// deployment can reach at all.
+	wavLength, err := prober.Probe(context.Background(), ports.AudioFile{
+		Filename: filepath.Base(wav),
+		Mime:     "audio/wav",
+		Data:     readOrFatal(t, wav),
+	})
+	if err != nil {
+		t.Fatalf("the server's own prober could not read the recording it was given: %v", err)
+	}
+
+	if seconds := wavLength.Seconds(); seconds < theToneLength || seconds > theToneLength+0.1 {
+		t.Errorf("the server's own prober reads the WAV as %s s, not the second it is", strconv.FormatFloat(seconds, 'f', 6, 64))
+	}
+
+	converted, err := choice.converter().Convert(context.Background(), ports.AudioFile{
+		Filename: "call.wav",
+		Mime:     "audio/wav",
+		Data:     readOrFatal(t, wav),
+	}, domain.AudioConversionEnabledLoudNorm, nil)
+	if err != nil {
+		t.Fatalf("the ffmpeg the server chose refused the recording: %v", err)
+	}
+
+	if string(converted.Data[4:8]) != "ftyp" {
+		t.Fatalf("the ffmpeg the server chose did not produce the m4a the server stores: %s", filepath.Base(wav))
+	}
+
+	m4a := writeRecording(t, dir, "converted.m4a", converted.Data)
+
+	m4aLength, err := prober.Probe(context.Background(), ports.AudioFile{
+		Filename: filepath.Base(m4a),
+		Mime:     "audio/mp4",
+		Data:     readOrFatal(t, m4a),
+	})
+	if err != nil {
+		t.Fatalf("the server's own prober could not read the recording it converted: %v", err)
+	}
+
+	if seconds := m4aLength.Seconds(); seconds < thePaddedToneLength {
+		t.Errorf("the server's own prober reads the converted recording as %s s, shorter than the three seconds its filters pad it to",
+			strconv.FormatFloat(seconds, 'f', 6, 64))
+	}
+}
+
 // aRecordingFrom copies a tier fixture into the working directory, so
 // ffprobe receives a file rather than a pipe.
 func aRecordingFrom(t *testing.T, dir string, name string) string {
