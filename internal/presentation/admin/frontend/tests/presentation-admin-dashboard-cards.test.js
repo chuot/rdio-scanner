@@ -44,8 +44,10 @@ const STATUS = {
       count: index === 21 ? 9 : index === 23 ? 37 : 0,
     })),
     busiest: [
-      { systemRef: 1, talkgroupRef: 101, name: 'Dispatch', label: 'T-101', count: 41 },
-      { systemRef: 1, talkgroupRef: 102, name: 'Interop', label: 'T-102', count: 12 },
+      { systemRef: 10002, talkgroupRef: 101, name: 'Dispatch', label: 'T-101', count: 41 },
+      { systemRef: 10002, talkgroupRef: 102, name: 'Interop', label: 'T-102', count: 12 },
+      // a reference no configured system carries: an older call, or a system removed after its calls
+      { systemRef: 10001, talkgroupRef: 103, name: 'Airport Ops', label: 'T-103', count: 7 },
     ],
     recent: [],
   },
@@ -76,8 +78,11 @@ const CONFIG = {
   options: { branding: 'shed' },
   systems: [
     {
+      // The store row's own id, and the reference every call and every busiest row carries: on a real
+      // deployment those are two different numbers, and a system is named by the second one.
       id: 8,
-      label: 'Trunk',
+      systemRef: 10002,
+      label: 'Harbour Dispatch',
       sites: [{ id: 9, label: 'East' }],
       talkgroups: [{ id: 10, label: 'Dispatch' }, { id: 11, label: 'Interop' }],
       units: [{ id: 12, label: 'Car 1' }],
@@ -113,14 +118,14 @@ globalThis.fetch = async () => {
   };
 };
 
-function openDashboard(status = STATUS) {
+function openDashboard(status = STATUS, config = CONFIG) {
   const context = getAdminContext();
 
   served = status;
 
   context.store.setState({
     auth: { authenticated: true, docker: false, passwordNeedChange: false },
-    config: structuredClone(CONFIG),
+    config: structuredClone(config),
     todos: [],
     status: { snapshot: structuredClone(status), failed: false, fetchedAt: status.server?.now ?? STATUS.server.now },
   });
@@ -319,24 +324,48 @@ test('the busiest talkgroups are a table with named columns', () => {
 
   const rows = findAll(table, (node) => node.tag === 'tr').filter((node) => findAll(node, (c) => c.tag === 'td').length);
 
-  assert.equal(rows.length, 2, `the table carries ${rows.length} talkgroup rows, wanting the 2 the snapshot named`);
-  assert.deepEqual(findAll(rows[0], (c) => c.tag === 'td').map((c) => text(c).trim()), ['Dispatch', '1', '41']);
+  assert.equal(rows.length, 3, `the table carries ${rows.length} talkgroup rows, wanting the 3 the snapshot named`);
+
+  const cells = (row) => findAll(row, (c) => c.tag === 'td').map((c) => text(c).trim());
+
+  // The System cell names the system the configuration carries that reference for. The label is longer
+  // than the column's own word and holds a space, so the cell cannot be mistaken for the heading.
+  assert.deepEqual(cells(rows[0]), ['Dispatch', 'Harbour Dispatch', '41'], `the busiest row's cells read ${cells(rows[0]).join(', ')}`);
+  assert.deepEqual(cells(rows[1]), ['Interop', 'Harbour Dispatch', '12'], `the busiest row's cells read ${cells(rows[1]).join(', ')}`);
+
+  // a row whose reference no configured system carries keeps that reference: the card never leaves a row
+  // with nothing in its System cell
+  assert.deepEqual(cells(rows[2]), ['Airport Ops', '10001', '7'], `the busiest row's cells read ${cells(rows[2]).join(', ')}`);
+
+  // The reference a configured system carries belongs to the Systems section, which keys its rows by it,
+  // and not to this card: the configured number is printed nowhere, the unconfigured one once.
+  const cardText = text(card(el, 'busiest'));
+
+  assert.equal(cardText.includes('10002'), false, `the card prints a configured system's reference: "${cardText.trim()}"`);
+  assert.equal(cardText.split('10001').length - 1, 1, `the unconfigured reference reads ${cardText.split('10001').length - 1} times in the card: "${cardText.trim()}"`);
 
   el.disconnectedCallback();
 });
 
 // the busiest card's talkgroup name is free text the server carries: the ingest
 // path writes it from call metadata, a weaker credential than an admin login
-// supplies, and it reaches this card verbatim. the name must render as the text
-// it is and plant no element in the administrator's own dashboard
-test('the busiest talkgroups card renders a name carrying markup as text, building no element', () => {
-  const MARKUP = 'Fire "><script>alert(1)</script><img src="x" onerror="arm()"> Station';
+// supplies, and it reaches this card verbatim. the system's name is free text as
+// well, an operator's own words typed into the systems form, and the card reaches
+// it through the configuration. Both must render as the text they are and plant no
+// element in the administrator's own dashboard
+test('the busiest talkgroups card renders a talkgroup name or a system label carrying markup as text, building no element', () => {
+  const NAME_MARKUP = 'Fire "><script>alert(1)</script><img src="x" onerror="arm()"> Station';
+  const LABEL_MARKUP = 'Dispatch "><script>alert(2)</script><img src="y" onerror="arm()"> Harbour';
 
   const poisoned = structuredClone(STATUS);
 
-  poisoned.activity.busiest = [{ systemRef: 1, talkgroupRef: 101, name: MARKUP, label: 'T-101', count: 41 }];
+  poisoned.activity.busiest = [{ systemRef: 10002, talkgroupRef: 101, name: NAME_MARKUP, label: 'T-101', count: 41 }];
 
-  const el = openDashboard(poisoned);
+  const poisonedConfig = structuredClone(CONFIG);
+
+  poisonedConfig.systems[0].label = LABEL_MARKUP;
+
+  const el = openDashboard(poisoned, poisonedConfig);
 
   const table = findAll(card(el, 'busiest'), (node) => node.tag === 'table')[0];
 
@@ -346,14 +375,15 @@ test('the busiest talkgroups card renders a name carrying markup as text, buildi
 
   assert.equal(rows.length, 1, `the table carries ${rows.length} talkgroup rows, wanting the 1 the snapshot named`);
 
-  const cell = findAll(rows[0], (c) => c.tag === 'td')[0];
+  const cells = findAll(rows[0], (c) => c.tag === 'td').map((c) => text(c).trim());
 
-  assert.ok(text(cell).includes('Station'), 'the card dropped the name it was given');
+  assert.ok(cells[0].includes('Station'), `the card dropped the talkgroup name it was given: "${cells[0]}"`);
+  assert.ok(cells[1].includes('Harbour'), `the card did not render the system's label as the text it is: "${cells[1]}"`);
 
   const built = findAll(card(el, 'busiest'), (n) => n.tag === 'img' || n.tag === 'script' || n.attributes.onerror !== undefined)
     .map((n) => (n.attributes.onerror !== undefined ? `${n.tag}[onerror]` : n.tag));
 
-  assert.deepEqual(built, [], 'a talkgroup name built an element or an attribute of its own into the dashboard');
+  assert.deepEqual(built, [], 'a talkgroup name or a system label built an element or an attribute of its own into the dashboard');
 
   el.disconnectedCallback();
 });
