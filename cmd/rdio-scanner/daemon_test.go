@@ -18,6 +18,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"log"
+	"strings"
 	"sync"
 	"testing"
 
@@ -26,21 +29,39 @@ import (
 	"rdio-scanner/internal/domain"
 )
 
-// with no service manager to talk to, these tests pin the two decisions of
+// with no service manager to talk to, these tests pin what a refused control
+// ends with and says, and which actions are asked for at all.
 
-// an unknown action ends with a failure and says nothing but the exit
-// code.
-func TestAnActionTheServiceManagerDoesNotKnowEndsWithAFailureAndSaysNothing(t *testing.T) {
-	var out bytes.Buffer
+// A control the manager refuses is said to the operator who asked for it,
+// through the house failure path: the failure names the action that was asked
+// for and the reason the manager gave, and the process ends with the code the
+// other one-shot failures end with.
+func TestARefusedServiceControlEndsWithTheHouseFailureCodeAndSaysWhy(t *testing.T) {
+	// the failure is said through the standard logger, so the test watches
+	// where that logger writes for the duration of the run
+	logOut := &bytes.Buffer{}
 
-	code := run([]string{"-base_dir", t.TempDir(), "-service", "bogus"}, &out, noBundlesUnbuilt)
+	previous := log.Writer()
+	log.SetOutput(logOut)
 
-	if code != -1 {
-		t.Errorf("an action the service manager does not know ended with %d, want the code of a refusal", code)
+	defer log.SetOutput(previous)
+
+	code := run([]string{"-base_dir", t.TempDir(), "-service", "bogus"}, io.Discard, noBundlesUnbuilt)
+
+	said := logOut.String()
+
+	if code != 1 {
+		t.Errorf("an action the service manager refused ended with %d, want the code a failure ends with", code)
 	}
 
-	if out.Len() != 0 {
-		t.Errorf("an action the service manager does not know said %q, want nothing said at all", out.String())
+	if !strings.Contains(said, "bogus") {
+		t.Errorf("the failure does not name the action that was asked for:\n%s", said)
+	}
+
+	// the reason is the manager's own words for the action it does not
+	// know, named here rather than the whole sentence it composes.
+	if !strings.Contains(said, "Unknown action") {
+		t.Errorf("the failure does not carry the reason the service manager gave:\n%s", said)
 	}
 }
 
