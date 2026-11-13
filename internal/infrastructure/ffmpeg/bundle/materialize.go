@@ -89,17 +89,15 @@ func (b Bundle) Materialize(dir string) (string, string, error) {
 // back is a build that produced something broken, and the server must not be left with one program
 // on disk and the other missing.
 func (b Bundle) read() ([]program, error) {
-	suffix := executableSuffix(b.Dir)
+	programs := make([]program, 0, len(theBundlePair))
 
-	programs := make([]program, 0, 2)
-
-	for _, name := range []string{"ffmpeg", "ffprobe"} {
-		body, err := readGzip(b.files, b.Dir+"/"+name+suffix+".gz")
+	for _, one := range theBundlePair {
+		body, err := readGzip(b.files, b.Dir+"/"+one.archive)
 		if err != nil {
 			return nil, fmt.Errorf("the ffmpeg bundle this server was built with is not readable: %w", err)
 		}
 
-		programs = append(programs, program{Name: name, Body: body})
+		programs = append(programs, program{Name: one.program, Body: body})
 	}
 
 	return programs, nil

@@ -225,6 +225,33 @@ type Bundle struct {
 	files fs.FS
 }
 
+// The archives a target's bundle directory holds. Every target stores its pair under these two names,
+// because a stored archive is not a program any target's operating system runs: the suffix a target puts on
+// a program it runs belongs to the files the server writes out, and a build drops the compressed pair into
+// the directory under the same names whatever target it compiled it for.
+const (
+	// FFmpegArchive is the name a target's directory holds the compressed converter under.
+	FFmpegArchive = "ffmpeg.gz"
+
+	// FFprobeArchive is the name a target's directory holds the compressed probe under.
+	FFprobeArchive = "ffprobe.gz"
+)
+
+// theBundlePair is that pair, with the program each archive becomes once the server writes it out. It is
+// the one place the two archives and the two programs are named together, so the rule that decides whether
+// a target carries a pair and the code that reads the pair out are never given different names to look for.
+var theBundlePair = []struct {
+	// archive is the name the target's directory holds the compressed program under.
+	archive string
+
+	// program is what the server runs it as, before the release version and the target's own suffix are
+	// added to the name.
+	program string
+}{
+	{FFmpegArchive, "ffmpeg"},
+	{FFprobeArchive, "ffprobe"},
+}
+
 // Lookup returns the bundle this binary carries, or reports that its target carries none.
 func Lookup() (Bundle, bool) {
 	files, dir := target()
@@ -235,7 +262,7 @@ func Lookup() (Bundle, bool) {
 // lookup is the rule, separated from the build tags that decide which directory this binary has, so
 // that it can be exercised against a directory the test can see completely.
 //
-// A target carries a bundle when its directory holds both programs. A directory holding only its
+// A target carries a bundle when its directory holds both archives. A directory holding only its
 // placeholder — which is what a fresh clone has, and what makes a plain `go build` compile — carries
 // none, and so does a directory holding only one of the two, because that is a build that failed
 // rather than a deployment that should quietly convert with half a converter.
@@ -244,23 +271,13 @@ func lookup(files fs.FS, dir string) (Bundle, bool) {
 		return Bundle{}, false
 	}
 
-	ffmpeg, ffprobe := programNames(dir)
-
-	for _, name := range []string{ffmpeg, ffprobe} {
-		if _, err := fs.Stat(files, dir+"/"+name+".gz"); err != nil {
+	for _, one := range theBundlePair {
+		if _, err := fs.Stat(files, dir+"/"+one.archive); err != nil {
 			return Bundle{}, false
 		}
 	}
 
 	return Bundle{Dir: dir, files: files}, true
-}
-
-// programNames returns the two programs a bundle carries, named the way that target's operating
-// system names a program it runs.
-func programNames(dir string) (ffmpeg string, ffprobe string) {
-	suffix := executableSuffix(dir)
-
-	return "ffmpeg" + suffix, "ffprobe" + suffix
 }
 
 // executableSuffix is what a target's operating system puts on the end of a program it runs.
