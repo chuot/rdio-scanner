@@ -264,10 +264,35 @@ const (
 	maintenanceLegacyRows  = 800
 )
 
-// seedMaintenanceDeployment writes the fixture's system and unit rows into a deployment the server
-// has already brought to its own schema, so the run is tested against stored rows rather than
-// against rows the composition root made up.
+// maintenanceRowsCarryingAReference is the maintenance catalog without the row that holds no radio
+// reference. The two rows a run clears are among what is left, and no row that is left is one the startup
+// report reads as damage: a deployment cleared by a run is a deployment a start has nothing to report.
+func maintenanceRowsCarryingAReference() []domain.Unit {
+	kept := []domain.Unit{}
+
+	for _, unit := range maintenanceDeploymentUnits {
+		if unit.UnitRef == 0 {
+			continue
+		}
+
+		kept = append(kept, unit)
+	}
+
+	return kept
+}
+
+// seedMaintenanceDeployment writes the whole fixture catalog into a deployment the server has already
+// brought to its own schema.
 func seedMaintenanceDeployment(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	seedMaintenanceUnits(t, db, maintenanceDeploymentUnits...)
+}
+
+// seedMaintenanceUnits writes the fixture's system and the given unit rows into a deployment the server
+// has already brought to its own schema, so the run is tested against stored rows rather than against
+// rows the composition root made up.
+func seedMaintenanceUnits(t *testing.T, db *sql.DB, units ...domain.Unit) {
 	t.Helper()
 
 	statements := []seedStatement{
@@ -277,7 +302,7 @@ func seedMaintenanceDeployment(t *testing.T, db *sql.DB) {
 		},
 	}
 
-	for _, unit := range maintenanceDeploymentUnits {
+	for _, unit := range units {
 		statements = append(statements, seedStatement{
 			query: `INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef", "unitFrom", "unitTo") VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			args:  []any{unit.ID, unit.Label, unit.Order, unit.SystemID, unit.UnitRef, unit.UnitFrom, unit.UnitTo},
@@ -702,6 +727,173 @@ func TestMaintainReportOnlyChangesNothingAndStillClaimsTheDeployment(t *testing.
 	if !errors.Is(err, ErrInUse) {
 		t.Errorf("the refusal is %v, want it to say the deployment is in use", err)
 	}
+}
+
+// TestAMaintainedDeploymentStartsAgainWithoutNamingADamagedUnit is what the operator does with a
+// deployment the run went through: the maintenance pass takes out the rows the legacy migration invented,
+// the server is opened again the way a start opens it, and the start that follows the run has nothing to
+// report. The report is the one the startup writes on every start, so a deployment left holding rows of
+// that shape would be heard again on the next start.
+func TestAMaintainedDeploymentStartsAgainWithoutNamingADamagedUnit(t *testing.T) {
+	ctx := context.Background()
+
+	base := t.TempDir()
+
+	srv, err := New(testConfigIn(base, io.Discard))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	seedMaintenanceUnits(t, srv.db, maintenanceRowsCarryingAReference()...)
+	createMaintenanceLegacyTable(t, srv.db)
+
+	summary, err := srv.Maintain(ctx)
+	if err != nil {
+		t.Fatalf("Maintain: %v", err)
+	}
+
+	if summary.UnitsRemoved != maintenanceDamagedUnits {
+		t.Errorf("the run removed %d unit rows, want the %d carrying their own number as their label", summary.UnitsRemoved, maintenanceDamagedUnits)
+	}
+
+	if err := srv.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	console := strings.Builder{}
+
+	again, err := New(testConfigIn(base, &console))
+	if err != nil {
+		t.Fatalf("New over the deployment the run cleared: %v", err)
+	}
+
+	defer func() {
+		if err := again.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
+
+	if err := again.Start(ctx); err != nil {
+		t.Fatalf("starting the server over the deployment the run cleared: %v", err)
+	}
+
+	if out := console.String(); strings.Contains(out, "the migration left") {
+		t.Errorf("the start that follows a maintenance run reports damaged units:\n%s", out)
+	}
+
+	if got := countRows(t, again.db, `SELECT COUNT(*) FROM "logs" WHERE "message" LIKE 'the migration left%'`); got != 0 {
+		t.Errorf("the log view holds %d entries from a damage report, want none: the run left no row a start would report", got)
+	}
+
+	if got := countRows(t, again.db, `SELECT COUNT(*) FROM "units"`); got != len(maintenanceRowsCarryingAReference())-maintenanceDamagedUnits {
+		t.Errorf("the catalog holds %d units after the run and a start, want the %d the deployment named",
+			got, len(maintenanceRowsCarryingAReference())-maintenanceDamagedUnits)
+	}
+
+	if got := countRows(t, again.db, `SELECT COUNT(*) FROM "units" WHERE "unitId" IN (303, 304)`); got != 0 {
+		t.Errorf("the catalog holds %d of the rows the run removed after a start, want none of them back", got)
+	}
+
+	if got := countRows(t, again.db, `SELECT COUNT(*) FROM "units" WHERE "unitId" IN (301, 305)`); got != 2 {
+		t.Errorf("the catalog holds %d of the two rows the run left standing after a start, want both", got)
+	}
+
+	if maintenanceTablePresent(t, again.db, maintenanceLegacyTable) {
+		t.Errorf("%s is standing again after the run dropped it, want it gone", maintenanceLegacyTable)
+	}
+
+	assertEveryServerLogEntry(t, again.db)
+}
+
+// TestAStartAfterAMaintenanceRunNamesOnlyTheRowsTheRunLeftStanding is the other half of the same start: a
+// deployment keeps the row a run may not remove — a unit that holds no radio reference, which is a name an
+// operator wrote rather than a number the migration invented — and the start that follows the run reports
+// exactly that row and no other.
+func TestAStartAfterAMaintenanceRunNamesOnlyTheRowsTheRunLeftStanding(t *testing.T) {
+	ctx := context.Background()
+
+	base := t.TempDir()
+
+	srv, err := New(testConfigIn(base, io.Discard))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	seedMaintenanceDeployment(t, srv.db)
+	createMaintenanceLegacyTable(t, srv.db)
+
+	summary, err := srv.Maintain(ctx)
+	if err != nil {
+		t.Fatalf("Maintain: %v", err)
+	}
+
+	if summary.UnitsRemoved != maintenanceDamagedUnits {
+		t.Errorf("the run removed %d unit rows, want the %d carrying their own number as their label", summary.UnitsRemoved, maintenanceDamagedUnits)
+	}
+
+	if err := srv.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	console := strings.Builder{}
+
+	again, err := New(testConfigIn(base, &console))
+	if err != nil {
+		t.Fatalf("New over the deployment the run cleared: %v", err)
+	}
+
+	defer func() {
+		if err := again.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
+
+	if err := again.Start(ctx); err != nil {
+		t.Fatalf("starting the server over the deployment the run cleared: %v", err)
+	}
+
+	out := console.String()
+
+	for _, want := range []string{
+		"the migration left 1 unit damaged: it holds no radio reference, the numbers they were migrated from are not in this database",
+		`the migration left unit 302 "Car 4" of Grand Metro (10001) damaged`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the start that follows a maintenance run does not say %q:\n%s", want, out)
+		}
+	}
+
+	for _, gone := range []string{
+		"the migration left unit 301 ",
+		"the migration left unit 303 ",
+		"the migration left unit 304 ",
+		"the migration left unit 305 ",
+		"they are labelled with their own numbers",
+		"it is labelled with its own number",
+	} {
+		if strings.Contains(out, gone) {
+			t.Errorf("the start that follows a maintenance run still reports %q, want it to report only the row the run left standing:\n%s", gone, out)
+		}
+	}
+
+	if got := strings.Count(out, "the migration left unit "); got != 1 {
+		t.Errorf("the start that follows a maintenance run names %d units damaged, want the 1 row it left standing:\n%s", got, out)
+	}
+
+	if got := countRows(t, again.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'database' AND "message" LIKE 'the migration left%'`); got != 2 {
+		t.Errorf("the log view holds %d entries from that report, want the summary and the one damaged unit the start named", got)
+	}
+
+	if got := countRows(t, again.db, `SELECT COUNT(*) FROM "units" WHERE "unitId" = 302 AND "unitRef" = 0`); got != 1 {
+		t.Errorf("the start left %d rows of the unit the run left standing, want the one row it reported written as it was", got)
+	}
+
+	if got := countRows(t, again.db, `SELECT COUNT(*) FROM "units"`); got != len(maintenanceDeploymentUnits)-maintenanceDamagedUnits {
+		t.Errorf("the catalog holds %d units after the run and a start, want the %d the run left standing",
+			got, len(maintenanceDeploymentUnits)-maintenanceDamagedUnits)
+	}
+
+	assertEveryServerLogEntry(t, again.db)
 }
 
 // TestAServerPointedAtAFreshDirectoryPutsItsFilesWhereTheBaseDirectorySays writes

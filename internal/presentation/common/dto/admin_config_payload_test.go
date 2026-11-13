@@ -175,6 +175,51 @@ func TestAdminConfigReplyMentionsTheContainerOnlyWhenToldTo(t *testing.T) {
 	}
 }
 
+// TestAdminUnitListingCarriesOnlyTheUnitsAMaintenanceRunLeftStanding proves the same account through the
+// listing an administrator is shown for one system: the two rows a maintenance run removes are gone from the
+// listing, the entries of the units it left standing keep the bytes and the order the same builder wrote for
+// them while those rows were still stored, and the listing built after the run is the bytes the captured
+// admin section carries for that system's units.
+func TestAdminUnitListingCarriesOnlyTheUnitsAMaintenanceRunLeftStanding(t *testing.T) {
+	kept := migrationKeptUnits()
+
+	before := marshal(t, UnitListPayload(append(append(domain.Units{}, kept...), migrationDamageUnits...)))
+	after := marshal(t, UnitListPayload(kept))
+
+	if golden := capturedAnswer(t, "rest-section-systems.json"); !strings.Contains(golden, after) {
+		t.Errorf("the unit listing a run leaves behind =\n  %s\nis not the bytes the captured admin section carries for that system's units:\n  %s", after, golden)
+	}
+
+	if got, want := strings.Count(before, `{"id":`), len(kept)+len(migrationDamageUnits); got != want {
+		t.Errorf("the unit listing built while the rows stand carries %d entries, want the %d the deployment named plus the %d the migration left",
+			got, want, len(migrationDamageUnits))
+	}
+
+	if got, want := strings.Count(after, `{"id":`), len(kept); got != want {
+		t.Errorf("the unit listing built after the run carries %d entries, want the %d it left standing", got, want)
+	}
+
+	// The surviving entries are the first bytes of the listing built while the rows stood, in the same
+	// order: a run takes rows out of the catalog, it does not re-write what is shown of what remains.
+	if head := strings.TrimSuffix(after, "]"); !strings.HasPrefix(before, head) {
+		t.Errorf("the listing built while the rows stand does not start with the units a run leaves standing:\n  %s\nwant it to start with\n  %s", before, head)
+	}
+
+	for _, entry := range unitEntryBytes(t, migrationDamageUnits) {
+		if !strings.Contains(before, entry) {
+			t.Errorf("the listing built while the rows stand does not carry %s:\n  %s", entry, before)
+		}
+
+		if strings.Contains(after, entry) {
+			t.Errorf("the listing built after the run still carries %s:\n  %s", entry, after)
+		}
+	}
+
+	if want := cutEntryBytes(t, before, unitEntryBytes(t, migrationDamageUnits)); want != after {
+		t.Errorf("the listing built after the run =\n  %s\nwant the listing built while the rows stood with only the removed entries cut out:\n  %s", after, want)
+	}
+}
+
 // captureConfiguration is the whole configuration the capture script put on the server, as the server
 // answers it after reading every part back out of its own database.
 func captureConfiguration() AdminConfigPayload {
@@ -211,6 +256,26 @@ func captureConfiguration() AdminConfigPayload {
 		Snapshot: snapshot,
 		Version:  "8.0.0",
 	}
+}
+
+// unitEntryBytes writes each unit's own listing entry, on its own, so a test can name the entries it cuts
+// out of a longer listing byte for byte.
+func unitEntryBytes(t *testing.T, units domain.Units) []string {
+	t.Helper()
+
+	out := make([]string, 0, len(units))
+
+	for _, unit := range units {
+		body := marshal(t, UnitListPayload(domain.Units{unit}))
+
+		if body == "[]" {
+			t.Fatalf("the unit listing carries no entry for unit %q, which the same builder wrote for it when asked for the whole system", unit.Label)
+		}
+
+		out = append(out, strings.TrimSuffix(strings.TrimPrefix(body, "["), "]"))
+	}
+
+	return out
 }
 
 // replaceExactly rewrites a captured payload and insists that it found exactly the number of places it

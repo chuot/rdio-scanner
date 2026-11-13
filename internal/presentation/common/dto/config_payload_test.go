@@ -417,6 +417,153 @@ func ladderSnapshot() ports.ConfigSnapshot {
 	}
 }
 
+// migrationDamageUnits are the two unit rows a legacy migration leaves behind in a deployment: a radio
+// reference carrying its own number written out as its label, with no range. They sit on the same system
+// the capture put units on, so a payload built around them carries the units a listener is already shown
+// beside the rows a maintenance run is allowed to remove.
+var migrationDamageUnits = domain.Units{
+	{ID: 303, Label: "6789", SystemID: 1, UnitRef: 6789},
+	{ID: 304, Label: "1514000", SystemID: 1, UnitRef: 1514000},
+}
+
+// migrationKeptUnits are the units of that system which a maintenance run leaves standing, read out of the
+// configuration the capture script put on the server.
+func migrationKeptUnits() domain.Units {
+	return append(domain.Units{}, captureSnapshot().Systems[0].Units...)
+}
+
+// TestConfigPayloadNamesOnlyTheUnitsAMaintenanceRunLeftStanding proves what a maintenance run changes in
+// the configuration a listener is shown, and what it may not touch. The two rows it removes are gone from
+// the units array of the system they belong to; the surviving entries carry the bytes the same builder
+// wrote for them while the removed rows were still stored; and the units array is the one place where the
+// two payloads differ at all.
+func TestConfigPayloadNamesOnlyTheUnitsAMaintenanceRunLeftStanding(t *testing.T) {
+	kept := migrationKeptUnits()
+
+	before := captureSnapshot()
+	before.Systems[0].Units = append(append(domain.Units{}, kept...), migrationDamageUnits...)
+
+	after := captureSnapshot()
+	after.Systems[0].Units = kept
+
+	beforeBody := marshal(t, ConfigPayload{Snapshot: before})
+	afterBody := marshal(t, ConfigPayload{Snapshot: after})
+
+	if want := capturedAnswer(t, "payload-cfg.json"); afterBody != want {
+		t.Errorf("the payload of the deployment a run left standing =\n  %s\nwant the captured configuration, byte for byte:\n  %s", afterBody, want)
+	}
+
+	for _, unit := range kept {
+		if unit.DamagedByMigration() {
+			t.Errorf("unit %q, which a run must leave standing, reports itself as a row a run removes", unit.Label)
+		}
+	}
+
+	for _, unit := range migrationDamageUnits {
+		if !unit.DamagedByMigration() {
+			t.Errorf("unit %q, which this test puts where a run looks, does not report itself as a row a run removes", unit.Label)
+		}
+	}
+
+	beforeConfig := decodeConfig(t, ConfigPayload{Snapshot: before})
+	afterConfig := decodeConfig(t, ConfigPayload{Snapshot: after})
+
+	beforeUnits := listOf(t, systemEntryOf(t, beforeConfig, "Grand Metro"), "units")
+	afterUnits := listOf(t, systemEntryOf(t, afterConfig, "Grand Metro"), "units")
+
+	if len(beforeUnits) != len(kept)+len(migrationDamageUnits) {
+		t.Fatalf("the units array holds %d entries while the rows stand, want the %d the deployment named plus the %d the migration left",
+			len(beforeUnits), len(kept), len(migrationDamageUnits))
+	}
+
+	if len(afterUnits) != len(kept) {
+		t.Errorf("the units array holds %d entries after the run, want the %d it left standing", len(afterUnits), len(kept))
+	}
+
+	for i, unit := range kept {
+		if i >= len(afterUnits) {
+			continue
+		}
+
+		if got, want := jsonOf(t, afterUnits[i]), jsonOf(t, beforeUnits[i]); got != want {
+			t.Errorf("the entry for unit %q =\n  %s\nwant the bytes the same builder wrote while the removed rows stood:\n  %s", unit.Label, got, want)
+		}
+	}
+
+	for _, entry := range entryBytesOf(t, beforeUnits[len(kept):]) {
+		if !strings.Contains(beforeBody, entry) {
+			t.Errorf("the units array does not carry %s while the rows stand:\n  %s", entry, beforeBody)
+		}
+
+		if strings.Contains(afterBody, entry) {
+			t.Errorf("the payload a run leaves behind still carries %s:\n  %s", entry, afterBody)
+		}
+	}
+
+	// Cutting the removed entries out of the payload built while they stood has to answer with the payload
+	// built after the run: nothing else in the configuration a listener is shown moves.
+	want := cutEntryBytes(t, beforeBody, entryBytesOf(t, beforeUnits[len(kept):]))
+
+	if want != afterBody {
+		t.Errorf("the payload built after the run =\n  %s\nwant the payload built while the rows stood with only the removed entries cut out:\n  %s", afterBody, want)
+	}
+}
+
+// TestCallPayloadNamesTheNumbersAMaintenanceRunRemovedAsTheRecordedCallHeardThem proves a recorded call is
+// answered from its own stored rows, so a maintenance run that empties the catalog of some numbers changes
+// nothing about the call that names them. The bytes are the recorded call's own bytes, with only the
+// numbers it heard swapped for the ones a run removes; the shape of the answer, and every other byte of it,
+// is what the capture recorded.
+func TestCallPayloadNamesTheNumbersAMaintenanceRunRemovedAsTheRecordedCallHeardThem(t *testing.T) {
+	call := capturedCall()
+
+	call.Units = []domain.CallUnit{
+		{ID: 41, CallID: call.ID, Offset: 0.5, UnitRef: 6789},
+		{ID: 42, CallID: call.ID, Offset: 1.5, UnitRef: 1514000},
+	}
+
+	got := marshal(t, CallPayload{Call: call})
+
+	// The stored rows are the same rows before and after a run, because a run removes catalog rows and not
+	// the rows of a recorded call; the answer therefore keeps every byte it had, and names the removed
+	// numbers exactly as the call heard them.
+	kept := []domain.CallUnit{
+		{ID: 41, CallID: call.ID, Offset: 0.5, UnitRef: 1001},
+		{ID: 42, CallID: call.ID, Offset: 1.5, UnitRef: 1002},
+	}
+
+	want := capturedAnswer(t, "payload-cal-detailed.json")
+
+	for _, unit := range kept {
+		if unit.UnitRef == 0 {
+			t.Fatalf("the call the capture recorded names no number at offset %v", unit.Offset)
+		}
+	}
+
+	swapped := strings.NewReplacer(
+		`"src":6789`, `"src":1001`,
+		`"src":1514000`, `"src":1002`,
+	).Replace(got)
+
+	if swapped != want {
+		t.Errorf("the recorded call's answer with its own numbers put back =\n  %s\nwant the captured call payload, byte for byte:\n  %s", swapped, want)
+	}
+
+	for _, number := range []string{"6789", "1514000"} {
+		if !strings.Contains(got, `"src":`+number) {
+			t.Errorf("the answer for a recorded call that heard %s does not name it: %s", number, got)
+		}
+	}
+
+	// A removed number is named as a number the call heard, and nothing about it is looked up in the catalog
+	// the run emptied: no name, no server-side number, no range.
+	for _, key := range []string{"label", "unitRef", "unitId", "unitFrom", "unitTo", "order"} {
+		if strings.Contains(got, `"`+key+`"`) {
+			t.Errorf("the answer for a recorded call carries %s, which is a catalog's answer and not a call's: %s", key, got)
+		}
+	}
+}
+
 // sharedGroupSnapshot is two systems whose talkgroups both belong to Shared, which the
 // payload's group listing therefore sees first, while the second talkgroup's own record
 // names its own group first.
@@ -561,6 +708,41 @@ func jsonOf(t *testing.T, from any) string {
 	}
 
 	return string(b)
+}
+
+// entryBytesOf writes each payload entry as the payload carries it, so a test can name the entries it is
+// cutting out of a payload byte for byte.
+func entryBytesOf(t *testing.T, entries []any) []string {
+	t.Helper()
+
+	out := make([]string, 0, len(entries))
+
+	for _, raw := range entries {
+		out = append(out, jsonOf(t, objectOf(t, raw)))
+	}
+
+	return out
+}
+
+// cutEntryBytes removes each entry's bytes from a marshaled payload, taking with each entry the comma that
+// separates it from the entry before it. A test uses it to state that those entries are the only bytes a
+// payload loses. It stops when an entry was never carried that way, because then the cut it is asked to
+// prove is not the cut the payload made.
+func cutEntryBytes(t *testing.T, body string, entries []string) string {
+	t.Helper()
+
+	out := body
+
+	for _, entry := range entries {
+		i := strings.Index(out, ","+entry)
+		if i < 0 {
+			t.Fatalf("the payload does not carry %s after a comma:\n  %s", entry, out)
+		}
+
+		out = out[:i] + out[i+len(","+entry):]
+	}
+
+	return out
 }
 
 // talkgroupRefs lists the talkgroup references a configuration carries, in the order it carries them.
