@@ -325,6 +325,13 @@ func ffmpegPathsFor(repo string, manifest bundle.Manifest, target string) ffmpeg
 	}
 }
 
+// ffmpegLicenceName is the file that says what the ffmpeg a release carries
+// is made of and how it was proved. It is the name the build writes it under
+// in a cache entry, in the bundle directory the server embeds, and in the
+// archive a reader unpacks, so the one place a reader looks for the notice is
+// the name the notice is kept under everywhere it is stored.
+const ffmpegLicenceName = "FFMPEG.txt"
+
 // sourceName is the tarball the release is published as, and sourceDir is the directory it extracts
 // to. They are the same name with the suffix taken off, which is what ffmpeg's own releases are.
 func sourceName(manifest bundle.Manifest) string {
@@ -992,7 +999,7 @@ func adoptSuppliedFFmpeg(paths ffmpegPaths, target string, licence string) error
 		}
 	}
 
-	if err := os.WriteFile(filepath.Join(paths.cached, "LICENCE.md"), []byte(licence), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(paths.cached, ffmpegLicenceName), []byte(licence), 0644); err != nil {
 		return fmt.Errorf("the build cannot write the licence text for %s: %w", target, err)
 	}
 
@@ -1792,6 +1799,12 @@ func gzipCompiled(paths ffmpegPaths, manifest bundle.Manifest, target string) er
 // about them, into the bundle directory the server embeds; the go build
 // placeholder stays. The licence text is passed in: the two ways a
 // target's ffmpeg comes to be say different and true things about it.
+//
+// A notice an earlier build left in that directory under the name this one
+// no longer uses is taken out. The embed that puts the pair inside the
+// server takes every file in the directory, and no phase of the build
+// prunes that directory, so a leftover would ride inside every server built
+// afterwards, and the server would carry two statements about one pair.
 func publishFFmpeg(paths ffmpegPaths, manifest bundle.Manifest, target string, licence string) error {
 	if err := os.MkdirAll(paths.bundle, 0755); err != nil {
 		return fmt.Errorf("the build cannot prepare %s: %w", paths.bundle, err)
@@ -1808,8 +1821,16 @@ func publishFFmpeg(paths ffmpegPaths, manifest bundle.Manifest, target string, l
 		}
 	}
 
-	if err := os.WriteFile(filepath.Join(paths.bundle, "LICENCE.md"), []byte(licence), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(paths.bundle, ffmpegLicenceName), []byte(licence), 0644); err != nil {
 		return fmt.Errorf("the build cannot write the licence text for %s: %w", target, err)
+	}
+
+	// The name this notice used to have is removed from the same directory,
+	// because the embed takes every file in it and nothing prunes it: a file
+	// an earlier release left standing there would be embedded in every
+	// server built after this one.
+	if err := os.Remove(filepath.Join(paths.bundle, "LICENCE.md")); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("the build cannot take the licence text an earlier build left in %s: %w", paths.bundle, err)
 	}
 
 	return nil
