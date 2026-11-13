@@ -171,7 +171,12 @@ func archiveFiles(repo string, tr releaseTarget, output string) ([]archiveFile, 
 	files := []archiveFile{program, guide, listenerGuide}
 
 	if _, ok := bundle.ReadManifest().Targets[tr.targetWord()]; ok {
-		licence, err := readArchiveSource(repo, filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", tr.targetWord(), "LICENCE.md"), "FFMPEG.txt", 0o644)
+		// The notice is entered under the name the bundle directory holds it
+		// at, the name the ffmpeg phase wrote it under, with no rename on the
+		// way into the archive.
+		noticePath := filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", tr.targetWord(), ffmpegLicenceName)
+
+		licence, err := readArchiveSource(repo, noticePath, ffmpegLicenceName, 0o644)
 		if err != nil {
 			return nil, fmt.Errorf("the release has no ffmpeg licence for %s: %w", tr.targetWord(), err)
 		}
