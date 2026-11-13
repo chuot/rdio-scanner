@@ -26,6 +26,7 @@ import (
 
 	"github.com/kardianos/service"
 
+	"rdio-scanner/internal/application"
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/infrastructure/persistence"
@@ -179,6 +180,71 @@ func (s *Server) Vacuum(ctx context.Context) (persistence.VacuumMeasurements, pe
 	}
 
 	return persistence.Vacuum(ctx, s.db)
+}
+
+// MaintenanceSummary is what one maintenance run answers with: the account of everything its clearing
+// named, and the page facts the compaction measured on either side of its statement. Both halves come back
+// in one summary because the operator asked for one run and reads one answer out of it — what came out of
+// the deployment, and what the file gave back afterwards.
+type MaintenanceSummary struct {
+	application.MigrationDamageListing
+
+	// Before and After are the file's page facts on either side of the compaction statement. They are
+	// zero when nothing was compacted: a backend the server cannot rewrite, or a listing the operator
+	// asked for without acting on it.
+	Before persistence.VacuumMeasurements
+	After  persistence.VacuumMeasurements
+
+	// CompactionSkip names the backend the run did not compact and says why, empty when the compaction
+	// ran. A report-only run carries it empty as well, because that run compacted nothing by the
+	// operator's own request; its listing is written in the words "would remove", and that is what says
+	// no compaction was asked for either.
+	CompactionSkip string
+}
+
+// Maintain runs the operator's one-shot maintenance pass over the deployment: it clears the records a
+// legacy migration left in problem and then compacts the database, in that order. The order is the point
+// of the run — dropping a legacy table and taking out the rows a migration made is what releases the pages
+// a compaction then reclaims, so compacting first would measure a file that had nothing to reclaim and
+// leave those pages where they are. The clearing runs on every backend the server stores on; only sqlite
+// keeps its whole database in one file the server can rewrite, so on the others the compaction is named as
+// skipped rather than attempted, and the summary carries no page facts because none were measured.
+func (s *Server) Maintain(ctx context.Context) (MaintenanceSummary, error) {
+	result, err := s.clearDamage.Handle(ctx, application.ClearMigrationDamageCommand{})
+	if err != nil {
+		return MaintenanceSummary{}, err
+	}
+
+	summary := MaintenanceSummary{MigrationDamageListing: result.MigrationDamageListing}
+
+	if s.dialect != persistence.DialectSqlite {
+		summary.CompactionSkip = fmt.Sprintf("the compaction was skipped: it needs the sqlite database, not %s", string(s.dialect))
+
+		return summary, nil
+	}
+
+	before, after, err := s.Vacuum(ctx)
+	if err != nil {
+		return MaintenanceSummary{}, err
+	}
+
+	summary.Before = before
+	summary.After = after
+
+	return summary, nil
+}
+
+// MaintainReportOnly answers what a maintenance run would clear, and changes nothing: it asks the query
+// half of the run, which reads the same three classes the clearing reads and removes none of them, and it
+// neither compacts nor files anything, because a listing an operator read is not a change that happened. It
+// is the report-only form of -vacuum, run instead of starting the server.
+func (s *Server) MaintainReportOnly(ctx context.Context) (MaintenanceSummary, error) {
+	result, err := s.reportDamage.Handle(ctx, application.GetMigrationDamageReportQuery{})
+	if err != nil {
+		return MaintenanceSummary{}, err
+	}
+
+	return MaintenanceSummary{MigrationDamageListing: result.MigrationDamageListing}, nil
 }
 
 // serviceLog is the copy of the server's log entries a service manager

@@ -17,13 +17,18 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"rdio-scanner/internal/application"
+	"rdio-scanner/internal/application/fakes"
+	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
 	"rdio-scanner/internal/infrastructure/persistence"
 )
@@ -231,6 +236,458 @@ func TestVacuumRefusesADatabaseTheServerDoesNotCompact(t *testing.T) {
 		if !strings.Contains(err.Error(), string(dialect)) {
 			t.Errorf("%s: the refusal says %q, want it to name the backend the server is wired to", dialect, err)
 		}
+	}
+}
+
+// maintenanceDeploymentUnits is the catalog a maintenance run is tested against: two rows of the
+// shape a legacy migration leaves — a radio reference, and a label that is that reference written
+// out — beside three survivors that are each one shape a looser rule would wrongly remove: a unit
+// with a described range, a unit with no radio reference at all, and a number an operator named.
+var maintenanceDeploymentUnits = []domain.Unit{
+	{ID: 301, Label: "Engine 12", Order: 1, SystemID: 101, UnitRef: 1234, UnitFrom: 1200, UnitTo: 1299},
+	{ID: 302, Label: "Car 4", Order: 2, SystemID: 101},
+	{ID: 303, Label: "6789", Order: 0, SystemID: 101, UnitRef: 6789},
+	{ID: 304, Label: "1514000", Order: 0, SystemID: 101, UnitRef: 1514000},
+	{ID: 305, Label: "6789 Engine", Order: 3, SystemID: 101, UnitRef: 6789},
+}
+
+const (
+	// maintenanceDamagedUnits is how many of those rows are the shape a run clears.
+	maintenanceDamagedUnits = 2
+
+	// maintenanceLegacyTable is one of the tables the legacy server wrote, and maintenanceLegacyRows
+	// is how many rows it holds while it stands. The rows are wide enough that dropping the table
+	// returns pages to the file, which is what makes the order of a run's two halves observable: the
+	// compaction measures a file the clearing has already released pages into. Only its name matters
+	// to a clearing, which counts a legacy table and drops it.
+	maintenanceLegacyTable = "rdioScannerCalls"
+	maintenanceLegacyRows  = 800
+)
+
+// seedMaintenanceDeployment writes the fixture's system and unit rows into a deployment the server
+// has already brought to its own schema, so the run is tested against stored rows rather than
+// against rows the composition root made up.
+func seedMaintenanceDeployment(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	statements := []seedStatement{
+		{
+			query: `INSERT INTO "systems" ("systemId", "label", "systemRef") VALUES (?, ?, ?)`,
+			args:  []any{101, "Grand Metro", 10001},
+		},
+	}
+
+	for _, unit := range maintenanceDeploymentUnits {
+		statements = append(statements, seedStatement{
+			query: `INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef", "unitFrom", "unitTo") VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			args:  []any{unit.ID, unit.Label, unit.Order, unit.SystemID, unit.UnitRef, unit.UnitFrom, unit.UnitTo},
+		})
+	}
+
+	seed(t, db, statements...)
+}
+
+// createMaintenanceLegacyTable fills one legacy table with rows wide enough that dropping it leaves
+// its pages on the file's freelist.
+func createMaintenanceLegacyTable(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	const body = "a row the legacy server wrote and this server never reads, repeated until the table is wide enough to matter: " +
+		"a row the legacy server wrote and this server never reads, repeated until the table is wide enough to matter."
+
+	if _, err := db.Exec(`CREATE TABLE "` + maintenanceLegacyTable + `" ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "body" text NOT NULL)`); err != nil {
+		t.Fatalf("creating the legacy table: %v", err)
+	}
+
+	for i := range maintenanceLegacyRows {
+		if _, err := db.Exec(`INSERT INTO "`+maintenanceLegacyTable+`" ("body") VALUES (?)`, body); err != nil {
+			t.Fatalf("inserting legacy row %d: %v", i, err)
+		}
+	}
+}
+
+// seedMaintenanceFreelist deletes a run of rows so the file holds free pages a compaction would
+// reclaim: a run that compacts nothing is only proved to have compacted nothing where there was
+// something to compact. The rows are deleted as one run rather than alternately, because a backend
+// returns a page to the file only when nothing is left on it, and deleting every other row leaves
+// every page with something on it.
+func seedMaintenanceFreelist(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	if _, err := db.Exec(`CREATE TABLE maintenance_probe ("id" integer NOT NULL PRIMARY KEY AUTOINCREMENT, "body" text NOT NULL)`); err != nil {
+		t.Fatalf("creating the probe table: %v", err)
+	}
+
+	const probeRows = 400
+
+	body := strings.Repeat("x", 300)
+
+	for i := range probeRows {
+		if _, err := db.Exec(`INSERT INTO maintenance_probe ("body") VALUES (?)`, body); err != nil {
+			t.Fatalf("inserting probe row %d: %v", i, err)
+		}
+	}
+
+	if _, err := db.Exec(`DELETE FROM maintenance_probe WHERE "id" BETWEEN 101 AND 300`); err != nil {
+		t.Fatalf("deleting the run of probe rows: %v", err)
+	}
+}
+
+// filePages reads the same three facts the compaction measures, so a test can set what the run's own
+// measurements say against what the file held before the run.
+func filePages(t *testing.T, db *sql.DB) persistence.VacuumMeasurements {
+	t.Helper()
+
+	var pages persistence.VacuumMeasurements
+
+	if err := db.QueryRow(`PRAGMA page_size`).Scan(&pages.PageSize); err != nil {
+		t.Fatalf("reading the page size: %v", err)
+	}
+
+	if err := db.QueryRow(`PRAGMA page_count`).Scan(&pages.PageCount); err != nil {
+		t.Fatalf("reading the page count: %v", err)
+	}
+
+	if err := db.QueryRow(`PRAGMA freelist_count`).Scan(&pages.FreelistCount); err != nil {
+		t.Fatalf("reading the free pages: %v", err)
+	}
+
+	return pages
+}
+
+// maintenanceTablePresent answers whether a table is standing in the deployment, which is how a test
+// checks a dropped one stayed dropped.
+func maintenanceTablePresent(t *testing.T, db *sql.DB, name string) bool {
+	t.Helper()
+
+	var standing int
+
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?`, name).Scan(&standing); err != nil {
+		t.Fatalf("asking whether %s stands: %v", name, err)
+	}
+
+	return standing > 0
+}
+
+// unitNamed finds one unit in the account a run gives back.
+func unitNamed(units []domain.Unit, id uint64) (domain.Unit, bool) {
+	for _, unit := range units {
+		if unit.ID == id {
+			return unit, true
+		}
+	}
+
+	return domain.Unit{}, false
+}
+
+// TestMaintainClearsTheDeploymentBeforeItCompactsIt runs the operator's maintenance pass through the
+// composition root and reads the order of its two halves off the file: the clearing drops the legacy
+// table and takes out the damaged rows first, so the compaction measures a file already holding the
+// pages that drop released, and reclaims them. A run that compacted before it cleared would measure
+// an empty freelist and leave those pages in the file behind. The removal counts and the page facts
+// come back in one summary, which is what lets the run answer once instead of twice.
+func TestMaintainClearsTheDeploymentBeforeItCompactsIt(t *testing.T) {
+	ctx := context.Background()
+
+	srv, err := New(testConfigIn(t.TempDir(), io.Discard))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	defer func() {
+		if err := srv.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
+
+	seedMaintenanceDeployment(t, srv.db)
+	createMaintenanceLegacyTable(t, srv.db)
+
+	before := filePages(t, srv.db)
+
+	summary, err := srv.Maintain(ctx)
+	if err != nil {
+		t.Fatalf("Maintain: %v", err)
+	}
+
+	if summary.CompactionSkip != "" {
+		t.Errorf("the run says %q about its compaction, want it to have compacted the sqlite file it holds", summary.CompactionSkip)
+	}
+
+	if summary.Before.FreelistCount <= before.FreelistCount {
+		t.Errorf("the compaction measured %d free pages against the %d the file held before the run, want the pages the clearing released to be on the freelist it measured: the compaction ran before the clearing",
+			summary.Before.FreelistCount, before.FreelistCount)
+	}
+
+	if summary.After.FreelistCount != 0 {
+		t.Errorf("the run leaves %d free pages in the file, want the compaction to have reclaimed the pages the clearing released", summary.After.FreelistCount)
+	}
+
+	if summary.After.PageCount >= summary.Before.PageCount {
+		t.Errorf("the file holds %d pages after the run and %d before it, want the compaction to have shrunk it", summary.After.PageCount, summary.Before.PageCount)
+	}
+
+	if summary.After.PageSize != summary.Before.PageSize || summary.After.PageSize == 0 {
+		t.Errorf("the run reports page size %d after and %d before, want the file's own page size on both sides", summary.After.PageSize, summary.Before.PageSize)
+	}
+
+	if summary.UnitsRemoved != maintenanceDamagedUnits {
+		t.Errorf("the run removed %d unit rows, want the %d labelled with their own radio numbers", summary.UnitsRemoved, maintenanceDamagedUnits)
+	}
+
+	if summary.TablesDropped != 1 {
+		t.Errorf("the run dropped %d legacy tables, want the one the deployment held", summary.TablesDropped)
+	}
+
+	if len(summary.DroppedTables) != 1 {
+		t.Fatalf("the run names %v, want the one legacy table it dropped", summary.DroppedTables)
+	}
+
+	if summary.DroppedTables[0].Name != maintenanceLegacyTable {
+		t.Errorf("the run dropped %s, want %s", summary.DroppedTables[0].Name, maintenanceLegacyTable)
+	}
+
+	if summary.DroppedTables[0].Rows != maintenanceLegacyRows {
+		t.Errorf("%s went with %d rows, want the %d rows it held", maintenanceLegacyTable, summary.DroppedTables[0].Rows, maintenanceLegacyRows)
+	}
+
+	if summary.DroppedArchive || summary.ArchiveRowsRemoved != 0 {
+		t.Errorf("the run names %d archived rows and an archive table %v, want nothing said about an archive table: this deployment's migration had nothing to archive",
+			summary.ArchiveRowsRemoved, summary.DroppedArchive)
+	}
+
+	for _, want := range []domain.Unit{maintenanceDeploymentUnits[2], maintenanceDeploymentUnits[3]} {
+		got, found := unitNamed(summary.RemovedUnits, want.ID)
+
+		if !found {
+			t.Errorf("the run does not name unit %d among what it removed, want the row it removed named with the values it held", want.ID)
+
+			continue
+		}
+
+		if got.Label != want.Label || got.UnitRef != want.UnitRef || got.SystemID != want.SystemID {
+			t.Errorf("the run names unit %d as %q of system %d with reference %d, want %q of system %d with reference %d",
+				want.ID, got.Label, got.SystemID, got.UnitRef, want.Label, want.SystemID, want.UnitRef)
+		}
+	}
+
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "units"`); got != len(maintenanceDeploymentUnits)-maintenanceDamagedUnits {
+		t.Errorf("the catalog holds %d units after the run, want the %d that were not the shape it clears",
+			got, len(maintenanceDeploymentUnits)-maintenanceDamagedUnits)
+	}
+
+	if kept := countRows(t, srv.db, `SELECT COUNT(*) FROM "units" WHERE "unitId" IN (301, 302, 305)`); kept != 3 {
+		t.Errorf("the catalog holds %d of the three units the run must leave alone, want all of them kept exactly as they were", kept)
+	}
+
+	if left := countRows(t, srv.db, `SELECT COUNT(*) FROM "units" WHERE "unitId" IN (303, 304)`); left != 0 {
+		t.Errorf("%d of the two rows the migration left labelled with their own numbers are still in the catalog, want both removed", left)
+	}
+
+	if maintenanceTablePresent(t, srv.db, maintenanceLegacyTable) {
+		t.Errorf("%s is still standing, want the run to have dropped it", maintenanceLegacyTable)
+	}
+}
+
+// TestAMaintenanceRunOverADeploymentAnotherInstanceHoldsIsRefused keeps the maintenance run to the
+// same claim every other mode that opens the database takes: the refusal comes before anything reads
+// the file, so the damaged rows a run would have removed are where they were.
+func TestAMaintenanceRunOverADeploymentAnotherInstanceHoldsIsRefused(t *testing.T) {
+	base := t.TempDir()
+
+	srv, err := New(testConfigIn(base, io.Discard))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	defer func() {
+		if err := srv.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
+
+	seedMaintenanceDeployment(t, srv.db)
+	createMaintenanceLegacyTable(t, srv.db)
+
+	second, err := New(testConfigIn(base, io.Discard))
+	if err == nil {
+		_ = second.Close()
+		t.Fatal("a maintenance run over a deployment another server holds started, want it refused as in use")
+	}
+
+	if !errors.Is(err, ErrInUse) {
+		t.Errorf("the refusal is %v, want it to say the deployment is in use", err)
+	}
+
+	if second != nil {
+		t.Error("the refused run hands back a server, want nothing to run a clearing against")
+	}
+
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "units" WHERE "unitId" IN (303, 304)`); got != maintenanceDamagedUnits {
+		t.Errorf("the refusal left %d of the two rows a run would have removed, want both kept: the refusal happens before the file is opened", got)
+	}
+
+	if !maintenanceTablePresent(t, srv.db, maintenanceLegacyTable) {
+		t.Errorf("%s is gone although the run was refused, want the deployment untouched", maintenanceLegacyTable)
+	}
+}
+
+// TestMaintainClearsABackendTheServerCannotCompactAndNamesTheSkippedCompaction holds the two halves
+// apart where only one of them can run. The clearing runs on every backend; the compaction is not
+// attempted at all, which the file itself proves: the free pages it would have reclaimed are still
+// there. The summary names the backend the server cannot rewrite and carries no page facts, because
+// it has none to carry.
+func TestMaintainClearsABackendTheServerCannotCompactAndNamesTheSkippedCompaction(t *testing.T) {
+	ctx := context.Background()
+
+	for _, dialect := range []persistence.Dialect{
+		persistence.DialectMariadb,
+		persistence.DialectMysql,
+		persistence.DialectPostgresql,
+	} {
+		// A sqlite file stands in for the deployment so the compaction half can be watched from the
+		// outside. The server is wired to a backend it cannot rewrite, and a run that reached for the
+		// file's compaction statement would take its free pages with it.
+		db, err := persistence.Open(persistence.Settings{
+			Dialect:  persistence.DialectSqlite,
+			FilePath: filepath.Join(t.TempDir(), "rdio-scanner.db"),
+		})
+		if err != nil {
+			t.Fatalf("%s: opening the stand-in file: %v", dialect, err)
+		}
+
+		seedMaintenanceFreelist(t, db)
+
+		pages := filePages(t, db)
+		if pages.FreelistCount == 0 {
+			db.Close()
+			t.Fatalf("%s: the stand-in file holds no free pages, want pages a compaction would have reclaimed", dialect)
+		}
+
+		store := &fakes.Maintenance{
+			Report: ports.MigrationDamageReport{
+				Units: []domain.Unit{maintenanceDeploymentUnits[2]},
+			},
+		}
+
+		srv := &Server{
+			dialect:     dialect,
+			db:          db,
+			clearDamage: application.NewClearMigrationDamageHandler(store, &fakes.Logs{}, fakes.NewClock(time.Unix(1763000000, 0))),
+		}
+
+		summary, err := srv.Maintain(ctx)
+		if err != nil {
+			t.Errorf("%s: Maintain: %v", dialect, err)
+
+			db.Close()
+
+			continue
+		}
+
+		if store.Cleared != 1 {
+			t.Errorf("%s: the run asked for %d clearings, want one: the clearing runs on every backend", dialect, store.Cleared)
+		}
+
+		if summary.CompactionSkip == "" {
+			t.Errorf("%s: the run says nothing about its compaction, want it to name the backend it did not compact", dialect)
+		} else if !strings.Contains(summary.CompactionSkip, string(dialect)) {
+			t.Errorf("%s: the run's compaction says %q, want it to name the backend the server is wired to", dialect, summary.CompactionSkip)
+		}
+
+		if summary.Before != (persistence.VacuumMeasurements{}) || summary.After != (persistence.VacuumMeasurements{}) {
+			t.Errorf("%s: the run carries the page facts %v and %v, want none: nothing was measured because nothing was compacted",
+				dialect, summary.Before, summary.After)
+		}
+
+		if summary.UnitsRemoved != 1 {
+			t.Errorf("%s: the run removed %d unit rows, want the one its clearing named", dialect, summary.UnitsRemoved)
+		}
+
+		if after := filePages(t, db); after.FreelistCount != pages.FreelistCount || after.PageCount != pages.PageCount {
+			t.Errorf("%s: the file went from %d pages with %d free to %d pages with %d free, want it exactly as it was: the compaction was not attempted",
+				dialect, pages.PageCount, pages.FreelistCount, after.PageCount, after.FreelistCount)
+		}
+
+		db.Close()
+	}
+}
+
+// TestMaintainReportOnlyChangesNothingAndStillClaimsTheDeployment is the dry run at the composition
+// root: the listing it answers with names what a run would remove, and the deployment keeps every
+// row and every page it had, including the free pages a compaction would have reclaimed and the log
+// entries a clearing would have filed. It opens the deployment the way a real run does, so another
+// instance is refused while it holds it.
+func TestMaintainReportOnlyChangesNothingAndStillClaimsTheDeployment(t *testing.T) {
+	ctx := context.Background()
+
+	base := t.TempDir()
+
+	srv, err := New(testConfigIn(base, io.Discard))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	defer func() {
+		if err := srv.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
+
+	seedMaintenanceDeployment(t, srv.db)
+	createMaintenanceLegacyTable(t, srv.db)
+	seedMaintenanceFreelist(t, srv.db)
+
+	units := countRows(t, srv.db, `SELECT COUNT(*) FROM "units"`)
+	legacy := countRows(t, srv.db, `SELECT COUNT(*) FROM "`+maintenanceLegacyTable+`"`)
+	entries := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs"`)
+	pages := filePages(t, srv.db)
+
+	summary, err := srv.MaintainReportOnly(ctx)
+	if err != nil {
+		t.Fatalf("MaintainReportOnly: %v", err)
+	}
+
+	if summary.UnitsRemoved != maintenanceDamagedUnits {
+		t.Errorf("the report names %d unit rows, want the %d a run would remove", summary.UnitsRemoved, maintenanceDamagedUnits)
+	}
+
+	if summary.TablesDropped != 1 || summary.DroppedTables[0].Name != maintenanceLegacyTable {
+		t.Errorf("the report names %v, want the one legacy table a run would drop", summary.DroppedTables)
+	}
+
+	if summary.CompactionSkip != "" {
+		t.Errorf("the report says %q about compaction, want it to carry no compaction at all: a dry run compacts nothing", summary.CompactionSkip)
+	}
+
+	if summary.Before != (persistence.VacuumMeasurements{}) || summary.After != (persistence.VacuumMeasurements{}) {
+		t.Errorf("the report carries the page facts %v and %v, want none: it measured nothing because it compacted nothing", summary.Before, summary.After)
+	}
+
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "units"`); got != units {
+		t.Errorf("the report left %d units in the catalog where it found %d, want it to remove no row", got, units)
+	}
+
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "`+maintenanceLegacyTable+`"`); got != legacy {
+		t.Errorf("the report left %d rows in %s where it found %d, want it to drop no table", got, maintenanceLegacyTable, legacy)
+	}
+
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs"`); got != entries {
+		t.Errorf("the report filed %d log entries where the deployment held %d, want none: a listing nobody acted on is not a change", got, entries)
+	}
+
+	if after := filePages(t, srv.db); after != pages {
+		t.Errorf("the report left the file at %v where it found it at %v, want the pages and free pages exactly as they were", after, pages)
+	}
+
+	second, err := New(testConfigIn(base, io.Discard))
+	if err == nil {
+		_ = second.Close()
+		t.Fatal("a second server started over a deployment a report-only run holds, want it refused as in use")
+	}
+
+	if !errors.Is(err, ErrInUse) {
+		t.Errorf("the refusal is %v, want it to say the deployment is in use", err)
 	}
 }
 

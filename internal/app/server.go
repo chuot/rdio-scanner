@@ -110,6 +110,14 @@ type Server struct {
 	prune   *application.PruneOldCallsHandler
 	held    *delayer.Delayer
 
+	// clearDamage and reportDamage are the operator's one-shot maintenance run in each of its two forms:
+	// the clearing, and the listing that says what the clearing would name without doing it. They are kept
+	// because a maintenance mode runs them after the server is assembled and never starts serving, and
+	// both halves are built from the one store adapter, so what a run says it would do and what a run does
+	// cannot be read out of different queries.
+	clearDamage  *application.ClearMigrationDamageHandler
+	reportDamage *application.GetMigrationDamageReportHandler
+
 	// collectorDone closes when the loop carrying held calls back into the pipeline has
 	// returned: a server that has stopped does not leave a collector behind.
 	collectorDone chan struct{}
@@ -413,6 +421,18 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 	s.watches = watches
 
 	s.prune = application.NewPruneOldCallsHandler(calls, s.logs, options, s.clock)
+
+	// The maintenance run is the operator's one-shot switch, and both of its halves are asked of one
+	// adapter: the clearing, and the reading that names the same rows as what a run would remove. Both
+	// handlers read the same three statements of the same database, so what a run says it would do and what
+	// a run does cannot be read out of different queries. The clearing files its entries through the plain
+	// repository rather than the echoing one, for the reason the migration's buffered lines are filed that
+	// way: the run prints its own listing to the terminal, and echoing every removal a second time would
+	// say the same line twice.
+	maintenance := persistence.NewMaintenance(s.db, s.dialect)
+
+	s.clearDamage = application.NewClearMigrationDamageHandler(maintenance, logs, s.clock)
+	s.reportDamage = application.NewGetMigrationDamageReportHandler(maintenance)
 
 	adminSessions := adminbackend.NewSessions(adminbackend.SessionDeps{
 		Session: application.NewCheckAdminSessionHandler(tokensAdapter),
