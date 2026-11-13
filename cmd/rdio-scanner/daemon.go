@@ -91,8 +91,10 @@ func asksTheServiceManager(action string) bool {
 	return action != "" && action != serviceActionRun
 }
 
-// controlService asks the manager to act, and an unknown action is refused
-// with only the exit code said to the operator.
+// controlService asks the manager to act, and a refusal the manager answers
+// with is said to the operator who asked, through the same failure path this
+// mode already uses for its other failures and ending with the same code;
+// what the manager said is passed on unchanged.
 func controlService(action string) int {
 	d, err := newDaemon()
 	if err != nil {
@@ -100,7 +102,7 @@ func controlService(action string) int {
 	}
 
 	if err := service.Control(d.service, action); err != nil {
-		return -1
+		return exitWithError(err)
 	}
 
 	return 0
