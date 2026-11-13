@@ -19,7 +19,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"rdio-scanner/internal/application/ports"
 	"rdio-scanner/internal/domain"
@@ -75,7 +74,9 @@ func legacyTablesPresent(ctx context.Context, s store) (bool, error) {
 // are damage is decided by the Domain predicate rather than by anything a backend compares, so all
 // four dialects are asked the same statements, each written once with the `?` placeholder the store
 // rewrites for PostgreSQL. A statement that names a legacy table holds the name itself: the names come
-// from this package's own list, not from anything the database answers.
+// from this package's own list, not from anything the database answers. The reading asks the three read
+// statements of this set and none of the ones that remove or drop, so both halves of the run put the same
+// questions to a backend and only one of them changes anything.
 type clearStatements struct {
 	units           string
 	deleteUnit      string
@@ -85,17 +86,23 @@ type clearStatements struct {
 	dropLegacyTable string
 }
 
-// Maintenance is the adapter that clears the records a legacy migration left in problem: the unit rows
-// the migration created rather than a deployment named, the migration archive table, and the v6 tables
-// the migration left standing. The operator's one-shot maintenance switch builds and runs it once; no
-// start, scheduled pass, or endpoint reaches it.
+// Maintenance is the adapter for the records a legacy migration left in problem: the unit rows the
+// migration created rather than a deployment named, the migration archive table, and the v6 tables the
+// migration left standing. It answers the run's two questions from the same three reads and the same
+// statements — remove them, or say which ones removing them would name — so what a run says it would do and
+// what a run does cannot be read out of different queries. The operator's one-shot maintenance run builds it
+// once; no start, scheduled pass, or endpoint reaches it.
 type Maintenance struct {
 	store store
 
 	statements clearStatements
 }
 
-// NewMaintenance builds the clearing for one opened database.
+var _ ports.MigrationClearer = (*Maintenance)(nil)
+var _ ports.MigrationDamageReader = (*Maintenance)(nil)
+
+// NewMaintenance builds the maintenance adapter for one opened database: both its halves, the clearing and
+// the reading, are built the same way and hold the same statements.
 func NewMaintenance(db *sql.DB, dialect Dialect) *Maintenance {
 	return &Maintenance{
 		store: newStore(db, dialect),
@@ -129,17 +136,9 @@ func (m *Maintenance) ClearMigrationDamage(ctx context.Context) (ports.Migration
 	// The presence questions are asked before the transaction opens. A table that is not there is an
 	// answer rather than a failure, and a statement that failed for its own absence is one a backend
 	// ends the transaction for.
-	legacy := []string{}
-
-	for _, table := range v6MigrationTables {
-		present, err := tableExists(ctx, m.store, table)
-		if err != nil {
-			return report, operationError(section, operation, err)
-		}
-
-		if present {
-			legacy = append(legacy, table)
-		}
+	legacy, err := standingLegacyTables(ctx, m.store)
+	if err != nil {
+		return report, operationError(section, operation, err)
 	}
 
 	archived, err := tableExists(ctx, m.store, migrationArchiveTable)
@@ -152,17 +151,18 @@ func (m *Maintenance) ClearMigrationDamage(ctx context.Context) (ports.Migration
 		return report, operationError(section, operation, err)
 	}
 
+	// Every standing table is counted before any is dropped, so each one is reported with the rows it held
+	// while it stood.
+	tables, err := legacyTableRowCounts(ctx, tx, m.statements, legacy, section, operation)
+	if err != nil {
+		tx.rollback()
+
+		return report, err
+	}
+
+	report.DroppedTables = tables
+
 	for _, table := range legacy {
-		count := fmt.Sprintf(m.statements.countLegacyRow, table)
-
-		var rows int64
-
-		if err := tx.queryRow(ctx, count).Scan(&rows); err != nil {
-			tx.rollback()
-
-			return report, statementError(section, operation, err, count)
-		}
-
 		drop := fmt.Sprintf(m.statements.dropLegacyTable, table)
 
 		if _, err := tx.exec(ctx, drop); err != nil {
@@ -170,50 +170,17 @@ func (m *Maintenance) ClearMigrationDamage(ctx context.Context) (ports.Migration
 
 			return report, statementError(section, operation, err, drop)
 		}
-
-		report.DroppedTables = append(report.DroppedTables, ports.DroppedTable{Name: table, Rows: int(rows)})
 	}
 
 	if archived {
-		rows, err := tx.query(ctx, m.statements.archiveRows)
+		rows, err := migrationArchiveRows(ctx, tx, m.statements, section, operation)
 		if err != nil {
 			tx.rollback()
 
-			return report, statementError(section, operation, err, m.statements.archiveRows)
+			return report, err
 		}
 
-		for rows.Next() {
-			var (
-				tableName  string
-				rowID      int64
-				reason     string
-				archivedAt int64
-			)
-
-			if err := rows.Scan(&tableName, &rowID, &reason, &archivedAt); err != nil {
-				rows.Close()
-				tx.rollback()
-
-				return report, operationError(section, operation, err)
-			}
-
-			report.ArchiveRows = append(report.ArchiveRows, ports.ArchivedRow{
-				Table:      tableName,
-				RowID:      uint64(rowID),
-				Reason:     reason,
-				ArchivedAt: time.UnixMilli(archivedAt),
-			})
-		}
-
-		failed := rows.Err()
-
-		rows.Close()
-
-		if failed != nil {
-			tx.rollback()
-
-			return report, operationError(section, operation, failed)
-		}
+		report.ArchiveRows = rows
 
 		if _, err := tx.exec(ctx, m.statements.dropArchive); err != nil {
 			tx.rollback()
@@ -224,65 +191,16 @@ func (m *Maintenance) ClearMigrationDamage(ctx context.Context) (ports.Migration
 		report.DroppedArchive = true
 	}
 
-	// Every unit row is read and each one handed to the predicate, rather than a selection the
-	// database makes: the shape the predicate names is a label read as the plain decimal form of its
-	// own number, and a backend asked to compare a text label with a number reads a number out of the
-	// text its own way. The rows are collected before any is deleted, so the read is finished before
+	// Every unit row is read and each one handed to the Domain predicate, through the same read the
+	// report-only half of the run asks: the shape the predicate names is a label read as the plain decimal
+	// form of its own number, and a backend asked to compare a text label with a number reads a number out
+	// of the text its own way. The rows are collected before any is deleted, so the read is finished before
 	// the table changes under it.
-	units, err := tx.query(ctx, m.statements.units)
+	damaged, err := damagedUnitRows(ctx, tx, m.statements, section, operation)
 	if err != nil {
 		tx.rollback()
 
-		return report, statementError(section, operation, err, m.statements.units)
-	}
-
-	damaged := []domain.Unit{}
-
-	for units.Next() {
-		var (
-			unitID   sql.NullInt64
-			label    sql.NullString
-			unitRef  sql.NullInt64
-			unitFrom sql.NullInt64
-			unitTo   sql.NullInt64
-			systemID sql.NullInt64
-		)
-
-		if err := units.Scan(&unitID, &label, &unitRef, &unitFrom, &unitTo, &systemID); err != nil {
-			units.Close()
-			tx.rollback()
-
-			return report, operationError(section, operation, err)
-		}
-
-		// A row without an identifier is a row no delete can name, and a value that is not there is
-		// not a reference a label was written as.
-		if !unitID.Valid {
-			continue
-		}
-
-		unit := domain.Unit{
-			ID:       uint64(unitID.Int64),
-			Label:    label.String,
-			SystemID: uint64(systemID.Int64),
-			UnitRef:  uint(unitRef.Int64),
-			UnitFrom: uint(unitFrom.Int64),
-			UnitTo:   uint(unitTo.Int64),
-		}
-
-		if unit.DamagedByMigration() {
-			damaged = append(damaged, unit)
-		}
-	}
-
-	failed := units.Err()
-
-	units.Close()
-
-	if failed != nil {
-		tx.rollback()
-
-		return report, operationError(section, operation, failed)
+		return report, err
 	}
 
 	for _, unit := range damaged {
@@ -302,4 +220,219 @@ func (m *Maintenance) ClearMigrationDamage(ctx context.Context) (ports.Migration
 	}
 
 	return report, nil
+}
+
+// ReadMigrationDamage answers the same three questions the clearing answers and removes nothing: the unit
+// rows a migration made rather than a deployment named, the legacy tables still standing with the rows
+// they hold, and the migration archive with every row kept in it. The classes are read in the order a run
+// performs them, so the listing an operator reads before deciding is built from the same account the run
+// reports afterwards. The read runs in a read-only transaction, which is what lets the deployment be
+// exactly what it was when the listing was read while a server of the same deployment is not running.
+func (m *Maintenance) ReadMigrationDamage(ctx context.Context) (ports.MigrationDamageReport, error) {
+	const section, operation = "maintenance", "read"
+
+	report := ports.MigrationDamageReport{
+		Units:         []domain.Unit{},
+		ArchiveRows:   []ports.ArchivedRow{},
+		DroppedTables: []ports.DroppedTable{},
+	}
+
+	standing, err := standingLegacyTables(ctx, m.store)
+	if err != nil {
+		return report, operationError(section, operation, err)
+	}
+
+	archived, err := tableExists(ctx, m.store, migrationArchiveTable)
+	if err != nil {
+		return report, operationError(section, operation, err)
+	}
+
+	tx, err := m.store.beginRead(ctx)
+	if err != nil {
+		return report, operationError(section, operation, err)
+	}
+
+	defer tx.rollback()
+
+	tables, err := legacyTableRowCounts(ctx, tx, m.statements, standing, section, operation)
+	if err != nil {
+		return report, err
+	}
+
+	report.DroppedTables = tables
+
+	if archived {
+		rows, err := migrationArchiveRows(ctx, tx, m.statements, section, operation)
+		if err != nil {
+			return report, err
+		}
+
+		report.ArchiveRows = rows
+
+		// The archive table's own presence is what the listing names, because a run drops the table and
+		// every row in it: an operator deciding whether to run it has to know the table is there at all,
+		// and not only how many rows are in it.
+		report.DroppedArchive = true
+	}
+
+	units, err := damagedUnitRows(ctx, tx, m.statements, section, operation)
+	if err != nil {
+		return report, err
+	}
+
+	report.Units = units
+
+	return report, nil
+}
+
+// damageReader is the half of the store the clearing and the reading both ask their read statements of:
+// the clearing asks them inside the transaction it commits at the end, the reading inside a read-only one.
+// None of the three read statements binds a value, so neither a table name nor a unit's shape is left to a
+// backend to decide.
+type damageReader interface {
+	query(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	queryRow(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// standingLegacyTables asks which of the legacy table names the deployment still holds, in the order the
+// migration's carry steps read them. A run drops exactly these tables, so this is the one question both
+// halves of the run ask first: a table that is not there is an answer, not a failure.
+func standingLegacyTables(ctx context.Context, s store) ([]string, error) {
+	standing := []string{}
+
+	for _, table := range v6MigrationTables {
+		present, err := tableExists(ctx, s, table)
+		if err != nil {
+			return nil, err
+		}
+
+		if present {
+			standing = append(standing, table)
+		}
+	}
+
+	return standing, nil
+}
+
+// legacyTableRowCounts counts the rows each standing legacy table holds, before any of them is dropped, so
+// the account names a table with the rows it held while it stood.
+func legacyTableRowCounts(ctx context.Context, r damageReader, stmts clearStatements, tables []string, section, operation string) ([]ports.DroppedTable, error) {
+	counted := []ports.DroppedTable{}
+
+	for _, table := range tables {
+		count := fmt.Sprintf(stmts.countLegacyRow, table)
+
+		var rows int64
+
+		if err := r.queryRow(ctx, count).Scan(&rows); err != nil {
+			return nil, statementError(section, operation, err, count)
+		}
+
+		counted = append(counted, ports.DroppedTable{Name: table, Rows: int(rows)})
+	}
+
+	return counted, nil
+}
+
+// migrationArchiveRows names every row the migration archive holds by where it came from, its identifier
+// there, and the reason the migration stored beside it. What a row holds is never read: the contents column
+// carries a call's encoded audio, and no account a person reads repeats it.
+func migrationArchiveRows(ctx context.Context, r damageReader, stmts clearStatements, section, operation string) ([]ports.ArchivedRow, error) {
+	rows, err := r.query(ctx, stmts.archiveRows)
+	if err != nil {
+		return nil, statementError(section, operation, err, stmts.archiveRows)
+	}
+
+	found := []ports.ArchivedRow{}
+
+	for rows.Next() {
+		var (
+			tableName  string
+			rowID      int64
+			reason     string
+			archivedAt int64
+		)
+
+		if err := rows.Scan(&tableName, &rowID, &reason, &archivedAt); err != nil {
+			rows.Close()
+
+			return nil, operationError(section, operation, err)
+		}
+
+		found = append(found, ports.ArchivedRow{
+			Table:      tableName,
+			RowID:      uint64(rowID),
+			Reason:     reason,
+			ArchivedAt: instantOf(archivedAt),
+		})
+	}
+
+	failed := rows.Err()
+
+	rows.Close()
+
+	if failed != nil {
+		return nil, operationError(section, operation, failed)
+	}
+
+	return found, nil
+}
+
+// damagedUnitRows reads every unit row and hands each one to the Domain predicate, rather than asking a
+// backend to pick the damaged ones: the shape is a label read as the plain decimal form of its own number,
+// and a backend asked to compare a text label with a number reads a number out of the text its own way. The
+// rows are collected before any is removed, so the read is finished before the table changes under it.
+func damagedUnitRows(ctx context.Context, r damageReader, stmts clearStatements, section, operation string) ([]domain.Unit, error) {
+	rows, err := r.query(ctx, stmts.units)
+	if err != nil {
+		return nil, statementError(section, operation, err, stmts.units)
+	}
+
+	found := []domain.Unit{}
+
+	for rows.Next() {
+		var (
+			unitID   sql.NullInt64
+			label    sql.NullString
+			unitRef  sql.NullInt64
+			unitFrom sql.NullInt64
+			unitTo   sql.NullInt64
+			systemID sql.NullInt64
+		)
+
+		if err := rows.Scan(&unitID, &label, &unitRef, &unitFrom, &unitTo, &systemID); err != nil {
+			rows.Close()
+
+			return nil, operationError(section, operation, err)
+		}
+
+		// A row without an identifier is a row no delete can name, and a value that is not there is
+		// not a reference a label was written as.
+		if !unitID.Valid {
+			continue
+		}
+
+		unit := domain.Unit{
+			ID:       uint64(unitID.Int64),
+			Label:    label.String,
+			SystemID: uint64(systemID.Int64),
+			UnitRef:  uint(unitRef.Int64),
+			UnitFrom: uint(unitFrom.Int64),
+			UnitTo:   uint(unitTo.Int64),
+		}
+
+		if unit.DamagedByMigration() {
+			found = append(found, unit)
+		}
+	}
+
+	failed := rows.Err()
+
+	rows.Close()
+
+	if failed != nil {
+		return nil, operationError(section, operation, failed)
+	}
+
+	return found, nil
 }

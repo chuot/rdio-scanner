@@ -960,6 +960,324 @@ func reportedDroppedTable(tables []ports.DroppedTable, name string) (ports.Dropp
 	return ports.DroppedTable{}, false
 }
 
+// openDamagedDeploymentHoldingEveryClass is the deployment a dry run is read for: the legacy tables its
+// migration could not finish reading, the archive holding what it could not carry, and the unit rows the
+// migration created rather than the deployment named. It is the clearing's fullest fixture, read instead
+// of run, so the two answers can be compared against one deployment.
+func openDamagedDeploymentHoldingEveryClass(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db := openDamagedDeploymentDatabaseWithArchive(t)
+
+	for _, table := range damagedDeploymentLegacyTables {
+		for _, statement := range recordedLegacyTableStatements(t, table) {
+			mustExec(t, db, statement)
+		}
+	}
+
+	return db
+}
+
+// damageReportDiff compares two accounts of one deployment: the unit rows named, the legacy tables with
+// the rows each held, the archived rows, and whether the archive table was there at all. It is the store's
+// half of the pair of listings the dry run is required to answer with.
+func damageReportDiff(a, b ports.MigrationDamageReport) string {
+	if len(a.Units) != len(b.Units) {
+		return fmt.Sprintf("%d unit rows against %d", len(a.Units), len(b.Units))
+	}
+
+	for _, want := range a.Units {
+		got, ok := reportedUnit(b.Units, want.ID)
+		if !ok {
+			return fmt.Sprintf("the unit row %d %q is named by one account and not by the other", want.ID, want.Label)
+		}
+
+		if got.Label != want.Label || got.UnitRef != want.UnitRef || got.UnitFrom != want.UnitFrom ||
+			got.UnitTo != want.UnitTo || got.SystemID != want.SystemID {
+			return fmt.Sprintf("the unit row %d is accounted as %+v in one and %+v in the other", want.ID, got, want)
+		}
+	}
+
+	if len(a.DroppedTables) != len(b.DroppedTables) {
+		return fmt.Sprintf("%d legacy tables against %d", len(a.DroppedTables), len(b.DroppedTables))
+	}
+
+	for _, want := range a.DroppedTables {
+		got, ok := reportedDroppedTable(b.DroppedTables, want.Name)
+		if !ok {
+			return fmt.Sprintf("the legacy table %s is named by one account and not by the other", want.Name)
+		}
+
+		if got.Rows != want.Rows {
+			return fmt.Sprintf("the legacy table %s holds %d rows in one account and %d in the other",
+				want.Name, got.Rows, want.Rows)
+		}
+	}
+
+	if a.DroppedArchive != b.DroppedArchive {
+		return fmt.Sprintf("the migration archive stands in one account (%v) and not in the other (%v)",
+			a.DroppedArchive, b.DroppedArchive)
+	}
+
+	if len(a.ArchiveRows) != len(b.ArchiveRows) {
+		return fmt.Sprintf("%d archived rows against %d", len(a.ArchiveRows), len(b.ArchiveRows))
+	}
+
+	for _, want := range a.ArchiveRows {
+		got, ok := reportedArchiveRow(b.ArchiveRows, want.Table, want.RowID)
+		if !ok {
+			return fmt.Sprintf("the archived row %s %d is named by one account and not by the other", want.Table, want.RowID)
+		}
+
+		if got.Reason != want.Reason || !got.ArchivedAt.UTC().Equal(want.ArchivedAt.UTC()) {
+			return fmt.Sprintf("the archived row %s %d is accounted as %+v in one and %+v in the other",
+				want.Table, want.RowID, got, want)
+		}
+	}
+
+	return ""
+}
+
+// TestReadMigrationDamageNamesEveryClassAClearingWouldRemove is the dry run read at the store: the same
+// three classes a clearing names, each named with the values that make it one, and nothing removed. The
+// archive table is reported as standing, because a listing that says nothing about an archive the
+// deployment holds is not the same listing a real run prints.
+func TestReadMigrationDamageNamesEveryClassAClearingWouldRemove(t *testing.T) {
+	db := openDamagedDeploymentHoldingEveryClass(t)
+
+	legacyRows := map[string]int{}
+
+	for _, table := range damagedDeploymentLegacyTables {
+		rows := countRows(t, db, table)
+
+		if rows == 0 {
+			t.Fatalf("the fixture's %s table holds no rows, want the rows the migration could not read out of it", table)
+		}
+
+		legacyRows[table] = rows
+	}
+
+	if got := countRows(t, db, "migrationArchive"); got != len(damagedDeploymentArchiveRows) {
+		t.Fatalf("the fixture's archive holds %d rows, want the %d rows it was given", got, len(damagedDeploymentArchiveRows))
+	}
+
+	report, err := NewMaintenance(db, DialectSqlite).ReadMigrationDamage(context.Background())
+	if err != nil {
+		t.Fatalf("ReadMigrationDamage: %v", err)
+	}
+
+	if len(report.Units) != len(damagedDeploymentRemovedUnits) {
+		t.Fatalf("the reading names %d unit rows, want the %d the migration created: %+v",
+			len(report.Units), len(damagedDeploymentRemovedUnits), report.Units)
+	}
+
+	for _, want := range damagedDeploymentRemovedUnits {
+		got, ok := reportedUnit(report.Units, want.ID)
+		if !ok {
+			t.Errorf("the reading does not name unit %d, want it named as a row a run would remove: %+v", want.ID, report.Units)
+
+			continue
+		}
+
+		if got.Label != want.Label || got.UnitRef != want.UnitRef || got.SystemID != want.SystemID {
+			t.Errorf("the reading names unit %d as %q of system %d with reference %d, want %q of system %d with reference %d",
+				want.ID, got.Label, got.SystemID, got.UnitRef, want.Label, want.SystemID, want.UnitRef)
+		}
+	}
+
+	if len(report.DroppedTables) != len(damagedDeploymentLegacyTables) {
+		t.Fatalf("the reading names %d legacy tables, want the %d the deployment holds: %+v",
+			len(report.DroppedTables), len(damagedDeploymentLegacyTables), report.DroppedTables)
+	}
+
+	for table, rows := range legacyRows {
+		got, ok := reportedDroppedTable(report.DroppedTables, table)
+		if !ok {
+			t.Errorf("the reading does not name the %s table, which holds %d rows: %+v", table, rows, report.DroppedTables)
+
+			continue
+		}
+
+		if got.Rows != rows {
+			t.Errorf("the reading says the %s table holds %d rows, want the %d rows it holds", table, got.Rows, rows)
+		}
+	}
+
+	if !report.DroppedArchive {
+		t.Errorf("the reading says nothing about the migration archive the deployment holds, want it named as a table a run would drop")
+	}
+
+	if len(report.ArchiveRows) != len(damagedDeploymentArchiveRows) {
+		t.Fatalf("the reading names %d archived rows, want one for each of the %d rows in the table: %+v",
+			len(report.ArchiveRows), len(damagedDeploymentArchiveRows), report.ArchiveRows)
+	}
+
+	for _, want := range damagedDeploymentArchiveRows {
+		got, ok := reportedArchiveRow(report.ArchiveRows, want.Table, want.RowID)
+		if !ok {
+			t.Errorf("the reading does not name the archived row %s %d: %+v", want.Table, want.RowID, report.ArchiveRows)
+
+			continue
+		}
+
+		if got.Reason != want.Reason {
+			t.Errorf("the reading names the archived row %s %d held for %q, want %q",
+				want.Table, want.RowID, got.Reason, want.Reason)
+		}
+
+		if !got.ArchivedAt.UTC().Equal(migrationInstant) {
+			t.Errorf("the reading names the archived row %s %d archived at %v, want the stored moment %v",
+				want.Table, want.RowID, got.ArchivedAt, migrationInstant)
+		}
+	}
+
+	rendered := fmt.Sprintf("%+v", report.ArchiveRows)
+
+	for _, want := range damagedDeploymentArchiveRows {
+		if strings.Contains(rendered, want.Contents) {
+			t.Errorf("the reading carries the contents of the archived row %s %d (%s): %s",
+				want.Table, want.RowID, want.Contents, rendered)
+		}
+	}
+
+	if strings.Contains(rendered, "contents") {
+		t.Errorf("the reading names a contents field, want the row named by its table, identifier, and stored reason: %s", rendered)
+	}
+}
+
+// TestReadMigrationDamageLeavesEveryRowAndTableOfTheDeploymentInPlace is the whole point of the dry run
+// read at the store: every table of the deployment stands afterwards with the rows it had, and the reading
+// can be asked twice and answer the same both times. The damaged rows are still there for a later run to
+// remove, which is what the reading is for.
+func TestReadMigrationDamageLeavesEveryRowAndTableOfTheDeploymentInPlace(t *testing.T) {
+	db := openDamagedDeploymentHoldingEveryClass(t)
+
+	before := map[string]int{}
+
+	for _, name := range readTableNames(t, db) {
+		before[name] = countRows(t, db, name)
+	}
+
+	first, err := NewMaintenance(db, DialectSqlite).ReadMigrationDamage(context.Background())
+	if err != nil {
+		t.Fatalf("ReadMigrationDamage: %v", err)
+	}
+
+	second, err := NewMaintenance(db, DialectSqlite).ReadMigrationDamage(context.Background())
+	if err != nil {
+		t.Fatalf("ReadMigrationDamage the second time: %v", err)
+	}
+
+	if diff := damageReportDiff(first, second); diff != "" {
+		t.Errorf("the same deployment read twice accounts differently: %s", diff)
+	}
+
+	after := readTableNames(t, db)
+
+	if len(after) != len(before) {
+		t.Fatalf("the deployment holds %d tables after the reading and %d before it: %v", len(after), len(before), after)
+	}
+
+	for _, name := range after {
+		rows, held := before[name]
+		if !held {
+			t.Errorf("the deployment holds the table %s after the reading and did not hold it before it: %v", name, after)
+
+			continue
+		}
+
+		if got := countRows(t, db, name); got != rows {
+			t.Errorf("the %s table holds %d rows after the reading and %d before it, want the reading to change nothing",
+				name, got, rows)
+		}
+	}
+
+	for _, name := range damagedDeploymentLegacyTables {
+		if _, standing := before[name]; !standing {
+			t.Fatalf("the fixture holds none of the legacy tables it was written to hold: %v", after)
+		}
+	}
+
+	if _, standing := before["migrationArchive"]; !standing {
+		t.Fatalf("the fixture holds no migration archive: %v", after)
+	}
+
+	for _, want := range damagedDeploymentRemovedUnits {
+		if got := countRows(t, db, "units"); got == 0 {
+			t.Errorf("the units table holds no rows after the reading, want the %d damaged rows still there for a run to remove",
+				len(damagedDeploymentRemovedUnits))
+
+			continue
+		}
+
+		rows := readRows(t, db, fmt.Sprintf(`SELECT "unitId", "label", "unitRef" FROM "units" WHERE "unitId" = %d`, want.ID))
+
+		if len(rows) != 1 {
+			t.Errorf("unit %d is gone from the catalog after the reading, want it kept for a run to remove", want.ID)
+		}
+	}
+}
+
+// TestReadMigrationDamageSaysNothingAboutTheClassesADeploymentDoesNotHold is the finished migration the
+// archive's own gate leaves behind: no legacy table, no archive table, and a reading that names only the
+// unit rows the migration created rather than failing for the classes that are not there.
+func TestReadMigrationDamageSaysNothingAboutTheClassesADeploymentDoesNotHold(t *testing.T) {
+	db := openDamagedDeploymentDatabase(t)
+
+	for _, name := range readTableNames(t, db) {
+		if legacyTableName(name) || name == "migrationArchive" {
+			t.Fatalf("the fixture holds %s, which it was written to hold none of", name)
+		}
+	}
+
+	report, err := NewMaintenance(db, DialectSqlite).ReadMigrationDamage(context.Background())
+	if err != nil {
+		t.Fatalf("ReadMigrationDamage: %v", err)
+	}
+
+	if len(report.DroppedTables) != 0 {
+		t.Errorf("the reading names %d legacy tables for a deployment holding none of the legacy names: %+v",
+			len(report.DroppedTables), report.DroppedTables)
+	}
+
+	if report.DroppedArchive {
+		t.Errorf("the reading names a migration archive the deployment does not hold")
+	}
+
+	if len(report.ArchiveRows) != 0 {
+		t.Errorf("the reading names %d archived rows for a deployment holding no archive table: %+v",
+			len(report.ArchiveRows), report.ArchiveRows)
+	}
+
+	if len(report.Units) != len(damagedDeploymentRemovedUnits) {
+		t.Errorf("the reading names %d unit rows, want the %d the migration created whatever the other classes do: %+v",
+			len(report.Units), len(damagedDeploymentRemovedUnits), report.Units)
+	}
+}
+
+// TestTheReadingReportsTheSameAccountTheClearingReports holds the store to one account: the listing a dry
+// run is built from and the listing a real run is built from come from one deployment read twice, once
+// without removing anything and once removing it, and the two accounts name the same rows, tables, and
+// counts. A dry run whose listing differed from its run's would tell an operator one thing and do another.
+func TestTheReadingReportsTheSameAccountTheClearingReports(t *testing.T) {
+	db := openDamagedDeploymentHoldingEveryClass(t)
+
+	read, err := NewMaintenance(db, DialectSqlite).ReadMigrationDamage(context.Background())
+	if err != nil {
+		t.Fatalf("ReadMigrationDamage: %v", err)
+	}
+
+	cleared, err := NewMaintenance(db, DialectSqlite).ClearMigrationDamage(context.Background())
+	if err != nil {
+		t.Fatalf("ClearMigrationDamage: %v", err)
+	}
+
+	if diff := damageReportDiff(read, cleared); diff != "" {
+		t.Errorf("the dry run and the run account the same deployment differently: %s\nread:   %+v\ncleared: %+v",
+			diff, read, cleared)
+	}
+}
+
 // The clearing's statements are pinned here rather than only run, because MySQL is held to its
 // statement even though no MySQL backend is started, and because a statement that let a backend
 // decide which unit rows are damage would decide it differently on each one.
