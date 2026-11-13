@@ -17,6 +17,10 @@ import {
   summarizeHourSeries,
 } from '../domain/dashboard-status.js';
 
+// The system-name derivation is read off the module's exports as a whole, because these tests name the
+// export by the name it is to be added under and the file's other tests are not about it.
+import * as dashboardStatus from '../domain/dashboard-status.js';
+
 // The snapshot the server answers, in the shape the published contract documents.
 function statusFixture(overrides = {}) {
   const base = {
@@ -167,6 +171,81 @@ test('a configuration with nothing in it answers zeros and not nothing', () => {
   assert.deepEqual(inventory.perSystem, []);
   assert.deepEqual(inventory.dirwatch, { configured: 0, enabled: 0, disabled: 0 });
   assert.deepEqual(inventory.downstreams, { configured: 0, enabled: 0, disabled: 0 });
+});
+
+// The Busiest talkgroups card names each row's system. The configuration the page holds names every
+// system twice: the store row's own `id`, which the inventory keys its per-system rows by, and the
+// `systemRef` the status payload carries on every busiest row and every call. The name belongs to the
+// reference, and the two numbers are not the same number.
+test('a configured system reference reads as the name that configuration gives it', () => {
+  const names = dashboardStatus.deriveSystemNames(
+    configFixture({
+      systems: [
+        { id: 1, systemRef: 10001, label: 'Harbour Dispatch' },
+        { id: 2, systemRef: 42002, label: 'Airport Fire Ground' },
+      ],
+    })
+  );
+
+  assert.equal(names.get(10001), 'Harbour Dispatch');
+  assert.equal(names.get(42002), 'Airport Fire Ground');
+});
+
+// three systems, references in no order that matches the order they are listed in: a row is named by
+// the system carrying its reference, not by whichever system the configuration happens to list first
+test('each configured reference resolves to its own system, and not to the one listed first', () => {
+  const names = dashboardStatus.deriveSystemNames(
+    configFixture({
+      systems: [
+        { id: 1, systemRef: 42002, label: 'Airport Fire Ground' },
+        { id: 2, systemRef: 10001, label: 'Harbour Dispatch' },
+        { id: 3, systemRef: 30005, label: 'Ports' },
+      ],
+    })
+  );
+
+  assert.equal(names.get(10001), 'Harbour Dispatch');
+  assert.equal(names.get(42002), 'Airport Fire Ground');
+  assert.equal(names.get(30005), 'Ports');
+});
+
+// a busiest row can carry a reference for a system the configuration no longer names: an older call, or
+// a system removed after its calls were recorded. The card keeps such a row's reference, so it is never
+// a row with nothing in its System cell.
+test('a reference no configured system carries is named by nothing', () => {
+  const names = dashboardStatus.deriveSystemNames(
+    configFixture({ systems: [{ id: 1, systemRef: 10001, label: 'Harbour Dispatch' }] })
+  );
+
+  assert.equal(names.has(10001), true, 'the configuration carries this reference and the derivation did not name it');
+  assert.equal(names.has(10002), false, 'the derivation named a reference no configured system carries');
+  assert.equal(names.get(10002), undefined, `the derivation reads ${JSON.stringify(names.get(10002))} for a reference it does not name`);
+});
+
+// a page that has never read a configuration, a configuration with no systems, and a configuration that
+// is not there at all all leave every busiest row on its own reference, which is what the card prints
+// before any system is named
+test('a configuration with no systems in it names no reference at all', () => {
+  for (const config of [configFixture({ systems: [] }), {}, null, undefined]) {
+    const names = dashboardStatus.deriveSystemNames(config);
+
+    assert.equal(names.size, 0, `the derivation named ${names.size} reference(s) read from ${JSON.stringify(config)}`);
+    assert.equal(names.get(10001), undefined, `the derivation named a reference for ${JSON.stringify(config)}`);
+  }
+});
+
+// a name that is not there is not a name, and a system carrying no reference cannot name a row: the
+// administration form refuses both, stored data from an older version need not
+test('a system that carries no name, or no reference, names nothing', () => {
+  const names = dashboardStatus.deriveSystemNames({
+    systems: [
+      { id: 1, systemRef: 10001, label: '' },
+      { id: 2, systemRef: 42002 },
+      { id: 3, label: 'Airport Fire Ground' },
+    ],
+  });
+
+  assert.equal(names.size, 0, `the derivation named ${names.size} reference(s) out of systems carrying neither a name nor a reference`);
 });
 
 // each card answers one state word; colour is never the only signal
