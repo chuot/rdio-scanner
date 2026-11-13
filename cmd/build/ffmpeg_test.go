@@ -1572,6 +1572,58 @@ func TestAReusedEntryWithNoNoticeUnderEitherNameIsStillRefused(t *testing.T) {
 	}
 }
 
+// The host route reaches the same entry through the same read, because the cache key is the record
+// and the target: the pair this machine's own run published, and the notice beside it, are looked for
+// under one name by whichever route the run came back by.
+func TestAHostRunReusingItsOwnEntrySettlesThatEntryToo(t *testing.T) {
+	repo := t.TempDir()
+
+	const proved = "proved by this machine's own run, at the name an earlier build wrote"
+
+	aWarmCacheEntryFromBeforeTheNoticeRename(t, repo, "linux-amd64", proved)
+
+	manifest := bundle.ReadManifest()
+
+	paths := ffmpegPathsFor(repo, manifest, "linux-amd64")
+
+	plan := ffmpegPlan{Target: "linux-amd64", Host: true, Reuses: true, Paths: paths}
+
+	out := &bytes.Buffer{}
+
+	tl := &tool{
+		repo:   repo,
+		errout: io.Discard,
+	}
+
+	if _, err := tl.runFFmpegOnHost(plan, manifest, "linux-amd64", out); err != nil {
+		t.Fatalf("the host run refused its own cached ffmpeg: %v\n%s", err, out.String())
+	}
+
+	said := out.String()
+
+	body, err := os.ReadFile(filepath.Join(paths.cached, "FFMPEG.txt"))
+	if err != nil {
+		t.Fatalf("the entry this host run reused holds no %s beside its pair: %v\n%s", "FFMPEG.txt", err, said)
+	}
+
+	if string(body) != proved {
+		t.Errorf("the settled notice is not the text the entry stored:\n%s", body)
+	}
+
+	if aFileIsThere(filepath.Join(paths.cached, "LICENCE.md")) {
+		t.Errorf("the entry still holds %s next to the settled notice: the entry a later run reads holds one notice, under the name this build writes", "LICENCE.md")
+	}
+
+	published, err := os.ReadFile(filepath.Join(paths.bundle, "FFMPEG.txt"))
+	if err != nil {
+		t.Fatalf("the bundle directory holds no %s: %v\n%s", "FFMPEG.txt", err, said)
+	}
+
+	if string(published) != proved {
+		t.Errorf("the published notice is not the text the reused entry stored:\n%s", published)
+	}
+}
+
 // aWarmCacheEntryFromBeforeTheNoticeRename seeds the warm cache entries this machine holds today: the
 // pair, and beside it the notice under the name a build wrote before this one named it.
 func aWarmCacheEntryFromBeforeTheNoticeRename(t *testing.T, repo string, target string, licence string) {

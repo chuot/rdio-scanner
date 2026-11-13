@@ -20,6 +20,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -50,8 +51,10 @@ type ffmpegState struct {
 
 	// bundleIsCached is a cache entry this run may reuse: the gzipped pair its recipe keys, and beside
 	// that pair the licence text the run that compiled them wrote. The text is what says how those
-	// binaries were proved, so an entry holding the pair without it is not reusable. pairIsCached says
-	// separately that such a pair is there: the run that leaves it alone names what it found.
+	// binaries were proved, so an entry holding the pair without it is not reusable. An entry whose
+	// notice sits at the name an older build wrote counts, because it names its proof; it is settled
+	// to this build's name as it is read. pairIsCached says separately that such a pair is there: the
+	// run that leaves it alone names what it found.
 	bundleIsCached bool
 	pairIsCached   bool
 
@@ -331,6 +334,12 @@ func ffmpegPathsFor(repo string, manifest bundle.Manifest, target string) ffmpeg
 // archive a reader unpacks, so the one place a reader looks for the notice is
 // the name the notice is kept under everywhere it is stored.
 const ffmpegLicenceName = "FFMPEG.txt"
+
+// theNoticeNameAnEarlierBuildWrote is the name that notice was kept under
+// before this one named it. It is read, never written: a cache entry warmed
+// by an older build still holds the notice there, and the run that reuses
+// that entry settles it to ffmpegLicenceName.
+const theNoticeNameAnEarlierBuildWrote = "LICENCE.md"
 
 // sourceName is the tarball the release is published as, and sourceDir is the directory it extracts
 // to. They are the same name with the suffix taken off, which is what ffmpeg's own releases are.
@@ -1010,8 +1019,13 @@ func adoptSuppliedFFmpeg(paths ffmpegPaths, target string, licence string) error
 // those binaries. It is the only thing in the entry that says how they were proved, so an entry
 // without it is named and refused: the run that reuses binaries cannot compose a statement about a
 // compile it did not see.
+//
+// An entry warmed by a build that kept the text under the older name is read the same way, and the
+// text is settled into the entry as it is read: written under the name this build writes and taken
+// out from the name it was read at, so the entry a later run looks in holds one notice, under the one
+// name. Only the entry this run reuses is settled, and the bytes travel unchanged.
 func theLicenceInTheCache(paths ffmpegPaths, target string) (string, error) {
-	body, err := os.ReadFile(filepath.Join(paths.cached, "LICENCE.md"))
+	body, err := os.ReadFile(filepath.Join(paths.cached, ffmpegLicenceName))
 	if err == nil {
 		return string(body), nil
 	}
@@ -1020,7 +1034,26 @@ func theLicenceInTheCache(paths ffmpegPaths, target string) (string, error) {
 		return "", fmt.Errorf("the licence text in %s cannot be read: %w", paths.cached, err)
 	}
 
-	return "", fmt.Errorf("the cache entry %s holds the ffmpeg pair for %s with no licence text beside it: nothing there says how those binaries were proved, and this run did not compile them", paths.cached, target)
+	body, err = os.ReadFile(filepath.Join(paths.cached, theNoticeNameAnEarlierBuildWrote))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("the cache entry %s holds the ffmpeg pair for %s with no licence text beside it: nothing there says how those binaries were proved, and this run did not compile them", paths.cached, target)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("the licence text in %s cannot be read: %w", paths.cached, err)
+	}
+
+	settled := filepath.Join(paths.cached, ffmpegLicenceName)
+
+	if err := os.WriteFile(settled, body, 0o644); err != nil {
+		return "", fmt.Errorf("the build cannot settle the licence text in %s to %s: %w", paths.cached, settled, err)
+	}
+
+	if err := os.Remove(filepath.Join(paths.cached, theNoticeNameAnEarlierBuildWrote)); err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("the build cannot take the licence text it settled out of %s: %w", paths.cached, err)
+	}
+
+	return string(body), nil
 }
 
 // buildImageArgs prepares the container one target is compiled or checked
@@ -1342,10 +1375,14 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	record, covered := manifest.Targets[target]
 
 	// The pair and the proof of the pair are looked for together, and the entry is reusable only when
-	// the run that compiled them left its own licence text beside them.
+	// the run that compiled them left its own licence text beside them. An entry warmed by a build that
+	// kept that text under the older name is such an entry: it names its proof, only at a name this
+	// build no longer writes, and the run that reuses it settles the notice as it reads it.
 	pairIsCached := covered && aFileIsThere(paths.cachedProgram("ffmpeg.gz")) && aFileIsThere(paths.cachedProgram("ffprobe.gz"))
 
-	licenceIsCached := pairIsCached && aFileIsThere(filepath.Join(paths.cached, "LICENCE.md"))
+	noticeIsCached := aFileIsThere(filepath.Join(paths.cached, ffmpegLicenceName)) || aFileIsThere(filepath.Join(paths.cached, theNoticeNameAnEarlierBuildWrote))
+
+	licenceIsCached := pairIsCached && noticeIsCached
 
 	bundleIsCached := pairIsCached && licenceIsCached
 
@@ -1829,7 +1866,7 @@ func publishFFmpeg(paths ffmpegPaths, manifest bundle.Manifest, target string, l
 	// because the embed takes every file in it and nothing prunes it: a file
 	// an earlier release left standing there would be embedded in every
 	// server built after this one.
-	if err := os.Remove(filepath.Join(paths.bundle, "LICENCE.md")); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(filepath.Join(paths.bundle, theNoticeNameAnEarlierBuildWrote)); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("the build cannot take the licence text an earlier build left in %s: %w", paths.bundle, err)
 	}
 
