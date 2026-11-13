@@ -29,27 +29,23 @@ import (
 // server writes into: they run against a real directory, because writing a file a process then has
 // to execute is the whole point of the seam.
 
-// aBundle is a bundle for one target, with the two programs it carries held in memory.
+// aBundle is a bundle for one target, with the two programs it carries held in memory. The archives carry
+// the names the build stores them under, the same two for every target: a target's own suffix belongs to
+// the program files Materialize writes out, and not to what the binary embeds.
 func aBundle(t *testing.T, dir string, ffmpeg string, ffprobe string) Bundle {
 	t.Helper()
 
 	files := fstest.MapFS{
-		dir + "/" + programNamesForTest(dir)[0] + ".gz": {Data: gzipped(t, ffmpeg)},
-		dir + "/" + programNamesForTest(dir)[1] + ".gz": {Data: gzipped(t, ffprobe)},
+		dir + "/ffmpeg.gz":  {Data: gzipped(t, ffmpeg)},
+		dir + "/ffprobe.gz": {Data: gzipped(t, ffprobe)},
 	}
 
 	bundle, ok := lookup(files, dir)
 	if !ok {
-		t.Fatalf("%s carries both programs and the bundle lookup says it does not", dir)
+		t.Fatalf("%s carries the pair as the build stores it and the bundle lookup says it does not", dir)
 	}
 
 	return bundle
-}
-
-func programNamesForTest(dir string) []string {
-	ffmpeg, ffprobe := programNames(dir)
-
-	return []string{ffmpeg, ffprobe}
 }
 
 func gzipped(t *testing.T, text string) []byte {
@@ -69,21 +65,20 @@ func gzipped(t *testing.T, text string) []byte {
 	return out.Bytes()
 }
 
-func notGzipped(t *testing.T, dir string, name string) fstest.MapFS {
+// notGzipped is a bundle directory holding the pair with one of its two archives not a program at all. The
+// name says which archive, and it is one of the two names the build stores the pair under.
+func notGzipped(t *testing.T, dir string, broken string) fstest.MapFS {
 	t.Helper()
 
-	ffmpeg, ffprobe := programNames(dir)
+	whole := "ffprobe.gz"
 
-	if name == ffprobe {
-		return fstest.MapFS{
-			dir + "/" + ffmpeg + ".gz":  {Data: gzipped(t, "a program")},
-			dir + "/" + ffprobe + ".gz": {Data: []byte("this is not a gzipped program")},
-		}
+	if broken == "ffprobe.gz" {
+		whole = "ffmpeg.gz"
 	}
 
 	return fstest.MapFS{
-		dir + "/" + ffmpeg + ".gz":  {Data: []byte("this is not a gzipped program")},
-		dir + "/" + ffprobe + ".gz": {Data: gzipped(t, "a program")},
+		dir + "/" + broken: {Data: []byte("this is not a gzipped program")},
+		dir + "/" + whole:  {Data: gzipped(t, "a program")},
 	}
 }
 
@@ -238,18 +233,18 @@ func TestMaterializingABundleReplacesAProgramThatIsNotTheOneItCarries(t *testing
 func TestMaterializingABundleWritesNothingWhenOneOfItsProgramsIsNotReadable(t *testing.T) {
 	dir := t.TempDir()
 
-	ffmpeg, ffprobe := programNames("linux-amd64")
-
-	bundle, ok := lookup(notGzipped(t, "linux-amd64", ffprobe), "linux-amd64")
+	bundle, ok := lookup(notGzipped(t, "linux-amd64", "ffprobe.gz"), "linux-amd64")
 	if !ok {
-		t.Fatal("the bundle lookup should report both programs present even when one of them is broken")
+		t.Fatal("the bundle lookup should report both archives present even when one of them is broken")
 	}
 
 	if _, _, err := bundle.Materialize(dir); err == nil {
 		t.Fatal("materialising a bundle with a program it cannot read back reported no failure")
 	}
 
-	for _, name := range []string{ffmpeg, ffprobe} {
+	// The names that must not appear are the program files this target would run, and this target runs an
+	// unsuffixed program.
+	for _, name := range []string{"ffmpeg", "ffprobe"} {
 		path := filepath.Join(dir, name+"-"+ReadManifest().FFmpeg)
 
 		if _, err := os.Stat(path); err == nil {
