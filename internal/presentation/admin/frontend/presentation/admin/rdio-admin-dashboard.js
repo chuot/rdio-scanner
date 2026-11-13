@@ -21,6 +21,10 @@ import { announce, escapeHtml } from '../../../../common/frontend/presentation/u
 // the word is what the operator reads: colour is never the only signal
 const STATE_WORDS = { ok: 'Working', attention: 'Needs attention', unknown: 'Not known' };
 
+// the words on the auto-refresh control, said in the same order the pressed attribute carries them
+// the control's state is part of its name: an operator who cannot see the fill still knows which way it is set
+const REFRESH_WORDS = { on: 'Auto-refresh on', off: 'Auto-refresh off' };
+
 class RdioAdminDashboard extends HTMLElement {
   connectedCallback() {
     if (this.dataset.bound) return;
@@ -48,7 +52,7 @@ class RdioAdminDashboard extends HTMLElement {
           <p>What this server is doing right now.</p>
           <div class="actions">
             <button type="button" class="rdio-button-mini rdio-dashboard-refresh">Read again</button>
-            <button type="button" class="rdio-button-mini rdio-dashboard-auto-refresh" aria-pressed="true">Auto-refresh</button>
+            <button type="button" class="rdio-button-mini rdio-dashboard-auto-refresh"></button>
           </div>
         </div>
         <p class="rdio-dashboard-strip"></p>
@@ -64,12 +68,20 @@ class RdioAdminDashboard extends HTMLElement {
     this.querySelector('.rdio-dashboard-refresh').addEventListener('click', () => this.readAgain());
 
     // auto-refresh is one control, and its pressed state is exposed for screen readers
+    // its words and its attribute are one state: the only place either is written, so they cannot drift
     const auto = this.querySelector('.rdio-dashboard-auto-refresh');
+
+    const showRefreshState = () => {
+      auto.setAttribute('aria-pressed', String(this.autoRefresh));
+      auto.textContent = this.autoRefresh ? REFRESH_WORDS.on : REFRESH_WORDS.off;
+    };
+
+    showRefreshState();
 
     auto.addEventListener('click', () => {
       this.autoRefresh = !this.autoRefresh;
 
-      auto.setAttribute('aria-pressed', String(this.autoRefresh));
+      showRefreshState();
 
       this.followThePage();
     });

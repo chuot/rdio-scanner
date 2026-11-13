@@ -668,6 +668,16 @@ rdio-admin .rdio-admin-card.dashboard .rdio-dashboard-reading {
   padding-left: var(--rdio-space-3);
 }
 
+/* The auto-refresh control is set one of two ways, and the control's own words are what says which; the fill is
+   the second telling. This is the look the log chips already give a control that is on — the accent fill, its
+   darker edge, and the page's own colour as ink — so the page has one way of looking switched on rather than two,
+   and no new colour enters it. */
+rdio-admin .rdio-admin-card.dashboard .rdio-button-mini.rdio-dashboard-auto-refresh[aria-pressed="true"] {
+  background: var(--rdio-accent);
+  border-color: var(--rdio-accent-dark);
+  color: var(--rdio-background);
+}
+
 rdio-admin .rdio-dashboard-cards {
   display: grid;
   gap: var(--rdio-space-3);
@@ -1446,6 +1456,12 @@ rdio-systems-selection .indent {
   /* A log source chip that is on says so by its fill today; the mode replaces the fill. The chip's
      edge is what carries the state. */
   rdio-admin .rdio-admin-card.logs .rdio-log-source[aria-pressed='true'] {
+    border: 3px solid CanvasText;
+  }
+
+  /* The dashboard's auto-refresh control is switched on and off the same way, and the mode takes its fill
+     away too. The edge beside it is the same edge, at the same weight. */
+  rdio-admin .rdio-admin-card.dashboard .rdio-button-mini.rdio-dashboard-auto-refresh[aria-pressed='true'] {
     border: 3px solid CanvasText;
   }
 
