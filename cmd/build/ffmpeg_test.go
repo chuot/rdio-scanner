@@ -1624,6 +1624,126 @@ func TestAHostRunReusingItsOwnEntrySettlesThatEntryToo(t *testing.T) {
 	}
 }
 
+// A run that compiles a pair is the run that saw it compiled, so it leaves its own proof in the
+// cache entry it filled: the notice beside the pair it gzipped there, the same words the bundle
+// directory and the archive then carry. An entry holding two programs and nothing else says to the
+// next run nothing about how its binaries were proved.
+func TestACompiledPairIsCachedWithTheNoticeThatReleaseCarries(t *testing.T) {
+	manifest := bundle.ReadManifest()
+
+	// Both cases are container compiles whose pair is proved by reading it, because that is the
+	// proof this build can make for a pair it cannot start: the compiled programs are fixtures, and
+	// a fixture fails a check that tries to run it.
+	for _, c := range []struct {
+		target string
+		wrote  func(t *testing.T, dir string, name string)
+	}{
+		{
+			target: "freebsd-amd64",
+			wrote: func(t *testing.T, dir string, name string) {
+				anELFProgramWrittenTo(t, dir, name, theMeasuredFreeBSDPair)
+			},
+		},
+		{
+			target: "macos-arm64",
+			wrote: func(t *testing.T, dir string, name string) {
+				aMachOProgramWrittenTo(t, dir, name, theProgramALinkerProduced(theArm64CPU))
+			},
+		},
+	} {
+		repo := t.TempDir()
+
+		tl, out := aBuildCompilingInAContainer(t, repo, c.target, c.wrote)
+
+		if _, err := tl.runFFmpeg(options{target: c.target}, out); err != nil {
+			t.Fatalf("%s: the build refused the pair it compiled: %v\n%s", c.target, err, out.String())
+		}
+
+		said := out.String()
+
+		if !strings.Contains(said, "read") {
+			t.Fatalf("%s: the run did not reach the read that proves the pair it compiled:\n%s", c.target, said)
+		}
+
+		paths := ffmpegPathsFor(repo, manifest, c.target)
+
+		// The cache entry the manifest's record names, as it stands after the compile that filled it.
+		cached := map[string][]byte{}
+		carries := []string{}
+
+		entries, err := os.ReadDir(paths.cached)
+		if err != nil {
+			t.Fatalf("%s: reading the cache entry the compile filled: %v", c.target, err)
+		}
+
+		for _, entry := range entries {
+			body, err := os.ReadFile(filepath.Join(paths.cached, entry.Name()))
+			if err != nil {
+				t.Fatalf("%s: reading %s in the cache entry: %v", c.target, entry.Name(), err)
+			}
+
+			cached[entry.Name()] = body
+			carries = append(carries, entry.Name())
+		}
+
+		for _, name := range []string{"ffmpeg.gz", "ffprobe.gz", "FFMPEG.txt"} {
+			if _, there := cached[name]; !there {
+				t.Errorf("%s: the cache entry its compile filled holds no %s, only %v", c.target, name, carries)
+			}
+		}
+
+		// The gzipped pair is the pair the container produced, and the published pair is the cached one.
+		for _, name := range []string{"ffmpeg", "ffprobe"} {
+			produced, err := os.ReadFile(filepath.Join(paths.scratch, sourceDir(manifest), name+programSuffix(c.target)))
+			if err != nil {
+				t.Fatalf("%s: reading the %s the container compiled: %v", c.target, name, err)
+			}
+
+			cgz, err := os.ReadFile(paths.cachedProgram(name + ".gz"))
+			if err != nil {
+				t.Fatalf("%s: reading the cached %s: %v", c.target, name, err)
+			}
+
+			unzipped, err := readGzip(paths.cachedProgram(name + ".gz"))
+			if err != nil {
+				t.Fatalf("%s: reading the cached %s: %v", c.target, name, err)
+			}
+
+			if !bytes.Equal(unzipped, produced) {
+				t.Errorf("%s: the cached %s is not the program the container compiled", c.target, name)
+			}
+
+			bgz, err := os.ReadFile(filepath.Join(paths.bundle, name+".gz"))
+			if err != nil {
+				t.Fatalf("%s: the bundle directory holds no %s.gz: %v", c.target, name, err)
+			}
+
+			if !bytes.Equal(bgz, cgz) {
+				t.Errorf("%s: the published %s is not the bytes the compile cached", c.target, name)
+			}
+		}
+
+		// The notice the compile wrote in the entry is the notice the release then carries: whoever
+		// compiled the pair is whoever says what it is.
+		inEntry := cached["FFMPEG.txt"]
+
+		inBundle, err := os.ReadFile(filepath.Join(paths.bundle, "FFMPEG.txt"))
+		if err != nil {
+			t.Fatalf("%s: the bundle directory holds no notice for the pair this run compiled: %v", c.target, err)
+		}
+
+		if !bytes.Equal(inEntry, inBundle) {
+			t.Errorf("%s: the notice the release carries is not the notice the compile left in the cache entry it filled:\nentry: %s\nbundle: %s", c.target, inEntry, inBundle)
+		}
+
+		written := ffmpegLicence(manifest, c.target)
+
+		if string(inEntry) != written {
+			t.Errorf("%s: the notice the compile left in its own cache entry is not the words this run composed for the pair it compiled:\n%s", c.target, inEntry)
+		}
+	}
+}
+
 // aWarmCacheEntryFromBeforeTheNoticeRename seeds the warm cache entries this machine holds today: the
 // pair, and beside it the notice under the name a build wrote before this one named it.
 func aWarmCacheEntryFromBeforeTheNoticeRename(t *testing.T, repo string, target string, licence string) {
