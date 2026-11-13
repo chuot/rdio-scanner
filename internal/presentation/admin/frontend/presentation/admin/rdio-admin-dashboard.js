@@ -8,6 +8,7 @@ import {
   buildHourSeries,
   deriveCardStates,
   deriveInventory,
+  deriveSystemNames,
   formatBytes,
   formatUptime,
   isStale,
@@ -204,9 +205,13 @@ class RdioAdminDashboard extends HTMLElement {
     const states = deriveCardStates(snapshot, inventory, { passwordNeedChange: !!auth?.passwordNeedChange });
     const series = buildHourSeries(snapshot);
 
+    // the busiest rows are named here, where the configuration is read: the card prints the name each
+    // row is handed and looks nothing up
+    const busiestRows = nameBusiestRows(snapshot, deriveSystemNames(config));
+
     this.strip.textContent = stripSentence(snapshot, series);
 
-    this.body.innerHTML = `<div class="rdio-dashboard-cards">${states.map((state) => cardMarkup(state, snapshot, inventory, series)).join('')}</div>`;
+    this.body.innerHTML = `<div class="rdio-dashboard-cards">${states.map((state) => cardMarkup(state, snapshot, inventory, series, busiestRows)).join('')}</div>`;
   }
 
   // The line that makes every figure on the page a figure with a moment attached to it.
@@ -242,10 +247,20 @@ function stripSentence(snapshot, series) {
   return `Running · ${parts.join(' · ')}`;
 }
 
-function cardMarkup(state, snapshot, inventory, series) {
+// each busiest row reads the name of the system its reference belongs to, or the reference itself when
+// the configuration no longer names that system: a removed system, or calls older than the system that
+// recorded them. The card never prints a row with an empty System cell.
+function nameBusiestRows(snapshot, systemNames) {
+  return (snapshot.activity?.busiest ?? []).map((row) => ({
+    ...row,
+    systemName: systemNames.get(row.systemRef) ?? row.systemRef,
+  }));
+}
+
+function cardMarkup(state, snapshot, inventory, series, busiestRows) {
   const heading = `rdio-dashboard-${state.key}-heading`;
 
-  const figures = cardFigures(state.key, snapshot, inventory, series);
+  const figures = cardFigures(state.key, snapshot, inventory, series, busiestRows);
 
   return `
     <section class="rdio-dashboard-card ${state.state}" data-card="${state.key}" aria-labelledby="${heading}">
@@ -263,7 +278,7 @@ function figures(rows) {
     .join('')}</dl>`;
 }
 
-function cardFigures(key, snapshot, inventory, series) {
+function cardFigures(key, snapshot, inventory, series, busiestRows) {
   if (key === 'server') {
     const server = snapshot.server ?? {};
 
@@ -300,7 +315,7 @@ function cardFigures(key, snapshot, inventory, series) {
   }
 
   if (key === 'activity') return activityCard(snapshot, series);
-  if (key === 'busiest') return busiestCard(snapshot);
+  if (key === 'busiest') return busiestCard(busiestRows);
 
   return logHealthCard(snapshot);
 }
@@ -335,21 +350,22 @@ function activityCard(snapshot, series) {
   <ul class="rdio-dashboard-hours">${hours}</ul>`;
 }
 
-function busiestCard(snapshot) {
-  const busiest = snapshot.activity?.busiest ?? [];
-
-  if (busiest.length === 0) {
+// the rows arrive already named by the configuration the page holds. The system's name is an operator's
+// own words from the systems form, and the talkgroup's name is text the ingest path wrote from call
+// metadata: both are rendered as the text they are.
+function busiestCard(rows) {
+  if (rows.length === 0) {
     return `<p class="rdio-dashboard-empty">No calls in the last 24 hours.</p>`;
   }
 
-  const rows = busiest
-    .map((row) => `<tr><td>${escapeHtml(row.name || `T-${row.talkgroupRef}`)}</td><td>${row.systemRef}</td><td>${row.count}</td></tr>`)
+  const markup = rows
+    .map((row) => `<tr><td>${escapeHtml(row.name || `T-${row.talkgroupRef}`)}</td><td>${escapeHtml(row.systemName)}</td><td>${row.count}</td></tr>`)
     .join('');
 
   return `
     <table class="rdio-dashboard-busiest">
       <thead><tr><th scope="col">Talkgroup</th><th scope="col">System</th><th scope="col">Calls</th></tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>${markup}</tbody>
     </table>`;
 }
 

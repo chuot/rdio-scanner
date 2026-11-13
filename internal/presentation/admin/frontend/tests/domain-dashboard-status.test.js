@@ -11,15 +11,12 @@ import {
   buildHourSeries,
   deriveCardStates,
   deriveInventory,
+  deriveSystemNames,
   formatBytes,
   formatUptime,
   isStale,
   summarizeHourSeries,
 } from '../domain/dashboard-status.js';
-
-// The system-name derivation is read off the module's exports as a whole, because these tests name the
-// export by the name it is to be added under and the file's other tests are not about it.
-import * as dashboardStatus from '../domain/dashboard-status.js';
 
 // The snapshot the server answers, in the shape the published contract documents.
 function statusFixture(overrides = {}) {
@@ -178,7 +175,7 @@ test('a configuration with nothing in it answers zeros and not nothing', () => {
 // `systemRef` the status payload carries on every busiest row and every call. The name belongs to the
 // reference, and the two numbers are not the same number.
 test('a configured system reference reads as the name that configuration gives it', () => {
-  const names = dashboardStatus.deriveSystemNames(
+  const names = deriveSystemNames(
     configFixture({
       systems: [
         { id: 1, systemRef: 10001, label: 'Harbour Dispatch' },
@@ -194,7 +191,7 @@ test('a configured system reference reads as the name that configuration gives i
 // three systems, references in no order that matches the order they are listed in: a row is named by
 // the system carrying its reference, not by whichever system the configuration happens to list first
 test('each configured reference resolves to its own system, and not to the one listed first', () => {
-  const names = dashboardStatus.deriveSystemNames(
+  const names = deriveSystemNames(
     configFixture({
       systems: [
         { id: 1, systemRef: 42002, label: 'Airport Fire Ground' },
@@ -213,7 +210,7 @@ test('each configured reference resolves to its own system, and not to the one l
 // a system removed after its calls were recorded. The card keeps such a row's reference, so it is never
 // a row with nothing in its System cell.
 test('a reference no configured system carries is named by nothing', () => {
-  const names = dashboardStatus.deriveSystemNames(
+  const names = deriveSystemNames(
     configFixture({ systems: [{ id: 1, systemRef: 10001, label: 'Harbour Dispatch' }] })
   );
 
@@ -227,7 +224,7 @@ test('a reference no configured system carries is named by nothing', () => {
 // before any system is named
 test('a configuration with no systems in it names no reference at all', () => {
   for (const config of [configFixture({ systems: [] }), {}, null, undefined]) {
-    const names = dashboardStatus.deriveSystemNames(config);
+    const names = deriveSystemNames(config);
 
     assert.equal(names.size, 0, `the derivation named ${names.size} reference(s) read from ${JSON.stringify(config)}`);
     assert.equal(names.get(10001), undefined, `the derivation named a reference for ${JSON.stringify(config)}`);
@@ -237,7 +234,7 @@ test('a configuration with no systems in it names no reference at all', () => {
 // a name that is not there is not a name, and a system carrying no reference cannot name a row: the
 // administration form refuses both, stored data from an older version need not
 test('a system that carries no name, or no reference, names nothing', () => {
-  const names = dashboardStatus.deriveSystemNames({
+  const names = deriveSystemNames({
     systems: [
       { id: 1, systemRef: 10001, label: '' },
       { id: 2, systemRef: 42002 },

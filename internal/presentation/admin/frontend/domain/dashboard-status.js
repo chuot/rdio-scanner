@@ -65,6 +65,16 @@ export function deriveInventory(config) {
   };
 }
 
+// what each configured system is called: the pair is keyed by the `systemRef` every call and every
+// busiest row carries, which is a different number from the store row's own `id` the inventory keys its
+// per-system rows by. A system carrying no reference cannot name a row, and a system carrying no name
+// does not name one either: a row keeps its reference rather than reading as a blank.
+export function deriveSystemNames(config) {
+  const named = rows(config?.systems).filter((system) => system?.systemRef !== null && system?.systemRef !== undefined && system?.label);
+
+  return new Map(named.map((system) => [system.systemRef, system.label]));
+}
+
 const working = (key, label) => ({ key, label, state: 'ok', reason: '' });
 
 const needsAttention = (key, label, reason) => ({ key, label, state: 'attention', reason });
