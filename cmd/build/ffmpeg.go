@@ -1528,7 +1528,9 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 	// embed and the release archive do not depend on a warm cache. What the
 	// archive says about the pair comes from whoever compiled them: this
 	// run's own words when it compiled them, and the words it left in the
-	// cache entry beside them when it did not.
+	// cache entry beside them when it did not. The compile leaves those
+	// words in the entry it filled, beside the pair it gzipped there, so the
+	// entry the next run looks in names how its binaries were proved.
 	if covered {
 		licence := ffmpegLicence(manifest, target)
 
@@ -1537,6 +1539,8 @@ func (t tool) runFFmpeg(o options, stdout io.Writer) (bool, error) {
 			if err != nil {
 				return false, err
 			}
+		} else if err := os.WriteFile(filepath.Join(plan.Paths.cached, ffmpegLicenceName), []byte(licence), 0644); err != nil {
+			return false, fmt.Errorf("the build cannot leave the licence text it wrote for %s in the cache entry it filled: %w", target, err)
 		}
 
 		if err := publishFFmpeg(plan.Paths, manifest, target, licence); err != nil {

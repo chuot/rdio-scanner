@@ -1536,13 +1536,24 @@ func TestAReusedEntryHoldingTheNoticeUnderThisBuildsNameBeholdsTheSame(t *testin
 }
 
 // A pair with no notice under either name is still the pair that names no proof: the gate that
-// accepts the older name does not make an entry reusable on the strength of its binaries alone.
+// accepts the older name does not make an entry reusable on the strength of its binaries alone. The
+// entry is read and judged before the run reaches it, because the compile that run plans leaves its
+// own proof in that entry on the way out.
 func TestAReusedEntryWithNoNoticeUnderEitherNameIsStillRefused(t *testing.T) {
 	repo := t.TempDir()
 
 	aCacheEntryFor(t, repo, "freebsd-amd64", "")
 
 	paths := ffmpegPathsFor(repo, bundle.ReadManifest(), "freebsd-amd64")
+
+	_, err := theLicenceInTheCache(paths, "freebsd-amd64")
+	if err == nil {
+		t.Fatal("a run read a cache entry that stores no proof of its pair and said nothing")
+	}
+
+	if !strings.Contains(err.Error(), "no licence") {
+		t.Errorf("the refusal %q does not say the entry stores no licence text", err.Error())
+	}
 
 	tl, out := aBuildCompilingInAContainer(t, repo, "freebsd-amd64", func(t *testing.T, dir string, name string) {
 		anELFProgramWrittenTo(t, dir, name, theMeasuredFreeBSDPair)
@@ -1560,15 +1571,6 @@ func TestAReusedEntryWithNoNoticeUnderEitherNameIsStillRefused(t *testing.T) {
 
 	if strings.Contains(said, "reusing") {
 		t.Errorf("the build reused a cache entry that names no proof of the pair it holds:\n%s", said)
-	}
-
-	_, err := theLicenceInTheCache(paths, "freebsd-amd64")
-	if err == nil {
-		t.Fatal("a run read a cache entry that stores no proof of its pair and said nothing")
-	}
-
-	if !strings.Contains(err.Error(), "no licence") {
-		t.Errorf("the refusal %q does not say the entry stores no licence text", err.Error())
 	}
 }
 
