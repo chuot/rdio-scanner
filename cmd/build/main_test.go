@@ -1042,8 +1042,8 @@ func TestAReleaseRunWritesTheSameArchivesWhicheverWayTheTargetsRan(t *testing.T)
 		writeArchiveLicence(t, repo, target, "the licence of "+target)
 	}
 
-	writeRepoFile(t, repo, guideSource, "the guide")
-	writeRepoFile(t, repo, listenerGuideSource, "the guide for the listener")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
 
 	fixEveryFileTime(t, repo, time.Date(2026, 1, 2, 3, 4, 6, 0, time.Local))
 

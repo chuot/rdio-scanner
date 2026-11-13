@@ -124,18 +124,24 @@ func readArchiveSource(repo string, path string, name string, mode os.FileMode) 
 }
 
 // guideSource is the administrator guide the archive carries for whoever
-// installs and runs the server, at the path the guide itself states,
+// installs and runs the server, named as the extracted folder names it,
 // with its own pictures and stylesheet inside, so the reader needs no network.
-const guideSource = "docs/admin-guide.html"
+// The repository keeps the guide under docs, which is where a release reads
+// it from.
+const guideSource = "admin-guide.html"
 
 // listenerGuideSource is the guide the archive carries for whoever hears
-// calls on the web application, at the path it states, carrying its own
-// pictures and stylesheet, so the listener is not handed the administrator's document.
-const listenerGuideSource = "docs/user-guide.html"
+// calls on the web application, named as the extracted folder names it,
+// carrying its own pictures and stylesheet, so the listener is not handed the administrator's document.
+// The repository keeps it under docs, which is where a release reads it from.
+const listenerGuideSource = "user-guide.html"
 
 // archiveFiles reads what a target's archive carries: the program the run wrote,
 // the two guides, and the licence of the ffmpeg the binary embeds. The program
-// comes from the path this run wrote it to, never a path of its own.
+// comes from the path this run wrote it to, never a path of its own. Each
+// document is read from the path the repository holds it at and entered under
+// its own name, so the archive's entry header carries no directory a reader
+// is handed on the way to the file.
 func archiveFiles(repo string, tr releaseTarget, output string) ([]archiveFile, error) {
 	name := "rdio-scanner" + programSuffix(tr.targetWord())
 
@@ -146,14 +152,20 @@ func archiveFiles(repo string, tr releaseTarget, output string) ([]archiveFile, 
 		return nil, fmt.Errorf("the release has no %s for %s: %w", name, tr.targetWord(), err)
 	}
 
-	guide, err := readArchiveSource(repo, guideSource, guideSource, 0o644)
+	// A missing document is named by the repository path the operator would
+	// have to put it back at, not by the name the archive would have carried.
+	guidePath := filepath.Join("docs", guideSource)
+
+	guide, err := readArchiveSource(repo, guidePath, guideSource, 0o644)
 	if err != nil {
-		return nil, fmt.Errorf("the release has no %s for %s: %w", guideSource, tr.targetWord(), err)
+		return nil, fmt.Errorf("the release has no %s for %s: %w", guidePath, tr.targetWord(), err)
 	}
 
-	listenerGuide, err := readArchiveSource(repo, listenerGuideSource, listenerGuideSource, 0o644)
+	listenerGuidePath := filepath.Join("docs", listenerGuideSource)
+
+	listenerGuide, err := readArchiveSource(repo, listenerGuidePath, listenerGuideSource, 0o644)
 	if err != nil {
-		return nil, fmt.Errorf("the release has no %s for %s: %w", listenerGuideSource, tr.targetWord(), err)
+		return nil, fmt.Errorf("the release has no %s for %s: %w", listenerGuidePath, tr.targetWord(), err)
 	}
 
 	files := []archiveFile{program, guide, listenerGuide}

@@ -506,7 +506,40 @@ func TestAMissingFfmpegLicenceStopsTheRelease(t *testing.T) {
 	}
 }
 
-// a windows target's program carries the suffix its system runs, the way the ffmpeg phase does
+// the notice is carried for the targets the ffmpeg manifest has a record for:
+// a target it has no record for carries its program and the two guides, and nothing else
+func TestTheArchiveOfATargetTheFfmpegManifestHasNoRecordForCarriesNoNotice(t *testing.T) {
+	repo := t.TempDir()
+
+	// A target outside the release matrix, so the manifest this repository carries
+	// cannot hold a record for it.
+	target := releaseTarget{name: "plan9", goos: "plan9", goarch: "riscv"}
+
+	word := target.targetWord()
+
+	writeArchiveSource(t, repo, word, "rdio-scanner"+programSuffix(word), "the binary")
+	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
+	writeRepoFile(t, repo, "docs/user-guide.html", "the guide for the listener")
+	writeArchiveLicence(t, repo, releaseTargets[4].targetWord(), "the licence of another target")
+
+	files, err := archiveFiles(repo, target, defaultOutputPath(word))
+	if err != nil {
+		t.Fatalf("archiveFiles: %v", err)
+	}
+
+	want := []string{
+		"rdio-scanner",
+		"admin-guide.html",
+		"user-guide.html",
+	}
+
+	if names := fileNames(files); strings.Join(names, " ") != strings.Join(want, " ") {
+		t.Fatalf("the archive of %s carries %v, want %v: the manifest has no ffmpeg for this target, so its archive carries no notice", word, names, want)
+	}
+}
+
+// a windows target's program carries the suffix its system runs, the way the ffmpeg phase does,
+// and it sits beside the same three names every other archive carries
 func TestTheWindowsArchiveCarriesTheProgramItsOperatingSystemRuns(t *testing.T) {
 	repo := t.TempDir()
 
@@ -520,8 +553,15 @@ func TestTheWindowsArchiveCarriesTheProgramItsOperatingSystemRuns(t *testing.T) 
 		t.Fatalf("archiveFiles: %v", err)
 	}
 
-	if files[0].name != "rdio-scanner.exe" {
-		t.Errorf("the archive carries %q, want rdio-scanner.exe", files[0].name)
+	want := []string{
+		"rdio-scanner.exe",
+		"admin-guide.html",
+		"user-guide.html",
+		"FFMPEG.txt",
+	}
+
+	if names := fileNames(files); strings.Join(names, " ") != strings.Join(want, " ") {
+		t.Fatalf("the windows archive carries %v, want %v", names, want)
 	}
 }
 
@@ -566,8 +606,8 @@ func TestTheBinaryInTheArchiveIsExecutable(t *testing.T) {
 			continue
 		}
 
-		if f.Mode()&0o111 != 0 {
-			t.Errorf("%s in the archive has mode %v, which is executable", f.Name, f.Mode())
+		if perm := f.Mode().Perm(); perm != 0o644 {
+			t.Errorf("%s in the archive has mode %o, want the 0644 a document carries", f.Name, perm)
 		}
 	}
 }
