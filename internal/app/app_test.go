@@ -487,6 +487,19 @@ func TestMaintainClearsTheDeploymentBeforeItCompactsIt(t *testing.T) {
 	if maintenanceTablePresent(t, srv.db, maintenanceLegacyTable) {
 		t.Errorf("%s is still standing, want the run to have dropped it", maintenanceLegacyTable)
 	}
+
+	// Every line the run printed is also a stored entry under its own subsystem, at the level a clearing
+	// is filed at, and one entry per line rather than one entry per class: the deployment keeps the account
+	// the terminal showed.
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'maintenance' AND "level" = 'warn'`); got != len(summary.Lines) {
+		t.Errorf("the run filed %d warn entries under the maintenance subsystem and printed %d lines, want one entry for every line it printed", got, len(summary.Lines))
+	}
+
+	for _, line := range summary.Lines {
+		if got := logSourceOfMessage(t, srv.db, line); got != "maintenance" {
+			t.Errorf("the entry %q is filed under %q, want it filed under the maintenance subsystem the run reports under", line, got)
+		}
+	}
 }
 
 // TestAMaintenanceRunOverADeploymentAnotherInstanceHoldsIsRefused keeps the maintenance run to the
