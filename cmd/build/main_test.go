@@ -1752,6 +1752,12 @@ func TestTheNativeRunPublishesNothingWhenTheRunOfTheBinariesFails(t *testing.T) 
 			t.Errorf("%s: the licence text names binaries the run refused", tc.name)
 		}
 
+		// A run that did not finish writing the entry leaves no proof in it: the licence text a
+		// compile writes goes in beside the pair it gzipped, and this run gzipped nothing.
+		if aFileIsThere(filepath.Join(paths.cached, "FFMPEG.txt")) {
+			t.Errorf("%s: the cache entry holds the licence text of binaries the run refused: %s", tc.name, paths.cached)
+		}
+
 		// The refused run leaves its binaries in the bundle directory of the host that
 		// can run them, which is what the refusal names.
 		for _, name := range []string{"ffmpeg", "ffprobe"} {
