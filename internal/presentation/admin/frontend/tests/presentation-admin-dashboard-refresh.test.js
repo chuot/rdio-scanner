@@ -208,20 +208,27 @@ function clearLiveRegion() {
 test('auto-refresh is on when the operator opens the dashboard, and the control says it is on', async () => {
   const clock = holdTheRefreshInterval();
 
+  let el;
+  let socket;
+
   try {
-    const { el, socket } = await openDashboard();
+    ({ el, socket } = await openDashboard());
 
     const control = refreshControl(el);
 
     assert.ok(control, 'the dashboard has no auto-refresh control');
     assert.match(control.textContent ?? '', /auto-refresh/i, `the control is labelled "${control.textContent}"`);
     assert.equal(control.getAttribute('aria-pressed'), 'true', 'the control does not say that auto-refresh is on');
+    assert.equal((control.textContent ?? '').trim(), 'Auto-refresh on',
+      `the control is pressed while its polling runs, but its own text reads "${control.textContent}"`);
 
     assert.equal(clock.waitingCount(), 1, `the page has ${clock.waitingCount()} refresh timers waiting, wanting exactly one`);
-
-    el.disconnectedCallback();
-    socket.close();
   } finally {
+    // the page and its clock are let go whichever way the assertions went:
+    // a failed reading must not leave a polling dashboard on the shared document
+    el?.disconnectedCallback();
+    socket?.close();
+
     clock.release();
   }
 });
@@ -240,6 +247,8 @@ test('the pause control stops the page asking and resuming starts exactly one ch
     control.dispatchEvent({ type: 'click' });
 
     assert.equal(control.getAttribute('aria-pressed'), 'false', 'the control does not say that auto-refresh is off');
+    assert.equal((control.textContent ?? '').trim(), 'Auto-refresh off',
+      `the control is unpressed after the pause, but its own text reads "${control.textContent}"`);
     assert.equal(clock.waitingCount(), 0, 'the page is still waiting to poll after the operator paused it');
 
     assert.equal(clock.fire(), 0, 'a paused dashboard polled anyway');
@@ -248,6 +257,8 @@ test('the pause control stops the page asking and resuming starts exactly one ch
     control.dispatchEvent({ type: 'click' });
 
     assert.equal(control.getAttribute('aria-pressed'), 'true');
+    assert.equal((control.textContent ?? '').trim(), 'Auto-refresh on',
+      `the control is pressed again after resuming, but its own text reads "${control.textContent}"`);
     assert.equal(clock.waitingCount(), 1, `resuming left ${clock.waitingCount()} refresh chains waiting, wanting one`);
 
     clock.fire();
