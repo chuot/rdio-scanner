@@ -50,7 +50,7 @@ func TestEveryArchiveEntryCarriesTheTimeOfTheFileItCarries(t *testing.T) {
 	target := releaseTargets[4].targetWord()
 
 	program := defaultOutputPath(target)
-	licence := filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", target, "LICENCE.md")
+	licence := filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", target, "FFMPEG.txt")
 
 	writeArchiveSource(t, repo, target, "rdio-scanner", "the binary the run compiled")
 	writeRepoFile(t, repo, "docs/admin-guide.html", "the guide")
@@ -180,6 +180,24 @@ func TestTheArchiveCarriesTheProgramTheGuidesAndTheLicenceOfTheFfmpegItCarries(t
 
 	if licence != "the licence" {
 		t.Errorf("the archive carries %q as its licence, want the text the ffmpeg phase wrote", licence)
+	}
+
+	// The notice travels byte for byte out of the directory the server embeds,
+	// and the archive's entry carries the name that directory holds it at: no
+	// second copy of it, under a second name, is what a release carries.
+	onDisk, err := os.ReadFile(filepath.Join(repo, "internal", "infrastructure", "ffmpeg", "bundle", target, "FFMPEG.txt"))
+	if err != nil {
+		t.Fatalf("reading the notice the ffmpeg phase left in %s: %v", filepath.Join("internal", "infrastructure", "ffmpeg", "bundle", target), err)
+	}
+
+	if licence != string(onDisk) {
+		t.Errorf("the notice in the archive is not the bytes the bundle directory holds: %q against %q", licence, string(onDisk))
+	}
+
+	for _, name := range fileNames(files) {
+		if name == "LICENCE.md" {
+			t.Errorf("the archive carries a second notice named %s, next to the one named %s", name, "FFMPEG.txt")
+		}
 	}
 }
 
@@ -723,8 +741,9 @@ func writeRepoFile(t *testing.T, repo string, path string, contents string) {
 	}
 }
 
-// writeArchiveLicence puts the licence the ffmpeg phase writes into the bundle
-// directory the server embeds, the phase's own name, not the reader-facing one.
+// writeArchiveLicence puts the notice the ffmpeg phase writes into the bundle
+// directory the server embeds, under the one name that notice is kept under
+// everywhere it is stored.
 func writeArchiveLicence(t *testing.T, repo string, target string, contents string) {
 	t.Helper()
 
@@ -734,7 +753,7 @@ func writeArchiveLicence(t *testing.T, repo string, target string, contents stri
 		t.Fatalf("making %s: %v", dir, err)
 	}
 
-	if err := os.WriteFile(filepath.Join(dir, "LICENCE.md"), []byte(contents), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "FFMPEG.txt"), []byte(contents), 0o644); err != nil {
 		t.Fatalf("writing the licence: %v", err)
 	}
 }
