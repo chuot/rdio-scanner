@@ -4067,9 +4067,10 @@ $ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
       <p>
         The archive is the only copy of the configuration a migration could not carry. The cleaning below
         drops that table with every row in it, so read the archive and re-enter what it names before you
-        run it. The archive table exists only where a migration had something to put in it, so a
-        deployment whose migration carried everything has no <code>migrationArchive</code> table at all,
-        and the same <code>SELECT</code> answers an error on a deployment that never archived anything.
+        run it. The archive table exists only where a migration had something to put in it: a start
+        creates it only while a legacy table is still standing to be read, so the same
+        <code>SELECT</code> answers an error on a deployment that never archived anything, and one that
+        had legacy tables but archived nothing keeps an empty table until the cleaning below drops it.
       </p>
     </div>
   </aside>
