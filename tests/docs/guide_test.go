@@ -1283,6 +1283,38 @@ func words(body string) string {
 	return strings.Join(strings.Fields(stripTags(body)), " ")
 }
 
+// what a reader finds beside the program after unpacking one release archive is named by each
+// file's own name, because no entry of the archive carries a directory.
+func TestTheGuideNamesTheFilesAReleaseArchiveUnpacksBesideTheProgram(t *testing.T) {
+	body := guidePath(t)
+
+	section := chapterOf(t, body, "ch-04-installation")
+
+	named := []string{}
+
+	for _, m := range regexp.MustCompile(`(?is)<code>([^<]*)</code>`).FindAllStringSubmatch(section, -1) {
+		name := strings.TrimSpace(m[1])
+
+		// The names that stand for a file the reader finds after unpacking, and not for a command,
+		// an image, or a container path.
+		if name == "rdio-scanner" || strings.HasSuffix(name, ".html") || strings.HasSuffix(name, ".md") || strings.HasSuffix(name, ".txt") {
+			named = append(named, name)
+		}
+	}
+
+	for _, want := range []string{"rdio-scanner", "admin-guide.html", "user-guide.html", "FFMPEG.txt"} {
+		if !slices.Contains(named, want) {
+			t.Errorf("the installation section never names %q as a whole file beside the program: it names %v", want, named)
+		}
+	}
+
+	for _, name := range named {
+		if strings.Contains(name, "/") {
+			t.Errorf("the installation section names %q with a directory in it, and no archive entry carries one", name)
+		}
+	}
+}
+
 // the guide states the ffmpeg is compiled for audio only wherever operators read the
 // ritual, and keeps the hand route as drop two files and run one command.
 func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
