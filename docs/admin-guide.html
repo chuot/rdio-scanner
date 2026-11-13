@@ -3502,8 +3502,10 @@ trusted_proxies = 127.0.0.1, 10.0.0.0/8</code></pre>
 
   <p>
     Stopping the service stops the server the same way the keys stop it in a terminal: it is told to stop,
-    it closes its listening addresses, and it closes the database. A control the manager will not perform
-    ends with a non-zero exit status and no comment, which is everything a script needs to know.
+    it closes its listening addresses, and it closes the database. A control the service manager will not
+    perform prints the manager's own reason for refusing it, where this command writes every other failure,
+    and ends with exit status <code>1</code>: a script tests the status, and the line beside it names the
+    control and the refusal that stands behind it.
   </p>
 
   <p>
@@ -3561,6 +3563,12 @@ $ sudo systemctl restart rdio-scanner</code></pre>
     the install from an elevated command prompt, inside the folder you extracted the archive into: the
     service is registered with the path it was installed from, so moving that folder later leaves the
     service pointing at a program that is no longer there.
+  </p>
+
+  <p>
+    Run from a prompt that is not elevated, the install is refused, and what you get is the manager's own
+    reason written on the console and an exit status of <code>1</code> rather than silence: run the same
+    command from a command prompt run as Administrator.
   </p>
 
   <pre><code>C:\rdio-scanner&gt; rdio-scanner.exe -service install
