@@ -43,7 +43,7 @@ var theMoment = time.Date(2026, 10, 13, 12, 30, 45, 0, time.UTC)
 func theVersion(t *testing.T) buildinfo.Version {
 	t.Helper()
 
-	version, err := buildinfo.Derive("8.0.0", "", "db79311", "")
+	version, err := buildinfo.Derive("8.0.0", "", "db79311", "", false)
 	if err != nil {
 		t.Fatalf("Derive: %v", err)
 	}

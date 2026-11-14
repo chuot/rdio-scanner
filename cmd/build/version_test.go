@@ -122,6 +122,22 @@ func writeScratchVersionFile(t *testing.T, dir, contents string) {
 	}
 }
 
+// commitScratchVersionFile puts the file writeScratchVersionFile wrote into the scratch
+// repository's commit, which is what a case that names a tree with nothing uncommitted needs:
+// a file that is only written is untracked work, and git reports the tree as dirty.
+func commitScratchVersionFile(t *testing.T, dir string) {
+	t.Helper()
+
+	for _, args := range [][]string{
+		{"add", "VERSION.txt"},
+		{"commit", "-q", "-m", "declare the core"},
+	} {
+		if out := scratchGit(t, dir, args...); out != "" {
+			t.Fatalf("git %s in the scratch repository printed %q", strings.Join(args, " "), out)
+		}
+	}
+}
+
 // readSource reads this repository's own state: a declared core and
 // a commit no tag names, the state every developer's clone is in.
 func TestReadSourceReadsThisRepositorysOwnState(t *testing.T) {
@@ -170,7 +186,7 @@ func TestReadSourceReportsTheTagThatNamesTheCommit(t *testing.T) {
 		t.Errorf("tag = %q, want v8.0.0, the tag that names HEAD", src.tag)
 	}
 
-	version, err := buildinfo.Derive(src.core, src.tag, src.commit, "")
+	version, err := buildinfo.Derive(src.core, src.tag, src.commit, "", src.dirty)
 	if err != nil {
 		t.Fatalf("deriving the version of a tagged scratch repository: %v", err)
 	}
@@ -199,7 +215,7 @@ func TestReadSourceReportsNoTagWhenTheTagNamesAnotherCommit(t *testing.T) {
 		t.Errorf("tag = %q, want no tag: v7.9.0 names a commit this is not", src.tag)
 	}
 
-	version, err := buildinfo.Derive(src.core, src.tag, src.commit, "")
+	version, err := buildinfo.Derive(src.core, src.tag, src.commit, "", src.dirty)
 	if err != nil {
 		t.Fatalf("deriving the version of an untagged scratch repository: %v", err)
 	}
@@ -224,7 +240,7 @@ func TestARealTagThatDisagreesWithTheDeclaredCoreStopsTheBuild(t *testing.T) {
 		t.Fatalf("tag = %q, want v7.9.0, so this test is testing what it says it tests", src.tag)
 	}
 
-	_, err = buildinfo.Derive(src.core, src.tag, src.commit, "")
+	_, err = buildinfo.Derive(src.core, src.tag, src.commit, "", src.dirty)
 	if err == nil {
 		t.Fatal("VERSION.txt saying 8.0.0 on a commit tagged v7.9.0 was accepted, and must stop the build")
 	}
@@ -255,7 +271,7 @@ func TestReadSourceReportsADirtyWorkingTreeWithoutLettingItIntoTheVersion(t *tes
 		t.Error("an uncommitted file is not reported as a dirty working tree")
 	}
 
-	version, err := buildinfo.Derive(src.core, src.tag, src.commit, "")
+	version, err := buildinfo.Derive(src.core, src.tag, src.commit, "", src.dirty)
 	if err != nil {
 		t.Fatalf("deriving the version of a dirty scratch repository: %v", err)
 	}
@@ -274,6 +290,7 @@ func TestReadSourceReportsADirtyWorkingTreeWithoutLettingItIntoTheVersion(t *tes
 func TestReadSourceOnACommittedTreeAskedForAPrereleaseNamesNoCommit(t *testing.T) {
 	dir := scratchRepository(t, "")
 	writeScratchVersionFile(t, dir, "8.0.0\n")
+	commitScratchVersionFile(t, dir)
 
 	src, err := readSource(dir)
 	if err != nil {
@@ -303,6 +320,7 @@ func TestReadSourceOnACommittedTreeAskedForAPrereleaseNamesNoCommit(t *testing.T
 func TestReadSourceOnAnUncommittedTreeAskedForAPrereleaseKeepsTheCommit(t *testing.T) {
 	dir := scratchRepository(t, "")
 	writeScratchVersionFile(t, dir, "8.0.0\n")
+	commitScratchVersionFile(t, dir)
 
 	// The commit git answers before the tree is dirtied is the commit the version has to keep.
 	before, err := readSource(dir)

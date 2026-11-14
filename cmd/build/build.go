@@ -168,6 +168,12 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		fmt.Fprintln(stdout, "note   working tree is dirty; the version does not say so")
 	}
 
+	// a name the operator asked for keeps its commit only when the tree has work
+	// in it, and the log says which name carries that build metadata.
+	if o.pre != "" && src.dirty && version.Commit() != "" {
+		fmt.Fprintf(stdout, "note   --pre %s carries +g%s: the working tree has uncommitted work\n", o.pre, version.Commit())
+	}
+
 	// a release is built from a commit, and its archive is named for it:
 	// a dirty tree is refused before anything is built, so an archive is
 	// never built from work a reader cannot check out.
