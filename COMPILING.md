@@ -162,10 +162,12 @@ The licence the ffmpeg is under, the release it comes from, and the recipe it wa
 
 `VERSION.txt` at the repository root is the one place a version is declared. The tool reads it, asks git what it says about the commit being built, and passes the result to the applications through the environment and to the binary through the linker. No source file is rewritten to carry a version.
 
-        8.0.0                       a commit tagged v8.0.0
-        8.0.0+g1a2b3c4              a commit no tag names
-        8.0.0-beta1                 go run ./cmd/build --pre beta1
-        8.0.0-beta1+g1a2b3c4        both at once
+        8.0.0                       a commit tagged v8.0.0, the tree beside it committed or not
+        8.0.0+g1a2b3c4              a commit no tag names, the tree beside it committed or not
+        8.0.0-beta1                 go run ./cmd/build --pre beta1, with everything committed
+        8.0.0-beta1+g1a2b3c4        go run ./cmd/build --pre beta1, with something uncommitted
+
+The hash names the build when nothing else does: a tag on the commit names it, and so does a prerelease name asked for with `--pre` when the tree has nothing uncommitted, which is why a tagged commit carries no hash, and why a named prerelease carries one only when the tree holds work that is not in the commit it names.
 
 A repository with no `VERSION.txt` builds as `0.0.0`, which is a version no release ever had. A `VERSION.txt` that holds something other than a bare `X.Y.Z` stops the build rather than being repaired, and a tag that names a different core than the file does stops it too.
 
