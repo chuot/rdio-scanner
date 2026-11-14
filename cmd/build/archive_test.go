@@ -33,12 +33,24 @@ import (
 
 // the archive name matches the name the guide's installation chapter names
 func TestTheArchiveIsNamedForTheTargetAndTheVersionTheReleaseResolved(t *testing.T) {
-	got := archivePath("linux-amd64", "8.0.0+g19042cd")
+	for _, c := range []struct {
+		version string
+		want    string
+	}{
+		{
+			version: "8.0.0+g19042cd",
+			want:    filepath.Join("dist", "rdio-scanner-linux-amd64-v8.0.0+g19042cd.zip"),
+		},
+		{
+			version: "8.0.0-beta1",
+			want:    filepath.Join("dist", "rdio-scanner-linux-amd64-v8.0.0-beta1.zip"),
+		},
+	} {
+		got := archivePath("linux-amd64", c.version)
 
-	want := filepath.Join("dist", "rdio-scanner-linux-amd64-v8.0.0+g19042cd.zip")
-
-	if got != want {
-		t.Errorf("the archive is written to %q, want %q", got, want)
+		if got != c.want {
+			t.Errorf("the archive of %s is written to %q, want %q", c.version, got, c.want)
+		}
 	}
 }
 

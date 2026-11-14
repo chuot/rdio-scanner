@@ -1193,6 +1193,7 @@ func TestTheVersionInAnArchiveNameIsReadByTheTargetTheNameNames(t *testing.T) {
 		"rdio-scanner-linux-amd64-v8.0.0.zip":              "8.0.0",
 		"rdio-scanner-windows-amd64-v8.0.0+g1885b7e2.zip":  "8.0.0+g1885b7e2",
 		"rdio-scanner-linux-arm64-v8.0.0-v1+g1885b7e2.zip": "8.0.0-v1+g1885b7e2",
+		"rdio-scanner-linux-amd64-v8.0.0-beta1.zip":        "8.0.0-beta1",
 	} {
 		got, found := archiveVersionOf(name)
 		if !found || got != want {
