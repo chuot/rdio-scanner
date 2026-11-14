@@ -829,6 +829,16 @@ rdio-admin .rdio-dashboard-busiest th {
   font-weight: 500;
 }
 
+/* A talkgroup name or a system label is often one long word with no space, hyphen, or slash in it, and a
+   table column is never narrower than the widest such word it holds: without a break inside the word, the
+   longest name decides the width of the whole table and the rows are drawn past the card that holds them.
+   The last cell of a row is left out of this rule — a count printed on two lines is a count that cannot be
+   compared down the column, and that column is what the five rows are ranked by. */
+
+rdio-admin .rdio-dashboard-busiest td:not(:last-child) {
+  overflow-wrap: anywhere;
+}
+
 rdio-admin .rdio-dashboard-busiest td:last-child,
 rdio-admin .rdio-dashboard-busiest th:last-child {
   font-family: var(--rdio-mono);
