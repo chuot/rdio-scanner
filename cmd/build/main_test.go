@@ -137,6 +137,16 @@ var development = source{core: "8.0.0", declared: true, commit: "db79311"}
 // uncommitted is a tree git says is dirty: work that is not in the commit the version names.
 var uncommitted = source{core: "8.0.0", declared: true, commit: "db79311", dirty: true, changed: []string{"cmd/build/build.go"}}
 
+// releasedUncommitted is a commit a release tag names with work beside it that is not in it:
+// the version says the core the tag declares, and the tree is a separate fact the operator
+// still has to be told.
+var releasedUncommitted = source{core: "8.0.0", declared: true, tag: "v8.0.0", commit: "db79311", dirty: true, changed: []string{"cmd/build/build.go"}}
+
+// theDirtyTreeNote is what a run that builds something says about a tree with uncommitted
+// work, word for word. A note about a kept commit is printed beside it and never in place of
+// it, so an operator who knows this line still recognises it.
+const theDirtyTreeNote = "note   working tree is dirty; the version does not say so"
+
 func TestRunningWithNoSubcommandBuildsBothApplicationsAndThenTheServer(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -313,6 +323,11 @@ func TestTheRunExplainsAPrereleaseNameThatKeptItsCommit(t *testing.T) {
 			out.String(), len(named))
 	}
 
+	if !strings.Contains(out.String(), theDirtyTreeNote) {
+		t.Errorf("the run's log\n  %s\ncarries the note about the kept commit without %q, and that note is the one an operator already knows: the new line is extra, not a replacement",
+			out.String(), theDirtyTreeNote)
+	}
+
 	tl, out, _ = fakeRun(development, "")
 
 	if code := tl.run([]string{"client", "--pre", "beta1"}, out); code != 0 {
@@ -356,6 +371,92 @@ func TestTheRunExplainsAPrereleaseNameInTheVersionSubcommandAlone(t *testing.T) 
 		if lines[0] != c.want {
 			t.Errorf("commit %s dirty %v: the version subcommand printed %q, want %q", c.src.commit, c.src.dirty, lines[0], c.want)
 		}
+	}
+}
+
+// Every run that builds something says in its own words that the tree has uncommitted work,
+// and a note about a prerelease name that kept its commit is printed beside that note and
+// never in place of it. The note lines are read in the order the run prints them.
+func TestTheRunExplainsAnUncommittedTreeOnEveryRunThatBuildsSomething(t *testing.T) {
+	keptCommit := "note   --pre beta1 carries +gdb79311: the working tree has uncommitted work"
+	usedOverride := "note   dist --allow-dirty: this release is built from an uncommitted tree"
+
+	for _, c := range []struct {
+		name  string
+		src   source
+		args  []string
+		notes []string
+	}{
+		{
+			name:  "a client build of an uncommitted tree",
+			src:   uncommitted,
+			args:  []string{"client"},
+			notes: []string{theDirtyTreeNote},
+		},
+		{
+			name:  "a client build of an uncommitted tree the operator asked to name a prerelease",
+			src:   uncommitted,
+			args:  []string{"client", "--pre", "beta1"},
+			notes: []string{theDirtyTreeNote, keptCommit},
+		},
+		{
+			name:  "a client build of a committed tree the operator asked to name a prerelease",
+			src:   development,
+			args:  []string{"client", "--pre", "beta1"},
+			notes: nil,
+		},
+		{
+			name:  "a client build of a tagged commit with uncommitted work beside it",
+			src:   releasedUncommitted,
+			args:  []string{"client"},
+			notes: []string{theDirtyTreeNote},
+		},
+		{
+			name:  "a client build of a tagged commit with uncommitted work beside it, asked to name a prerelease",
+			src:   releasedUncommitted,
+			args:  []string{"client", "--pre", "beta1"},
+			notes: []string{theDirtyTreeNote},
+		},
+		{
+			name:  "a release run that used the override",
+			src:   uncommitted,
+			args:  []string{"dist", "--allow-dirty"},
+			notes: []string{theDirtyTreeNote, usedOverride},
+		},
+		{
+			name:  "a release run that used the override and was asked to name a prerelease",
+			src:   uncommitted,
+			args:  []string{"dist", "--allow-dirty", "--pre", "beta1"},
+			notes: []string{theDirtyTreeNote, keptCommit, usedOverride},
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			tl, out, _ := fakeRun(c.src, "")
+
+			if code := tl.run(c.args, out); code != 0 {
+				t.Fatalf("exit code = %d, want 0: the run %v was asked to finish", code, c.args)
+			}
+
+			printed := []string{}
+
+			for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+				if strings.HasPrefix(line, "note") {
+					printed = append(printed, line)
+				}
+			}
+
+			if len(printed) != len(c.notes) {
+				t.Fatalf("the run's log\n  %s\nholds %d note lines, want %d: %v",
+					out.String(), len(printed), len(c.notes), c.notes)
+			}
+
+			for i, want := range c.notes {
+				if printed[i] != want {
+					t.Errorf("the run's note lines %q do not hold %q as its line %d, and the log is\n  %s",
+						printed, want, i, out.String())
+				}
+			}
+		})
 	}
 }
 
