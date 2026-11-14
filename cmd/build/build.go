@@ -151,7 +151,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		return fail(t.errout, err)
 	}
 
-	version, err := buildinfo.Derive(src.core, src.tag, src.commit, o.pre)
+	version, err := buildinfo.Derive(src.core, src.tag, src.commit, o.pre, src.dirty)
 	if err != nil {
 		return fail(t.errout, err)
 	}

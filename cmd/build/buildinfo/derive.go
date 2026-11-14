@@ -37,8 +37,9 @@ func (v Version) Core() string { return v.core }
 // Pre is the prerelease name this build carries, or empty when it carries none.
 func (v Version) Pre() string { return v.pre }
 
-// Commit is the short hash of the commit this build was made from, or empty when a tag already said
-// which release it is.
+// Commit is the build metadata a version carries: the short hash of the commit the build was
+// made from, or empty when a tag on that commit, or a prerelease name the operator asked for on a
+// tree with nothing uncommitted, already says which build this is.
 func (v Version) Commit() string { return v.commit }
 
 // String is the version in the form a client reads: a core, an
@@ -85,10 +86,11 @@ func ValidatePre(pre string) error {
 var tagPattern = regexp.MustCompile(`^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$`)
 
 // Derive decides the version one build carries from the declared
-// core, the tag naming the commit if any, its short hash, and a
-// prerelease the operator asked for. A tag may add a prerelease and
-// says whether the commit appears, never the version.
-func Derive(core, tag, commit, pre string) (Version, error) {
+// core, the tag naming the commit if any, its short hash, the state of
+// the working tree beside that commit, and a prerelease the operator
+// asked for. A tag may add a prerelease and says whether the commit
+// appears, never the version.
+func Derive(core, tag, commit, pre string, uncommitted bool) (Version, error) {
 	if !corePattern.MatchString(core) {
 		return Version{}, fmt.Errorf("%q is not a core version in the form X.Y.Z", core)
 	}
@@ -120,7 +122,15 @@ func Derive(core, tag, commit, pre string) (Version, error) {
 		return Version{}, fmt.Errorf("HEAD is not tagged, so this build needs its commit to say which build it is")
 	}
 
-	return Version{core: core, pre: pre, commit: commit}, nil
+	// A build nobody named carries its commit, because nothing else says which build it is. A name an
+	// operator asked for on a tree with nothing uncommitted is already the name of a published build, and
+	// the commit would be build noise on every surface it reaches. A tree with uncommitted work is not a
+	// tree a reader can check out, so there the commit stays.
+	if pre == "" || uncommitted {
+		return Version{core: core, pre: pre, commit: commit}, nil
+	}
+
+	return Version{core: core, pre: pre}, nil
 }
 
 // readTag takes the core and prerelease out of a tag name, and

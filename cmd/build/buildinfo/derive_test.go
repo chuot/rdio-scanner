@@ -146,7 +146,7 @@ func TestDeriveProducesTheFourShapesAndNoOther(t *testing.T) {
 
 // Derive refuses a tag naming a different core than the declared one.
 func TestDeriveRefusesATagThatDisagreesWithTheDeclaredCore(t *testing.T) {
-	_, err := Derive("8.0.0", "v7.9.0", "db79311", "")
+	_, err := Derive("8.0.0", "v7.9.0", "db79311", "", false)
 	if err == nil {
 		t.Fatal("VERSION.txt saying 8.0.0 and HEAD being tagged v7.9.0 was accepted, and must stop the build")
 	}
@@ -161,7 +161,7 @@ func TestDeriveRefusesATagThatDisagreesWithTheDeclaredCore(t *testing.T) {
 // Derive refuses a tag that is not a version instead of treating it as some tag.
 func TestDeriveRefusesATagThatIsNotAVersion(t *testing.T) {
 	for _, tag := range []string{"release-2026", "v8", "v8.0.0+gdb79311", "v8.0.0-beta..1"} {
-		_, err := Derive("8.0.0", tag, "db79311", "")
+		_, err := Derive("8.0.0", tag, "db79311", "", false)
 		if err == nil {
 			t.Errorf("the tag %q was accepted, and must be refused", tag)
 			continue
@@ -176,7 +176,7 @@ func TestDeriveRefusesATagThatIsNotAVersion(t *testing.T) {
 // Derive refuses a prerelease name that is not a semver prerelease.
 func TestDeriveRefusesAPreReleaseNameThatIsNotASemverPrerelease(t *testing.T) {
 	for _, pre := range []string{"beta 1", "beta..1", "beta.", "beta+", "beta1+gdb79311", "01"} {
-		_, err := Derive("8.0.0", "", "db79311", pre)
+		_, err := Derive("8.0.0", "", "db79311", pre, false)
 		if err == nil {
 			t.Errorf("the prerelease %q was accepted, and must be refused", pre)
 			continue
@@ -192,7 +192,7 @@ func TestDeriveRefusesAPreReleaseNameThatIsNotASemverPrerelease(t *testing.T) {
 // prerelease name asked for or without one: the refusal comes before the name is
 // used, and a build with no commit has nothing to name itself by.
 func TestDeriveRefusesAnUntaggedBuildThatDoesNotKnowItsCommit(t *testing.T) {
-	_, err := Derive("8.0.0", "", "", "")
+	_, err := Derive("8.0.0", "", "", "", false)
 	if err == nil {
 		t.Fatal("an untagged build with no commit was accepted, and must be refused")
 	}
