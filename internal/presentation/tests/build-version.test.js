@@ -43,6 +43,12 @@ describe('build.mjs — the version a bundle carries', () => {
         assert.equal(resolveVersion({ RDIO_VERSION: '8.0.0-beta1+gdb79311' }, scratchRoot()), '8.0.0-beta1+gdb79311');
     });
 
+    it('reports a prerelease that carries no build metadata by the name it was given', () => {
+        // A prerelease built from a tree with nothing uncommitted is named by itself, and the banner a
+        // person reads in the running application has to say that same name and nothing beside it.
+        assert.equal(resolveVersion({ RDIO_VERSION: '8.0.0-beta1' }, scratchRoot('8.0.0\n')), '8.0.0-beta1');
+    });
+
     it('takes the declared core when the build tool said nothing', () => {
         assert.equal(resolveVersion({}, scratchRoot('8.0.0\n')), '8.0.0');
     });

@@ -19,6 +19,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"rdio-scanner/cmd/build/buildinfo"
 )
 
 // These tests read the plan the tool composes for the bundles: what
@@ -101,34 +103,51 @@ func TestTheApplicationBuildsAreGivenTheVersionInTheEnvironment(t *testing.T) {
 		t.Fatalf("parseArgs: %v", err)
 	}
 
-	steps := plan(o, "/repo", theVersion(t), "npm", planState{})
+	for _, c := range []struct {
+		name    string
+		version func(*testing.T) buildinfo.Version
+		env     string
+	}{
+		{
+			name:    "a development build",
+			version: theVersion,
+			env:     "RDIO_VERSION=8.0.0+gdb79311",
+		},
+		{
+			name:    "a prerelease of a committed tree",
+			version: thePrerelease,
+			env:     "RDIO_VERSION=8.0.0-beta1",
+		},
+	} {
+		steps := plan(o, "/repo", c.version(t), "npm", planState{})
 
-	for _, app := range []string{subScanner, subAdmin} {
-		s := steps[0]
-		if app == subAdmin {
-			s = steps[1]
-		}
+		for _, app := range []string{subScanner, subAdmin} {
+			s := steps[0]
+			if app == subAdmin {
+				s = steps[1]
+			}
 
-		if s.name != "npm" {
-			t.Errorf("%s is built with %q, want npm", app, s.name)
-		}
+			if s.name != "npm" {
+				t.Errorf("%s is built with %q, want npm", app, s.name)
+			}
 
-		if strings.Join(s.args, " ") != "run build:"+app {
-			t.Errorf("%s is built with %v, want npm run build:%s", app, s.args, app)
-		}
+			if strings.Join(s.args, " ") != "run build:"+app {
+				t.Errorf("%s is built with %v, want npm run build:%s", app, s.args, app)
+			}
 
-		if s.dir != filepath.Join("/repo", presentationDir) {
-			t.Errorf("%s is built in %q, want the presentation directory", app, s.dir)
-		}
+			if s.dir != filepath.Join("/repo", presentationDir) {
+				t.Errorf("%s is built in %q, want the presentation directory", app, s.dir)
+			}
 
-		if !contains(s.env, "RDIO_VERSION=8.0.0+gdb79311") {
-			t.Errorf("%s is built with env %v, which does not carry the resolved version", app, s.env)
-		}
+			if !contains(s.env, c.env) {
+				t.Errorf("%s: %s is built with env %v, which does not carry %s", c.name, app, s.env, c.env)
+			}
 
-		// each application writes into the bundle directory of the Go package that
-		// embeds it, and the step records that destination as its result.
-		if s.result != appBundle[app] {
-			t.Errorf("%s leaves behind %q, want the bundle of the package that embeds it", app, s.result)
+			// each application writes into the bundle directory of the Go package that
+			// embeds it, and the step records that destination as its result.
+			if s.result != appBundle[app] {
+				t.Errorf("%s leaves behind %q, want the bundle of the package that embeds it", app, s.result)
+			}
 		}
 	}
 }

@@ -51,6 +51,19 @@ func theVersion(t *testing.T) buildinfo.Version {
 	return version
 }
 
+// thePrerelease is the version a plan is composed for when the operator asked for a name and
+// the tree had nothing uncommitted: the shape a prerelease that stands on its own has.
+func thePrerelease(t *testing.T) buildinfo.Version {
+	t.Helper()
+
+	version, err := buildinfo.Derive("8.0.0", "", "db79311", "beta1", false)
+	if err != nil {
+		t.Fatalf("Derive: %v", err)
+	}
+
+	return version
+}
+
 func contains(haystack []string, needle string) bool {
 	for _, s := range haystack {
 		if s == needle {
@@ -68,46 +81,89 @@ func TestTheServerBuildCarriesTheResolvedVersionInTheLinkerFlags(t *testing.T) {
 		t.Fatalf("parseArgs: %v", err)
 	}
 
-	s := serverStep(o, "/repo", theVersion(t))
+	for _, c := range []struct {
+		name    string
+		version func(*testing.T) buildinfo.Version
+		want    string
+	}{
+		{
+			name:    "a development build",
+			version: theVersion,
+			want:    "go build -ldflags -s -w -X main.Version=8.0.0+gdb79311 -o " + defaultOutputPath("") + " ./cmd/rdio-scanner",
+		},
+		{
+			name:    "a prerelease of a committed tree",
+			version: thePrerelease,
+			want:    "go build -ldflags -s -w -X main.Version=8.0.0-beta1 -o " + defaultOutputPath("") + " ./cmd/rdio-scanner",
+		},
+	} {
+		s := serverStep(o, "/repo", c.version(t))
 
-	want := "go build -ldflags -s -w -X main.Version=8.0.0+gdb79311 -o " + defaultOutputPath("") + " ./cmd/rdio-scanner"
-	got := strings.Join(append([]string{s.name}, s.args...), " ")
-	if got != want {
-		t.Errorf("the server is built with\n  %s\nwant\n  %s", got, want)
-	}
+		got := strings.Join(append([]string{s.name}, s.args...), " ")
+		if got != c.want {
+			t.Errorf("%s is built with\n  %s\nwant\n  %s", c.name, got, c.want)
+		}
 
-	if s.dir != "/repo" {
-		t.Errorf("the server is built in %q, want the repository root", s.dir)
+		if s.dir != "/repo" {
+			t.Errorf("the server is built in %q, want the repository root", s.dir)
+		}
 	}
 }
 
 // the container step tags the image with the resolved version and latest.
 func TestTheContainerStepTagsTheImageWithTheVersionTheRunResolved(t *testing.T) {
-	s := containerStep(options{}, "/repo", theVersion(t), theMoment, podmanProgram)
+	for _, c := range []struct {
+		name    string
+		version func(*testing.T) buildinfo.Version
+		args    []string
+		result  string
+	}{
+		{
+			name:    "a development build",
+			version: theVersion,
+			args: []string{
+				"build",
+				"--pull",
+				"-f", "Containerfile",
+				"--build-arg", "VERSION=8.0.0+gdb79311",
+				"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+				"-t", "rdio-scanner:8.0.0-gdb79311",
+				"-t", "rdio-scanner:latest",
+				".",
+			},
+			result: "rdio-scanner:8.0.0-gdb79311",
+		},
+		{
+			name:    "a prerelease of a committed tree",
+			version: thePrerelease,
+			args: []string{
+				"build",
+				"--pull",
+				"-f", "Containerfile",
+				"--build-arg", "VERSION=8.0.0-beta1",
+				"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+				"-t", "rdio-scanner:8.0.0-beta1",
+				"-t", "rdio-scanner:latest",
+				".",
+			},
+			result: "rdio-scanner:8.0.0-beta1",
+		},
+	} {
+		s := containerStep(options{}, "/repo", c.version(t), theMoment, podmanProgram)
 
-	want := []string{
-		"build",
-		"--pull",
-		"-f", "Containerfile",
-		"--build-arg", "VERSION=8.0.0+gdb79311",
-		"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
-		"-t", "rdio-scanner:8.0.0-gdb79311",
-		"-t", "rdio-scanner:latest",
-		".",
-	}
+		if strings.Join(s.args, " ") != strings.Join(c.args, " ") {
+			t.Errorf("%s: podman is asked to run\n  %v\nwant\n  %v", c.name, s.args, c.args)
+		}
 
-	if strings.Join(s.args, " ") != strings.Join(want, " ") {
-		t.Errorf("podman is asked to run\n  %v\nwant\n  %v", s.args, want)
-	}
-
-	if s.result != "rdio-scanner:8.0.0-gdb79311" {
-		t.Errorf("the run reports the image as %q, want the image named for the version the run resolved", s.result)
+		if s.result != c.result {
+			t.Errorf("%s: the run reports the image as %q, want the image named for the version the run resolved", c.name, s.result)
+		}
 	}
 }
 
 // the image tag is the version spelled the way an image tag's grammar allows.
 func TestTheImageTagIsTheVersionSpelledTheWayAnImageTagAllows(t *testing.T) {
-	for _, version := range []string{"8.0.0", "8.0.0+g1885b7e2", "8.0.0-rc1+g1885b7e2"} {
+	for _, version := range []string{"8.0.0", "8.0.0+g1885b7e2", "8.0.0-rc1+g1885b7e2", "8.0.0-beta1"} {
 		tag := imageTagFor(version)
 
 		if strings.Contains(tag, "+") {
@@ -123,6 +179,12 @@ func TestTheImageTagIsTheVersionSpelledTheWayAnImageTagAllows(t *testing.T) {
 		if tag != strings.Replace(version, "+", "-", 1) {
 			t.Errorf("the tag for %s is %q, want the version with the sign that introduces the git metadata written as a dash", version, tag)
 		}
+	}
+
+	// A version carrying no git metadata is already a tag: the name the operator
+	// asked for, standing on its own, is written into the image unchanged.
+	if tag := imageTagFor("8.0.0-beta1"); tag != "8.0.0-beta1" {
+		t.Errorf("the tag for 8.0.0-beta1 is %q, want 8.0.0-beta1: there is no git metadata in that version to rewrite", tag)
 	}
 }
 
