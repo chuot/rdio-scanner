@@ -291,6 +291,74 @@ func TestTheRunSaysWhatVersionItResolvedAndWhy(t *testing.T) {
 	}
 }
 
+// A prerelease name that kept its commit because the tree has uncommitted work
+// says so on the run's own log; a prerelease name that kept nothing says nothing.
+func TestTheRunExplainsAPrereleaseNameThatKeptItsCommit(t *testing.T) {
+	tl, out, _ := fakeRun(uncommitted, "")
+
+	if code := tl.run([]string{"client", "--pre", "beta1"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	named := []string{}
+
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		if strings.Contains(line, "beta1") && strings.Contains(line, "+g") && strings.Contains(line, "uncommitted") {
+			named = append(named, line)
+		}
+	}
+
+	if len(named) != 1 {
+		t.Fatalf("the run's log\n  %s\nholds %d lines naming the prerelease name, the commit part it kept, and the uncommitted tree; want exactly one",
+			out.String(), len(named))
+	}
+
+	tl, out, _ = fakeRun(development, "")
+
+	if code := tl.run([]string{"client", "--pre", "beta1"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		if strings.Contains(line, "beta1") && strings.Contains(line, "+g") {
+			t.Errorf("the log of a prerelease built from a committed tree says %q, and it kept no commit part to say anything about", line)
+		}
+	}
+}
+
+// The version subcommand answers the version alone even when the prerelease name
+// keeps its commit: one line, and no note beside it.
+func TestTheRunExplainsAPrereleaseNameInTheVersionSubcommandAlone(t *testing.T) {
+	for _, c := range []struct {
+		src  source
+		want string
+	}{
+		{src: development, want: "8.0.0-beta1"},
+		{src: uncommitted, want: "8.0.0-beta1+gdb79311"},
+	} {
+		tl, out, ran := fakeRun(c.src, "")
+
+		if code := tl.run([]string{"version", "--pre", "beta1"}, out); code != 0 {
+			t.Fatalf("commit %s dirty %v: exit code = %d, want 0", c.src.commit, c.src.dirty, code)
+		}
+
+		if len(*ran) != 0 {
+			t.Errorf("commit %s dirty %v: the version subcommand ran %d steps, want none", c.src.commit, c.src.dirty, len(*ran))
+		}
+
+		lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+
+		if len(lines) != 1 {
+			t.Fatalf("commit %s dirty %v: the version subcommand printed %d lines:\n  %s\nwant the version and nothing else",
+				c.src.commit, c.src.dirty, len(lines), out.String())
+		}
+
+		if lines[0] != c.want {
+			t.Errorf("commit %s dirty %v: the version subcommand printed %q, want %q", c.src.commit, c.src.dirty, lines[0], c.want)
+		}
+	}
+}
+
 // A dist run builds the applications once, then each target's ffmpeg serially, then every
 // target's compile and archive at once; the ordering rules live.
 func TestADistRunBuildsTheApplicationsOnceThenEveryFfmpegThenTheTargetsAtOnce(t *testing.T) {
@@ -716,6 +784,30 @@ func TestADistRunRefusesATreeWithUncommittedChanges(t *testing.T) {
 	}
 }
 
+// A prerelease name does not soften the release refusal: a release run asked to
+// package an uncommitted tree stops before it builds anything.
+func TestADistRunAskedForAPrereleaseStillRefusesAnUncommittedTree(t *testing.T) {
+	tl, out, ran := fakeRun(uncommitted, "")
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"dist", "--pre", "beta1"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1: a release run asked to package a tree that is not committed", code)
+	}
+
+	for _, want := range []string{"cmd/build/build.go", "--allow-dirty"} {
+		if !strings.Contains(errout.String(), want) {
+			t.Errorf("the refusal %q does not name %s, which is what the operator needs to fix it", errout.String(), want)
+		}
+	}
+
+	if len(*ran) != 0 {
+		t.Errorf("the run built %d steps after refusing the tree: %v", len(*ran), *ran)
+	}
+}
+
 // A run that used the override says on its own log that the release is built from an
 // uncommitted tree.
 func TestADistRunBuiltFromAnUncommittedTreeSaysSo(t *testing.T) {
@@ -943,6 +1035,53 @@ func TestADistRunRemovesTheArchivesOfTheVersionsItDidNotRelease(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(repo, path)); err != nil {
 			t.Errorf("the release run removed %s, and it is not an archive of a version it did not release: %v", path, err)
 		}
+	}
+}
+
+// A release run asked for a prerelease name writes the archive that name names, and
+// prunes the release folder by the same name it wrote.
+func TestADistRunAskedForAPrereleaseNamesItsArchivesAndPrunesByThatName(t *testing.T) {
+	repo := t.TempDir()
+
+	// The release folder fixtures: the plain version's archive for the target this run
+	// builds, and this prerelease's archive for a target it does not build.
+	writeRepoFile(t, repo, "dist/rdio-scanner-linux-amd64-v8.0.0.zip", "the archive of the release this prerelease stands beside")
+	writeRepoFile(t, repo, "dist/rdio-scanner-linux-arm64-v8.0.0-beta1.zip", "the archive of this prerelease, for a target this run is not building")
+
+	tl, out, _ := fakeRun(development, "")
+
+	tl.repo = repo
+	tl.archive = func(path string, files []archiveFile) error {
+		return writeArchive(filepath.Join(repo, path), files)
+	}
+
+	if code := tl.run([]string{"dist", "linux-amd64", "--pre", "beta1"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	for _, path := range []string{
+		"dist/rdio-scanner-linux-amd64-v8.0.0-beta1.zip",
+		"dist/rdio-scanner-linux-arm64-v8.0.0-beta1.zip",
+	} {
+		if _, err := os.Stat(filepath.Join(repo, path)); err != nil {
+			t.Errorf("the release folder holds no %s, and it is an archive of the version the run released: %v\nthe run wrote\n  %s",
+				path, err, out.String())
+		}
+	}
+
+	if _, err := os.Stat(filepath.Join(repo, "dist/rdio-scanner-linux-amd64-v8.0.0-beta1+gdb79311.zip")); err == nil {
+		t.Errorf("the release run named an archive for the prerelease of a committed tree by a commit part that version does not carry:\n  %s",
+			out.String())
+	}
+
+	path := "dist/rdio-scanner-linux-amd64-v8.0.0.zip"
+
+	if _, err := os.Stat(filepath.Join(repo, path)); err == nil {
+		t.Errorf("%s survived a run that released 8.0.0-beta1, and it is an archive of a version the run did not release", path)
+	}
+
+	if !strings.Contains(out.String(), path) {
+		t.Errorf("the run's log %q does not name the removal of %s", out.String(), path)
 	}
 }
 

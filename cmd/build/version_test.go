@@ -269,6 +269,78 @@ func TestReadSourceReportsADirtyWorkingTreeWithoutLettingItIntoTheVersion(t *tes
 	}
 }
 
+// A prerelease name asked for on a tree with nothing uncommitted answers the
+// prerelease alone: there is no half-committed work to tell a reader about.
+func TestReadSourceOnACommittedTreeAskedForAPrereleaseNamesNoCommit(t *testing.T) {
+	dir := scratchRepository(t, "")
+	writeScratchVersionFile(t, dir, "8.0.0\n")
+
+	src, err := readSource(dir)
+	if err != nil {
+		t.Fatalf("reading a scratch repository with nothing uncommitted: %v", err)
+	}
+
+	if src.dirty {
+		t.Fatalf("the scratch repository reports an uncommitted tree, so this test is not reading the tree it names")
+	}
+
+	version, err := buildinfo.Derive(src.core, src.tag, src.commit, "beta1", src.dirty)
+	if err != nil {
+		t.Fatalf("deriving a prerelease of a scratch repository with nothing uncommitted: %v", err)
+	}
+
+	if version.String() != "8.0.0-beta1" {
+		t.Errorf("version = %q, want 8.0.0-beta1: the prerelease of a committed tree names no commit", version.String())
+	}
+
+	if version.Commit() != "" {
+		t.Errorf("Commit() = %q, want no commit carried by a prerelease of a committed tree", version.Commit())
+	}
+}
+
+// A prerelease name asked for on a tree with uncommitted work keeps the commit
+// part, because the work the version names is not the whole tree it was built from.
+func TestReadSourceOnAnUncommittedTreeAskedForAPrereleaseKeepsTheCommit(t *testing.T) {
+	dir := scratchRepository(t, "")
+	writeScratchVersionFile(t, dir, "8.0.0\n")
+
+	// The commit git answers before the tree is dirtied is the commit the version has to keep.
+	before, err := readSource(dir)
+	if err != nil {
+		t.Fatalf("reading the scratch repository before it has uncommitted changes: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "uncommitted.txt"), []byte("not committed\n"), 0o644); err != nil {
+		t.Fatalf("making the working tree dirty: %v", err)
+	}
+
+	src, err := readSource(dir)
+	if err != nil {
+		t.Fatalf("reading a scratch repository with uncommitted changes: %v", err)
+	}
+
+	if !src.dirty {
+		t.Fatal("an uncommitted file is not reported as a dirty working tree")
+	}
+
+	if src.commit != before.commit {
+		t.Fatalf("commit = %q, want the %q git answered for the same commit before the tree was dirtied", src.commit, before.commit)
+	}
+
+	version, err := buildinfo.Derive(src.core, src.tag, src.commit, "beta1", src.dirty)
+	if err != nil {
+		t.Fatalf("deriving a prerelease of a scratch repository with uncommitted changes: %v", err)
+	}
+
+	if version.String() != "8.0.0-beta1+g"+src.commit {
+		t.Errorf("version = %q, want 8.0.0-beta1+g%s: the prerelease of uncommitted work keeps its commit", version.String(), src.commit)
+	}
+
+	if version.Commit() != src.commit {
+		t.Errorf("Commit() = %q, want the %s git answered for the commit the version names", version.Commit(), src.commit)
+	}
+}
+
 // readSource reports an undeclared version as assumed: a repository
 // with no VERSION.txt has not said what version it is.
 func TestReadSourceReportsAVersionTheRepositoryNeverDeclaredAsAssumed(t *testing.T) {
