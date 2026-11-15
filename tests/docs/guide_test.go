@@ -1376,6 +1376,47 @@ func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 	}
 }
 
+// the guide states the question the administration page asks when it finds a new version, in the
+// chapter an operator is already reading when the question appears, and states in the
+// troubleshooting chapter why a page opened over an address the browser will not give a worker
+// never asks.
+func TestTheGuideSaysTheAdministrationPageAsksBeforeItUsesANewVersion(t *testing.T) {
+	body := guidePath(t)
+
+	places := []struct {
+		chapter string
+		need    []string
+	}{
+		{
+			chapter: "ch-08-administration-interface",
+			need: []string{
+				"New version available",
+				"A new version of the administration interface is available. Would you like to reload the page?",
+				"No keeps what you have open for now, and the page asks again next time.",
+				"Yes reloads the page, and the new version starts.",
+			},
+		},
+		{
+			chapter: "ch-25-troubleshooting",
+			need: []string{
+				"The administration page did not ask about a new version",
+				"The question comes from the page's own worker",
+				"registers no worker, so it never finds a new version and never asks",
+			},
+		},
+	}
+
+	for _, p := range places {
+		text := words(chapterOf(t, body, p.chapter))
+
+		for _, want := range p.need {
+			if !strings.Contains(text, want) {
+				t.Errorf("the guide's chapter %q never says %q", p.chapter, want)
+			}
+		}
+	}
+}
+
 // the guide names which machine compiles each archive's ffmpeg, the container route for
 // every target, and what the build reads instead of running.
 func TestTheGuideSaysWhereTheFfmpegIsCompiledAndWhatTheBuildReadsInsteadOfRunning(t *testing.T) {
