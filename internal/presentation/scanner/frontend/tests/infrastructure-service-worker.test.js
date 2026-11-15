@@ -8,6 +8,18 @@ import { describe, it } from 'node:test';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const origin = 'https://rdio.example';
+const workerPath = join(here, '..', 'infrastructure', 'service-worker.js');
+
+/** The names the scanner build precaches, injected the way the build injects them. */
+const manifestSource = () =>
+    readFileSync(workerPath, 'utf8').replace(
+        '/* @precache-manifest */',
+        `const PRECACHE_MANIFEST = ${JSON.stringify(
+            ['/index.html', '/manifest.webmanifest', '/sw.js', '/favicon.ico', '/main.AAA1111.js', '/main.BBB2222.css'],
+            null,
+            4,
+        )};`,
+    );
 
 /**
  * The worker is a script for a browser's worker global scope, not a module: it has no exports, and the
@@ -16,17 +28,31 @@ const origin = 'https://rdio.example';
  *
  * `calls` records the order the worker reached for the network and for the cache, which is the only
  * visible difference between the two strategies the fetch handler has.
+ *
+ * `clients` and `cacheNames` name the pages the worker was told about and the caches already on the
+ * origin, because what the worker does with those is a reading about which pages and which caches belong
+ * to the other application.
  */
-function loadWorker() {
+function loadWorker({ clients = [], cacheNames = [], active = null } = {}) {
     const listeners = {};
     const calls = [];
+    const announcements = [];
+    const deletions = [];
 
     const context = {
         self: {
             location: { origin },
             addEventListener: (type, handler) => (listeners[type] ??= []).push(handler),
-            registration: { update: () => {} },
-            clients: { claim: async () => {}, matchAll: async () => [] },
+            registration: { active, update: () => {} },
+            skipWaiting: () => {},
+            clients: {
+                claim: async () => {},
+                matchAll: async () =>
+                    clients.map((path) => ({
+                        url: origin + path,
+                        postMessage: (data) => announcements.push({ to: origin + path, data }),
+                    })),
+            },
         },
 
         // The worker schedules its own update check; a test does not need a live timer for it.
@@ -51,14 +77,16 @@ function loadWorker() {
                 },
                 put: async () => {},
             }),
-            keys: async () => [],
-            delete: async () => {},
+            keys: async () => [...cacheNames],
+            delete: async (name) => {
+                deletions.push(name);
+            },
         },
     };
 
-    vm.runInNewContext(readFileSync(join(here, '..', 'infrastructure', 'service-worker.js'), 'utf8'), context);
+    vm.runInNewContext(manifestSource(), context);
 
-    return { listeners, calls };
+    return { listeners, calls, announcements, deletions };
 }
 
 /** ask hands the worker one fetch event and reports whether it answered, and in what order. */
@@ -80,6 +108,17 @@ async function ask(worker, path, { method = 'GET', mode } = {}) {
     await Promise.allSettled(answered);
 
     return { intercepted: answered.length > 0, calls: worker.calls };
+}
+
+/** fire runs every handler the worker registered for one event, and waits for what it waited for. */
+async function fire(worker, type, event = {}) {
+    const waited = [];
+
+    for (const handler of worker.listeners[type] ?? []) {
+        handler({ ...event, waitUntil: (promise) => waited.push(promise) });
+    }
+
+    await Promise.allSettled(waited);
 }
 
 describe('scanner/sw — the paths the worker leaves alone', async () => {
@@ -144,5 +183,50 @@ describe('scanner/sw — the paths the worker answers', async () => {
             assert.equal(intercepted, true, `${path} was not answered`);
             assert.equal(calls[0], 'network', `${path} was treated as a cached asset`);
         }
+    });
+});
+
+describe('scanner/sw — the update it announces', () => {
+    it('registers the handler that answers the accepted update once', () => {
+        // The name every version of the worker shares cannot tell one registration of a handler from two,
+        // so the count is read where it is written.
+        const handlers = readFileSync(workerPath, 'utf8').match(/addEventListener\('message'/g) ?? [];
+
+        assert.equal(
+            handlers.length,
+            1,
+            `the worker registers a message handler ${handlers.length} times, and only one of them is asked for`,
+        );
+    });
+
+    it("announces the new version to the pages it serves, and not to the administration application's page", async () => {
+        const worker = loadWorker({
+            clients: ['/', '/logs', '/admin/', '/admin/systems/edit'],
+            active: { scriptURL: `${origin}/sw.js` },
+        });
+
+        await fire(worker, 'install');
+
+        assert.deepEqual(
+            worker.announcements.map((one) => new URL(one.to).pathname),
+            ['/', '/logs'],
+            'the worker told a page the administration application holds, which is a question the operator was never asked to answer there',
+        );
+    });
+});
+
+describe('scanner/sw — the caches it leaves on the origin', () => {
+    it('keeps the administration application cache and its own, and deletes every other name', async () => {
+        const worker = loadWorker({
+            cacheNames: ['rdio-scanner-static', 'rdio-admin-static', 'rdio-scanner-static.old'],
+        });
+
+        await fire(worker, 'activate');
+
+        assert.deepEqual(
+            worker.deletions,
+            ['rdio-scanner-static.old'],
+            `the worker deleted ${JSON.stringify(worker.deletions)} of the caches it was asked to leave on the origin`,
+        );
     });
 });
