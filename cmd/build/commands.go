@@ -432,7 +432,9 @@ type step struct {
 
 // serverStep composes the server binary for the run's target, last
 // because it embeds both applications and that target's ffmpeg;
-// the version arrives through the linker, the target through goos.
+// the version arrives through the linker, the target through goos,
+// and source paths are trimmed to the module they belong to, so the
+// binary names no folder of the machine that compiled it.
 func serverStep(o options, repo string, version buildinfo.Version) step {
 	target := o.target
 	if target == "" {
@@ -448,6 +450,7 @@ func serverStep(o options, repo string, version buildinfo.Version) step {
 		name:   "go",
 		args: []string{
 			"build",
+			"-trimpath",
 			"-ldflags", "-s -w -X main.Version=" + version.String(),
 			"-o", o.output,
 			"./cmd/rdio-scanner",
