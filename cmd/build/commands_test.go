@@ -89,12 +89,12 @@ func TestTheServerBuildCarriesTheResolvedVersionInTheLinkerFlags(t *testing.T) {
 		{
 			name:    "a development build",
 			version: theVersion,
-			want:    "go build -ldflags -s -w -X main.Version=8.0.0+gdb79311 -o " + defaultOutputPath("") + " ./cmd/rdio-scanner",
+			want:    "go build -trimpath -ldflags -s -w -X main.Version=8.0.0+gdb79311 -o " + defaultOutputPath("") + " ./cmd/rdio-scanner",
 		},
 		{
 			name:    "a prerelease of a committed tree",
 			version: thePrerelease,
-			want:    "go build -ldflags -s -w -X main.Version=8.0.0-beta1 -o " + defaultOutputPath("") + " ./cmd/rdio-scanner",
+			want:    "go build -trimpath -ldflags -s -w -X main.Version=8.0.0-beta1 -o " + defaultOutputPath("") + " ./cmd/rdio-scanner",
 		},
 	} {
 		s := serverStep(o, "/repo", c.version(t))
@@ -262,6 +262,59 @@ func TestTheContainerfileNamesItsBaseImageByVersionAndCarriesTheImageLabels(t *t
 		if !strings.Contains(contents, "LABEL "+label[0]+`"`+`$`+label[1]+`"`) {
 			t.Errorf("the Containerfile's %s label does not read the %s build argument", strings.TrimSuffix(label[0], "="), label[1])
 		}
+	}
+}
+
+// the Containerfile compiles the server with the posture the build tool composes, so the image a
+// container host runs and the archive a release ships are built the same way.
+func TestTheContainerfileCompilesTheServerTheWayTheBuildToolDoes(t *testing.T) {
+	text, err := os.ReadFile(filepath.Join("..", "..", "Containerfile"))
+	if err != nil {
+		t.Fatalf("reading the Containerfile: %v", err)
+	}
+
+	compile := ""
+
+	for _, line := range strings.Split(string(text), "\n") {
+		if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "go build ") {
+			compile = trimmed
+
+			break
+		}
+	}
+
+	if compile == "" {
+		t.Fatal("the Containerfile has no go build line, so nothing here holds how the image compiles the server")
+	}
+
+	if !strings.Contains(compile, " -trimpath ") {
+		t.Errorf("the Containerfile compiles the server as %q, which does not ask the compiler to record source paths without the folders of the machine it ran on", compile)
+	}
+
+	// the trimming flag is a build argument, and the quoted linker value is not where the compiler takes it.
+	_, linker, found := strings.Cut(compile, `"`)
+	if !found {
+		t.Fatalf("the Containerfile compiles the server as %q, which passes no quoted value to -ldflags", compile)
+	}
+
+	flags, _, found := strings.Cut(linker, `"`)
+	if !found {
+		t.Fatalf("the Containerfile compiles the server as %q, whose -ldflags value is not closed", compile)
+	}
+
+	for _, want := range []string{"-s", "-w", "-X main.Version=$VERSION"} {
+		if !strings.Contains(flags, want) {
+			t.Errorf("the Containerfile links the server with %q, which does not carry %s", flags, want)
+		}
+	}
+
+	if strings.Contains(flags, "-trimpath") {
+		t.Errorf("the Containerfile links the server with %q, which carries the trimming flag inside the linker flags, where the compiler does not take it", flags)
+	}
+
+	// the version arrives through the build argument, so the line does not go stale with the release.
+	if literal := regexp.MustCompile(`main\.Version=[^$]`).FindString(compile); literal != "" {
+		t.Errorf("the Containerfile stamps the version with %q, which is a literal version rather than the VERSION build argument", literal)
 	}
 }
 
@@ -439,7 +492,8 @@ func TestTheAllowDirtyFlagIsAcceptedOnlyByTheReleaseRun(t *testing.T) {
 }
 
 // the shipped server binary is compiled static and stripped so it
-// runs on machines the release machine has never seen.
+// runs on machines the release machine has never seen, and the source paths it records name the module they
+// belong to rather than the folders of the machine that compiled it.
 func TestTheServerBinaryIsCompiledStaticAndStripped(t *testing.T) {
 	o, err := parseArgs([]string{"server"})
 	if err != nil {
@@ -464,6 +518,14 @@ func TestTheServerBinaryIsCompiledStaticAndStripped(t *testing.T) {
 		if !strings.Contains(flags, want) {
 			t.Errorf("the server is linked with %q, which does not carry %s", flags, want)
 		}
+	}
+
+	if !contains(s.args, "-trimpath") {
+		t.Errorf("the server is built with %v, which does not ask the compiler to record source paths without the folders of the machine it ran on", s.args)
+	}
+
+	if strings.Contains(flags, "-trimpath") {
+		t.Errorf("the server is linked with %q, which carries the trimming flag inside the linker flags, where the compiler does not take it", flags)
 	}
 }
 
