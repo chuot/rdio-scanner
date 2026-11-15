@@ -518,31 +518,88 @@ footer.site .signoff {
 
   <p>
     Version 7 was assembled but never published, so the jump from version 6.6.3 lands on version 7 and
-    version 8 together. The table lists what changed since version 6.6.3 — only what changes your work — and
-    names the chapter that operates each item. For the release-by-release record, read the project's change
-    log.
+    version 8 together. These groups list what changed since version 6.6.3 — only what changes your work —
+    and name the chapter that operates each one. For the release-by-release record, read the project's
+    change log.
   </p>
 
-  <table>
-    <caption>The changes since version 6.6.3, by what they touch</caption>
-    <thead><tr><th scope="col">Area</th><th scope="col">What changed</th><th scope="col">Chapter</th></tr></thead>
-    <tbody>
-      <tr><td>The log</td><td>Every entry names the part of the server that wrote it, and the log view filters on it. Messages no longer begin with the name of the internal function that wrote them. The view gained a subsystem filter, a text search, the clickable counts strip, and auto-refresh. Retention says what it removed, and says when it could not run. Lines that only ever went to the console are in the log now.</td><td><a href="#ch-14-logs">14</a></td></tr>
-      <tr><td>The database</td><td>A new schema, and four dialects: SQLite, MariaDB, MySQL, and PostgreSQL. The first start on a version 6.6.3 database migrates it in place, announces each table, and copies what it cannot carry into the migration archive instead of throwing it away.</td><td><a href="#ch-07-database">7</a>, <a href="#ch-24-upgrading-and-migrating">24</a></td></tr>
-      <tr><td>The administration interface</td><td>Rebuilt. Sections are edited as a working copy and written with the save bar; the conflict banner appears when another session saved the same section; the systems-and-talkgroups dialog scopes a credential; the OpenAPI section reads the contract the server publishes; the Tools section exports and imports the configuration, and imports a talkgroup or unit list per system.</td><td><a href="#ch-08-administration-interface">8</a>, <a href="#ch-15-tools">15</a></td></tr>
-      <tr><td>Talkgroups, groups, and tags</td><td>A talkgroup belongs to many groups, which is why the tag toggle is gone. System and talkgroup types name the radio standard, and the AFS systems option is gone, replaced by the Provoice type. Alert tones and LED colours are set at group, tag, system, and talkgroup level, with the group winning. Calls are delayed per system and per talkgroup.</td><td><a href="#ch-11-systems-sites-talkgroups-units">11</a>, <a href="#ch-12-groups-and-tags">12</a></td></tr>
-      <tr><td>Duplicate detection</td><td>Detection is built on the new schema, and the window is fixed: a second call landing on one system, talkgroup, and site within the fixed window counts as the first call.</td><td><a href="#ch-13-options">13</a></td></tr>
-      <tr><td>Getting audio in</td><td>The mask gained the unit label token, so a recorder that names the radio that transmitted names the unit the listener sees.</td><td><a href="#ch-10-getting-audio-in">10</a></td></tr>
-      <tr><td>Interfaces and APIs</td><td>The API was renewed with the older calls clients use kept working. The call history endpoints accept a listener's access code beside an administrator's session. The Model Context Protocol endpoint lets an assistant read a deployment, and write to it when it presents the administrator's credential.</td><td><a href="#ch-16-rest-api">16</a>, <a href="#ch-17-mcp-server">17</a></td></tr>
-      <tr><td>The release</td><td>The archive carries this guide as its operating documentation, with the ffmpeg licence as plain text beside the program.</td><td><a href="#ch-04-installation">4</a></td></tr>
-    </tbody>
-  </table>
+  <h4>The log</h4>
+  <ul>
+    <li>Every line says which part of the server wrote it, and a line no longer opens with the name of the
+        function that wrote it.</li>
+    <li>The log view gained a filter for the part of the server, a text search over the message, a strip of
+        counts showing how many lines each part wrote, and auto-refresh.
+        <a href="#ch-14-logs">Chapter 14</a> carries the parts of the server, the filters, and where to look
+        when something is wrong.</li>
+    <li>Retention says what it removed, and says when it could not run. Lines that only ever reached the
+        console are in the log now.</li>
+  </ul>
+
+  <h4>The database, and updating from version 6.6.3</h4>
+  <ul>
+    <li>The schema is new, and it runs on SQLite, MariaDB, MySQL, and PostgreSQL.
+        <a href="#ch-07-database">Chapter 7</a> covers the four and what the server writes into each.</li>
+    <li>The first start on a version 6.6.3 database carries your rows across by itself, naming each table as
+        it goes. A row the new structure has no place for is kept in the migration archive instead of being
+        thrown away; <a href="#ch-24-upgrading-and-migrating">chapter 24</a> walks the whole path and shows how
+        to read what was kept.</li>
+  </ul>
+
+  <h4>The administration interface</h4>
+  <ul>
+    <li>It is rebuilt. A section is edited as a working copy and written with the save bar, and the conflict
+        banner appears when another session saved the same section while you were editing.</li>
+    <li>The systems-and-talkgroups dialog scopes a credential, and the OpenAPI section reads the contract the
+        server publishes. <a href="#ch-08-administration-interface">Chapter 8</a> carries all three, and the
+        question the page asks before it uses a newer version.</li>
+    <li>The Tools section exports and imports the configuration, and imports a talkgroup or unit list for one
+        system. <a href="#ch-15-tools">Chapter 15</a> carries both.</li>
+  </ul>
+
+  <h4>Talkgroups, groups, and tags</h4>
+  <ul>
+    <li>A talkgroup belongs to many groups, which is why the tag toggle is gone.
+        <a href="#ch-12-groups-and-tags">Chapter 12</a> covers the groups and tags themselves.</li>
+    <li>System and talkgroup types name the radio standard, and the AFS systems option is gone, replaced by
+        the Provoice type. Alert tones and LED colours are set at group, tag, system, and talkgroup level,
+        with the group winning, and calls are delayed per system and per talkgroup.
+        <a href="#ch-11-systems-sites-talkgroups-units">Chapter 11</a> carries the types, which colour wins at
+        each level, and the delays.</li>
+  </ul>
+
+  <h4>Getting audio in, and how calls are filed</h4>
+  <ul>
+    <li>The mask gained the unit label token, so a recorder that names the radio that transmitted names the
+        unit the listener sees. <a href="#ch-10-getting-audio-in">Chapter 10</a> carries the mask tokens.</li>
+    <li>Duplicate detection is built on the new schema, and its window is fixed: a second call landing on one
+        system, talkgroup, and site inside the window counts as the first call.
+        <a href="#ch-13-options">Chapter 13</a> carries that window, and the audio conversion modes, including
+        the mode that stores a recording exactly as it arrived.</li>
+  </ul>
+
+  <h4>Interfaces other than the web pages</h4>
+  <ul>
+    <li>The API was renewed, and the older calls clients use kept working; the call history endpoints accept a
+        listener's access code beside an administrator's session.
+        <a href="#ch-16-rest-api">Chapter 16</a> tabulates the endpoints and the credential each takes.</li>
+    <li>The Model Context Protocol endpoint lets an assistant read a deployment, and write to it when it
+        presents the administrator's credential.
+        <a href="#ch-17-mcp-server">Chapter 17</a> carries what it reads and what it may change.</li>
+  </ul>
+
+  <h4>The release</h4>
+  <ul>
+    <li>Each archive unpacks flat: this guide as the operating documentation, the listener's guide, and the
+        ffmpeg licence as plain text, all beside the program.
+        <a href="#ch-04-installation">Chapter 4</a> names those files and the install path.</li>
+  </ul>
 
   <aside class="caution">
     <p>
-      Back up the database and the configuration file before updating. The migration carries every row
-      across, and an old table disappears only once all of its rows have been carried or archived. The first
-      start of the new server ends every open administrator session; expect to log in again.
+      Back up the database and the configuration file before updating. The migration rewrites your database
+      where it sits, carries every row across, and an old table disappears only once all of its rows have been
+      carried or archived. The first start of the new server ends every open administrator session; expect to
+      log in again.
       <a href="#ch-24-upgrading-and-migrating">Chapter 24</a> walks the whole path.
     </p>
   </aside>
