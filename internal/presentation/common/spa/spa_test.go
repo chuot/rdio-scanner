@@ -504,16 +504,19 @@ const (
 	scannerShellHTML = "<!doctype html>\n<html>\n<head><title>Rdio Scanner</title></head>\n<body><rdio-app></rdio-app></body>\n</html>\n"
 	adminShellHTML   = "<!doctype html>\n<html>\n<head><title>Rdio Scanner Administration</title></head>\n<body><rdio-admin></rdio-admin></body>\n</html>\n"
 	adminJS          = "export const admin = 'rdio-scanner-admin';\n"
+	adminWorkerJS    = "const CACHE_NAME = 'rdio-admin-static';\n"
 )
 
 // adminBundle is the file set a client build produces for the administration application:
-// a shell, a hashed module, a hashed stylesheet, and no service worker.
+// a shell, a hashed module, a hashed stylesheet, a copied web manifest, and a service
+// worker under its own unhashed name.
 func adminBundle() fstest.MapFS {
 	return fstest.MapFS{
 		"bundle/index.html":           &fstest.MapFile{Data: []byte(adminShellHTML)},
 		"bundle/main.AAA.js":          &fstest.MapFile{Data: []byte(adminJS)},
 		"bundle/main.BBB.css":         &fstest.MapFile{Data: []byte(appCSS)},
 		"bundle/manifest.webmanifest": &fstest.MapFile{Data: []byte(manifestText)},
+		"bundle/sw.js":                &fstest.MapFile{Data: []byte(adminWorkerJS)},
 	}
 }
 
@@ -533,6 +536,23 @@ func TestMountedBundleServesItsOwnFilesUnderTheMount(t *testing.T) {
 
 	if string(body) != adminJS {
 		t.Errorf("body = %q, want the admin module bytes", body)
+	}
+
+	// The worker script is a file the administration bundle carries, so the mount
+	// answers for it the way it answers for any other file in that bundle: its own
+	// bytes with the type a worker script needs, and not the shell a page needs.
+	status, header, body = getMounted(t, adminBundle(), "/admin", "/admin/sw.js", nil)
+
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want the worker script the admin bundle holds", status)
+	}
+
+	if got, _ := wireContentType(header); got != "text/javascript" {
+		t.Errorf("Content-Type = %q, want text/javascript with no charset", got)
+	}
+
+	if string(body) != adminWorkerJS {
+		t.Errorf("body = %q, want the admin worker bytes and not the administration shell", body)
 	}
 }
 
