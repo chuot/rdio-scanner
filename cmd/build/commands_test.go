@@ -1000,6 +1000,58 @@ func TestTheCompileGuideNamesTheContainerBuilderTheCompilesNeed(t *testing.T) {
 	}
 }
 
+// the compile guide says what the build tool asks the compiler to record
+// about a source file: the paths a shipped server binary carries are
+// rooted in the module that holds the file, the flag that makes it so is
+// named as the tool's own doing for every target a release writes, and a
+// server built without the tool is described as keeping the paths of the
+// machine it was built on.
+//
+// the guide is read whole, the way the test above reads it, and not
+// through theGuideSection: that helper stops only at the next `## `
+// heading, so a `### ` heading handed to it answers with everything from
+// there to the end of the file, and a test built on it would pass against
+// text it never read.
+func TestTheCompileGuideSaysWhatTheToolAsksTheCompilerToRecord(t *testing.T) {
+	path := filepath.Join("..", "..", "COMPILING.md")
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%s): %v", path, err)
+	}
+
+	guide := string(body)
+
+	if !strings.Contains(guide, "-trimpath") {
+		t.Fatal("the compile guide names no compile flag at all, so it never says what the tool asks the compiler to record about a source file")
+	}
+
+	// the flag is the tool's own: the guide does not offer it as a flag an operator has to add.
+	if typed := regexp.MustCompile("go build[^\n`]*-trimpath").FindString(guide); typed != "" {
+		t.Errorf("the compile guide shows %q, which is a flag an operator would have to add to a command the build tool already composes", typed)
+	}
+
+	paragraph := ""
+
+	for _, candidate := range strings.Split(guide, "\n\n") {
+		if strings.Contains(candidate, "-trimpath") {
+			paragraph = strings.ToLower(candidate)
+
+			break
+		}
+	}
+
+	if paragraph == "" {
+		t.Fatal("the compile guide names -trimpath only outside a paragraph of its own, where nothing says what the compiler records")
+	}
+
+	for _, want := range []string{"module", "build machine", "crash log", "documented", "every release target", "go build"} {
+		if !strings.Contains(paragraph, want) {
+			t.Errorf("the compile guide's passage about -trimpath never says %q, which is what tells a reader what the recorded paths name, for which binaries they do, and where the tool's own flag comes from", want)
+		}
+	}
+}
+
 // theGuideSection reads one section of the compile guide: the lines
 // under the heading named, up to the next heading of the same level.
 func theGuideSection(t *testing.T, heading string) string {
