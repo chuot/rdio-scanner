@@ -173,6 +173,10 @@ A repository with no `VERSION.txt` builds as `0.0.0`, which is a version no rele
 
 A server built with plain `go build`, without the tool, reports `dev` — in its banner as well as in `-version` — so nobody mistakes it for a release.
 
+### The paths a shipped binary records about its own source
+
+A server binary the tool compiles is compiled so that the source paths it records name the module they belong to rather than the folder a build machine keeps that module in. The compiler is asked for that with `-trimpath`, a documented flag of the toolchain, and the tool passes it for every release target it compiles a server for. Those recorded paths are what a panic trace and a crash log name, and a reader holding their own checkout can open the file such a trace names because it points at the module and not at one machine's home folder. A server built with plain `go build`, without the tool, keeps the paths of the machine that built it, because nothing there asks the compiler otherwise.
+
 ### The release matrix, and what a release run refuses
 
 `dist` alone builds the one archive the machine running it can run, which is what a developer builds to try what they just built. The eight-target matrix is a release, and asking for it is a deliberate act: `--all` is the flag that asks for it, and it belongs to `dist` and to nothing else. `--all` beside a named target is refused, and a machine whose platform is in no release target is refused naming `--all`.
