@@ -80,7 +80,11 @@ function loadWorker({ clients = [], cacheNames = [], stored = [], active = null,
             matchAll: async () =>
                 clients.map((path) => ({
                     url: new URL(path, location).href,
-                    postMessage: (data) => messages.push({ to: new URL(path, location).href, data }),
+                    // A client receives a copy of what a worker posted, not the worker's own object: the
+                    // message is copied across the boundary, so the copy is what a reading compares against.
+                    postMessage: (data) => {
+                        messages.push({ to: new URL(path, location).href, data: structuredClone(data) });
+                    },
                 })),
         },
     };
