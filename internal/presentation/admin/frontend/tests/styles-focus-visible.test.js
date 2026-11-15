@@ -1,9 +1,13 @@
 // tests for focus visibility: the cascade the keyboard gets
+import './dom-shim.js';
+
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { openDialog } from '../../../common/frontend/presentation/ui/primitives.js';
 
 // the focus indicator, proven in the stylesheets that draw it a
 // field-box ring may replace a control ring, but only paired with it.
@@ -135,6 +139,44 @@ function focusVisibleRules(name) {
         .filter((rule) => selectors(rule.selector).some((part) => part.includes(':focus-visible')));
 }
 
+function focusVisibleParts(name) {
+    return focusVisibleRules(name).flatMap((rule) => selectors(rule.selector));
+}
+
+function forcedFocusVisibleParts(name) {
+    return forcedColorRules(name).flatMap((block) => selectors(block.selector).filter((part) => part.includes(':focus-visible')));
+}
+
+// the class the declarations land on, and not a longer class that starts with it
+function namesClass(part, name) {
+    return new RegExp(`\\.${name}(?![-\\w])`).test(subject(part));
+}
+
+// the classes the dialog puts on the buttons it builds its answers with: the primitive
+// owns them, and only a rule naming one of them can draw a ring on such a button
+function dialogActionClasses() {
+    const dialog = openDialog({
+        title: 'New version available',
+        content: 'A new version of the administration interface is available. Would you like to reload the page?',
+        actions: [{ label: 'No' }, { label: 'Yes' }],
+    });
+
+    const bar = dialog.querySelector('.rdio-dialog-actions');
+    const buttons = (bar?.children ?? []).filter((node) => node.tag === 'button');
+
+    assert.equal(buttons.length, 2, 'the dialog action bar does not carry the two answers it was opened with');
+
+    const classes = new Set();
+
+    for (const button of buttons) {
+        for (const name of button.className.split(/\s+/).filter(Boolean)) classes.add(name);
+    }
+
+    dialog.close();
+
+    return [...classes];
+}
+
 // an entry: the control family, its stylesheet, and the proving selector shape
 const FAMILIES = [
     { family: 'navigation buttons', sheet: 'admin', part: (p) => p.includes('rdio-admin-nav') && p.includes('button') },
@@ -197,6 +239,27 @@ describe('focus indicators — the cascade the keyboard gets', () => {
         }
 
         assert.deepEqual(wrong, [], `the indicator is not the accent outline at a 2px offset: ${wrong.join(' | ')}`);
+    });
+
+    it('draws the ring on the class the dialog puts on the buttons it builds its answers with', () => {
+        const classes = dialogActionClasses();
+        const missing = [];
+
+        for (const [cascade, partsFor] of [['the cascade', focusVisibleParts], ['forced colours', forcedFocusVisibleParts]]) {
+            for (const name of classes) {
+                const covered = ['theme', 'admin', 'scanner'].some((sheet) =>
+                    partsFor(sheet).some((part) => namesClass(part, name) && part.includes('.rdio-dialog-actions')),
+                );
+
+                if (!covered) missing.push(`${cascade}: .rdio-dialog-actions .${name}:focus-visible`);
+            }
+        }
+
+        assert.deepEqual(
+            missing,
+            [],
+            `the dialog builds its answers as ${classes.map((name) => `.${name}`).join(' ')}; nothing draws their ring: ${missing.join(' | ')}`,
+        );
     });
 });
 

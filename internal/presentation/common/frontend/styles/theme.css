@@ -456,14 +456,19 @@ rdio-paginator {
 
    The ring is drawn on the control the keyboard is on, not on the field's wrapper: the wrapper is
    not what the operator is standing on, and a ring around a box that holds a label, a control, and a
-   message line says where the group is, not where the keyboard is. */
+   message line says where the group is, not where the keyboard is.
+
+   Each rule names the class the control actually carries. A dialog builds its two answers as
+   .rdio-button-mini, so the dialog's rule names that class: a rule naming another one leaves the
+   answers with nothing but the ring the browser draws on its own, which is not the theme's and sits
+   too close to the button's own fill to be read as the keyboard's place. */
 
 rdio-form-field input:focus-visible,
 rdio-form-field textarea:focus-visible,
 rdio-select select:focus-visible,
 rdio-toggle .rdio-toggle:focus-visible,
 rdio-paginator .rdio-button-mini:focus-visible,
-.rdio-dialog-actions .rdio-button:focus-visible,
+.rdio-dialog-actions .rdio-button-mini:focus-visible,
 .rdio-icon-button:focus-visible,
 a[href]:focus-visible {
   outline: 2px solid var(--rdio-accent);
@@ -539,7 +544,7 @@ a[href]:focus-visible {
   rdio-select select:focus-visible,
   rdio-toggle .rdio-toggle:focus-visible,
   rdio-paginator .rdio-button-mini:focus-visible,
-  .rdio-dialog-actions .rdio-button:focus-visible,
+  .rdio-dialog-actions .rdio-button-mini:focus-visible,
   .rdio-icon-button:focus-visible,
   a[href]:focus-visible {
     outline: 2px solid Highlight;
