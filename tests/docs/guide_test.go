@@ -380,11 +380,27 @@ func TestTheGuideClosesWithTheSignOff(t *testing.T) {
 	}
 }
 
-// the opening chapter tells an administrator coming from the last release what changed,
-// every change links to a chapter of this guide, and the summary says the database is
-// rewritten in place.
-func TestTheGuideTellsAVersion6AdministratorWhatChanged(t *testing.T) {
-	body := guidePath(t)
+// the opening chapter tells an administrator coming from the last release what
+// changed, in groups named after what each change touches, and each group names the
+// chapter that operates it.
+var changesGroups = []struct {
+	group    string
+	chapters []string
+}{
+	{"The log", []string{"ch-14-logs"}},
+	{"The database, and updating from version 6.6.3", []string{"ch-07-database", "ch-24-upgrading-and-migrating"}},
+	{"The administration interface", []string{"ch-08-administration-interface", "ch-15-tools"}},
+	{"Talkgroups, groups, and tags", []string{"ch-11-systems-sites-talkgroups-units", "ch-12-groups-and-tags"}},
+	{"Getting audio in, and how calls are filed", []string{"ch-10-getting-audio-in", "ch-13-options"}},
+	{"Interfaces other than the web pages", []string{"ch-16-rest-api", "ch-17-mcp-server"}},
+	{"The release", []string{"ch-04-installation"}},
+}
+
+// changesSection returns chapter 1's changes since version 6.6.3: from that heading to
+// the next heading of the same rank, so the checks hold over the groups and the caution
+// that closes them and over nothing else in the chapter.
+func changesSection(t *testing.T, body string) string {
+	t.Helper()
 
 	chapter := chapterOf(t, body, "ch-01-overview")
 
@@ -397,29 +413,128 @@ func TestTheGuideTellsAVersion6AdministratorWhatChanged(t *testing.T) {
 		t.Fatalf("the opening chapter does not carry the changes since version 6.6.3")
 	}
 
-	section := chapter[start:]
+	rest := chapter[start:]
 
-	links := regexp.MustCompile(`(?i)href="([^"]+)"`).FindAllStringSubmatch(section, -1)
-
-	if len(links) < 5 {
-		t.Fatalf("the changes since version 6.6.3 name %d chapters, want the changes to be operable", len(links))
+	if end := strings.Index(rest, "<h3>"); end >= 0 {
+		return rest[:end]
 	}
 
-	for _, m := range links {
-		href := m[1]
+	return rest
+}
 
-		if !strings.HasPrefix(href, "#") {
-			t.Errorf("the changes since version 6.6.3 point at %q, outside the document", href)
+// changesGroupBlocks returns the heading of each group of the changes section and the
+// text that sits under it, up to the next group heading.
+func changesGroupBlocks(section string) (headings, bodies []string) {
+	groups := regexp.MustCompile(`(?is)<h4\b[^>]*>(.*?)</h4>`).FindAllStringSubmatchIndex(section, -1)
 
-			continue
+	for i, m := range groups {
+		end := len(section)
+		if i+1 < len(groups) {
+			end = groups[i+1][0]
 		}
 
-		if !strings.Contains(body, `id="`+strings.TrimPrefix(href, "#")+`"`) {
-			t.Errorf("the changes since version 6.6.3 point at %q, which the document does not carry", href)
+		headings = append(headings, strings.TrimSpace(stripTags(section[m[2]:m[3]])))
+		bodies = append(bodies, section[m[1]:end])
+	}
+
+	return headings, bodies
+}
+
+// chapterNumber reads the number an in-document chapter anchor carries, so a link can
+// be read against the way the guide names that chapter in its sentences.
+func chapterNumber(id string) string {
+	m := regexp.MustCompile(`^ch-0*(\d+)`).FindStringSubmatch(id)
+	if m == nil {
+		return ""
+	}
+
+	return m[1]
+}
+
+func TestTheGuideTellsAVersion6AdministratorWhatChanged(t *testing.T) {
+	body := guidePath(t)
+
+	section := changesSection(t, body)
+
+	if strings.Contains(strings.ToLower(section), "<table") {
+		t.Errorf("the changes since version 6.6.3 are tabulated, where a reader has to scan rows and cells to find one change")
+	}
+
+	headings, blocks := changesGroupBlocks(section)
+
+	want := []string{}
+	for _, group := range changesGroups {
+		want = append(want, group.group)
+	}
+
+	if !slices.Equal(headings, want) {
+		t.Fatalf("the changes since version 6.6.3 carry the groups %q, want %q", headings, want)
+	}
+
+	linksAt := regexp.MustCompile(`(?i)href="([^"]+)"`)
+	linkTexts := regexp.MustCompile(`(?is)<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>`)
+
+	for i, group := range changesGroups {
+		block := blocks[i]
+
+		links := linksAt.FindAllStringSubmatch(block, -1)
+		if len(links) == 0 {
+			t.Errorf("the group %q names no chapter to operate what it states", group.group)
+		}
+
+		pointed := map[string]bool{}
+
+		for _, m := range links {
+			href := m[1]
+
+			if !strings.HasPrefix(href, "#") {
+				t.Errorf("the group %q points at %q, outside the document", group.group, href)
+
+				continue
+			}
+
+			id := strings.TrimPrefix(href, "#")
+
+			if !strings.Contains(body, `id="`+id+`"`) {
+				t.Errorf("the group %q points at %q, which the document does not carry", group.group, href)
+
+				continue
+			}
+
+			pointed[id] = true
+		}
+
+		for _, id := range group.chapters {
+			if !pointed[id] {
+				t.Errorf("the group %q does not point at chapter %s, which carries what it states", group.group, chapterNumber(id))
+			}
+		}
+
+		// A link read out of context has to say where it lands, so the chapter number
+		// sits in the link's own words or in the sentence the link rides in.
+		sentence := strings.ToLower(stripTags(block))
+
+		for _, m := range linkTexts.FindAllStringSubmatch(block, -1) {
+			number := chapterNumber(strings.TrimPrefix(m[1], "#"))
+			if number == "" {
+				continue
+			}
+
+			text := strings.TrimSpace(stripTags(m[2]))
+
+			if text == "" || text == number {
+				t.Errorf("the group %q links chapter %s with %q, which names no destination", group.group, number, text)
+
+				continue
+			}
+
+			if !strings.Contains(strings.ToLower(text), "chapter "+number) && !strings.Contains(sentence, "chapter "+number) {
+				t.Errorf("the group %q links %q without naming chapter %s beside it", group.group, text, number)
+			}
 		}
 	}
 
-	for _, cost := range []string{"Back up", "migrates it in place", "session"} {
+	for _, cost := range []string{"Back up", "rewrites your database", "session", "log in again"} {
 		if !strings.Contains(section, cost) {
 			t.Errorf("the changes since version 6.6.3 do not name the update's cost: %q is missing", cost)
 		}
