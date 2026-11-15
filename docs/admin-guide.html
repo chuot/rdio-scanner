@@ -1505,6 +1505,26 @@ bcrypt_cost = 12</code></pre>
     <figcaption>The Options section at 420 CSS pixels: the navigation moves above the content, and the controls stack. The interface is usable from a phone in front of a rack.</figcaption>
   </figure>
 
+  <h3>What the page asks when a new version is waiting</h3>
+
+  <p>
+    From time to time the operator puts up a new version of the administration page. When the page you
+    have open finds the new one, it asks before it uses it. Its title reads <code>New version
+    available</code>, and its question reads:
+  </p>
+
+  <p>
+    <code>A new version of the administration interface is available. Would you like to reload the
+    page?</code>
+  </p>
+
+  <p>
+    Two buttons answer the question. <code>No</code> keeps what you have open for now, and the page asks
+    again next time. <code>Yes</code> reloads the page, and the new version starts. Nothing is answered
+    for you: the page you have open keeps working until you choose, and a <code>No</code> leaves unsaved
+    edits in the section you were editing exactly where you left them.
+  </p>
+
   <h3>The container changes one thing</h3>
 
   <p>
@@ -4344,6 +4364,24 @@ $ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
     will not let a save silently overwrite what it has. Read the section as the server has it now, make
     your changes in that copy, and save again. Two people editing one section at once is the situation
     the banner exists for, and it tells you before your work is written over, not after.
+  </p>
+
+  <h3>The administration page did not ask about a new version</h3>
+
+  <p>
+    The question comes from the page's own worker, and a browser gives a page a worker only over an address it
+    treats as secure: <code>https</code>, or plain <code>http</code> on the machine the page is opened on, such
+    as <code>http://localhost:3000/admin/</code>. Opened over a plain address on another host, such as
+    <code>http://HOST:3000/admin/</code>, the administration page registers no worker, so it never finds a new
+    version and never asks — it serves what the server answers whenever the page is opened.
+  </p>
+
+  <p>
+    No setting on the server decides whether the question appears, and there is no switch to turn on. Close the
+    tab and open the page again through the secure address: the page registers its worker, and from then on a
+    new version is announced the way <a href="#ch-08-administration-interface">chapter 8</a> describes it.
+    <a href="#ch-19-tls">Chapter 19</a> is where an <code>https</code> listener is set up, and the same rule
+    explains a listener page that never asks either.
   </p>
 </section>
 
