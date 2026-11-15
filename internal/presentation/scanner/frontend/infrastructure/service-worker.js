@@ -27,6 +27,10 @@
 
 const CACHE_NAME = 'rdio-scanner-static';
 
+// The administration application's cache is that application's worker's to
+// manage; this activation leaves it on the origin.
+const ADMIN_CACHE_NAME = 'rdio-admin-static';
+
 const UPDATE_CHECK_INTERVAL = 5 * 60 * 1000;
 
 self.addEventListener('install', (event) => {
@@ -46,7 +50,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       for (const key of await caches.keys()) {
-        if (key !== CACHE_NAME) await caches.delete(key);
+        if (key !== CACHE_NAME && key !== ADMIN_CACHE_NAME) await caches.delete(key);
       }
 
       await self.clients.claim();
@@ -56,10 +60,6 @@ self.addEventListener('activate', (event) => {
 
 // the worker checks itself for an update every 5 minutes.
 setInterval(() => self.registration.update(), UPDATE_CHECK_INTERVAL);
-
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
-});
 
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
@@ -77,8 +77,9 @@ self.addEventListener('fetch', (event) => {
   // API calls and the WebSockets behind them are never intercepted.
   if (url.pathname.startsWith('/api/')) return;
 
-  // admin is served from its own bundle with no worker of its own, and
-  // this worker's scope is the whole origin.
+  // admin has its own worker, registered under its own mount, and this
+  // worker's scope is the whole origin: the admin paths are handed to that
+  // worker on purpose.
   if (isAdminApplication(url)) return;
 
   if (request.mode === 'navigate') {
@@ -148,6 +149,10 @@ async function networkFirst(request, fallbackUrl) {
 
 async function notifyClients() {
   for (const client of await self.clients.matchAll({ type: 'window', includeUncontrolled: true })) {
+    // a page under admin is that application's page, and its own worker is
+    // the one that tells it about its own new version.
+    if (isAdminApplication(new URL(client.url))) continue;
+
     client.postMessage({ type: 'AppUpdateAvailable' });
   }
 }
