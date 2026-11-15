@@ -146,7 +146,7 @@ export const scannerConfig = {
     outDir: scannerBundle,
 };
 
-/** The admin application: no service worker, no offline cache, its own shell and manifest.
+/** The admin application: its own service worker and its own offline cache, beside its shell and manifest.
  * The OpenAPI contract rides along as `openapi.json`: the OpenAPI section renders from it,
  * so the contract file is the single source of truth for the endpoints the admin sees. */
 export const adminConfig = {
@@ -154,7 +154,7 @@ export const adminConfig = {
     srcDir: adminDir,
     entryPoints: [join(adminDir, 'main.js')],
     indexHtml: join(adminDir, 'index.html'),
-    serviceWorker: null,
+    serviceWorker: { source: join(adminDir, 'infrastructure', 'service-worker.js'), register: 'sw.js', scope: '/admin/' },
     staticFiles: [join(sharedDir, 'favicon.ico'), join(adminDir, 'manifest.webmanifest'), join(here, '..', '..', 'docs', 'openapi.json')],
     staticDirs: copiedAssets,
     outDir: adminBundle,
@@ -191,6 +191,46 @@ function listOutputs(config, metafile) {
 }
 
 /**
+ * The precache manifest a worker is built with, as the text it is injected as.
+ *
+ * Every entry is rooted at the registration scope, which is the mount the application is served from, so
+ * each application holds the same list in the shape its own mount gives it. A development build precaches
+ * nothing, and an application with no worker has no manifest to generate.
+ */
+export function serviceWorkerManifest(config, names, isProduction) {
+    if (!isProduction || !config.serviceWorker) {
+        return null;
+    }
+
+    const scope = config.serviceWorker.scope;
+    const hashed = names.filter((n) => n.endsWith('.js') || n.endsWith('.css'));
+
+    const precache = [
+        `${scope}index.html`,
+        `${scope}manifest.webmanifest`,
+        `${scope}${config.serviceWorker.register}`,
+        `${scope}favicon.ico`,
+        ...hashed.map((n) => scope + n),
+        ...listStaticAssets(config).map((p) => scope + p),
+    ];
+
+    return 'const PRECACHE_MANIFEST = ' + JSON.stringify(precache, null, 4) + ';';
+}
+
+/** The statement the built shell carries to register its worker, or nothing when it registers none. */
+export function serviceWorkerRegistration(config, isProduction) {
+    if (!isProduction || !config.serviceWorker) {
+        return null;
+    }
+
+    return `<script type="module">
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('${config.serviceWorker.register}', { scope: '${config.serviceWorker.scope}' }).catch(() => {});
+}
+</script>`;
+}
+
+/**
  * Inject the hashed entry script + stylesheet links into index.html and, in
  * production, the service worker registration bootstrap.
  */
@@ -213,12 +253,10 @@ function processIndexHtml(config, names) {
     const body = [];
     body.push(`<script type="module" src="${mainJs}"></script>`);
 
-    if (production && config.serviceWorker) {
-        body.push(`<script type="module">
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('${config.serviceWorker.register}', { scope: '${config.serviceWorker.scope}' }).catch(() => {});
-}
-</script>`);
+    const registration = serviceWorkerRegistration(config, production);
+
+    if (registration) {
+        body.push(registration);
     }
 
     html = html.replace('<!-- @app-head -->', head.join('\n        '));
@@ -234,28 +272,16 @@ if ('serviceWorker' in navigator) {
  * page registers, and it stays unhashed.
  */
 function processServiceWorker(config, names) {
-    if (!config.serviceWorker) {
+    const manifest = serviceWorkerManifest(config, names, production);
+
+    if (manifest === null) {
         return;
     }
 
-    const hashed = names.filter((n) => n.endsWith('.js') || n.endsWith('.css'));
-
-    const precache = [
-        '/index.html',
-        '/manifest.webmanifest',
-        '/sw.js',
-        '/favicon.ico',
-        ...hashed.map((n) => '/' + n),
-        ...listStaticAssets(config).map((p) => '/' + p),
-    ];
-
     let sw = readFileSync(config.serviceWorker.source, 'utf8');
-    sw = sw.replace(
-        '/* @precache-manifest */',
-        'const PRECACHE_MANIFEST = ' + JSON.stringify(precache, null, 4) + ';',
-    );
+    sw = sw.replace('/* @precache-manifest */', manifest);
 
-    writeFileSync(join(config.outDir, 'sw.js'), sw);
+    writeFileSync(join(config.outDir, config.serviceWorker.register), sw);
 }
 
 function listStaticAssets(config) {
