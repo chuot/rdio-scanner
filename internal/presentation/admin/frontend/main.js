@@ -18,10 +18,10 @@
  */
 
 /*
- * Admin entry point: boots the admin context and mounts the rdio-admin shell
- * (login screen or sidebar navigation, decided by the auth store slice). The shell
- * element is in index.html, which is what lets this page be served from /admin/ with
- * nothing but its own bundle.
+ * Admin entry point: asks the operator about a service-worker update, boots the admin context,
+ * and mounts the rdio-admin shell (login screen or sidebar navigation, decided by the auth store
+ * slice). The shell element is in index.html, which is what lets this page be served from /admin/
+ * with nothing but its own bundle.
  */
 
 import '../../common/frontend/styles/theme.css';
@@ -29,6 +29,11 @@ import './styles/admin.css';
 
 import './presentation/admin/rdio-admin.js';
 
+import { promptForUpdate } from '../../common/frontend/presentation/update-prompt.js';
 import { getAdminContext } from './application/admin-context.js';
+
+// Asked before the sections are built: an operator decides about a new version before the page is
+// half-built around them, and a waiting worker is reached whatever the answer.
+promptForUpdate('A new version of the administration interface is available. Would you like to reload the page?');
 
 getAdminContext().useCases.boot();

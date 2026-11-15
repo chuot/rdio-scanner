@@ -18,9 +18,8 @@
  */
 
 /*
- * Scanner entry point: registers the listener elements, boots the listener context, and
- * prompts for a service-worker update. This is the only application with a service worker,
- * so the update prompt lives here and not in a shared bootstrap.
+ * Scanner entry point: registers the listener elements, boots the listener context, and asks
+ * the operator about a service-worker update through the prompt the two applications share.
  */
 
 import '../../common/frontend/styles/theme.css';
@@ -33,39 +32,11 @@ import './presentation/listener/rdio-search-panel.js';
 import './presentation/listener/rdio-select-panel.js';
 import './presentation/listener/rdio-status.js';
 
-import { openDialog } from '../../common/frontend/presentation/ui/primitives.js';
+import { promptForUpdate } from '../../common/frontend/presentation/update-prompt.js';
 import { getAppContext } from './application/context.js';
 
-/*
- * PWA update prompt: a waiting service
- * worker posts AppUpdateAvailable; the dialog reproduces the legacy
- * AppUpdateComponent text and Yes applies the update before reloading
- * (SwUpdate.activateUpdate() equivalent).
- */
-let updatePrompted = false;
-
-navigator.serviceWorker?.addEventListener('message', (ev) => {
-  if (ev.data?.type !== 'AppUpdateAvailable' || updatePrompted) return;
-
-  updatePrompted = true;
-
-  openDialog({
-    title: 'New version available',
-    content: 'A new version of the scanner webapp is available. Would you like to reload the page?',
-    actions: [
-      { label: 'No' },
-      {
-        label: 'Yes',
-        onClick: async () => {
-          const registration = await navigator.serviceWorker.getRegistration();
-
-          registration?.waiting?.postMessage({ type: 'SKIP_WAITING' });
-
-          document.location.reload();
-        },
-      },
-    ],
-  });
-});
+// A waiting service worker says a new build is waiting; the operator is asked before anything
+// reloads, and only a yes hands that worker its skip.
+promptForUpdate('A new version of the scanner webapp is available. Would you like to reload the page?');
 
 getAppContext();
