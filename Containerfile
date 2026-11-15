@@ -34,12 +34,17 @@ COPY internal/ internal/
 # what `go run ./cmd/build container` does: it builds the ffmpeg for linux-amd64 first. Saying so here is
 # what keeps an image built straight from a fresh clone from shipping a server that cannot convert
 # anything.
+# The compile below carries by hand the flags the build tool passes when it compiles this same server: the
+# linker strips the symbol table and the debug information, and the compiler is asked to record each source
+# path as the module that holds it rather than as a folder on the machine building the image. An image build
+# does not ask the build tool to compose its Go compile, so that posture holds only because this line says
+# so.
 RUN mkdir -p /app/data && \
     test -f internal/infrastructure/ffmpeg/bundle/linux-amd64/ffmpeg.gz || { \
         echo "the ffmpeg this image carries was not compiled: run go run ./cmd/build container first" >&2; exit 1; \
     } && \
     apk --no-cache --no-progress --virtual .build add go && \
-    go build -ldflags "-X main.Version=$VERSION" -o ./rdio-scanner ./cmd/rdio-scanner && \
+    go build -trimpath -ldflags "-s -w -X main.Version=$VERSION" -o ./rdio-scanner ./cmd/rdio-scanner && \
     rm -fr cmd internal go.mod go.sum /root/.cache /root/go && \
     apk del .build && \
     apk --no-cache --no-progress add mailcap tzdata && \
