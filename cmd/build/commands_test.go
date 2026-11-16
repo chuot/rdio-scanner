@@ -939,7 +939,8 @@ func TestTheFfmpegCheckIsNotACommandThisToolAccepts(t *testing.T) {
 	}
 }
 
-// the usage line names the commands the tool has.
+// the usage line names the commands the tool has, and names the three architectures a container run
+// builds for rather than offering a target the run refuses.
 func TestTheUsageLineNamesTheCommandsTheToolHas(t *testing.T) {
 	out := &bytes.Buffer{}
 	errout := &bytes.Buffer{}
@@ -955,6 +956,28 @@ func TestTheUsageLineNamesTheCommandsTheToolHas(t *testing.T) {
 	for _, want := range []string{"nonsense", "client", "scanner", "admin", "ffmpeg", "server", "dist", "container", "clean", "version"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("the usage line %q does not name %s", line, want)
+		}
+	}
+
+	// A container run builds one of three architectures, and the line names those three: a line naming
+	// only the command sends the operator to a target the run refuses. `linux-arm` is read where no digit
+	// follows it, because `linux-arm64` carries the shorter word inside itself.
+	for _, tc := range []struct {
+		target string
+		named  *regexp.Regexp
+	}{
+		{target: "linux-amd64", named: regexp.MustCompile(`linux-amd64`)},
+		{target: "linux-arm64", named: regexp.MustCompile(`linux-arm64`)},
+		{target: "linux-arm", named: regexp.MustCompile(`linux-arm[^0-9]`)},
+	} {
+		if !tc.named.MatchString(line) {
+			t.Errorf("the usage line %q does not name %s, an architecture a container run builds for", line, tc.target)
+		}
+	}
+
+	for _, notWant := range []string{"linux-386", "freebsd-amd64"} {
+		if strings.Contains(line, notWant) {
+			t.Errorf("the usage line offers a container target the run refuses: %s in %q", notWant, line)
 		}
 	}
 

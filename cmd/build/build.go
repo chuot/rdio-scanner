@@ -141,7 +141,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	if err != nil {
 		// a refused command line is a failure reaching the operator's standard
 		// error with the refused word and the usage line, and it builds nothing.
-		fmt.Fprintf(t.errout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch] [--all] [--allow-dirty]|container|test|clean|version] [--pre <name>] [-o <path>, for the runs that write a server binary]\n", err)
+		fmt.Fprintf(t.errout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch] [--all] [--allow-dirty]|container [linux-amd64|linux-arm64|linux-arm]|test|clean|version] [--pre <name>] [-o <path>, for the runs that write a server binary]\n", err)
 
 		return 2
 	}
