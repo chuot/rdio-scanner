@@ -1508,6 +1508,71 @@ func TestTheCompileGuideSaysWhatTheToolAsksTheCompilerToRecord(t *testing.T) {
 	}
 }
 
+// the compile guide says which architectures a container image is built for, how the
+// architecture reaches the container program, what tags the run writes, and what host the
+// arm image needs. A maintainer who builds an arm image from a source tree reads these facts
+// off the guide, and no other document in the published repository states them.
+func TestTheCompileGuideNamesTheArchitecturesAContainerImageIsBuiltFor(t *testing.T) {
+	section := theGuideSection(t, "## What to type")
+
+	for _, want := range []string{"cmd/build container", "cmd/build container linux-arm64"} {
+		if !strings.Contains(section, want) {
+			t.Errorf("the compile guide's command section does not type %s, which is how a container image for another architecture is built", want)
+		}
+	}
+
+	passage := theGuideSubsection(t, "### The container image, and the architectures it is built for")
+
+	// `linux-arm` is read where no digit follows it, because `linux-arm64` carries the shorter
+	// word inside itself.
+	for _, tc := range []struct {
+		target string
+		named  *regexp.Regexp
+	}{
+		{target: "linux-amd64", named: regexp.MustCompile(`linux-amd64`)},
+		{target: "linux-arm64", named: regexp.MustCompile(`linux-arm64`)},
+		{target: "linux-arm", named: regexp.MustCompile(`linux-arm[^0-9]`)},
+	} {
+		if !tc.named.MatchString(passage) {
+			t.Errorf("the compile guide's container image section does not name %s, which is one of the three architectures a container run builds for", tc.target)
+		}
+	}
+
+	for _, want := range []string{
+		"go run ./cmd/build container",
+		"--platform=linux/amd64",
+		"--platform=linux/arm64",
+		"--platform=linux/arm/v7",
+		"$BUILDPLATFORM",
+		"GOOS=$TARGETOS",
+		"GOARCH=$TARGETARCH",
+		"compiles that target's ffmpeg pair first",
+		"never pushed",
+		"hard-float",
+	} {
+		if !strings.Contains(passage, want) {
+			t.Errorf("the compile guide's container image section never says %q, which is what a maintainer building an image for another architecture has to know", want)
+		}
+	}
+
+	// the tags: the architecture-named pair every run writes, and the plain pair the amd64 run
+	// also writes. A plain search for the unarch'd forms would pass on the arch'd ones, so each
+	// is read only where no dash follows it.
+	for _, tc := range []struct {
+		tag   string
+		named *regexp.Regexp
+	}{
+		{tag: "rdio-scanner:<version>-<target>", named: regexp.MustCompile(`rdio-scanner:<version>-<target>`)},
+		{tag: "rdio-scanner:latest-<target>", named: regexp.MustCompile(`rdio-scanner:latest-<target>`)},
+		{tag: "rdio-scanner:<version> with no architecture", named: regexp.MustCompile(`rdio-scanner:<version>[^-]`)},
+		{tag: "rdio-scanner:latest with no architecture", named: regexp.MustCompile(`rdio-scanner:latest[^-]`)},
+	} {
+		if !tc.named.MatchString(passage) {
+			t.Errorf("the compile guide's container image section never names %s, which is a tag a container run writes", tc.tag)
+		}
+	}
+}
+
 // theGuideSection reads one section of the compile guide: the lines
 // under the heading named, up to the next heading of the same level.
 func theGuideSection(t *testing.T, heading string) string {
@@ -1542,6 +1607,49 @@ func theGuideSection(t *testing.T, heading string) string {
 
 	for _, line := range lines[start+1:] {
 		if level && strings.HasPrefix(line, "## ") {
+			break
+		}
+
+		section = append(section, line)
+	}
+
+	return strings.Join(section, "\n")
+}
+
+// theGuideSubsection reads one named subsection of the compile guide: the lines under the
+// heading named, up to the next heading of any level. theGuideSection stops only at a heading
+// of the level it was given, so a subsection read through it answers with everything from
+// there to the end of the file.
+func theGuideSubsection(t *testing.T, heading string) string {
+	t.Helper()
+
+	path := filepath.Join("..", "..", "COMPILING.md")
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile(%s): %v", path, err)
+	}
+
+	lines := strings.Split(string(body), "\n")
+
+	start := -1
+
+	for i, line := range lines {
+		if strings.TrimSpace(line) == heading {
+			start = i
+
+			break
+		}
+	}
+
+	if start == -1 {
+		t.Fatalf("%s has no %q subsection, which is where the reader looks for it", path, heading)
+	}
+
+	var section []string
+
+	for _, line := range lines[start+1:] {
+		if strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "### ") {
 			break
 		}
 
