@@ -518,26 +518,65 @@ func imageTagFor(version string) string {
 	return strings.Replace(version, "+", "-", 1)
 }
 
-// containerStep asks the container program to build the image: the
-// version, the build time, and the file to build from arrive as
-// build arguments, and the image build compiles the server itself.
+// containerPlatformFor spells a container target as the platform the
+// container program builds for: a release word joins a Go operating
+// system and architecture with a dash, and a platform names the same
+// pair with a slash. linux-arm is ARMv7 with hard-float floating point,
+// the variant the ffmpeg an arm image embeds is compiled for, so the
+// platform named for it carries that variant.
+func containerPlatformFor(target string) string {
+	platform := strings.ReplaceAll(target, "-", "/")
+
+	if target == "linux-arm" {
+		return platform + "/v7"
+	}
+
+	return platform
+}
+
+// containerStep asks the container program to build the image for one
+// architecture: the architecture is named once, by the platform the
+// program builds for, and the version and the build time arrive as build
+// arguments. The image build compiles the server itself, for the
+// architecture the run resolves. The image is tagged with the version and
+// with latest, each named for that architecture, and the linux-amd64 run
+// also writes the unarch'd pair the published image has always carried.
 func containerStep(o options, repo string, version buildinfo.Version, created time.Time, program string) step {
-	tag := containerImage + ":" + imageTagFor(version.String())
+	target := o.target
+	if target == "" {
+		target = containerTarget
+	}
+
+	versionedTag := containerImage + ":" + imageTagFor(version.String())
+	tags := []string{
+		versionedTag + "-" + target,
+		containerImage + ":" + containerLatestTag + "-" + target,
+	}
+
+	if target == containerTarget {
+		tags = append(tags, versionedTag, containerImage+":"+containerLatestTag)
+	}
+
+	args := []string{
+		"build",
+		"--pull",
+		"--platform=" + containerPlatformFor(target),
+		"-f", "Containerfile",
+		"--build-arg", "VERSION=" + version.String(),
+		"--build-arg", "BUILD_TIME=" + created.UTC().Format(time.RFC3339),
+	}
+
+	for _, tag := range tags {
+		args = append(args, "-t", tag)
+	}
+
+	args = append(args, ".")
 
 	return step{
 		label:  subContainer,
-		result: tag,
+		result: tags[0],
 		dir:    repo,
 		name:   program,
-		args: []string{
-			"build",
-			"--pull",
-			"-f", "Containerfile",
-			"--build-arg", "VERSION=" + version.String(),
-			"--build-arg", "BUILD_TIME=" + created.UTC().Format(time.RFC3339),
-			"-t", tag,
-			"-t", containerImage + ":" + containerLatestTag,
-			".",
-		},
+		args:   args,
 	}
 }
