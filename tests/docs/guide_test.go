@@ -283,6 +283,30 @@ func chapterOf(t *testing.T, body string, id string) string {
 	return body[start : start+end]
 }
 
+// subsectionOf returns one subsection's body: from its heading to the next heading of any
+// level. chapterOf answers with a whole chapter, and a chapter carries several subsections,
+// so a claim the guide makes in one of them is read where the reader looks for it.
+func subsectionOf(t *testing.T, body string, heading string) string {
+	t.Helper()
+
+	open := regexp.MustCompile(`(?is)<h3\b[^>]*>` + regexp.QuoteMeta(heading) + `</h3>`)
+
+	at := open.FindStringIndex(body)
+	if at == nil {
+		t.Fatalf("the guide has no %q subsection, which is where a reader looks for it", heading)
+	}
+
+	rest := body[at[1]:]
+
+	end := len(rest)
+
+	if next := regexp.MustCompile(`(?is)<h[23]\b[^>]*>`).FindStringIndex(rest); next != nil {
+		end = next[0]
+	}
+
+	return rest[:end]
+}
+
 // the guide's header carries the project mark inline, so it shows whole on a machine
 // with no network.
 func TestTheGuideShowsTheMark(t *testing.T) {
@@ -1690,6 +1714,65 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 		if !strings.Contains(words(chapterOf(t, body, "ch-26-faq")), word) {
 			t.Errorf("the guide never says the build accepts %s", word)
 		}
+	}
+}
+
+// the guide says which architectures the container image is built for, in the same product
+// names the release matrix uses, names the platform the container program is asked for each
+// one by, states for an image the host rule it already states for an archive, and names the
+// architecture in the tag an operator types when starting an image built on their own machine.
+func TestTheGuideSaysWhichArchitecturesTheContainerImageIsBuiltFor(t *testing.T) {
+	body := guidePath(t)
+
+	section := strings.ToLower(words(subsectionOf(t, body, "Run the container image")))
+
+	// `linux-arm` is read where no digit follows it, because `linux-arm64` carries the shorter
+	// word inside itself.
+	for _, tc := range []struct {
+		target string
+		named  *regexp.Regexp
+	}{
+		{target: "linux-amd64", named: regexp.MustCompile(`linux-amd64`)},
+		{target: "linux-arm64", named: regexp.MustCompile(`linux-arm64`)},
+		{target: "linux-arm", named: regexp.MustCompile(`linux-arm[^0-9]`)},
+	} {
+		if !tc.named.MatchString(section) {
+			t.Errorf("the guide's container image section does not name %s, one of the architectures the image is built for", tc.target)
+		}
+	}
+
+	for _, want := range []string{
+		"linux/amd64",
+		"linux/arm64",
+		"linux/arm/v7",
+		"machine that imports audio",
+		"Raspberry Pi 3 or 4",
+		"64-bit Raspberry Pi OS",
+		"hard-float",
+		"latest-linux-arm64",
+		"no manifest list",
+	} {
+		if !strings.Contains(section, strings.ToLower(want)) {
+			t.Errorf("the guide's container image section never says %q, which is what an operator choosing an image for their own machine reads off it", want)
+		}
+	}
+
+	// building an image for another architecture is an operator command, on its own line,
+	// beside the other build lines the chapter types.
+	var lines []string
+
+	for _, block := range regexp.MustCompile(`(?is)<pre><code>(.*?)</code></pre>`).FindAllStringSubmatch(chapterOf(t, body, "ch-04-installation"), -1) {
+		for _, line := range strings.Split(block[1], "\n") {
+			if i := strings.Index(line, "#"); i >= 0 {
+				line = line[:i]
+			}
+
+			lines = append(lines, strings.TrimSpace(line))
+		}
+	}
+
+	if !slices.Contains(lines, "go run ./cmd/build container linux-arm64") {
+		t.Errorf("the guide's commands are %v, and none of them builds the container image for a 64-bit ARM machine", lines)
 	}
 }
 
