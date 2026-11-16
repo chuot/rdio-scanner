@@ -236,7 +236,90 @@ func TestTheImageTagIsTheVersionSpelledTheWayAnImageTagAllows(t *testing.T) {
 // theImageTagGrammar is the tag grammar a registry accepts.
 var theImageTagGrammar = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
 
-// the Containerfile names its base image by version and carries the image labels.
+// theContainerfileStage is one build stage of the Containerfile: the FROM line that starts it, and
+// the instructions that follow it up to the next FROM.
+type theContainerfileStage struct {
+	from string
+	text string
+}
+
+// theContainerfileStages splits the Containerfile at its FROM lines. The lines before the first FROM
+// declare the build arguments the stages are built with, and a line that is only a comment is left
+// out: what these cases read is what the file asks the container program to do.
+func theContainerfileStages(contents string) []theContainerfileStage {
+	stages := []theContainerfileStage{}
+
+	for _, line := range strings.Split(contents, "\n") {
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		if strings.HasPrefix(trimmed, "FROM ") {
+			stages = append(stages, theContainerfileStage{from: trimmed})
+
+			continue
+		}
+
+		if len(stages) == 0 {
+			continue
+		}
+
+		last := &stages[len(stages)-1]
+
+		if last.text == "" {
+			last.text = trimmed
+		} else {
+			last.text += "\n" + trimmed
+		}
+	}
+
+	return stages
+}
+
+// theCompilingContainerfileStage is the stage that runs the Go compiler, and the second result says
+// whether the file has one.
+func theCompilingContainerfileStage(stages []theContainerfileStage) (theContainerfileStage, bool) {
+	for _, stage := range stages {
+		if strings.Contains(stage.text, "go build ") {
+			return stage, true
+		}
+	}
+
+	return theContainerfileStage{}, false
+}
+
+// theShippingContainerfileStage is the stage the finished image is taken from: the one that does not
+// run the Go compiler.
+func theShippingContainerfileStage(stages []theContainerfileStage) (theContainerfileStage, bool) {
+	for _, stage := range stages {
+		if !strings.Contains(stage.text, "go build ") {
+			return stage, true
+		}
+	}
+
+	return theContainerfileStage{}, false
+}
+
+// theGuardedFfmpegPath is the bundle path the Containerfile looks for before it compiles, or an empty
+// string when it looks for none.
+func theGuardedFfmpegPath(contents string) string {
+	const guard = "test -f internal/infrastructure/ffmpeg/bundle/"
+
+	_, rest, found := strings.Cut(contents, guard)
+	if !found {
+		return ""
+	}
+
+	path, _, _ := strings.Cut(rest, " ")
+
+	return path
+}
+
+// the Containerfile builds the image in two stages, names each base image by version, asks for the
+// machine doing the build on the stage that compiles and on no other, and carries the image's own
+// account of itself in the stage that ships.
 func TestTheContainerfileNamesItsBaseImageByVersionAndCarriesTheImageLabels(t *testing.T) {
 	text, err := os.ReadFile(filepath.Join("..", "..", "Containerfile"))
 	if err != nil {
@@ -244,39 +327,117 @@ func TestTheContainerfileNamesItsBaseImageByVersionAndCarriesTheImageLabels(t *t
 	}
 
 	contents := string(text)
+	stages := theContainerfileStages(contents)
 
-	from := ""
+	if len(stages) != 2 {
+		t.Errorf("the Containerfile builds %d stages, want two: one that compiles the server and one that ships it", len(stages))
+	}
 
-	for _, line := range strings.Split(contents, "\n") {
-		if strings.HasPrefix(line, "FROM ") {
-			from = line
-
-			break
+	// Every part of the build reaches the architecture through the platform the container program is
+	// given. A literal architecture anywhere in the file, or a package named for one, builds the same
+	// image whatever the run asked for.
+	for _, literal := range []string{"x86_64", "aarch64", "armv7", "amd64", "arm64", "/arm/"} {
+		if strings.Contains(contents, literal) {
+			t.Errorf("the Containerfile names %q, which fixes the image to one architecture instead of the one the build was asked for", literal)
 		}
 	}
 
-	if from == "" {
-		t.Fatal("the Containerfile has no FROM line")
-	}
+	compiling, compilingFound := theCompilingContainerfileStage(stages)
+	shipping, shippingFound := theShippingContainerfileStage(stages)
 
-	if strings.Contains(from, ":latest") {
-		t.Errorf("the base image is named %q, and `latest` is a moving version: the image built today is not the image built last week", from)
-	}
+	platforms := 0
 
-	base, found := strings.CutPrefix(from, "FROM docker.io/")
-	if !found {
-		t.Fatalf("the base image is %q, want it named on the registry it is pulled from", from)
-	}
+	for _, stage := range stages {
+		from := strings.TrimPrefix(stage.from, "FROM ")
 
-	name, version, found := strings.Cut(base, ":")
-	if !found || name != "alpine" || version == "" {
-		t.Fatalf("the base image is %q, want alpine named by version", from)
-	}
+		if platform, rest, _ := strings.Cut(from, " "); strings.HasPrefix(platform, "--platform=") {
+			platforms++
 
-	for _, part := range strings.Split(version, ".") {
-		if _, err := strconv.Atoi(part); err != nil {
-			t.Fatalf("the base image is named %q, which is not a release number", version)
+			if platform != "--platform=$BUILDPLATFORM" {
+				t.Errorf("the stage %q asks for the platform %q, want the machine doing the build through the BUILDPLATFORM build argument",
+					stage.from, platform)
+			}
+
+			from = rest
 		}
+
+		// A stage is named so that the stage after it can copy from it, and the name is not part of the
+		// base image the line pulls.
+		if fields := strings.Fields(from); len(fields) > 1 {
+			for i, field := range fields {
+				if strings.EqualFold(field, "AS") && i+1 < len(fields) {
+					from = strings.Join(append(fields[:i], fields[i+2:]...), " ")
+
+					break
+				}
+			}
+		}
+
+		if strings.Contains(from, ":latest") {
+			t.Errorf("a stage is built from %q, and `latest` is a moving version: the image built today is not the image built last week", stage.from)
+		}
+
+		base, named := strings.CutPrefix(from, "docker.io/")
+		if !named {
+			t.Errorf("a stage is built from %q, want the base image named on the registry it is pulled from", stage.from)
+
+			continue
+		}
+
+		name, version, withVersion := strings.Cut(base, ":")
+		if !withVersion || name != "alpine" || version == "" {
+			t.Errorf("a stage is built from %q, want alpine named by version", stage.from)
+
+			continue
+		}
+
+		for _, part := range strings.Split(version, ".") {
+			if _, err := strconv.Atoi(part); err != nil {
+				t.Errorf("a stage is built from %q, which is not a release number", stage.from)
+			}
+		}
+	}
+
+	if platforms != 1 {
+		t.Errorf("the Containerfile names a platform on %d of its %d FROM lines, want the one stage that compiles: the stage that ships takes the architecture the build was asked for",
+			platforms, len(stages))
+	}
+
+	// The argument naming the machine doing the build is declared above the FROM that reads it: below
+	// that line the argument has no value yet, and the stage is built for the wrong architecture.
+	argLine, fromLine := 0, 0
+
+	for i, line := range strings.Split(contents, "\n") {
+		trimmed := strings.TrimSpace(line)
+
+		if argLine == 0 && (trimmed == "ARG BUILDPLATFORM" || strings.HasPrefix(trimmed, "ARG BUILDPLATFORM ")) {
+			argLine = i + 1
+		}
+
+		if fromLine == 0 && strings.HasPrefix(trimmed, "FROM --platform=$BUILDPLATFORM") {
+			fromLine = i + 1
+		}
+	}
+
+	if argLine == 0 {
+		t.Error("the Containerfile declares no ARG BUILDPLATFORM build argument, so no stage can name the architecture of the machine doing the build")
+	}
+
+	if fromLine == 0 {
+		t.Error("no FROM line asks for a platform through $BUILDPLATFORM, so the compile runs on the architecture being built for and needs a cross-compiler")
+	}
+
+	if argLine != 0 && fromLine != 0 && argLine > fromLine {
+		t.Errorf("ARG BUILDPLATFORM is declared on line %d, below the FROM that reads it on line %d: the container program has no value for it when that line is reached",
+			argLine, fromLine)
+	}
+
+	if !compilingFound {
+		t.Fatal("no stage of the Containerfile compiles the server, so the image builds no binary")
+	}
+
+	if !shippingFound {
+		t.Fatal("every stage of the Containerfile runs the Go compiler, so the image ships the toolchain that built it")
 	}
 
 	// the labels the image carries and the build arguments they arrive
@@ -289,8 +450,8 @@ func TestTheContainerfileNamesItsBaseImageByVersionAndCarriesTheImageLabels(t *t
 		"org.opencontainers.image.documentation=",
 		"org.opencontainers.image.ref.name=",
 	} {
-		if !strings.Contains(contents, "LABEL "+label) {
-			t.Errorf("the Containerfile carries no %s label", strings.TrimSuffix(label, "="))
+		if !strings.Contains(shipping.text, "LABEL "+label) {
+			t.Errorf("the stage that ships carries no %s label", strings.TrimSuffix(label, "="))
 		}
 	}
 
@@ -299,37 +460,88 @@ func TestTheContainerfileNamesItsBaseImageByVersionAndCarriesTheImageLabels(t *t
 		{"org.opencontainers.image.created=", "BUILD_TIME"},
 		{"org.opencontainers.image.ref.name=", "VERSION"},
 	} {
-		if !strings.Contains(contents, "ARG "+label[1]+"=") {
-			t.Errorf("the Containerfile declares no %s build argument, so its %s label cannot carry what the run knows",
+		if !strings.Contains(shipping.text, "ARG "+label[1]+"=") {
+			t.Errorf("the stage that ships declares no %s build argument, so its %s label cannot carry what the run knows",
 				label[1], strings.TrimSuffix(label[0], "="))
 		}
 
-		if !strings.Contains(contents, "LABEL "+label[0]+`"`+`$`+label[1]+`"`) {
+		if !strings.Contains(shipping.text, "LABEL "+label[0]+`"`+`$`+label[1]+`"`) {
 			t.Errorf("the Containerfile's %s label does not read the %s build argument", strings.TrimSuffix(label[0], "="), label[1])
+		}
+	}
+
+	// What the shipped stage carries is the server, the directory it writes, and the packages it
+	// converts with: the source tree and the toolchain that built the binary stay behind.
+	for _, want := range []string{
+		"WORKDIR /app",
+		"ENV DOCKER=1",
+		"COPY --from=",
+		"USER 10001",
+		`VOLUME [ "/app/data" ]`,
+		"EXPOSE 3000",
+		`ENTRYPOINT [ "./rdio-scanner", "-base_dir", "/app/data" ]`,
+	} {
+		if !strings.Contains(shipping.text, want) {
+			t.Errorf("the stage that ships carries no %s instruction", want)
+		}
+	}
+
+	for _, notWant := range []string{"go build ", "COPY cmd/", "COPY internal/", "apk --no-cache --no-progress --virtual"} {
+		if strings.Contains(shipping.text, notWant) {
+			t.Errorf("the stage that ships carries %q, so the image holds a source tree or a toolchain it does not run", notWant)
+		}
+	}
+
+	for _, notWant := range []string{"ENTRYPOINT", "USER 10001", `VOLUME [`, "ENV DOCKER=1", "LABEL "} {
+		if strings.Contains(compiling.text, notWant) {
+			t.Errorf("the stage that compiles carries %q, which belongs in the stage that ships", notWant)
+		}
+	}
+
+	// Every part of the build reaches the architecture through the platform the container program is
+	// given. A literal architecture anywhere in the file, or a package named for one, builds the same
+	// image whatever the run asked for.
+	for _, literal := range []string{"x86_64", "aarch64", "armv7", "amd64", "arm64", "/arm/"} {
+		if strings.Contains(contents, literal) {
+			t.Errorf("the Containerfile names %q, which fixes the image to one architecture instead of the one the build was asked for", literal)
 		}
 	}
 }
 
-// the Containerfile compiles the server with the posture the build tool composes, so the image a
-// container host runs and the archive a release ships are built the same way.
+// the Containerfile compiles the server with the posture the build tool composes, for the architecture
+// the image build was asked for. The flags are read from the compiler's own line; the operating system
+// and architecture it compiles for are read from the instruction that line continues from, because the
+// guard that stops an image shipping without a matching ffmpeg shares that instruction.
 func TestTheContainerfileCompilesTheServerTheWayTheBuildToolDoes(t *testing.T) {
 	text, err := os.ReadFile(filepath.Join("..", "..", "Containerfile"))
 	if err != nil {
 		t.Fatalf("reading the Containerfile: %v", err)
 	}
 
-	compile := ""
+	contents := string(text)
+	lines := strings.Split(contents, "\n")
 
-	for _, line := range strings.Split(string(text), "\n") {
-		if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "go build ") {
-			compile = trimmed
+	at := -1
+
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "go build ") {
+			at = i
 
 			break
 		}
 	}
 
-	if compile == "" {
+	if at < 0 {
 		t.Fatal("the Containerfile has no go build line, so nothing here holds how the image compiles the server")
+	}
+
+	compile := strings.TrimSpace(lines[at])
+	instruction := compile
+
+	for at > 0 && strings.HasSuffix(strings.TrimSpace(lines[at-1]), "\\") {
+		at--
+
+		instruction = strings.TrimSpace(lines[at]) + " " + instruction
 	}
 
 	if !strings.Contains(compile, " -trimpath ") {
@@ -360,6 +572,73 @@ func TestTheContainerfileCompilesTheServerTheWayTheBuildToolDoes(t *testing.T) {
 	// the version arrives through the build argument, so the line does not go stale with the release.
 	if literal := regexp.MustCompile(`main\.Version=[^$]`).FindString(compile); literal != "" {
 		t.Errorf("the Containerfile stamps the version with %q, which is a literal version rather than the VERSION build argument", literal)
+	}
+
+	// The compile is for the architecture the image build was asked for, named through the build
+	// arguments the container program fills in for the platform it was given: the same way the build
+	// tool names the pair when it compiles this server for a release.
+	for _, want := range []string{"CGO_ENABLED=0 ", "GOOS=$TARGETOS ", "GOARCH=$TARGETARCH "} {
+		if !strings.Contains(instruction, want) {
+			t.Errorf("the Containerfile compiles the server as %q, which does not carry %s, so the compile is not the one the build tool composes for the architecture the run resolves", instruction, want)
+		}
+	}
+
+	// The architecture is named once. A second spelling, a variant, a full platform, or a Go ARM
+	// setting, is a second answer to the question the platform already answered, and the two drift.
+	for _, notWant := range []string{"GOARM", "TARGETVARIANT", "TARGETPLATFORM", "CGO_ENABLED=1"} {
+		if strings.Contains(instruction, notWant) {
+			t.Errorf("the Containerfile compiles the server as %q, which names %s beside the platform the build was asked for", instruction, notWant)
+		}
+	}
+
+	if literal := regexp.MustCompile(`GO(OS|ARCH)=[^$]`).FindString(instruction); literal != "" {
+		t.Errorf("the Containerfile compiles the server with %q, which names an operating system or architecture as a literal instead of reading the build arguments the container program fills in", literal)
+	}
+
+	// The ffmpeg the binary embeds is checked for the architecture being built for. A guard that
+	// names one architecture lets an arm image ship a server with an amd64 ffmpeg, or none at all.
+	guard := theGuardedFfmpegPath(contents)
+
+	if guard == "" {
+		t.Error("the Containerfile has no ffmpeg guard naming the bundle directory, so an image can ship a server that cannot convert anything")
+	} else if !strings.Contains(guard, "${TARGETOS}-${TARGETARCH}") {
+		t.Errorf("the Containerfile checks for the ffmpeg at %q, which names a fixed architecture rather than the one the image build was asked for", guard)
+	}
+}
+
+// The message an image build writes when the ffmpeg for the architecture it was asked for is not on
+// disk names that architecture and the run that compiles it: whoever reads it is holding a failed image
+// build, and the fix is a build-tool run.
+func TestTheContainerfileRefusesAnImageWhoseFfmpegIsNotCompiledForTheTarget(t *testing.T) {
+	text, err := os.ReadFile(filepath.Join("..", "..", "Containerfile"))
+	if err != nil {
+		t.Fatalf("reading the Containerfile: %v", err)
+	}
+
+	contents := string(text)
+
+	_, rest, found := strings.Cut(contents, "test -f internal/infrastructure/ffmpeg/bundle/")
+	if !found {
+		t.Fatal("the Containerfile has no ffmpeg guard naming the bundle directory, so an image can ship a server that cannot convert anything")
+	}
+
+	_, after, found := strings.Cut(rest, `echo "`)
+	if !found {
+		t.Fatal("the Containerfile's ffmpeg guard writes no message, so the build stops without saying why")
+	}
+
+	message, _, closed := strings.Cut(after, `"`)
+	if !closed {
+		t.Fatal("the Containerfile's ffmpeg guard message is not closed")
+	}
+
+	// The architecture that is missing and the run that produces it both arrive through the build
+	// arguments the container program fills in. A message naming one architecture sends the reader to
+	// the wrong build.
+	for _, want := range []string{"${TARGETOS}-${TARGETARCH}", "go run ./cmd/build container"} {
+		if !strings.Contains(message, want) {
+			t.Errorf("the Containerfile refuses a missing ffmpeg with %q, which does not name %s", message, want)
+		}
 	}
 }
 
