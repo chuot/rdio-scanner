@@ -572,10 +572,9 @@ func containerPlatformFor(target string) string {
 // with latest, each named for that architecture, and the linux-amd64 run
 // also writes the unarch'd pair the published image has always carried.
 func containerStep(o options, repo string, version buildinfo.Version, created time.Time, program string) step {
+	// the run's target list is already resolved to real architecture words,
+	// so the step builds for the target it is given and guesses nothing.
 	target := o.target
-	if target == "" {
-		target = containerTarget
-	}
 
 	versionedTag := containerImage + ":" + imageTagFor(version.String())
 	tags := []string{
