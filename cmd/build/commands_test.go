@@ -975,6 +975,13 @@ func TestTheUsageLineNamesTheCommandsTheToolHas(t *testing.T) {
 		}
 	}
 
+	// The all-architectures request is spelled for the container run the way it is spelled for the
+	// release run: the flag sits beside the target words that run accepts, so an operator who wants
+	// all three reads it from the same place in both halves of the line.
+	if !regexp.MustCompile(`container \[linux-amd64\|linux-arm64\|linux-arm\] \[--all\]`).MatchString(line) {
+		t.Errorf("the usage line %q does not spell the container run's all-architectures request beside the three architectures it names", line)
+	}
+
 	for _, notWant := range []string{"linux-386", "freebsd-amd64"} {
 		if strings.Contains(line, notWant) {
 			t.Errorf("the usage line offers a container target the run refuses: %s in %q", notWant, line)
