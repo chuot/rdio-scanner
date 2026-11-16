@@ -1609,9 +1609,11 @@ func TestTheCompileGuideSaysWhatTheToolAsksTheCompilerToRecord(t *testing.T) {
 func TestTheCompileGuideNamesTheArchitecturesAContainerImageIsBuiltFor(t *testing.T) {
 	section := theGuideSection(t, "## What to type")
 
-	for _, want := range []string{"cmd/build container", "cmd/build container linux-arm64"} {
+	// The three lines an operator typing a container run needs: this machine's image, one named
+	// architecture, and all three at once.
+	for _, want := range []string{"cmd/build container", "cmd/build container linux-arm64", "cmd/build container --all"} {
 		if !strings.Contains(section, want) {
-			t.Errorf("the compile guide's command section does not type %s, which is how a container image for another architecture is built", want)
+			t.Errorf("the compile guide's command section does not type %s, which is a way a container image is built", want)
 		}
 	}
 
@@ -1629,6 +1631,36 @@ func TestTheCompileGuideNamesTheArchitecturesAContainerImageIsBuiltFor(t *testin
 	} {
 		if !tc.named.MatchString(passage) {
 			t.Errorf("the compile guide's container image section does not name %s, which is one of the three architectures a container run builds for", tc.target)
+		}
+	}
+
+	// The machine rule, in the words the tool itself answers: a run naming no target builds the
+	// architecture it stands on, and a machine that is none of the three is refused with a line naming
+	// that machine, the three it has, and both ways out of the refusal.
+	for _, want := range []string{
+		"the architecture of the machine it is run on",
+		"this machine is <goos>-<goarch>",
+		"no architecture a container image is built for",
+		"name one of linux-amd64, linux-arm, linux-arm64",
+		"or build all three with go run ./cmd/build container --all",
+	} {
+		if !strings.Contains(passage, want) {
+			t.Errorf("the compile guide's container image section never says %q, which is what an operator on a machine outside the three has to read off the refusal", want)
+		}
+	}
+
+	// The three-architecture request, and the order its three legs take: the tool's own list order,
+	// which is not the order the usage line prints, and each target's ffmpeg compiled before the image
+	// that copies that ffmpeg off the disk.
+	inOrder := regexp.MustCompile("linux-amd64`, `linux-arm`, `linux-arm64")
+
+	if !inOrder.MatchString(passage) {
+		t.Error("the compile guide's container image section never names the three architectures in the order a --all run builds them, which is the order its log and its summary read in")
+	}
+
+	for _, want := range []string{"container --all", "one target's ffmpeg before that target's image"} {
+		if !strings.Contains(passage, want) {
+			t.Errorf("the compile guide's container image section never says %q, which is what an operator building all three images has to know", want)
 		}
 	}
 
@@ -1663,6 +1695,20 @@ func TestTheCompileGuideNamesTheArchitecturesAContainerImageIsBuiltFor(t *testin
 	} {
 		if !tc.named.MatchString(passage) {
 			t.Errorf("the compile guide's container image section never names %s, which is a tag a container run writes", tc.tag)
+		}
+	}
+
+	// The exit code an incomplete set of things written ends at: the guide names both shapes the
+	// release run and the container run answer with it, because both say which targets wrote none.
+	exits := theGuideSubsection(t, "### What the exit code says")
+
+	for _, want := range []string{
+		"a release run wrote fewer archives",
+		"a container run wrote fewer images",
+		"than it was asked for",
+	} {
+		if !strings.Contains(exits, want) {
+			t.Errorf("the compile guide's exit code section does not say %s, which is what exit code 3 reports", want)
 		}
 	}
 }
