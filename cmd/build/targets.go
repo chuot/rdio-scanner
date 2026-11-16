@@ -120,6 +120,47 @@ func distTargets(o options, goos string, goarch string) ([]releaseTarget, error)
 	return nil, fmt.Errorf("this machine is %s-%s, which is no platform this project releases: build every platform this project releases with go run ./cmd/build dist --all", goos, goarch)
 }
 
+// containerTargetsFor is the list of architectures one container run walks,
+// decided before any of it runs: the named target, the three architectures a
+// container image is built for when they were asked for, or the target of the
+// machine running it. The image carries the ffmpeg compiled for the target it
+// is built for, so a target outside these three has no image and no ffmpeg pair.
+func containerTargetsFor(o options, goos string, goarch string) ([]releaseTarget, error) {
+	if o.target != "" {
+		tr, found := targetFor(o.target)
+
+		if !found || !isContainerTarget(tr.targetWord()) {
+			return nil, fmt.Errorf("a container image is built for %s, so %s is not a target a container run builds for", strings.Join(containerTargets, ", "), o.target)
+		}
+
+		return []releaseTarget{tr}, nil
+	}
+
+	if o.all {
+		targets := make([]releaseTarget, 0, len(containerTargets))
+
+		for _, word := range containerTargets {
+			tr, found := targetFor(word)
+
+			if !found {
+				return nil, fmt.Errorf("%s is not a platform this project releases, so no container image is built for it", word)
+			}
+
+			targets = append(targets, tr)
+		}
+
+		return targets, nil
+	}
+
+	word := releaseTargetWordFor(goos, goarch)
+
+	if tr, found := targetFor(word); found && isContainerTarget(tr.targetWord()) {
+		return []releaseTarget{tr}, nil
+	}
+
+	return nil, fmt.Errorf("this machine is %s-%s, which is no architecture a container image is built for: name one of %s, or build all three with go run ./cmd/build container --all", goos, goarch, strings.Join(containerTargets, ", "))
+}
+
 // serverGoos is the operating system go builds a target word for; a
 // word the matrix has no place for is built for its own name.
 func serverGoos(word string) string {
