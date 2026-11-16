@@ -110,53 +110,98 @@ func TestTheServerBuildCarriesTheResolvedVersionInTheLinkerFlags(t *testing.T) {
 	}
 }
 
-// the container step tags the image with the resolved version and latest.
+// the container step asks for the architecture the run resolves, tags the image with the
+// resolved version named for that architecture, and keeps the unarch'd pair for the
+// architecture the published image has always carried.
 func TestTheContainerStepTagsTheImageWithTheVersionTheRunResolved(t *testing.T) {
 	for _, c := range []struct {
 		name    string
+		target  string
 		version func(*testing.T) buildinfo.Version
 		args    []string
 		result  string
 	}{
 		{
-			name:    "a development build",
+			name:    "a development build for linux-amd64",
+			target:  "linux-amd64",
 			version: theVersion,
 			args: []string{
 				"build",
 				"--pull",
+				"--platform=linux/amd64",
 				"-f", "Containerfile",
 				"--build-arg", "VERSION=8.0.0+gdb79311",
 				"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+				"-t", "rdio-scanner:8.0.0-gdb79311-linux-amd64",
+				"-t", "rdio-scanner:latest-linux-amd64",
 				"-t", "rdio-scanner:8.0.0-gdb79311",
 				"-t", "rdio-scanner:latest",
 				".",
 			},
-			result: "rdio-scanner:8.0.0-gdb79311",
+			result: "rdio-scanner:8.0.0-gdb79311-linux-amd64",
 		},
 		{
-			name:    "a prerelease of a committed tree",
+			name:    "a prerelease of a committed tree for linux-amd64",
+			target:  "linux-amd64",
 			version: thePrerelease,
 			args: []string{
 				"build",
 				"--pull",
+				"--platform=linux/amd64",
 				"-f", "Containerfile",
 				"--build-arg", "VERSION=8.0.0-beta1",
 				"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+				"-t", "rdio-scanner:8.0.0-beta1-linux-amd64",
+				"-t", "rdio-scanner:latest-linux-amd64",
 				"-t", "rdio-scanner:8.0.0-beta1",
 				"-t", "rdio-scanner:latest",
 				".",
 			},
-			result: "rdio-scanner:8.0.0-beta1",
+			result: "rdio-scanner:8.0.0-beta1-linux-amd64",
+		},
+		{
+			name:    "a development build for linux-arm64",
+			target:  "linux-arm64",
+			version: theVersion,
+			args: []string{
+				"build",
+				"--pull",
+				"--platform=linux/arm64",
+				"-f", "Containerfile",
+				"--build-arg", "VERSION=8.0.0+gdb79311",
+				"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+				"-t", "rdio-scanner:8.0.0-gdb79311-linux-arm64",
+				"-t", "rdio-scanner:latest-linux-arm64",
+				".",
+			},
+			result: "rdio-scanner:8.0.0-gdb79311-linux-arm64",
+		},
+		{
+			name:    "a development build for linux-arm",
+			target:  "linux-arm",
+			version: theVersion,
+			args: []string{
+				"build",
+				"--pull",
+				"--platform=linux/arm/v7",
+				"-f", "Containerfile",
+				"--build-arg", "VERSION=8.0.0+gdb79311",
+				"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+				"-t", "rdio-scanner:8.0.0-gdb79311-linux-arm",
+				"-t", "rdio-scanner:latest-linux-arm",
+				".",
+			},
+			result: "rdio-scanner:8.0.0-gdb79311-linux-arm",
 		},
 	} {
-		s := containerStep(options{}, "/repo", c.version(t), theMoment, podmanProgram)
+		s := containerStep(options{sub: subContainer, target: c.target}, "/repo", c.version(t), theMoment, podmanProgram)
 
 		if strings.Join(s.args, " ") != strings.Join(c.args, " ") {
 			t.Errorf("%s: podman is asked to run\n  %v\nwant\n  %v", c.name, s.args, c.args)
 		}
 
 		if s.result != c.result {
-			t.Errorf("%s: the run reports the image as %q, want the image named for the version the run resolved", c.name, s.result)
+			t.Errorf("%s: the run reports the image as %q, want the image named for the version and the architecture the run resolved", c.name, s.result)
 		}
 	}
 }
@@ -931,22 +976,66 @@ func aMachineWith(programs ...string) func(string) (string, error) {
 	}
 }
 
-// the container step names the resolved program and the Containerfile it builds from.
+// the container step names the resolved program and the Containerfile it builds from, asks for
+// the architecture exactly once, and never publishes: the arguments name no build argument
+// carrying an architecture, no push, no manifest list, and no registry to push to.
 func TestTheReleaseImageBuildNamesTheProgramAndTheFileItBuildsFrom(t *testing.T) {
 	for _, program := range []string{podmanProgram, dockerProgram} {
-		s := containerStep(options{}, "/repo", theVersion(t), theMoment, program)
+		for _, target := range containerTargets {
+			s := containerStep(options{sub: subContainer, target: target}, "/repo", theVersion(t), theMoment, program)
 
-		if s.name != program {
-			t.Errorf("the release image build names %q, want the program the run resolved: %q", s.name, program)
-		}
+			if s.name != program {
+				t.Errorf("the release image build names %q, want the program the run resolved: %q", s.name, program)
+			}
 
-		if len(s.args) == 0 || s.args[0] != "build" {
-			t.Fatalf("the release image build runs %v, want a build", s.args)
-		}
+			if len(s.args) == 0 || s.args[0] != "build" {
+				t.Fatalf("the release image build runs %v, want a build", s.args)
+			}
 
-		if file := theFlagValue(s.args, "-f"); file != "Containerfile" {
-			t.Errorf("the release image build names %q as the file it builds from, want Containerfile: docker looks for Dockerfile and does not find Containerfile",
-				file)
+			if file := theFlagValue(s.args, "-f"); file != "Containerfile" {
+				t.Errorf("the release image build names %q as the file it builds from, want Containerfile: docker looks for Dockerfile and does not find Containerfile",
+					file)
+			}
+
+			// the architecture is named once, by the flag the container program selects
+			// the build architecture with, and by nothing else: the automatic build
+			// arguments carry what that flag asked for.
+			named := 0
+
+			for _, arg := range s.args {
+				if strings.HasPrefix(arg, "--platform=") {
+					named++
+				}
+			}
+
+			if named != 1 {
+				t.Errorf("the %s image build names the build architecture %d times, want once: %v", target, named, s.args)
+			}
+
+			for _, arg := range s.args {
+				if !strings.HasPrefix(arg, "--build-arg") {
+					continue
+				}
+
+				for _, word := range []string{"TARGETARCH", "TARGETOS", "TARGETPLATFORM", "TARGETVARIANT", "BUILDPLATFORM", "GOARCH", "GOOS", "GOARM"} {
+					if strings.Contains(arg, word) {
+						t.Errorf("the %s image build passes %q, which names the architecture as a build argument: the container program fills %s itself from the platform it was asked for",
+							target, arg, word)
+					}
+				}
+			}
+
+			for _, arg := range s.args {
+				if arg == "push" || arg == "manifest" {
+					t.Errorf("the %s image build runs %q, and the build publishes nothing: it writes an image into this machine's container store", target, arg)
+				}
+
+				if strings.HasPrefix(arg, "-t") || strings.Contains(arg, "rdio-scanner:") {
+					if strings.Contains(arg, "/") {
+						t.Errorf("the %s image build tags %q, which names a registry or a namespace the build publishes to", target, arg)
+					}
+				}
+			}
 		}
 	}
 }

@@ -1533,8 +1533,8 @@ func TestADistRunBuildsTheArchiveForThePlatformItIsRunOn(t *testing.T) {
 	}
 }
 
-// A container run builds the two application bundles and the image architecture's ffmpeg, then
-// asks podman to build the image, which compiles the server inside itself.
+// A container run builds the two application bundles and the target's ffmpeg, then asks podman to
+// build the image for that target, which compiles the server inside itself.
 func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1551,7 +1551,7 @@ func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T
 		"scanner " + appBundle[subScanner],
 		"admin " + appBundle[subAdmin],
 		"ffmpeg linux-amd64",
-		"container rdio-scanner:8.0.0",
+		"container rdio-scanner:8.0.0-linux-amd64",
 	}
 
 	if strings.Join(got, " ") != strings.Join(want, " ") {
@@ -1559,8 +1559,9 @@ func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T
 	}
 }
 
-// The container step passes the resolved version to podman as a build argument and tags the
-// image with it beside latest, naming the Containerfile explicitly.
+// The container step asks podman for the architecture the run resolves, passes the resolved
+// version to it as a build argument, and tags the image with that version beside latest, named
+// for the architecture, naming the Containerfile explicitly.
 func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1577,9 +1578,12 @@ func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *test
 	want := []string{
 		"build",
 		"--pull",
+		"--platform=linux/amd64",
 		"-f", "Containerfile",
 		"--build-arg", "VERSION=8.0.0",
 		"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+		"-t", "rdio-scanner:8.0.0-linux-amd64",
+		"-t", "rdio-scanner:latest-linux-amd64",
 		"-t", "rdio-scanner:8.0.0",
 		"-t", "rdio-scanner:latest",
 		".",
@@ -1587,6 +1591,52 @@ func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *test
 
 	if strings.Join(last.args, " ") != strings.Join(want, " ") {
 		t.Errorf("%s ran with %v, want %v", last.name, last.args, want)
+	}
+}
+
+// A container run names the architecture it builds: it compiles that architecture's ffmpeg before
+// it asks for the image, and reports the image named for that architecture.
+func TestAContainerRunForANamedArchitectureBuildsThatArchitecturesFfmpegThenItsImage(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	if code := tl.run([]string{"container", "linux-arm64"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		got = append(got, s.label+" "+s.result)
+	}
+
+	want := []string{
+		"scanner " + appBundle[subScanner],
+		"admin " + appBundle[subAdmin],
+		"ffmpeg linux-arm64",
+		"container rdio-scanner:8.0.0-linux-arm64",
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the container linux-arm64 run ran\n  %v\nwant\n  %v", got, want)
+	}
+
+	last := (*ran)[len(*ran)-1]
+
+	platform := ""
+	named := 0
+
+	for _, arg := range last.args {
+		if value, ok := strings.CutPrefix(arg, "--platform="); ok {
+			named++
+			platform = value
+		}
+	}
+
+	if named != 1 {
+		t.Errorf("the container linux-arm64 run names the build architecture %d times, want once: %v", named, last.args)
+	}
+
+	if platform != "linux/arm64" {
+		t.Errorf("the container linux-arm64 run asks for the platform %q, want linux/arm64: %v", platform, last.args)
 	}
 }
 
