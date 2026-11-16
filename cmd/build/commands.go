@@ -41,8 +41,10 @@ const (
 	subTest      = "test"
 )
 
-// the container image is built for linux-amd64: the Containerfile's
-// guard checks for the ffmpeg compiled for that architecture.
+// the container image is built for three architectures, and the word after
+// `container` names which one. linux-amd64 is what a run that names no
+// target builds, and is the architecture the Containerfile's guard names
+// first.
 const (
 	containerTarget = "linux-amd64"
 
@@ -52,6 +54,11 @@ const (
 	containerImage     = "rdio-scanner"
 	containerLatestTag = "latest"
 )
+
+// containerTargets are the words a container run accepts, in the order the
+// release matrix names them. The image carries the ffmpeg compiled for the
+// target it is built for, so a target outside these three has no image.
+var containerTargets = []string{containerTarget, "linux-arm", "linux-arm64"}
 
 // the container programs this build knows, podman preferred:
 // the order here is the order a machine is asked in.
@@ -301,8 +308,8 @@ func parseArgs(args []string) (options, error) {
 
 			// a clean run builds nothing, and a test run builds nothing and runs
 			// the whole tree's suites, so a target after either is a stray word;
-			// the container image is one architecture, linux-amd64, so a target
-			// after it names an ffmpeg the image never embeds.
+			// a container run builds one of three architectures, and the word
+			// after it names which one.
 			if arg == subClean || arg == subContainer || arg == subTest {
 				if i+1 < len(args) && isTarget(args[i+1]) {
 					if arg == subClean {
@@ -313,7 +320,17 @@ func parseArgs(args []string) (options, error) {
 						return options{}, fmt.Errorf("a test run builds nothing, so %s is not a target it is asked for: go run ./cmd/build test runs this project's suites on this machine", args[i+1])
 					}
 
-					return options{}, fmt.Errorf("the container image is %s, so %s is not a target a container run builds for", containerTarget, args[i+1])
+					word := theReleaseWordTheRunBuildsFor(args[i+1])
+
+					if !isContainerTarget(word) {
+						return options{}, fmt.Errorf("a container image is built for %s, so %s is not a target a container run builds for", strings.Join(containerTargets, ", "), word)
+					}
+
+					i++
+
+					o.target = word
+
+					continue
 				}
 
 				if arg == subContainer {
@@ -413,6 +430,18 @@ func isTarget(word string) bool {
 	}
 
 	return true
+}
+
+// isContainerTarget reports whether a release word names one of the three
+// architectures a container image is built for.
+func isContainerTarget(word string) bool {
+	for _, target := range containerTargets {
+		if word == target {
+			return true
+		}
+	}
+
+	return false
 }
 
 // step is one external command: a directory, a program, its
