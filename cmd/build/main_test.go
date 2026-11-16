@@ -93,9 +93,11 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 		},
 
 		// The ffmpeg stand-in records that the phase ran rather than what command it
-		// ran; the phase itself is tested in ffmpeg_test.go.
+		// ran; the phase itself is tested in ffmpeg_test.go. It records the target that
+		// phase compiles for, read the way the phase reads it: the one the operator
+		// named, or this machine's when the run named none.
 		ffmpeg: func(o options, stdout io.Writer) (bool, error) {
-			record(step{label: subFFmpeg, result: o.target})
+			record(step{label: subFFmpeg, result: ffmpegTarget(o)})
 
 			return false, nil
 		},
@@ -1655,16 +1657,42 @@ func TestTheContainerImageOfADevelopmentBuildCarriesTheDevelopmentVersion(t *tes
 	}
 }
 
-// A bare container run is for linux-amd64, and a word naming another architecture is refused
-// by a message naming the three a container image is built for.
+// A bare container run names no target at the command line: the architecture its image is built
+// for is decided from the machine the run stands on, and the Containerfile's own architecture is
+// the platform the run later hands the container program. A word naming an architecture outside
+// the three is refused by a message naming the three a container image is built for.
 func TestAContainerRunIsForTheArchitectureTheContainerfileChecksFor(t *testing.T) {
 	o, err := parseArgs([]string{"container"})
 	if err != nil {
 		t.Fatalf("a container run was refused: %v", err)
 	}
 
-	if o.target != "linux-amd64" {
-		t.Errorf("a container run builds for %q, want the architecture the Containerfile checks for", o.target)
+	if o.target != "" {
+		t.Errorf("a bare container run names %s, and a run that names no target decides the architecture from the machine it runs on", o.target)
+	}
+
+	tl, _, ran := fakeRun(released, "")
+
+	// The machine named here is the one the Containerfile's guard checks for, so the platform this
+	// run is given is the answer to the question that guard asks.
+	tl.machine = func() host { return host{goos: "linux", goarch: "amd64", cpus: 4} }
+
+	if code := tl.run([]string{"container"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	last := (*ran)[len(*ran)-1]
+
+	platform := ""
+
+	for _, arg := range last.args {
+		if value, found := strings.CutPrefix(arg, "--platform="); found {
+			platform = value
+		}
+	}
+
+	if platform != "linux/amd64" {
+		t.Errorf("the bare container run built the image for the platform %q, want the architecture the Containerfile checks for: %v", platform, last.args)
 	}
 
 	_, err = parseArgs([]string{"container", "linux-386"})

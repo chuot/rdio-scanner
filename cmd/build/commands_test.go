@@ -1016,15 +1016,19 @@ func TestTheTargetACommandNamesIsTheReleaseWordTheRunBuildsFor(t *testing.T) {
 	}
 }
 
-// a container run builds one of three architectures, and the word after `container` names
-// which one. A word outside the three is refused by a message naming them, because a container
-// image has no build for any other platform; a word that is no target at all is a stray word.
+// a container run builds one of three architectures: the word after `container` names one, --all
+// asks for all three, and a run naming neither decides the architecture it builds for from the
+// machine it runs on. A word outside the three is refused by a message naming them, because a
+// container image has no build for any other platform; a word that is no target at all is a stray word.
 func TestTheTargetAContainerRunNamesIsOneOfTheThreeArchitecturesItsImageIsBuiltFor(t *testing.T) {
 	for _, tc := range []struct {
 		args   []string
 		target string
+		all    bool
 	}{
-		{args: []string{"container"}, target: "linux-amd64"},
+		{args: []string{"container"}},
+		{args: []string{"container", "--all"}, all: true},
+		{args: []string{"--all", "container"}, all: true},
 		{args: []string{"container", "linux-amd64"}, target: "linux-amd64"},
 		{args: []string{"container", "linux-arm"}, target: "linux-arm"},
 		{args: []string{"container", "linux-arm64"}, target: "linux-arm64"},
@@ -1040,7 +1044,15 @@ func TestTheTargetAContainerRunNamesIsOneOfTheThreeArchitecturesItsImageIsBuiltF
 		}
 
 		if o.target != tc.target {
-			t.Errorf("%v names the target %q, want the architecture its image is built for: %s", tc.args, o.target, tc.target)
+			if tc.target == "" {
+				t.Errorf("%v names the target %q, and a run that names no target decides it from the machine it runs on", tc.args, o.target)
+			} else {
+				t.Errorf("%v names the target %q, want the architecture its image is built for: %s", tc.args, o.target, tc.target)
+			}
+		}
+
+		if o.all != tc.all {
+			t.Errorf("%v asks for the three architectures a container image is built for as %t, want %t", tc.args, o.all, tc.all)
 		}
 	}
 
@@ -1078,6 +1090,79 @@ func TestTheTargetAContainerRunNamesIsOneOfTheThreeArchitecturesItsImageIsBuiltF
 
 	if o.pre != "alpha" {
 		t.Errorf("container linux-arm64 --pre alpha carries the prerelease %q, want alpha", o.pre)
+	}
+}
+
+// --all and a target word are one request each, so a container command line carrying both is
+// refused however the words arrive in order. A target the image is built for is refused by the
+// sentence naming both; a target it is not built for is refused by the sentence naming the three,
+// because no container image is built for it.
+func TestAContainerRunAskedForAllAndATargetIsRefusedByTheSentenceNamingThem(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		says []string
+	}{
+		{args: []string{"container", "--all", "linux-arm64"},
+			says: []string{"--all builds every architecture a container image is built for", "linux-arm64", "name one target or --all, not both"}},
+		{args: []string{"container", "linux-arm64", "--all"},
+			says: []string{"--all builds every architecture a container image is built for", "linux-arm64", "name one target or --all, not both"}},
+		{args: []string{"--all", "container", "linux-arm64"},
+			says: []string{"--all builds every architecture a container image is built for", "linux-arm64", "name one target or --all, not both"}},
+		{args: []string{"container", "--all", "linux-386"},
+			says: []string{"a container image is built for linux-amd64, linux-arm, linux-arm64", "is not a target a container run builds for"}},
+		{args: []string{"container", "macos-arm64", "--all"},
+			says: []string{"a container image is built for linux-amd64, linux-arm, linux-arm64", "is not a target a container run builds for"}},
+	} {
+		_, err := parseArgs(tc.args)
+		if err == nil {
+			t.Errorf("%v is accepted, and --all and a target word are not one request", tc.args)
+			continue
+		}
+
+		for _, want := range tc.says {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("the refusal %q does not say %q, which is what %v asked for", err, want, tc.args)
+			}
+		}
+	}
+
+	// The flag arriving first still reaches the container run, so a word that names no target is
+	// refused for that word and not for the flag.
+	_, err := parseArgs([]string{"--all", "container", "nonsense"})
+	if err == nil {
+		t.Fatal("--all container nonsense is accepted, and nonsense names no target")
+	}
+
+	if !strings.Contains(err.Error(), "nonsense") {
+		t.Errorf("the refusal %q does not name nonsense, the word %v got wrong", err, []string{"--all", "container", "nonsense"})
+	}
+}
+
+// --all stays the release matrix's flag for every command that builds one thing, and the refusal
+// each one answers today stays the same. `--all dist` is refused today even though
+// `dist --all` is the release run that asks for the matrix, and stays refused: a finding this
+// feature records without taking on.
+func TestAllStaysRefusedForTheCommandsThatBuildOneThing(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		says string
+	}{
+		{args: []string{"--all"}, says: "--all is the release matrix, and a run that names no command builds this machine's whole tree"},
+		{args: []string{"ffmpeg", "--all"}, says: "--all is the release matrix, and ffmpeg is not it"},
+		{args: []string{"server", "--all"}, says: "--all is the release matrix, and server is not it"},
+		{args: []string{"clean", "--all"}, says: "--all is the release matrix, and clean is not it"},
+		{args: []string{"--all", "dist"}, says: "--all is the release matrix, and dist is not it"},
+		{args: []string{"dist", "--all", "linux-arm64"}, says: "--all builds every platform this project releases, and linux-arm64 is one of them: name one target or --all, not both"},
+	} {
+		_, err := parseArgs(tc.args)
+		if err == nil {
+			t.Errorf("%v is accepted, and --all is not a flag it is asked for", tc.args)
+			continue
+		}
+
+		if !strings.Contains(err.Error(), tc.says) {
+			t.Errorf("the refusal %q does not say %q", err, tc.says)
+		}
 	}
 }
 
@@ -1121,11 +1206,13 @@ func TestDistBuildsThePlatformItIsRunOnUnlessTheWholeMatrixIsAskedFor(t *testing
 	for _, args := range [][]string{
 		{"dist", "--all", "linux-arm64"},
 		{"dist", "linux-arm64", "--all"},
+		{"container", "--all", "linux-arm64"},
+		{"container", "linux-arm64", "--all"},
+		{"--all", "container", "linux-arm64"},
 		{"--all"},
 		{"ffmpeg", "--all"},
 		{"server", "--all"},
 		{"client", "--all"},
-		{"container", "--all"},
 		{"clean", "--all"},
 		{"version", "--all"},
 	} {

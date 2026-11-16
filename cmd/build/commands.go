@@ -41,10 +41,10 @@ const (
 	subTest      = "test"
 )
 
-// the container image is built for three architectures, and the word after
-// `container` names which one. linux-amd64 is what a run that names no
-// target builds, and is the architecture the Containerfile's guard names
-// first.
+// the container image is built for three architectures: the word after
+// `container` names one, --all names all three, and a run naming neither
+// builds the machine it stands on. linux-amd64 is the first of the three,
+// and the architecture the Containerfile's guard names first.
 const (
 	containerTarget = "linux-amd64"
 
@@ -241,17 +241,23 @@ func parseArgs(args []string) (options, error) {
 			o.outputNamed = true
 
 		case "--all":
-			// --all asks for the release matrix, which is a deliberate release,
-			// so the flag belongs to the release run and to nothing else.
-			if o.sub != subDist {
-				// the flag and command arrive in either order, so the refusal
-				// names the command the operator typed, not the word order.
-				who := o.sub
+			// --all asks for a whole list, and only two runs have one: the release run's
+			// matrix of platforms, and the container run's three architectures. It is a
+			// deliberate request, so the flag belongs to those two runs and to nothing else.
+			//
+			// The flag and the command arrive in either order, so the look-ahead names the
+			// command the operator typed. Only a peeked `container` lets the flag through:
+			// `--all dist` stays refused although `dist --all` is the release run that asks
+			// for the matrix.
+			who := o.sub
 
-				if who == "" && i+1 < len(args) && isKnownCommand(args[i+1]) {
-					who = args[i+1]
-				}
+			if who == "" && i+1 < len(args) && isKnownCommand(args[i+1]) {
+				who = args[i+1]
+			}
 
+			forContainer := o.sub == subContainer || who == subContainer
+
+			if o.sub != subDist && !forContainer {
 				if who == "" {
 					return options{}, fmt.Errorf("--all is the release matrix, and a run that names no command builds this machine's whole tree: go run ./cmd/build dist --all builds every platform this project releases")
 				}
@@ -259,9 +265,30 @@ func parseArgs(args []string) (options, error) {
 				return options{}, fmt.Errorf("--all is the release matrix, and %s is not it: go run ./cmd/build dist --all builds every platform this project releases", who)
 			}
 
-			// --all names every platform and a target names one, and these are
-			// not one request; the check looks forward too, so the refusal names
-			// the command line the operator typed.
+			// --all names every target of the run's list and a target word names one, and these
+			// are not one request; the check looks forward too, so the refusal names the command
+			// line the operator typed. A target a container run has no image for is refused for
+			// that target, whichever side of the flag it sits on.
+			if forContainer {
+				word := o.target
+
+				if word == "" && i+1 < len(args) && isTarget(args[i+1]) {
+					word = theReleaseWordTheRunBuildsFor(args[i+1])
+				}
+
+				if word != "" && !isContainerTarget(word) {
+					return options{}, fmt.Errorf("a container image is built for %s, so %s is not a target a container run builds for", strings.Join(containerTargets, ", "), word)
+				}
+
+				if word != "" {
+					return options{}, fmt.Errorf("--all builds every architecture a container image is built for, and %s is one of them: name one target or --all, not both", word)
+				}
+
+				o.all = true
+
+				continue
+			}
+
 			if o.target != "" {
 				return options{}, fmt.Errorf("--all builds every platform this project releases, and %s is one of them: name one target or --all, not both", o.target)
 			}
@@ -308,8 +335,9 @@ func parseArgs(args []string) (options, error) {
 
 			// a clean run builds nothing, and a test run builds nothing and runs
 			// the whole tree's suites, so a target after either is a stray word;
-			// a container run builds one of three architectures, and the word
-			// after it names which one.
+			// a container run builds one of three architectures, the word after it
+			// names which one, and a run naming no target builds the machine it
+			// stands on.
 			if arg == subClean || arg == subContainer || arg == subTest {
 				if i+1 < len(args) && isTarget(args[i+1]) {
 					if arg == subClean {
@@ -326,15 +354,17 @@ func parseArgs(args []string) (options, error) {
 						return options{}, fmt.Errorf("a container image is built for %s, so %s is not a target a container run builds for", strings.Join(containerTargets, ", "), word)
 					}
 
+					// --all has already asked for every architecture the image is built
+					// for, so the word beside it is a second request.
+					if o.all {
+						return options{}, fmt.Errorf("--all builds every architecture a container image is built for, and %s is one of them: name one target or --all, not both", word)
+					}
+
 					i++
 
 					o.target = word
 
 					continue
-				}
-
-				if arg == subContainer {
-					o.target = containerTarget
 				}
 
 				continue
