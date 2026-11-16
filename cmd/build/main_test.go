@@ -1605,8 +1605,8 @@ func TestTheContainerImageOfADevelopmentBuildCarriesTheDevelopmentVersion(t *tes
 	}
 }
 
-// A container run is for linux-amd64, the architecture the Containerfile's own guard checks
-// for.
+// A bare container run is for linux-amd64, and a word naming another architecture is refused
+// by a message naming the three a container image is built for.
 func TestAContainerRunIsForTheArchitectureTheContainerfileChecksFor(t *testing.T) {
 	o, err := parseArgs([]string{"container"})
 	if err != nil {
@@ -1617,8 +1617,15 @@ func TestAContainerRunIsForTheArchitectureTheContainerfileChecksFor(t *testing.T
 		t.Errorf("a container run builds for %q, want the architecture the Containerfile checks for", o.target)
 	}
 
-	if _, err := parseArgs([]string{"container", "linux-arm64"}); err == nil {
-		t.Error("a container run for linux-arm64 was accepted, and the image builds for linux-amd64")
+	_, err = parseArgs([]string{"container", "linux-386"})
+	if err == nil {
+		t.Fatal("a container run for linux-386 was accepted, and no container image is built for it")
+	}
+
+	for _, want := range []string{"linux-amd64", "linux-arm", "linux-arm64"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal %q does not name %s, an architecture a container run builds for", err, want)
+		}
 	}
 }
 

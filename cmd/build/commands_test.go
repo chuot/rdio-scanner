@@ -669,6 +669,71 @@ func TestTheTargetACommandNamesIsTheReleaseWordTheRunBuildsFor(t *testing.T) {
 	}
 }
 
+// a container run builds one of three architectures, and the word after `container` names
+// which one. A word outside the three is refused by a message naming them, because a container
+// image has no build for any other platform; a word that is no target at all is a stray word.
+func TestTheTargetAContainerRunNamesIsOneOfTheThreeArchitecturesItsImageIsBuiltFor(t *testing.T) {
+	for _, tc := range []struct {
+		args   []string
+		target string
+	}{
+		{args: []string{"container"}, target: "linux-amd64"},
+		{args: []string{"container", "linux-amd64"}, target: "linux-amd64"},
+		{args: []string{"container", "linux-arm"}, target: "linux-arm"},
+		{args: []string{"container", "linux-arm64"}, target: "linux-arm64"},
+	} {
+		o, err := parseArgs(tc.args)
+		if err != nil {
+			t.Errorf("%v: the command was refused: %v", tc.args, err)
+			continue
+		}
+
+		if o.sub != subContainer {
+			t.Errorf("%v runs %q, want a container run", tc.args, o.sub)
+		}
+
+		if o.target != tc.target {
+			t.Errorf("%v names the target %q, want the architecture its image is built for: %s", tc.args, o.target, tc.target)
+		}
+	}
+
+	for _, args := range [][]string{
+		{"container", "linux-386"},
+		{"container", "freebsd-amd64"},
+		{"container", "macos-arm64"},
+		{"container", "windows-amd64"},
+	} {
+		_, err := parseArgs(args)
+		if err == nil {
+			t.Errorf("%v is accepted, and no container image is built for %s", args, args[1])
+			continue
+		}
+
+		for _, want := range []string{"linux-amd64", "linux-arm", "linux-arm64"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("the refusal %q does not name %s, an architecture a container run builds for", err, want)
+			}
+		}
+	}
+
+	if _, err := parseArgs([]string{"container", "nonsense"}); err == nil {
+		t.Error(`container nonsense is accepted, and "nonsense" names no target`)
+	}
+
+	o, err := parseArgs([]string{"container", "linux-arm64", "--pre", "alpha"})
+	if err != nil {
+		t.Fatalf("container linux-arm64 --pre alpha was refused: %v", err)
+	}
+
+	if o.target != "linux-arm64" {
+		t.Errorf("container linux-arm64 --pre alpha names the target %q, want linux-arm64", o.target)
+	}
+
+	if o.pre != "alpha" {
+		t.Errorf("container linux-arm64 --pre alpha carries the prerelease %q, want alpha", o.pre)
+	}
+}
+
 // a release run builds its own platform unless --all asks for the whole matrix.
 func TestDistBuildsThePlatformItIsRunOnUnlessTheWholeMatrixIsAskedFor(t *testing.T) {
 	o, err := parseArgs([]string{"dist"})
