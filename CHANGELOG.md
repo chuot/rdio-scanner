@@ -24,6 +24,7 @@
 ### Getting audio in
 
 - The audio converter that ships inside each release now reads the audio out of whichever file format and coding your recorder wrote, and always writes the same output: AAC in an m4a file at 32 kbit/s. When it cannot read a recording's audio, the recording is stored exactly as it arrived and the log says why, in the converter's own words rather than only the version of the program that ran. Chapter 13 of the [administrator guide](docs/admin-guide.html) explains the four conversion modes.
+- A call upload that is missing several things at once now names the last thing it is missing, the way version 6.6.3 named it. The submission a capture client sends when it is only checking that the server is listening — an upload key, a system number, and the `test` flag, with no recording and no talkgroup — is answered `Incomplete call data: no talkgroup` again, which is the sentence SDRTrunk and any other client that treats it as a working server reads. A submission that is complete apart from one thing is refused for that thing, as it was before, and no status code or answer shape changed.
 
 ### One licence for the whole server
 
