@@ -138,6 +138,115 @@ func TestCallIsValidAcceptsAnyTalkgroupClaim(t *testing.T) {
 	}
 }
 
+// TestCallIsValidNamesTheLastDeficiencyTheCallHas pins which reason a call that fails
+// more than one check is refused for: the last check that fails, out of the four the
+// checks always run in — audio beyond its container header, a stated moment, a system,
+// a talkgroup. A submission that is short in several ways is one call, and the sentence
+// an ingest client or an operator reads names the last thing it was missing.
+func TestCallIsValidNamesTheLastDeficiencyTheCallHas(t *testing.T) {
+	noAudio := func(call *Call) { call.Audio = bytes.Repeat([]byte{0}, MinimumAudioLength) }
+	noMoment := func(call *Call) { call.Timestamp = time.UnixMilli(0) }
+	noSystem := func(call *Call) { call.System = System{} }
+	noTalkgroup := func(call *Call) { call.Talkgroup = Talkgroup{} }
+
+	both := func(first, second func(*Call)) func(*Call) {
+		return func(call *Call) {
+			first(call)
+			second(call)
+		}
+	}
+
+	all := func(first, second, third func(*Call)) func(*Call) {
+		return func(call *Call) {
+			first(call)
+			second(call)
+			third(call)
+		}
+	}
+
+	cases := []struct {
+		missing string
+		strip   func(call *Call)
+		want    string
+	}{
+		{missing: "audio", strip: noAudio, want: "no audio"},
+		{missing: "a moment", strip: noMoment, want: "no timestamp"},
+		{missing: "a system", strip: noSystem, want: "no system"},
+		{missing: "a talkgroup", strip: noTalkgroup, want: "no talkgroup"},
+
+		{missing: "audio and a moment", strip: both(noAudio, noMoment), want: "no timestamp"},
+		{missing: "audio and a system", strip: both(noAudio, noSystem), want: "no system"},
+		{missing: "audio and a talkgroup", strip: both(noAudio, noTalkgroup), want: "no talkgroup"},
+		{missing: "a moment and a system", strip: both(noMoment, noSystem), want: "no system"},
+		{missing: "a moment and a talkgroup", strip: both(noMoment, noTalkgroup), want: "no talkgroup"},
+		{missing: "a system and a talkgroup", strip: both(noSystem, noTalkgroup), want: "no talkgroup"},
+
+		{missing: "audio, a moment and a system", strip: all(noAudio, noMoment, noSystem), want: "no system"},
+		{missing: "audio, a moment and a talkgroup", strip: all(noAudio, noMoment, noTalkgroup), want: "no talkgroup"},
+		{missing: "audio, a system and a talkgroup", strip: all(noAudio, noSystem, noTalkgroup), want: "no talkgroup"},
+		{missing: "a moment, a system and a talkgroup", strip: all(noMoment, noSystem, noTalkgroup), want: "no talkgroup"},
+
+		{
+			missing: "audio, a moment, a system and a talkgroup",
+			strip:   func(call *Call) { noAudio(call); noMoment(call); noSystem(call); noTalkgroup(call) },
+			want:    "no talkgroup",
+		},
+	}
+
+	for _, testCase := range cases {
+		call := validCall()
+		testCase.strip(&call)
+
+		err := call.IsValid()
+
+		if err == nil {
+			t.Errorf("IsValid for a call missing %s = nil, want it refused for %q", testCase.missing, testCase.want)
+			continue
+		}
+
+		if err.Error() != testCase.want {
+			t.Errorf("IsValid for a call missing %s reports %q, want %q: the checks run in the order audio, "+
+				"moment, system, talkgroup, and the refusal names the last one that fails",
+				testCase.missing, err.Error(), testCase.want)
+		}
+	}
+}
+
+// TestCallIsValidAcceptsACallThatStatesNoMomentAndRefusesOneStampedAtTheEpoch keeps the
+// two halves of the timestamp guard apart: a call that names no moment at all is accepted
+// and dated to the year 1, and only a call that names the epoch itself is refused. The
+// last reading is the guard's own failure passing behind a later one, which is what an
+// ingest client sees when a submission is short in more than one way.
+func TestCallIsValidAcceptsACallThatStatesNoMomentAndRefusesOneStampedAtTheEpoch(t *testing.T) {
+	unstamped := validCall()
+	unstamped.Timestamp = time.Time{}
+
+	if err := unstamped.IsValid(); err != nil {
+		t.Errorf("IsValid for a complete call naming no moment = %v, want it accepted and dated to the year 1", err)
+	}
+
+	if unstamped.Timestamp.Year() != 1 {
+		t.Errorf("a call naming no moment is dated to the year %d, want the year 1 the guard was written to catch",
+			unstamped.Timestamp.Year())
+	}
+
+	epoch := validCall()
+	epoch.Timestamp = time.UnixMilli(0)
+
+	if err := epoch.IsValid(); err == nil || err.Error() != "no timestamp" {
+		t.Errorf("IsValid for a call stamped at the epoch = %v, want it refused for no timestamp", err)
+	}
+
+	epochNamesNoSystem := epoch
+	epochNamesNoSystem.System = System{}
+
+	if err := epochNamesNoSystem.IsValid(); err == nil || err.Error() != "no system" {
+		t.Errorf("IsValid for a call stamped at the epoch that names no system = %v, want it refused for no "+
+			"system: the epoch is only one of the four checks, and a later failure is what the refusal names",
+			err)
+	}
+}
+
 // TestIsDuplicateOfUsesTheLegacyRule pins the duplicate rule the server has
 // always used: same system identifier, same talkgroup identifier, timestamp
 // within the window; unit sets, labels and audio are irrelevant.

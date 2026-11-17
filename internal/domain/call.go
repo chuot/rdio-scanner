@@ -76,27 +76,32 @@ func NewCall() Call {
 	}
 }
 
-// IsValid reports the first reason the call cannot be accepted, or nil when it can be.
+// IsValid reports the last reason the call cannot be accepted, or nil when it can be.
 // A call needs audio beyond its container header, a real timestamp, and either a
-// resolved system and talkgroup or an ingest claim that names each one.
+// resolved system and talkgroup or an ingest claim that names each one. All four are
+// always checked, in that order, and a call that is short in several ways is refused for
+// the last one: the sentence an ingest client or an operator reads names the last thing
+// the submission was missing.
 func (call Call) IsValid() error {
+	reason := error(nil)
+
 	if len(call.Audio) <= MinimumAudioLength {
-		return errors.New("no audio")
+		reason = errors.New("no audio")
 	}
 
 	if call.Timestamp.UnixMilli() == 0 {
-		return errors.New("no timestamp")
+		reason = errors.New("no timestamp")
 	}
 
 	if !call.hasSystemClaim() {
-		return errors.New("no system")
+		reason = errors.New("no system")
 	}
 
 	if !call.hasTalkgroupClaim() {
-		return errors.New("no talkgroup")
+		reason = errors.New("no talkgroup")
 	}
 
-	return nil
+	return reason
 }
 
 // HasSystem reports whether a system is attached to the call: one the server already

@@ -495,9 +495,10 @@ func TestCallUploadEndpointAnswersWhatASubmissionIsMissing(t *testing.T) {
 		t.Fatalf("upload status = %d, want 417: %s", rec.Code, rec.Body.String())
 	}
 
-	if got, want := rec.Body.String(), "Incomplete call data: no audio\n\n"; got != want {
-		t.Errorf("upload answer = %q, want %q: the legacy server's own message already ends with a line break, "+
-			"and its error helper adds one", got, want)
+	if got, want := rec.Body.String(), "Incomplete call data: no talkgroup\n\n"; got != want {
+		t.Errorf("upload answer = %q, want %q: the submission names no recording, no moment, no system, and no "+
+			"talkgroup, and the answer names the last thing it is missing. The legacy server's own message already "+
+			"ends with a line break, and its error helper adds one", got, want)
 	}
 
 	// The log holds the exact sentence, not a fragment: the legacy helper
@@ -510,9 +511,58 @@ func TestCallUploadEndpointAnswersWhatASubmissionIsMissing(t *testing.T) {
 		}
 	}
 
-	if stored != "the upload was refused: Incomplete call data: no audio" {
+	if stored != "the upload was refused: Incomplete call data: no talkgroup" {
 		t.Errorf("stored refusal = %q, want the refusal as one sentence filed with the upload endpoint, "+
 			"without the line break the uploader's answer carries: %v", stored, fixture.logs.Stored)
+	}
+}
+
+// TestCallUploadEndpointsAnswerTheConnectionCheckWithTheLastDeficiency answers what a
+// capture client asks when it is only asking whether the server is listening: a credential,
+// a system, and a test flag, with no recording in the request. The submission is short of a
+// recording and of a talkgroup, and the answer names the talkgroup, which is the sentence a
+// capture client reads as a working server. Both upload endpoints answer the same way because
+// they refuse through the same reading.
+func TestCallUploadEndpointsAnswerTheConnectionCheckWithTheLastDeficiency(t *testing.T) {
+	paths := []string{"/api/call-upload", "/api/trunk-recorder-call-upload"}
+
+	for _, path := range paths {
+		fixture := newUploadFixture()
+
+		call := domain.NewCall()
+		call.Meta.SystemRef = uploadSystemRef
+
+		fixture.parser.produces(call)
+
+		body, contentType := postedBody(t,
+			uploadField{name: "key", value: uploadOpenKey},
+			uploadField{name: "system", value: "10001"},
+			uploadField{name: "test", value: "1"},
+		)
+
+		rec := fixture.post(path, contentType, body)
+
+		if rec.Code != http.StatusExpectationFailed {
+			t.Fatalf("%s connection check status = %d, want 417: %s", path, rec.Code, rec.Body.String())
+		}
+
+		if got, want := rec.Body.String(), "Incomplete call data: no talkgroup\n\n"; got != want {
+			t.Errorf("%s connection check answer = %q, want %q: the request names a system and nothing else, "+
+				"so the last thing it is missing is a talkgroup", path, got, want)
+		}
+
+		stored := ""
+
+		for _, entry := range fixture.logs.Stored {
+			if entry.Source == domain.LogSourceUpload {
+				stored = entry.Message
+			}
+		}
+
+		if stored != "the upload was refused: Incomplete call data: no talkgroup" {
+			t.Errorf("%s stored refusal = %q, want the refusal the answer carries, filed as one sentence: %v",
+				path, stored, fixture.logs.Stored)
+		}
 	}
 }
 
