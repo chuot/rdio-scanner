@@ -270,6 +270,17 @@ func TestUploadCallHandlerReportsWhatASubmissionIsMissing(t *testing.T) {
 
 			return call
 		}, cause: "no talkgroup"},
+		{name: "a check that says nothing about a recording", call: func() domain.Call {
+			// An ingest client testing its connection posts a credential and a system and names
+			// no recording, no moment, and no talkgroup. The refusal names the last thing the
+			// submission was missing, which is the answer the client reads as a working server.
+			call := uploadedCall()
+			call.Audio = nil
+			call.Timestamp = time.Unix(0, 0)
+			call.Meta.TalkgroupRef = 0
+
+			return call
+		}, cause: "no talkgroup"},
 	}
 
 	for _, testCase := range cases {
