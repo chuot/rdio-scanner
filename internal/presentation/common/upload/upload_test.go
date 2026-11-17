@@ -39,10 +39,15 @@ const (
 	uploadSystemRef    = uint(10001)
 	uploadOtherSystem  = uint(10002)
 	uploadTalkgroupRef = uint(1514000)
-	uploadOpenKey      = "capture-apikey-open"
-	uploadScopedKey    = "capture-apikey-scoped"
-	uploadDisabledKey  = "capture-apikey-disabled"
-	uploadRecording    = "a recording long enough to be a recording, and then some more of it"
+
+	// uploadUnknownTalkgroupRef is a talkgroup number no row in these fixtures carries a row for, which is what an
+	// uploader names when its own configuration knows a talkgroup this server has never been told about.
+	uploadUnknownTalkgroupRef = uint(999999)
+
+	uploadOpenKey     = "capture-apikey-open"
+	uploadScopedKey   = "capture-apikey-scoped"
+	uploadDisabledKey = "capture-apikey-disabled"
+	uploadRecording   = "a recording long enough to be a recording, and then some more of it"
 )
 
 var uploadMoment = time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
@@ -50,6 +55,13 @@ var uploadMoment = time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 // uploadEndpointPaths are the two endpoints an uploader posts a call to. They answer a connection check the same
 // way because they read the posted body and answer the reading through the same code.
 var uploadEndpointPaths = []string{"/api/call-upload", "/api/trunk-recorder-call-upload"}
+
+// capturedUploadAnswers are the recorded success answers, named by the endpoint they were captured from. The two
+// answers are the same bytes, and a test that names the endpoint it posted at names the capture that endpoint has.
+var capturedUploadAnswers = map[string]string{
+	"/api/call-upload":                "rest-upload.txt",
+	"/api/trunk-recorder-call-upload": "rest-trunk-recorder-upload.txt",
+}
 
 // uploadFixture is a server whose ingest runs on the in-memory stand-ins the application tests use,
 // reached through the real upload endpoints.
@@ -153,6 +165,28 @@ func callNaming(systemRef, talkgroupRef uint) domain.Call {
 
 	call.Meta.SystemRef = systemRef
 	call.Meta.TalkgroupRef = talkgroupRef
+
+	return call
+}
+
+// recordingNamingNoTalkgroup is a submission that carries a recording, a moment, and a system number, and names no
+// talkgroup in any form: a recording in every way but one, which the server refuses for that one thing.
+func recordingNamingNoTalkgroup(systemRef uint) domain.Call {
+	call := completeRecording()
+
+	call.Meta.SystemRef = systemRef
+	call.Meta.TalkgroupLabel = ""
+
+	return call
+}
+
+// recordingCarryingTheCheckClaim is what the field reading hands back for a posted recording that also carries the
+// marker a client posts when it is only asking whether the server will take an upload. The recording is what decides
+// such a submission: a marker beside a recording claims nothing the recording does not already answer.
+func recordingCarryingTheCheckClaim() domain.Call {
+	call := completeCall()
+
+	call.Meta.ConnectionCheck = true
 
 	return call
 }
@@ -317,6 +351,47 @@ func connectionCheckFields(key string, systemRef string) []uploadField {
 	return append(fields, uploadField{name: "test", value: "1"})
 }
 
+// recordingNamingNoTalkgroupFields are the parts an uploader posts for a recording whose talkgroup it has no number
+// for: everything the capture client posts, with the talkgroup named as the digit zero and no label or name posted
+// with it. That reading claims no talkgroup at all, which the reader's own suite pins.
+func recordingNamingNoTalkgroupFields(key string) []uploadField {
+	kept := []uploadField{}
+
+	for _, field := range captureUploadFields(key) {
+		if field.name == "talkgroupLabel" || field.name == "talkgroupName" {
+			continue
+		}
+
+		if field.name == "talkgroup" {
+			field.value = "0"
+		}
+
+		kept = append(kept, field)
+	}
+
+	return kept
+}
+
+// recordingWithCheckClaimFields are the parts an uploader posts for a recording that also carries the marker a client
+// posts when it is only asking whether the server will take an upload.
+func recordingWithCheckClaimFields(key string) []uploadField {
+	return append(captureUploadFields(key), uploadField{name: "test", value: "1"})
+}
+
+// checkNamingTalkgroupFields are the parts a client posts when it names a talkgroup as well as a system, names the
+// moment it is reporting, posts its own marker, and brings no recording: the shape that is short of a recording
+// alone. The system and talkgroup numbers it posts are the ones checkNamingTalkgroupCall claims.
+func checkNamingTalkgroupFields(key string) []uploadField {
+	return []uploadField{
+		{name: "key", value: key},
+		{name: "system", value: "10001"},
+		{name: "dateTime", value: "1791288000000"},
+		{name: "talkgroup", value: "999999"},
+		{name: "talkgroupLabel", value: "Unknown Dispatch"},
+		{name: "test", value: "1"},
+	}
+}
+
 // connectionCheckCall is what the field reading hands back for the body above: its claim that the submission is a
 // connection check, the system number the submission named when it named one, and no recording. Which claim a
 // posted test marker earns is the reading's own contract, proven in the parser's own suite; what these endpoints
@@ -326,6 +401,18 @@ func connectionCheckCall(systemRef uint) domain.Call {
 
 	call.Meta.ConnectionCheck = true
 	call.Meta.SystemRef = systemRef
+
+	return call
+}
+
+// checkNamingTalkgroupCall is what the field reading hands back for the body the fields helper above posts: the claim
+// a client's own marker earns, one system number, one talkgroup number, the moment the submission reported, and no
+// recording. It is short of a recording alone, so the reason it is refused for is its audio.
+func checkNamingTalkgroupCall() domain.Call {
+	call := connectionCheckCall(uploadSystemRef)
+
+	call.Meta.TalkgroupRef = uploadUnknownTalkgroupRef
+	call.Timestamp = uploadMoment
 
 	return call
 }
@@ -395,6 +482,21 @@ func (fixture *uploadFixture) entriesNamingACheck() []domain.LogEntry {
 
 	for _, entry := range fixture.uploadEntries() {
 		if strings.Contains(entry.Message, "connection check") {
+			entries = append(entries, entry)
+		}
+	}
+
+	return entries
+}
+
+// entriesFiledUnder are the entries one part of the server filed, in the order it wrote them. A submission that
+// never reached the ingest use case leaves nothing under that use case, and nothing under the configuration the
+// ingest use case changes when it auto-populates what an upload names.
+func (fixture *uploadFixture) entriesFiledUnder(source domain.LogSource) []domain.LogEntry {
+	entries := []domain.LogEntry{}
+
+	for _, entry := range fixture.logs.Stored {
+		if entry.Source == source {
 			entries = append(entries, entry)
 		}
 	}
@@ -849,6 +951,169 @@ func TestTheConnectionCheckWithACredentialThisServerDoesNotAcceptIsRefusedAsACre
 				fixture.assertStamped(t, "the apikey is not valid")
 			})
 		}
+	}
+}
+
+// TestTheTwoUploadRefusalsDoNotCollapseTheLog keeps the two ways an upload endpoint says no apart in the log view. A
+// connection check and a recording that names no talkgroup are refused for the same thing, and the answer each is put
+// on the wire is the same sentence with the same status: the entry the server keeps for itself is the only place an
+// operator can tell a client that was testing from a recording that was lost. Both refusals are posted in one server
+// run so that they are read against each other, and the recording refusal is the shape a capture client posts when it
+// has no talkgroup number — the digit zero, and no label beside it. Which deficiency each reason word names is the
+// model's own reading, pinned in its own suite; what is pinned here is that the level and the sentence each refusal is
+// filed with do not move when the other refusal happens beside it.
+func TestTheTwoUploadRefusalsDoNotCollapseTheLog(t *testing.T) {
+	for _, path := range uploadEndpointPaths {
+		t.Run(strings.TrimPrefix(path, "/api/")+" refused recording and refused check", func(t *testing.T) {
+			fixture := newUploadFixture()
+
+			fixture.seedUploadSystem()
+
+			fixture.parser.produces(recordingNamingNoTalkgroup(uploadSystemRef))
+
+			body, contentType := postedBody(t, recordingNamingNoTalkgroupFields(uploadOpenKey)...)
+
+			rec := fixture.post(path, contentType, body)
+
+			if rec.Code != http.StatusExpectationFailed {
+				t.Fatalf("%s refused recording status = %d, want 417: %s", path, rec.Code, rec.Body.String())
+			}
+
+			if got, want := rec.Body.String(), "Incomplete call data: no talkgroup\n\n"; got != want {
+				t.Errorf("%s refused recording answer = %q, want %q: a posting that carries audio, a moment, and a "+
+					"system number, and names the digit zero for its talkgroup, is short of a talkgroup and is answered "+
+					"for that", path, got, want)
+			}
+
+			assertFiledAt(t, path+" refused recording", fixture.uploadEntries(), domain.LogLevelError,
+				"the upload was refused: Incomplete call data: no talkgroup",
+				"a recording this server did not accept is reported as a lost recording, in the sentence and at the "+
+					"level an operator reads it in today")
+
+			fixture.parser.produces(connectionCheckCall(uploadSystemRef))
+
+			body, contentType = postedBody(t, connectionCheckFields(uploadOpenKey, "10001")...)
+
+			rec = fixture.post(path, contentType, body)
+
+			if rec.Code != http.StatusExpectationFailed {
+				t.Fatalf("%s connection check status = %d, want 417: %s", path, rec.Code, rec.Body.String())
+			}
+
+			if got, want := rec.Body.String(), "Incomplete call data: no talkgroup\n\n"; got != want {
+				t.Errorf("%s connection check answer = %q, want %q: the two refusals are answered alike on purpose, "+
+					"because the answer a client reads as a working server is the pinned one", path, got, want)
+			}
+
+			entries := fixture.uploadEntries()
+
+			if len(entries) != 2 {
+				t.Fatalf("%s filed %d entries with the upload endpoint for two refusals, want the one each leaves: %v",
+					path, len(entries), entries)
+			}
+
+			assertFiledAt(t, path+" refused check", entries[1:], domain.LogLevelInfo,
+				"the connection check was refused: no talkgroup, presented by the apikey Capture open for system 10001",
+				"the two submissions were refused for the same thing, so the entry the server keeps for itself is the "+
+					"only place an operator can tell them apart")
+
+			if named := fixture.entriesNamingACheck(); len(named) != 1 || named[0].Level != domain.LogLevelInfo {
+				t.Errorf("%s filed %v, want the two refusals told apart by level and by sentence: the check is the only "+
+					"one of the two that names itself, and it is filed where a routine refusal is read", path, named)
+			}
+
+			fixture.assertStamped(t, "was refused")
+		})
+
+		t.Run(strings.TrimPrefix(path, "/api/")+" marker carried beside a recording", func(t *testing.T) {
+			fixture := newUploadFixture()
+
+			fixture.seedUploadSystem()
+			fixture.parser.produces(recordingCarryingTheCheckClaim())
+
+			body, contentType := postedBody(t, recordingWithCheckClaimFields(uploadOpenKey)...)
+
+			rec := fixture.post(path, contentType, body)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s status = %d, want 200: %s", path, rec.Code, rec.Body.String())
+			}
+
+			if got, want := rec.Body.String(), capturedAnswer(t, capturedUploadAnswers[path]); got != want {
+				t.Errorf("%s answer =\n  %q\nwant\n  %q: a submission that carries a recording long enough to be one is "+
+					"a recording, whatever marker was posted beside it, and it is answered the way that recording has "+
+					"always been answered", path, got, want)
+			}
+
+			if len(fixture.calls.Saved) != 1 {
+				t.Errorf("%s stored %v, want the one call the recording carried: a marker beside a recording does not "+
+					"make it a check, and a check is the one submission this server keeps nothing of", path, fixture.calls.Saved)
+			}
+
+			if entries := fixture.uploadEntries(); len(entries) != 0 {
+				t.Errorf("%s filed %v with the upload endpoint, want no refusal for an accepted recording: a marker says "+
+					"what a submission is only when the submission brings no recording", path, entries)
+			}
+		})
+	}
+}
+
+// TestAConnectionCheckCreatesNothing proves that a connection check leaves the server holding nothing it did not hold
+// before. The check names a system and a talkgroup no row in this fixture carries, and the server auto-populates what
+// an accepted recording names: a check that reached the ingest use case would invent both rows, file the entry that
+// creation earns, and file a call of its own. A refused check is answered by the use case that answers checks, and
+// that use case stores nothing. The entry naming the refusal is read here because a submission the server never read
+// as a check would prove nothing about what a check leaves behind.
+func TestAConnectionCheckCreatesNothing(t *testing.T) {
+	for _, path := range uploadEndpointPaths {
+		t.Run(strings.TrimPrefix(path, "/api/")+" connection check names nothing the operator configured", func(t *testing.T) {
+			fixture := newUploadFixture()
+
+			fixture.parser.produces(checkNamingTalkgroupCall())
+
+			body, contentType := postedBody(t, checkNamingTalkgroupFields(uploadOpenKey)...)
+
+			rec := fixture.post(path, contentType, body)
+
+			if rec.Code != http.StatusExpectationFailed {
+				t.Fatalf("%s status = %d, want 417: %s", path, rec.Code, rec.Body.String())
+			}
+
+			if got, want := rec.Body.String(), "Incomplete call data: no audio\n\n"; got != want {
+				t.Errorf("%s answer = %q, want %q: the check names a system, a talkgroup, and a moment, and brings no "+
+					"recording, so the last thing it is missing is its audio", path, got, want)
+			}
+
+			if named := fixture.entriesNamingACheck(); len(named) != 1 {
+				t.Errorf("%s filed %v, want the one entry a refused check leaves: without that entry there is no reading "+
+					"of this submission as a check to measure the empty tables against", path, named)
+			}
+
+			if len(fixture.calls.Saved) != 0 || len(fixture.calls.Stored) != 0 {
+				t.Errorf("%s stored %v in a history of %d, want no call at all: a check brings no recording, so there is "+
+					"nothing to record", path, fixture.calls.Saved, len(fixture.calls.Stored))
+			}
+
+			if len(fixture.systems.Stored) != 0 {
+				t.Errorf("%s holds systems %v, want no system row and so no talkgroup row under one: the numbers a check "+
+					"names are not a request to configure them", path, fixture.systems.Stored)
+			}
+
+			if len(fixture.groups.Stored) != 1 || len(fixture.tags.Stored) != 1 {
+				t.Errorf("%s holds groups %v and tags %v, want the one group and the one tag the server started with",
+					path, fixture.groups.Stored, fixture.tags.Stored)
+			}
+
+			for _, source := range []domain.LogSource{domain.LogSourceIngest, domain.LogSourceConfig} {
+				if entries := fixture.entriesFiledUnder(source); len(entries) != 0 {
+					t.Errorf("%s filed %v under %s, want nothing there: a submission that reached the ingest use case "+
+						"would file its own entry there, and file the configuration it auto-populated beside it",
+						path, entries, source)
+				}
+			}
+
+			fixture.assertStamped(t, "was refused")
+		})
 	}
 }
 
