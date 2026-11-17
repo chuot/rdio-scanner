@@ -41,10 +41,15 @@ const (
 	uploadTalkgroupRef = uint(1514000)
 	uploadOpenKey      = "capture-apikey-open"
 	uploadScopedKey    = "capture-apikey-scoped"
+	uploadDisabledKey  = "capture-apikey-disabled"
 	uploadRecording    = "a recording long enough to be a recording, and then some more of it"
 )
 
 var uploadMoment = time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+
+// uploadEndpointPaths are the two endpoints an uploader posts a call to. They answer a connection check the same
+// way because they read the posted body and answer the reading through the same code.
+var uploadEndpointPaths = []string{"/api/call-upload", "/api/trunk-recorder-call-upload"}
 
 // uploadFixture is a server whose ingest runs on the in-memory stand-ins the application tests use,
 // reached through the real upload endpoints.
@@ -76,6 +81,8 @@ func newUploadFixture() *uploadFixture {
 				Present: true,
 				Systems: []domain.ScopedSystem{{SystemRef: uploadSystemRef, TalkgroupsWildcard: true}},
 			}},
+			{ID: 3, Ident: "Capture switched off", Key: uploadDisabledKey, Disabled: true,
+				Scope: domain.AccessScope{Present: true, Wildcard: true}},
 		}},
 		calls:       fakes.NewCalls(),
 		systems:     &fakes.Systems{},
@@ -292,6 +299,37 @@ func captureUploadFields(key string) []uploadField {
 	}
 }
 
+// connectionCheckFields are the parts a capture client posts when it is only asking whether this server will take
+// an upload: its credential, one system number, and its own test marker, in the order it posts them, and no
+// recording part. A row that posts nothing where the credential or the system number goes is how a client that
+// names neither arrives.
+func connectionCheckFields(key string, systemRef string) []uploadField {
+	fields := []uploadField{}
+
+	if len(key) > 0 {
+		fields = append(fields, uploadField{name: "key", value: key})
+	}
+
+	if len(systemRef) > 0 {
+		fields = append(fields, uploadField{name: "system", value: systemRef})
+	}
+
+	return append(fields, uploadField{name: "test", value: "1"})
+}
+
+// connectionCheckCall is what the field reading hands back for the body above: its claim that the submission is a
+// connection check, the system number the submission named when it named one, and no recording. Which claim a
+// posted test marker earns is the reading's own contract, proven in the parser's own suite; what these endpoints
+// make of a call that carries it is proven here.
+func connectionCheckCall(systemRef uint) domain.Call {
+	call := domain.NewCall()
+
+	call.Meta.ConnectionCheck = true
+	call.Meta.SystemRef = systemRef
+
+	return call
+}
+
 func (fixture *uploadFixture) post(path, contentType, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", contentType)
@@ -333,6 +371,57 @@ func (fixture *uploadFixture) loggedAs(source domain.LogSource, fragment string)
 	}
 
 	return false
+}
+
+// uploadEntries are the entries the server filed with the upload endpoint, in the order it wrote them. A test
+// reads a whole message and the level it was filed at here, rather than a fragment of one: the sentence an operator
+// searches the log view for is the whole entry.
+func (fixture *uploadFixture) uploadEntries() []domain.LogEntry {
+	entries := []domain.LogEntry{}
+
+	for _, entry := range fixture.logs.Stored {
+		if entry.Source == domain.LogSourceUpload {
+			entries = append(entries, entry)
+		}
+	}
+
+	return entries
+}
+
+// entriesNamingACheck are the entries that name a connection check. A submission refused for its credential never
+// reaches the question of what it was short of, so the answer it would have been given for that appears nowhere.
+func (fixture *uploadFixture) entriesNamingACheck() []domain.LogEntry {
+	entries := []domain.LogEntry{}
+
+	for _, entry := range fixture.uploadEntries() {
+		if strings.Contains(entry.Message, "connection check") {
+			entries = append(entries, entry)
+		}
+	}
+
+	return entries
+}
+
+// assertFiledAt insists that the upload endpoint filed exactly one entry, at the given level, whose message is
+// exactly the given sentence. These endpoints file one entry per refusal they answer, so more than one entry means
+// one answer wrote two, and a stored message that is not the whole sentence is one an operator cannot search for.
+func assertFiledAt(t *testing.T, label string, entries []domain.LogEntry, level string, want string, why string) {
+	t.Helper()
+
+	if len(entries) != 1 {
+		t.Errorf("%s filed %d entries with the upload endpoint, want the one entry this answer leaves: %v",
+			label, len(entries), entries)
+
+		return
+	}
+
+	if entries[0].Level != level {
+		t.Errorf("%s entry is filed at %q, want %q: %s", label, entries[0].Level, level, why)
+	}
+
+	if entries[0].Message != want {
+		t.Errorf("%s entry =\n  %q\nwant\n  %q: %s", label, entries[0].Message, want, why)
+	}
 }
 
 // TestCallUploadEndpointAnswersTheCapturedUpload proves an accepted
@@ -522,23 +611,19 @@ func TestCallUploadEndpointAnswersWhatASubmissionIsMissing(t *testing.T) {
 // a system, and a test flag, with no recording in the request. The submission is short of a
 // recording and of a talkgroup, and the answer names the talkgroup, which is the sentence a
 // capture client reads as a working server. Both upload endpoints answer the same way because
-// they refuse through the same reading.
+// they refuse through the same reading. What the server keeps for itself is the same answer
+// said as a check: the reason, the credential that presented itself, and the system the check
+// named, filed at the level an operator reads as a normal refusal and not a lost recording. The instant that entry
+// carries is read in the tests below, which post the same check at every state a check names a system in.
 func TestCallUploadEndpointsAnswerTheConnectionCheckWithTheLastDeficiency(t *testing.T) {
-	paths := []string{"/api/call-upload", "/api/trunk-recorder-call-upload"}
+	paths := uploadEndpointPaths
 
 	for _, path := range paths {
 		fixture := newUploadFixture()
 
-		call := domain.NewCall()
-		call.Meta.SystemRef = uploadSystemRef
+		fixture.parser.produces(connectionCheckCall(uploadSystemRef))
 
-		fixture.parser.produces(call)
-
-		body, contentType := postedBody(t,
-			uploadField{name: "key", value: uploadOpenKey},
-			uploadField{name: "system", value: "10001"},
-			uploadField{name: "test", value: "1"},
-		)
+		body, contentType := postedBody(t, connectionCheckFields(uploadOpenKey, "10001")...)
 
 		rec := fixture.post(path, contentType, body)
 
@@ -551,17 +636,218 @@ func TestCallUploadEndpointsAnswerTheConnectionCheckWithTheLastDeficiency(t *tes
 				"so the last thing it is missing is a talkgroup", path, got, want)
 		}
 
-		stored := ""
+		assertFiledAt(t, path+" connection check", fixture.uploadEntries(), domain.LogLevelInfo,
+			"the connection check was refused: no talkgroup, presented by the apikey Capture open for system 10001",
+			"the server refused a submission it read as a connection check on purpose, and the entry names what it was "+
+				"refused for, which credential presented itself, and which system it named: an operator reading this "+
+				"between two upload attempts is reading the answer a client got, not a recording that was lost")
+	}
+}
 
-		for _, entry := range fixture.logs.Stored {
-			if entry.Source == domain.LogSourceUpload {
-				stored = entry.Message
-			}
+// TestTheConnectionCheckEntryNamesTheSystemTheCheckNamed reads the sentence a refused check leaves in the three
+// states a check names a system in: a number this server has a row for, a number it has no row for, and nothing
+// named at all. They are three different things an operator is being told about a client that keeps retrying, and
+// the sentence says which one the submission did. The answer the uploader is given stays the same in all three.
+func TestTheConnectionCheckEntryNamesTheSystemTheCheckNamed(t *testing.T) {
+	cases := []struct {
+		label  string
+		posted string
+		named  uint
+		want   string
+	}{
+		{
+			label:  "names a system this server has a row for",
+			posted: "10001",
+			named:  uploadSystemRef,
+			want: "the connection check was refused: no talkgroup, presented by the apikey Capture open " +
+				"for system 10001",
+		},
+		{
+			label:  "names a number this server has no row for",
+			posted: "10002",
+			named:  uploadOtherSystem,
+			want: "the connection check was refused: no talkgroup, presented by the apikey Capture open " +
+				"for system 10002 this server does not have",
+		},
+		{
+			label:  "names no system at all",
+			posted: "",
+			named:  0,
+			want:   "the connection check was refused: no talkgroup, presented by the apikey Capture open",
+		},
+	}
+
+	for _, path := range uploadEndpointPaths {
+		for _, testCase := range cases {
+			label := path + " connection check that " + testCase.label
+
+			t.Run(strings.TrimPrefix(label, "/api/"), func(t *testing.T) {
+				fixture := newUploadFixture()
+
+				fixture.seedUploadSystem()
+				fixture.parser.produces(connectionCheckCall(testCase.named))
+
+				body, contentType := postedBody(t, connectionCheckFields(uploadOpenKey, testCase.posted)...)
+
+				rec := fixture.post(path, contentType, body)
+
+				if rec.Code != http.StatusExpectationFailed {
+					t.Fatalf("status = %d, want 417: %s", rec.Code, rec.Body.String())
+				}
+
+				if got, want := rec.Body.String(), "Incomplete call data: no talkgroup\n\n"; got != want {
+					t.Errorf("answer = %q, want %q: a check is short of a talkgroup at both endpoints whatever number "+
+						"it named for a system, and the answer it is given names the last thing it was missing", got, want)
+				}
+
+				assertFiledAt(t, "the check", fixture.uploadEntries(), domain.LogLevelInfo, testCase.want,
+					"the entry an operator reads is the whole sentence, and its system clause says whether the number "+
+						"the check named is one this server has a row for, one it has none for, or no number at all")
+
+				fixture.assertStamped(t, "the connection check was refused")
+			})
 		}
+	}
+}
 
-		if stored != "the upload was refused: Incomplete call data: no talkgroup" {
-			t.Errorf("%s stored refusal = %q, want the refusal the answer carries, filed as one sentence: %v",
-				path, stored, fixture.logs.Stored)
+// TestTheConnectionCheckEntryNamesTheCredentialByIdentityAndNeverTheKeyString reads the credential clause of the
+// sentence a refused check leaves, and the rule that an entry says who a credential is and not what it is: the key
+// string itself never appears in one. The clause names whichever credential presented itself, which is the identity
+// an operator can act on in the log view. A check hands over no recording, so a credential whose scope names a
+// different system than the one the check named is still one this server has, because a scope has nothing to
+// withhold from a submission that brings nothing a scope could refuse.
+func TestTheConnectionCheckEntryNamesTheCredentialByIdentityAndNeverTheKeyString(t *testing.T) {
+	cases := []struct {
+		label  string
+		key    string
+		posted string
+		named  uint
+		want   string
+	}{
+		{
+			label:  "the credential this server holds and has not switched off",
+			key:    uploadOpenKey,
+			posted: "10001",
+			named:  uploadSystemRef,
+			want: "the connection check was refused: no talkgroup, presented by the apikey Capture open " +
+				"for system 10001",
+		},
+		{
+			label:  "the credential whose scope names the system the check names",
+			key:    uploadScopedKey,
+			posted: "10001",
+			named:  uploadSystemRef,
+			want: "the connection check was refused: no talkgroup, presented by the apikey Capture scoped " +
+				"for system 10001",
+		},
+		{
+			label:  "a credential whose scope names another system than the one the check names",
+			key:    uploadScopedKey,
+			posted: "10002",
+			named:  uploadOtherSystem,
+			want: "the connection check was refused: no talkgroup, presented by the apikey Capture scoped " +
+				"for system 10002 this server does not have",
+		},
+	}
+
+	for _, path := range uploadEndpointPaths {
+		for _, testCase := range cases {
+			label := path + " connection check with " + testCase.label
+
+			t.Run(strings.TrimPrefix(label, "/api/"), func(t *testing.T) {
+				fixture := newUploadFixture()
+
+				fixture.seedUploadSystem()
+				fixture.parser.produces(connectionCheckCall(testCase.named))
+
+				body, contentType := postedBody(t, connectionCheckFields(testCase.key, testCase.posted)...)
+
+				rec := fixture.post(path, contentType, body)
+
+				if rec.Code != http.StatusExpectationFailed {
+					t.Fatalf("status = %d, want 417: %s", rec.Code, rec.Body.String())
+				}
+
+				if got, want := rec.Body.String(), "Incomplete call data: no talkgroup\n\n"; got != want {
+					t.Errorf("answer = %q, want %q: a check that brings nothing a scope could withhold is answered for "+
+						"what it is short of as a call, not for the credential it presented", got, want)
+				}
+
+				entries := fixture.uploadEntries()
+
+				assertFiledAt(t, "the check", entries, domain.LogLevelInfo, testCase.want,
+					"the credential clause names the identity the credential is configured under, which is the one "+
+						"thing an operator can act on in the log view")
+
+				for _, apikey := range fixture.apikeys.Stored {
+					for _, entry := range entries {
+						if strings.Contains(entry.Message, apikey.Key) {
+							t.Errorf("entry = %q, which carries the key string %s: an entry names who a credential is, "+
+								"never the string that opens the door", entry.Message, apikey.Key)
+						}
+					}
+				}
+
+				fixture.assertStamped(t, "the connection check was refused")
+			})
+		}
+	}
+}
+
+// TestTheConnectionCheckWithACredentialThisServerDoesNotAcceptIsRefusedAsACredential answers a check whose
+// credential this server does not accept the way it answers a recording carrying the same credential: with the
+// answer that refusal has always had, filed with the sentence that refusal has always had, and with no entry naming
+// a check. Today that submission is answered for being short of a call before its credential is ever read, which is
+// the all-clear a client reports as a working server.
+func TestTheConnectionCheckWithACredentialThisServerDoesNotAcceptIsRefusedAsACredential(t *testing.T) {
+	cases := []struct {
+		label string
+		key   string
+	}{
+		{label: "a key this server has never heard of", key: "not-an-apikey"},
+		{label: "a key this server has and has switched off", key: uploadDisabledKey},
+		{label: "no credential part at all", key: ""},
+	}
+
+	for _, path := range uploadEndpointPaths {
+		for _, testCase := range cases {
+			label := path + " connection check with " + testCase.label
+
+			t.Run(strings.TrimPrefix(label, "/api/"), func(t *testing.T) {
+				fixture := newUploadFixture()
+
+				fixture.seedUploadSystem()
+				fixture.parser.produces(connectionCheckCall(uploadSystemRef))
+
+				body, contentType := postedBody(t, connectionCheckFields(testCase.key, "10001")...)
+
+				rec := fixture.post(path, contentType, body)
+
+				if rec.Code != http.StatusUnauthorized {
+					t.Fatalf("status = %d, want 401: %s", rec.Code, rec.Body.String())
+				}
+
+				if got, want := rec.Body.String(), capturedAnswer(t, "rest-upload-denied.txt"); got != want {
+					t.Errorf("answer = %q, want %q: a check whose credential this server does not accept is refused "+
+						"for that credential, with the answer a refused upload carrying it has always been given", got, want)
+				}
+
+				assertFiledAt(t, "the check", fixture.uploadEntries(), domain.LogLevelError,
+					"the upload was refused: the apikey is not valid",
+					"the entry says the credential was refused, which is what happened, in the sentence a refused "+
+						"upload has always been filed with")
+
+				if named := fixture.entriesNamingACheck(); len(named) != 0 {
+					t.Errorf("filed %v, want no entry naming a check: the server refused the credential before it "+
+						"ever asked what the submission was short of", named)
+				}
+
+				if len(fixture.calls.Saved) != 0 {
+					t.Errorf("stored %v, want nothing stored for a refused check", fixture.calls.Saved)
+				}
+
+				fixture.assertStamped(t, "the apikey is not valid")
+			})
 		}
 	}
 }
