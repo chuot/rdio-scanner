@@ -137,7 +137,8 @@ func TestExtractDefaultReadsTheCallTheMaskNames(t *testing.T) {
 }
 
 // TestExtractDefaultWithoutAMaskNamesNoSystemAndIsRefused: a default
-// watch with no mask, system, or talkgroup refuses every recording.
+// watch with no mask, system, or talkgroup names nothing in the filename, and
+// refuses every recording.
 func TestExtractDefaultWithoutAMaskNamesNoSystemAndIsRefused(t *testing.T) {
 	_, recognized, err := extract(t, domain.NewDirwatch(), "recording.wav")
 
@@ -145,8 +146,9 @@ func TestExtractDefaultWithoutAMaskNamesNoSystemAndIsRefused(t *testing.T) {
 		t.Error("a call naming no system was handed to the ingest path, want it refused")
 	}
 
-	if err == nil || !strings.Contains(err.Error(), "no system") {
-		t.Errorf("Extract = %v, want the reason the call was refused", err)
+	if err == nil || !strings.Contains(err.Error(), "no talkgroup") {
+		t.Errorf("Extract = %v, want the reason the call was refused: the watch named no system and no "+
+			"talkgroup, and the refusal names the last thing the recording was missing", err)
 	}
 }
 
@@ -598,8 +600,9 @@ func TestExtractDefaultReadsNothingFromAFilenameTheMaskDoesNotMatch(t *testing.T
 
 	_, _, err := extract(t, watch, "recording.wav")
 
-	if err == nil || !strings.Contains(err.Error(), "no system") {
-		t.Errorf("Extract = %v, want a filename the mask does not match to name no system", err)
+	if err == nil || !strings.Contains(err.Error(), "no talkgroup") {
+		t.Errorf("Extract = %v, want a filename the mask does not match to name no system and no talkgroup, "+
+			"refused for the last thing it was missing", err)
 	}
 }
 
