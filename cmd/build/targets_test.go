@@ -256,6 +256,123 @@ func TestTheDistTargetListIsTheNamedTargetTheMatrixOrTheMachine(t *testing.T) {
 	}
 }
 
+// the container target list is the named architecture, the three architectures a container image is
+// built for, or the architecture of the machine the run stands on, decided once before the run walks
+// it. A named architecture is accepted whatever machine the run stands on; a machine outside the
+// three is refused naming that machine, the three, and both remedies a run naming no target has.
+func TestTheContainerTargetListIsTheNamedTargetTheThreeArchitecturesOrTheMachine(t *testing.T) {
+	named, err := containerTargetsFor(options{target: "linux-arm64"}, "darwin", "arm64")
+	if err != nil {
+		t.Fatalf("containerTargetsFor: %v", err)
+	}
+
+	if len(named) != 1 || named[0].targetWord() != "linux-arm64" {
+		t.Errorf("container linux-arm64 walks %v, want linux-arm64 alone, whatever machine the run stands on", targetWords(named))
+	}
+
+	matrix, err := containerTargetsFor(options{all: true}, "linux", "amd64")
+	if err != nil {
+		t.Fatalf("containerTargetsFor: %v", err)
+	}
+
+	got := []string{}
+	want := []string{}
+
+	for _, tr := range matrix {
+		got = append(got, tr.targetWord())
+	}
+
+	for _, word := range containerTargets {
+		want = append(want, word)
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("container --all walks %v, want the three architectures a container image is built for in the order the tool lists them: %v", got, want)
+	}
+
+	for _, machine := range []struct{ goos, goarch, word string }{
+		{goos: "linux", goarch: "amd64", word: "linux-amd64"},
+		{goos: "linux", goarch: "arm64", word: "linux-arm64"},
+		{goos: "linux", goarch: "arm", word: "linux-arm"},
+	} {
+		list, err := containerTargetsFor(options{}, machine.goos, machine.goarch)
+		if err != nil {
+			t.Fatalf("containerTargetsFor on %s-%s: %v", machine.goos, machine.goarch, err)
+		}
+
+		if len(list) != 1 || list[0].targetWord() != machine.word {
+			t.Errorf("on %s-%s, container walks %v, want %s, the release target of the machine running it",
+				machine.goos, machine.goarch, targetWords(list), machine.word)
+		}
+	}
+
+	// A machine the image is not built for is refused rather than handed linux-amd64 it never asked
+	// for: the refusal names the machine, the three architectures, and the two ways out of it.
+	for _, machine := range []struct{ goos, goarch, word string }{
+		{goos: "darwin", goarch: "arm64", word: "darwin-arm64"},
+		{goos: "windows", goarch: "amd64", word: "windows-amd64"},
+		{goos: "freebsd", goarch: "amd64", word: "freebsd-amd64"},
+		{goos: "linux", goarch: "386", word: "linux-386"},
+	} {
+		_, err := containerTargetsFor(options{}, machine.goos, machine.goarch)
+		if err == nil {
+			t.Errorf("container on %s-%s was accepted, and no container image is built for that machine", machine.goos, machine.goarch)
+			continue
+		}
+
+		for _, want := range append([]string{machine.word}, containerTargets...) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("the refusal %q for a container run on %s does not name %s", err.Error(), machine.word, want)
+			}
+		}
+
+		// Both remedies: name one of the three architectures, or ask for all three.
+		for _, says := range []string{
+			"this machine is " + machine.word,
+			"no architecture a container image is built for",
+			"name one of " + strings.Join(containerTargets, ", "),
+			"build all three with go run ./cmd/build container --all",
+		} {
+			if !strings.Contains(err.Error(), says) {
+				t.Errorf("the refusal %q for a container run on %s does not say %q", err.Error(), machine.word, says)
+			}
+		}
+	}
+
+	// linux-386 is a platform this project releases, and a container run is refused for it all the
+	// same: no ffmpeg pair and no image rootfs is built for it.
+	if release, err := distTargets(options{}, "linux", "386"); err != nil || len(release) != 1 || release[0].targetWord() != "linux-386" {
+		t.Errorf("dist on linux-386 walks %v with %v, want the release this project builds for that machine", targetWords(release), err)
+	}
+
+	// A named architecture outside the three is refused by the words the parse refusal uses, from any
+	// machine.
+	for _, machine := range []struct{ goos, goarch string }{
+		{goos: "linux", goarch: "amd64"},
+		{goos: "darwin", goarch: "arm64"},
+	} {
+		_, err := containerTargetsFor(options{target: "linux-386"}, machine.goos, machine.goarch)
+		if err == nil {
+			t.Errorf("container linux-386 on %s-%s was accepted, and no container image is built for it", machine.goos, machine.goarch)
+			continue
+		}
+
+		for _, want := range []string{
+			"a container image is built for " + strings.Join(containerTargets, ", "),
+			"is not a target a container run builds for",
+			"linux-386",
+		} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("the refusal %q does not say %q", err.Error(), want)
+			}
+		}
+	}
+
+	if _, err := containerTargetsFor(options{target: "macos-arm64"}, "darwin", "arm64"); err == nil {
+		t.Error("container macos-arm64 was accepted, and no container image is built for it")
+	}
+}
+
 func targetWords(targets []releaseTarget) []string {
 	words := []string{}
 

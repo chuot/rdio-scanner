@@ -34,7 +34,9 @@ A run that names no command builds this machine's whole tree: both applications,
         go run ./cmd/build dist                   # the archive of the platform this machine is
         go run ./cmd/build dist --all             # the release matrix, and the archives it writes
         go run ./cmd/build dist linux-arm64       # one target, which is how the matrix is built one at a time
-        go run ./cmd/build container              # the container image, built locally and never pushed
+        go run ./cmd/build container              # the container image for the architecture this machine is, built locally and never pushed
+        go run ./cmd/build container linux-arm64  # an image for another architecture, which is how an arm image is built on this machine
+        go run ./cmd/build container --all        # all three architectures an image is built for, in one run
         go run ./cmd/build clean                  # the release output, the client dependencies, and both bundle contents
         go run ./cmd/build test                   # this project's suites, and nothing compiled
         go run ./cmd/build version                # the version this build carries
@@ -47,7 +49,7 @@ The ffmpeg line compiles one target's pair in a container, on any machine that h
 
         --pre beta1     the prerelease name the version carries
         -o PATH         where the server binary is written: the whole-tree run and the server run
-        --all           the release matrix: the dist run, and nothing else
+        --all           every target a run has a fixed list of: the dist run's release matrix, and the three architectures a container image is built for
         --allow-dirty   release a tree that has uncommitted work in it: the dist run
 
 A flag a run cannot honour is refused with the command line that would have worked, and the run exits `2` without building anything.
@@ -64,9 +66,9 @@ The release run's bound is the machine's cores, the targets it is ready to build
         0   the run did what it was asked to do
         1   a step failed, or the tree was refused
         2   the command line is not one the tool accepts
-        3   a release run wrote fewer archives than the matrix it was asked for
+        3   a release run wrote fewer archives, or a container run wrote fewer images, than it was asked for
 
-`go run` reports its own exit code, so a `3` asked through it arrives as `1`. The compiled tool carries the code itself: `go build -o buildtool ./cmd/build`. A release run that ends `3` wrote the archives it wrote, and says which targets wrote none.
+`go run` reports its own exit code, so a `3` asked through it arrives as `1`. The compiled tool carries the code itself: `go build -o buildtool ./cmd/build`. A run that ends `3` wrote what it wrote — the archives it wrote, or the images it wrote — and its closing line names how many it wrote and which targets wrote none.
 
 ### Where the lines go
 
@@ -127,6 +129,16 @@ The two macOS targets are compiled by the container `Containerfile.ffmpeg` build
 What the machine that compiled those three pairs can and cannot say about them is the read the section above describes, and the archive's `FFMPEG.txt` is what says it out loud: `compiled and not run` is the compile step's own line, and the notice names the properties the build read and states that a read does not say what a program does.
 
 Both images above are built on the machine running the build, and the builder there has to be BuildKit-capable. A Docker CLI without the buildx plugin hands the build to the classic builder, and the classic builder cannot build `FROM --platform=freebsd/amd64` at all: it answers `operating system is not supported` for that stage, at `Step 4/11` for the `Containerfile.ffmpeg.freebsd` this repository carries. It names no file and no instruction beyond that step number, which is why the failure reads as a FreeBSD problem rather than a builder problem. `DOCKER_BUILDKIT=0 docker build -f Containerfile.ffmpeg.freebsd .build/ffmpeg/context` brings the failure back without asking a release run anything, and the same command with BuildKit enabled copies the sysroot stage and reports it `CACHED`. The step number counts only the instructions ahead of that stage, so it moves whenever the Containerfile gains a line: match the message and the instruction, not the number.
+
+### The container image, and the architectures it is built for
+
+A `container` run builds one of three images: `linux-amd64`, `linux-arm`, and `linux-arm64`. Those are three of the eight names the release matrix carries, and they are the three this project publishes container images for. A run that names no target builds the architecture of the machine it is run on, so `go run ./cmd/build container` builds the `linux-amd64` image on an x86-64 Linux machine and the `linux-arm64` one on a 64-bit ARM machine. A named target is that architecture wherever the line is typed: `go run ./cmd/build container linux-arm64` builds the arm64 image on this machine, and `container linux-arm` the 32-bit ARM one. `go run ./cmd/build container --all` builds all three in one run, in the order the tool lists them — `linux-amd64`, `linux-arm`, `linux-arm64` — with one target's ffmpeg before that target's image, because an image build copies the ffmpeg off the disk it builds on and can only start once that pair is there. A machine that is none of the three is refused before anything is compiled, in the words the tool answers: `this machine is <goos>-<goarch>, which is no architecture a container image is built for: name one of linux-amd64, linux-arm, linux-arm64, or build all three with go run ./cmd/build container --all`. A target word outside those three is refused the same way, in one line naming the three, as is `--all` typed beside a named target. The run compiles that target's ffmpeg pair first, and the image carries it inside the server binary exactly as the archives do, so an image built from a fresh checkout converts audio with nothing installed on the machine that runs it.
+
+The architecture reaches the image once, as the platform the container program is asked for: `linux-amd64` as `--platform=linux/amd64`, `linux-arm64` as `--platform=linux/arm64`, and `linux-arm` as `--platform=linux/arm/v7`, the 32-bit ARM request that names the variant. `Containerfile` builds in two stages. The stage that compiles starts `FROM --platform=$BUILDPLATFORM`, which is the architecture of the machine running the build, so that machine's own Go compiler does the work and nothing is emulated. The stage that ships names no platform of its own: the container program builds it for the architecture the run asked for, and that is the architecture the server then runs on. `ARG BUILDPLATFORM` is declared above the `FROM` that reads it, because declared below it the argument has no value when that line is reached and the stage that compiles is pulled for the architecture being built for instead of for the machine doing the build. The Go compile in the stage that compiles carries `CGO_ENABLED=0`, `GOOS=$TARGETOS`, and `GOARCH=$TARGETARCH`: the architecture is read from the platform the run was given, no build argument names an architecture, and `GOARM` is set nowhere, so an arm image carries the arm variant the Go toolchain chooses by default.
+
+The tags name the architecture the image was built for. A run writes `rdio-scanner:<version>-<target>` and `rdio-scanner:latest-<target>`, and the `linux-amd64` run also writes the older pair `rdio-scanner:<version>` and `rdio-scanner:latest`, so a machine that has pulled the unarch'd names keeps finding the amd64 image. A `--all` run writes the three architecture-named pairs, and the plain pair beside the `linux-amd64` one, and removes no tag an earlier run wrote. Every image is built locally and never pushed: the run writes tags into the machine's own image store, and it assembles no manifest list that bundles the three architectures under one name.
+
+The `linux-arm` image is 32-bit ARMv7 hard-float code, because the ffmpeg it carries was compiled for ARMv7 with the hard-float ABI and that pair is the floor of the image. It runs where 32-bit ARMv7 hard-float programs run, on a Raspberry Pi 3 or 4 running 32-bit Raspberry Pi OS for example, and a host whose kernel runs only 64-bit ARM code takes `linux-arm64` instead. It is the rule the release archives already follow: pick the name that matches the machine that imports audio.
 
 ### The Apple SDK a macOS compile links against
 

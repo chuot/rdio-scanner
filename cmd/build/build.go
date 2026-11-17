@@ -141,7 +141,7 @@ func (t tool) run(args []string, stdout io.Writer) int {
 	if err != nil {
 		// a refused command line is a failure reaching the operator's standard
 		// error with the refused word and the usage line, and it builds nothing.
-		fmt.Fprintf(t.errout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch] [--all] [--allow-dirty]|container|test|clean|version] [--pre <name>] [-o <path>, for the runs that write a server binary]\n", err)
+		fmt.Fprintf(t.errout, "error  %v\n\nusage: go run ./cmd/build [client|scanner|admin|ffmpeg [goos-goarch]|server|dist [name-arch] [--all] [--allow-dirty]|container [linux-amd64|linux-arm64|linux-arm] [--all]|test|clean|version] [--pre <name>] [-o <path>, for the runs that write a server binary]\n", err)
 
 		return 2
 	}
@@ -225,6 +225,12 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		return t.runDist(o, version, stdout)
 	}
 
+	// a container run walks its own list of architectures, each with its own ffmpeg and
+	// its own image, so it never reaches the single-target phases below.
+	if o.sub == subContainer {
+		return t.runContainer(o, version, stdout)
+	}
+
 	// the ffmpeg is produced before the server is compiled: the server embeds it,
 	// and one built too early quietly ships without one.
 	if o.buildsFFmpeg() {
@@ -238,26 +244,6 @@ func (t tool) run(args []string, stdout io.Writer) int {
 		if skipped {
 			return 0
 		}
-	}
-
-	// the container image compiles its own server, so this run ends with the
-	// container program: the image needs the applications and ffmpeg on disk,
-	// and throws away a server built here.
-	if o.sub == subContainer {
-		program, err := resolveContainerProgram(t.resolve, os.LookupEnv)
-		if err != nil {
-			return fail(t.errout, err)
-		}
-
-		s := containerStep(o, t.repo, version, t.now(), program)
-
-		if err := t.execute(s); err != nil {
-			return fail(t.errout, fmt.Errorf("%s: %w", s.label, err))
-		}
-
-		fmt.Fprintf(stdout, "%-7s %s\n", s.label, s.result)
-
-		return 0
 	}
 
 	if o.buildsServer() {
@@ -463,6 +449,112 @@ func (t tool) runDist(o options, version buildinfo.Version, stdout io.Writer) in
 	return 3
 }
 
+// runContainer builds the container images for the architectures the run resolves: the machine it
+// stands on, one named target, or the three architectures an image is built for. Each target's
+// ffmpeg is compiled before any image is built, because the image copies the ffmpeg from disk, and
+// then one image per target, in the order the tool lists the three architectures.
+func (t tool) runContainer(o options, version buildinfo.Version, stdout io.Writer) int {
+	// the target list is decided once, before any of it runs,
+	// so a machine no container image is built for is refused before a single step runs.
+	targets, err := containerTargetsFor(o, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return fail(t.errout, err)
+	}
+
+	// one run looks for the container program once, whether it builds one image or three.
+	program, err := resolveContainerProgram(t.resolve, os.LookupEnv)
+	if err != nil {
+		return fail(t.errout, err)
+	}
+
+	// a single target's log needs no prefix;
+	// every line of a three-architecture run has to name the target it is about.
+	prefix := len(targets) > 1
+
+	var mu sync.Mutex
+
+	log := func(target string) io.Writer {
+		if !prefix {
+			return stdout
+		}
+
+		return &theReleaseLog{mu: &mu, target: target, out: stdout}
+	}
+
+	// the ffmpeg phase stays serial and finishes before any image build starts: an image
+	// build copies the ffmpeg from disk, so it can only start once every target's pair is
+	// compiled or refused.
+	ready := make([]releaseTarget, 0, len(targets))
+
+	var none []string
+
+	for _, tr := range targets {
+		o.target = tr.targetWord()
+
+		skipped, err := t.ffmpeg(o, log(o.target))
+		if err != nil {
+			return fail(t.errout, fmt.Errorf("%s for %s: %w", subFFmpeg, o.target, err))
+		}
+
+		// this target wrote no ffmpeg: the image would carry whatever ffmpeg the machine
+		// happens to have, so the run builds no image for it and says at the end which
+		// targets wrote none.
+		if skipped {
+			none = append(none, o.target)
+
+			continue
+		}
+
+		ready = append(ready, tr)
+	}
+
+	// the image builds run one after another and not at once: each one compiles a server
+	// inside its own image, and the container program builds one image at a time.
+	var written []string
+
+	var failed error
+
+	for _, tr := range ready {
+		per := o
+		per.target = tr.targetWord()
+
+		out := log(per.target)
+
+		s := containerStep(per, t.repo, version, t.now(), program)
+
+		if err := t.execute(s); err != nil {
+			// a target whose image build failed is one target's failure: the targets after
+			// it still get their images, and the run ends naming the one it could not build.
+			if failed == nil {
+				failed = fmt.Errorf("%s for %s: %w", s.label, per.target, err)
+			}
+
+			continue
+		}
+
+		fmt.Fprintf(out, "%-7s %s\n", s.label, s.result)
+
+		written = append(written, s.result)
+	}
+
+	if failed != nil {
+		return fail(t.errout, failed)
+	}
+
+	// the exit status says whether the images asked for are the images written:
+	// an incomplete set of images is a fact a script has to tell from a broken step.
+	if len(none) == 0 {
+		fmt.Fprintf(stdout, "%-7s %s written\n", subContainer, imagesWord(len(written)))
+
+		return 0
+	}
+
+	fmt.Fprintf(stdout, "%-7s %s written, %s wrote none: %s\n",
+		subContainer, imagesWord(len(written)), targetsWord(len(none)), strings.Join(none, ", "))
+
+	return 3
+}
+
 // theWorkOfOneTarget is what one release worker says when it finishes:
 // the archive it wrote, or the failure it stopped on, named for its target.
 type theWorkOfOneTarget struct {
@@ -555,6 +647,16 @@ func targetsWord(n int) string {
 	}
 
 	return fmt.Sprintf("%d targets", n)
+}
+
+// imagesWord says how many images a container run wrote the way the release log
+// reads the archives it wrote: one image, two images.
+func imagesWord(n int) string {
+	if n == 1 {
+		return "1 image"
+	}
+
+	return fmt.Sprintf("%d images", n)
 }
 
 // fail says what stopped the build and returns the exit code that says a step did not do its job.

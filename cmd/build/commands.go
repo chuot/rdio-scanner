@@ -41,8 +41,10 @@ const (
 	subTest      = "test"
 )
 
-// the container image is built for linux-amd64: the Containerfile's
-// guard checks for the ffmpeg compiled for that architecture.
+// the container image is built for three architectures: the word after
+// `container` names one, --all names all three, and a run naming neither
+// builds the machine it stands on. linux-amd64 is the first of the three,
+// and the architecture the Containerfile's guard names first.
 const (
 	containerTarget = "linux-amd64"
 
@@ -52,6 +54,11 @@ const (
 	containerImage     = "rdio-scanner"
 	containerLatestTag = "latest"
 )
+
+// containerTargets are the words a container run accepts, in the order the
+// release matrix names them. The image carries the ffmpeg compiled for the
+// target it is built for, so a target outside these three has no image.
+var containerTargets = []string{containerTarget, "linux-arm", "linux-arm64"}
 
 // the container programs this build knows, podman preferred:
 // the order here is the order a machine is asked in.
@@ -234,17 +241,23 @@ func parseArgs(args []string) (options, error) {
 			o.outputNamed = true
 
 		case "--all":
-			// --all asks for the release matrix, which is a deliberate release,
-			// so the flag belongs to the release run and to nothing else.
-			if o.sub != subDist {
-				// the flag and command arrive in either order, so the refusal
-				// names the command the operator typed, not the word order.
-				who := o.sub
+			// --all asks for a whole list, and only two runs have one: the release run's
+			// matrix of platforms, and the container run's three architectures. It is a
+			// deliberate request, so the flag belongs to those two runs and to nothing else.
+			//
+			// The flag and the command arrive in either order, so the look-ahead names the
+			// command the operator typed. Only a peeked `container` lets the flag through:
+			// `--all dist` stays refused although `dist --all` is the release run that asks
+			// for the matrix.
+			who := o.sub
 
-				if who == "" && i+1 < len(args) && isKnownCommand(args[i+1]) {
-					who = args[i+1]
-				}
+			if who == "" && i+1 < len(args) && isKnownCommand(args[i+1]) {
+				who = args[i+1]
+			}
 
+			forContainer := o.sub == subContainer || who == subContainer
+
+			if o.sub != subDist && !forContainer {
 				if who == "" {
 					return options{}, fmt.Errorf("--all is the release matrix, and a run that names no command builds this machine's whole tree: go run ./cmd/build dist --all builds every platform this project releases")
 				}
@@ -252,9 +265,30 @@ func parseArgs(args []string) (options, error) {
 				return options{}, fmt.Errorf("--all is the release matrix, and %s is not it: go run ./cmd/build dist --all builds every platform this project releases", who)
 			}
 
-			// --all names every platform and a target names one, and these are
-			// not one request; the check looks forward too, so the refusal names
-			// the command line the operator typed.
+			// --all names every target of the run's list and a target word names one, and these
+			// are not one request; the check looks forward too, so the refusal names the command
+			// line the operator typed. A target a container run has no image for is refused for
+			// that target, whichever side of the flag it sits on.
+			if forContainer {
+				word := o.target
+
+				if word == "" && i+1 < len(args) && isTarget(args[i+1]) {
+					word = theReleaseWordTheRunBuildsFor(args[i+1])
+				}
+
+				if word != "" && !isContainerTarget(word) {
+					return options{}, fmt.Errorf("a container image is built for %s, so %s is not a target a container run builds for", strings.Join(containerTargets, ", "), word)
+				}
+
+				if word != "" {
+					return options{}, fmt.Errorf("--all builds every architecture a container image is built for, and %s is one of them: name one target or --all, not both", word)
+				}
+
+				o.all = true
+
+				continue
+			}
+
 			if o.target != "" {
 				return options{}, fmt.Errorf("--all builds every platform this project releases, and %s is one of them: name one target or --all, not both", o.target)
 			}
@@ -301,8 +335,9 @@ func parseArgs(args []string) (options, error) {
 
 			// a clean run builds nothing, and a test run builds nothing and runs
 			// the whole tree's suites, so a target after either is a stray word;
-			// the container image is one architecture, linux-amd64, so a target
-			// after it names an ffmpeg the image never embeds.
+			// a container run builds one of three architectures, the word after it
+			// names which one, and a run naming no target builds the machine it
+			// stands on.
 			if arg == subClean || arg == subContainer || arg == subTest {
 				if i+1 < len(args) && isTarget(args[i+1]) {
 					if arg == subClean {
@@ -313,11 +348,23 @@ func parseArgs(args []string) (options, error) {
 						return options{}, fmt.Errorf("a test run builds nothing, so %s is not a target it is asked for: go run ./cmd/build test runs this project's suites on this machine", args[i+1])
 					}
 
-					return options{}, fmt.Errorf("the container image is %s, so %s is not a target a container run builds for", containerTarget, args[i+1])
-				}
+					word := theReleaseWordTheRunBuildsFor(args[i+1])
 
-				if arg == subContainer {
-					o.target = containerTarget
+					if !isContainerTarget(word) {
+						return options{}, fmt.Errorf("a container image is built for %s, so %s is not a target a container run builds for", strings.Join(containerTargets, ", "), word)
+					}
+
+					// --all has already asked for every architecture the image is built
+					// for, so the word beside it is a second request.
+					if o.all {
+						return options{}, fmt.Errorf("--all builds every architecture a container image is built for, and %s is one of them: name one target or --all, not both", word)
+					}
+
+					i++
+
+					o.target = word
+
+					continue
 				}
 
 				continue
@@ -415,6 +462,18 @@ func isTarget(word string) bool {
 	return true
 }
 
+// isContainerTarget reports whether a release word names one of the three
+// architectures a container image is built for.
+func isContainerTarget(word string) bool {
+	for _, target := range containerTargets {
+		if word == target {
+			return true
+		}
+	}
+
+	return false
+}
+
 // step is one external command: a directory, a program, its
 // arguments, and its extra environment; composed here, executed
 // there, so a test can read a command line.
@@ -489,26 +548,64 @@ func imageTagFor(version string) string {
 	return strings.Replace(version, "+", "-", 1)
 }
 
-// containerStep asks the container program to build the image: the
-// version, the build time, and the file to build from arrive as
-// build arguments, and the image build compiles the server itself.
+// containerPlatformFor spells a container target as the platform the
+// container program builds for: a release word joins a Go operating
+// system and architecture with a dash, and a platform names the same
+// pair with a slash. linux-arm is ARMv7 with hard-float floating point,
+// the variant the ffmpeg an arm image embeds is compiled for, so the
+// platform named for it carries that variant.
+func containerPlatformFor(target string) string {
+	platform := strings.ReplaceAll(target, "-", "/")
+
+	if target == "linux-arm" {
+		return platform + "/v7"
+	}
+
+	return platform
+}
+
+// containerStep asks the container program to build the image for one
+// architecture: the architecture is named once, by the platform the
+// program builds for, and the version and the build time arrive as build
+// arguments. The image build compiles the server itself, for the
+// architecture the run resolves. The image is tagged with the version and
+// with latest, each named for that architecture, and the linux-amd64 run
+// also writes the unarch'd pair the published image has always carried.
 func containerStep(o options, repo string, version buildinfo.Version, created time.Time, program string) step {
-	tag := containerImage + ":" + imageTagFor(version.String())
+	// the run's target list is already resolved to real architecture words,
+	// so the step builds for the target it is given and guesses nothing.
+	target := o.target
+
+	versionedTag := containerImage + ":" + imageTagFor(version.String())
+	tags := []string{
+		versionedTag + "-" + target,
+		containerImage + ":" + containerLatestTag + "-" + target,
+	}
+
+	if target == containerTarget {
+		tags = append(tags, versionedTag, containerImage+":"+containerLatestTag)
+	}
+
+	args := []string{
+		"build",
+		"--pull",
+		"--platform=" + containerPlatformFor(target),
+		"-f", "Containerfile",
+		"--build-arg", "VERSION=" + version.String(),
+		"--build-arg", "BUILD_TIME=" + created.UTC().Format(time.RFC3339),
+	}
+
+	for _, tag := range tags {
+		args = append(args, "-t", tag)
+	}
+
+	args = append(args, ".")
 
 	return step{
 		label:  subContainer,
-		result: tag,
+		result: tags[0],
 		dir:    repo,
 		name:   program,
-		args: []string{
-			"build",
-			"--pull",
-			"-f", "Containerfile",
-			"--build-arg", "VERSION=" + version.String(),
-			"--build-arg", "BUILD_TIME=" + created.UTC().Format(time.RFC3339),
-			"-t", tag,
-			"-t", containerImage + ":" + containerLatestTag,
-			".",
-		},
+		args:   args,
 	}
 }

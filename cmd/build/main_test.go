@@ -93,9 +93,11 @@ func fakeRun(declared source, failAt string) (*tool, *bytes.Buffer, *[]step) {
 		},
 
 		// The ffmpeg stand-in records that the phase ran rather than what command it
-		// ran; the phase itself is tested in ffmpeg_test.go.
+		// ran; the phase itself is tested in ffmpeg_test.go. It records the target that
+		// phase compiles for, read the way the phase reads it: the one the operator
+		// named, or this machine's when the run named none.
 		ffmpeg: func(o options, stdout io.Writer) (bool, error) {
-			record(step{label: subFFmpeg, result: o.target})
+			record(step{label: subFFmpeg, result: ffmpegTarget(o)})
 
 			return false, nil
 		},
@@ -1533,8 +1535,8 @@ func TestADistRunBuildsTheArchiveForThePlatformItIsRunOn(t *testing.T) {
 	}
 }
 
-// A container run builds the two application bundles and the image architecture's ffmpeg, then
-// asks podman to build the image, which compiles the server inside itself.
+// A container run builds the two application bundles and the target's ffmpeg, then asks podman to
+// build the image for that target, which compiles the server inside itself.
 func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1551,7 +1553,7 @@ func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T
 		"scanner " + appBundle[subScanner],
 		"admin " + appBundle[subAdmin],
 		"ffmpeg linux-amd64",
-		"container rdio-scanner:8.0.0",
+		"container rdio-scanner:8.0.0-linux-amd64",
 	}
 
 	if strings.Join(got, " ") != strings.Join(want, " ") {
@@ -1559,8 +1561,9 @@ func TestAContainerRunBuildsTheApplicationsAndTheFfmpegThenTheImage(t *testing.T
 	}
 }
 
-// The container step passes the resolved version to podman as a build argument and tags the
-// image with it beside latest, naming the Containerfile explicitly.
+// The container step asks podman for the architecture the run resolves, passes the resolved
+// version to it as a build argument, and tags the image with that version beside latest, named
+// for the architecture, naming the Containerfile explicitly.
 func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *testing.T) {
 	tl, _, ran := fakeRun(released, "")
 
@@ -1577,9 +1580,12 @@ func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *test
 	want := []string{
 		"build",
 		"--pull",
+		"--platform=linux/amd64",
 		"-f", "Containerfile",
 		"--build-arg", "VERSION=8.0.0",
 		"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+		"-t", "rdio-scanner:8.0.0-linux-amd64",
+		"-t", "rdio-scanner:latest-linux-amd64",
 		"-t", "rdio-scanner:8.0.0",
 		"-t", "rdio-scanner:latest",
 		".",
@@ -1587,6 +1593,52 @@ func TestTheContainerStepAsksPodmanToBuildTheImageWithTheResolvedVersion(t *test
 
 	if strings.Join(last.args, " ") != strings.Join(want, " ") {
 		t.Errorf("%s ran with %v, want %v", last.name, last.args, want)
+	}
+}
+
+// A container run names the architecture it builds: it compiles that architecture's ffmpeg before
+// it asks for the image, and reports the image named for that architecture.
+func TestAContainerRunForANamedArchitectureBuildsThatArchitecturesFfmpegThenItsImage(t *testing.T) {
+	tl, _, ran := fakeRun(released, "")
+
+	if code := tl.run([]string{"container", "linux-arm64"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		got = append(got, s.label+" "+s.result)
+	}
+
+	want := []string{
+		"scanner " + appBundle[subScanner],
+		"admin " + appBundle[subAdmin],
+		"ffmpeg linux-arm64",
+		"container rdio-scanner:8.0.0-linux-arm64",
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the container linux-arm64 run ran\n  %v\nwant\n  %v", got, want)
+	}
+
+	last := (*ran)[len(*ran)-1]
+
+	platform := ""
+	named := 0
+
+	for _, arg := range last.args {
+		if value, ok := strings.CutPrefix(arg, "--platform="); ok {
+			named++
+			platform = value
+		}
+	}
+
+	if named != 1 {
+		t.Errorf("the container linux-arm64 run names the build architecture %d times, want once: %v", named, last.args)
+	}
+
+	if platform != "linux/arm64" {
+		t.Errorf("the container linux-arm64 run asks for the platform %q, want linux/arm64: %v", platform, last.args)
 	}
 }
 
@@ -1605,20 +1657,403 @@ func TestTheContainerImageOfADevelopmentBuildCarriesTheDevelopmentVersion(t *tes
 	}
 }
 
-// A container run is for linux-amd64, the architecture the Containerfile's own guard checks
-// for.
+// A bare container run names no target at the command line: the architecture its image is built
+// for is decided from the machine the run stands on, and the Containerfile's own architecture is
+// the platform the run later hands the container program. A word naming an architecture outside
+// the three is refused by a message naming the three a container image is built for.
 func TestAContainerRunIsForTheArchitectureTheContainerfileChecksFor(t *testing.T) {
 	o, err := parseArgs([]string{"container"})
 	if err != nil {
 		t.Fatalf("a container run was refused: %v", err)
 	}
 
-	if o.target != "linux-amd64" {
-		t.Errorf("a container run builds for %q, want the architecture the Containerfile checks for", o.target)
+	if o.target != "" {
+		t.Errorf("a bare container run names %s, and a run that names no target decides the architecture from the machine it runs on", o.target)
 	}
 
-	if _, err := parseArgs([]string{"container", "linux-arm64"}); err == nil {
-		t.Error("a container run for linux-arm64 was accepted, and the image builds for linux-amd64")
+	tl, _, ran := fakeRun(released, "")
+
+	// The machine named here is the one the Containerfile's guard checks for, so the platform this
+	// run is given is the answer to the question that guard asks.
+	tl.machine = func() host { return host{goos: "linux", goarch: "amd64", cpus: 4} }
+
+	if code := tl.run([]string{"container"}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	last := (*ran)[len(*ran)-1]
+
+	platform := ""
+
+	for _, arg := range last.args {
+		if value, found := strings.CutPrefix(arg, "--platform="); found {
+			platform = value
+		}
+	}
+
+	if platform != "linux/amd64" {
+		t.Errorf("the bare container run built the image for the platform %q, want the architecture the Containerfile checks for: %v", platform, last.args)
+	}
+
+	_, err = parseArgs([]string{"container", "linux-386"})
+	if err == nil {
+		t.Fatal("a container run for linux-386 was accepted, and no container image is built for it")
+	}
+
+	for _, want := range []string{"linux-amd64", "linux-arm", "linux-arm64"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal %q does not name %s, an architecture a container run builds for", err, want)
+		}
+	}
+}
+
+// A container run asked for all three architectures compiles each target's ffmpeg before any image
+// is built, then asks for one image per target, each for its own architecture and tagged with its
+// own architecture-named pair.
+func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenBuildsThreeImages(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		got = append(got, s.label+" "+s.result)
+	}
+
+	// The whole run is one ffmpeg block per target, in the order the tool lists the three
+	// architectures, and then one image per target in that same order.
+	want := []string{
+		"scanner " + appBundle[subScanner],
+		"admin " + appBundle[subAdmin],
+		"ffmpeg linux-amd64",
+		"ffmpeg linux-arm",
+		"ffmpeg linux-arm64",
+		"container rdio-scanner:8.0.0-linux-amd64",
+		"container rdio-scanner:8.0.0-linux-arm",
+		"container rdio-scanner:8.0.0-linux-arm64",
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the container --all run ran\n  %v\nwant\n  %v", got, want)
+	}
+
+	if !strings.Contains(out.String(), "3 images written") {
+		t.Errorf("the run's log %q does not say 3 images written", out.String())
+	}
+
+	images := []step{}
+	for _, s := range *ran {
+		if s.label == subContainer {
+			images = append(images, s)
+		}
+	}
+
+	if len(images) != len(containerTargets) {
+		t.Fatalf("the container --all run built %d images, want one for each of the three architectures", len(images))
+	}
+
+	// Each image step carries the argument list the single-target step is pinned to,
+	// with its own platform and its own architecture-named tag pair: only the
+	// linux-amd64 one carries the unarch'd pair the published image has always had.
+	for i, wantArgs := range [][]string{
+		{
+			"build",
+			"--pull",
+			"--platform=linux/amd64",
+			"-f", "Containerfile",
+			"--build-arg", "VERSION=8.0.0",
+			"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+			"-t", "rdio-scanner:8.0.0-linux-amd64",
+			"-t", "rdio-scanner:latest-linux-amd64",
+			"-t", "rdio-scanner:8.0.0",
+			"-t", "rdio-scanner:latest",
+			".",
+		},
+		{
+			"build",
+			"--pull",
+			"--platform=linux/arm/v7",
+			"-f", "Containerfile",
+			"--build-arg", "VERSION=8.0.0",
+			"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+			"-t", "rdio-scanner:8.0.0-linux-arm",
+			"-t", "rdio-scanner:latest-linux-arm",
+			".",
+		},
+		{
+			"build",
+			"--pull",
+			"--platform=linux/arm64",
+			"-f", "Containerfile",
+			"--build-arg", "VERSION=8.0.0",
+			"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
+			"-t", "rdio-scanner:8.0.0-linux-arm64",
+			"-t", "rdio-scanner:latest-linux-arm64",
+			".",
+		},
+	} {
+		if strings.Join(images[i].args, " ") != strings.Join(wantArgs, " ") {
+			t.Errorf("the %s image was built with\n  %v\nwant\n  %v", containerTargets[i], images[i].args, wantArgs)
+		}
+	}
+
+	// The run builds images and publishes none: no argument pushes, writes a manifest list,
+	// names a host, or asks the program to build from any file but the Containerfile.
+	for i, s := range images {
+		given := 0
+
+		for _, arg := range s.args {
+			for _, forbidden := range []string{"push", "manifest", "://"} {
+				if strings.Contains(arg, forbidden) {
+					t.Errorf("the %s image step carries %q, and a container run publishes nothing", containerTargets[i], arg)
+				}
+			}
+
+			if arg == "-f" {
+				given++
+			}
+		}
+
+		if given != 1 {
+			t.Errorf("the %s image step names the file it builds from %d times, want once: %v", containerTargets[i], given, s.args)
+		}
+	}
+}
+
+// Every per-target line a container run asked for all three writes names the target that line is
+// about; the version, the notes, the two shared application builds, and the closing summary name
+// none.
+func TestAContainerRunAskedForAllNamesTheTargetEveryLineOfItsLogIsAbout(t *testing.T) {
+	tl, out, _ := fakeRun(released, "")
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0", code)
+	}
+
+	namedBy := map[string]int{}
+
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		if line == "" {
+			continue
+		}
+
+		word := strings.Fields(line)[0]
+
+		// The run's own untagged lines are the version line, the notes, the two shared
+		// application builds, and the summary of what the whole run wrote.
+		if word == "version" || word == "note" || word == subScanner || word == subAdmin || word == subContainer {
+			continue
+		}
+
+		if !isContainerTarget(word) {
+			t.Errorf("the log line %q does not name the target its work is about", line)
+
+			continue
+		}
+
+		namedBy[word]++
+	}
+
+	// Each of the three targets the run was asked for has to be readable as its own work.
+	for _, target := range containerTargets {
+		if namedBy[target] == 0 {
+			t.Errorf("the log %q names %s in no line of its own, and %s is a target the run was asked for", out.String(), target, target)
+		}
+	}
+}
+
+// A container run whose target wrote no ffmpeg ends non-zero the way a release run does: the image
+// that would have to carry whatever ffmpeg the machine happens to have is not built, and the
+// closing line says which target wrote none. A run asked for all three carries on past that target
+// and builds the images it can.
+func TestAContainerRunAskedForATargetThatWroteNoFfmpegExitsNonZero(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	tl.ffmpeg = wroteNoFfmpegFor(ran, "linux-amd64")
+
+	if code := tl.run([]string{"container"}, out); code != 3 {
+		t.Fatalf("exit code = %d, want 3: the target this machine is wrote no ffmpeg", code)
+	}
+
+	for _, want := range []string{"0 images written", "1 target wrote none: linux-amd64"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the run's log %q does not say %q", out.String(), want)
+		}
+	}
+
+	for _, s := range *ran {
+		if s.label == subContainer {
+			t.Errorf("the run built %s, and no image is built for a target that wrote no ffmpeg", s.result)
+		}
+	}
+
+	tl, out, ran = fakeRun(released, "")
+
+	tl.ffmpeg = wroteNoFfmpegFor(ran, "linux-arm")
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 3 {
+		t.Fatalf("exit code = %d, want 3: one of the three targets the run was asked for wrote no ffmpeg", code)
+	}
+
+	for _, want := range []string{"2 images written", "1 target wrote none: linux-arm"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("the container --all run's log %q does not say %q", out.String(), want)
+		}
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		if s.label == subContainer {
+			got = append(got, s.result)
+		}
+	}
+
+	want := []string{"rdio-scanner:8.0.0-linux-amd64", "rdio-scanner:8.0.0-linux-arm64"}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the container --all run built\n  %v\nwant\n  %v: the two targets that carried an ffmpeg still get their images", got, want)
+	}
+}
+
+// A container run asked for all three carries on past an image build that failed: the targets after
+// it still get their images, and the run ends naming the target it could not build, with no closing
+// line counting what it wrote.
+func TestAContainerRunAskedForAllCarriesOnPastAnImageBuildThatFailed(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	// The stand-in says no to the arm image alone, and records every other step.
+	tl.execute = func(s step) error {
+		if s.label == subContainer && s.result == "rdio-scanner:8.0.0-linux-arm" {
+			return errors.New("the container program said no")
+		}
+
+		*ran = append(*ran, s)
+
+		return nil
+	}
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+
+	if !strings.Contains(errout.String(), "container for linux-arm") {
+		t.Errorf("the failure %q does not name the target whose image build failed", errout.String())
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		if s.label == subContainer {
+			got = append(got, s.result)
+		}
+	}
+
+	want := []string{"rdio-scanner:8.0.0-linux-amd64", "rdio-scanner:8.0.0-linux-arm64"}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the container --all run built\n  %v\nwant\n  %v: the legs after the one that failed still build their images", got, want)
+	}
+
+	if strings.Contains(out.String(), "images written") {
+		t.Errorf("the run's log %q counts what it wrote, and a run that failed names no such count", out.String())
+	}
+}
+
+// The target whose ffmpeg fails ends a container run asked for all three before any image is built:
+// the image compiles its own server and would carry whatever ffmpeg the machine happens to have, so
+// no image step runs at all.
+func TestAContainerRunAskedForAllStopsAtTheTargetWhoseFfmpegFails(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	tl.ffmpeg = func(o options, stdout io.Writer) (bool, error) {
+		if o.target == "linux-arm" {
+			return false, errors.New("the ffmpeg for linux-arm said no")
+		}
+
+		*ran = append(*ran, step{label: subFFmpeg, result: o.target})
+
+		return false, nil
+	}
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+
+	if !strings.Contains(errout.String(), "ffmpeg for linux-arm") {
+		t.Errorf("the failure %q does not name the target it stopped at", errout.String())
+	}
+
+	got := []string{}
+	for _, s := range *ran {
+		got = append(got, s.label+" "+s.result)
+	}
+
+	want := []string{
+		"scanner " + appBundle[subScanner],
+		"admin " + appBundle[subAdmin],
+		"ffmpeg linux-amd64",
+	}
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the container --all run ran\n  %v\nwant\n  %v", got, want)
+	}
+
+	if strings.Contains(out.String(), "images written") {
+		t.Errorf("the run's log %q counts images, and a run that stopped at an ffmpeg failure built none", out.String())
+	}
+}
+
+// A container run for a machine no container image is built for is refused before anything it would
+// build runs: the target list is decided first, so no ffmpeg is compiled, no image is asked for, and
+// no container program is looked for.
+func TestAContainerRunOnAMachineOutsideTheThreeIsRefusedBeforeAnythingBuilds(t *testing.T) {
+	for _, machine := range []struct{ goos, goarch string }{
+		{"darwin", "arm64"},
+		{"windows", "amd64"},
+		{"freebsd", "amd64"},
+		{"linux", "386"},
+	} {
+		_, err := containerTargetsFor(options{}, machine.goos, machine.goarch)
+		if err == nil {
+			t.Fatalf("a container run on %s-%s was accepted, and no container image is built for that machine", machine.goos, machine.goarch)
+		}
+
+		// The command line names that same machine by the word the release calls it,
+		// which is the only way a run reaches a machine this host is not.
+		word := releaseTargetWordFor(machine.goos, machine.goarch)
+
+		tl, _, ran := fakeRun(released, "")
+
+		errout := &bytes.Buffer{}
+
+		tl.errout = errout
+
+		if code := tl.run([]string{"container", word}, io.Discard); code != 2 {
+			t.Errorf("container %s answers exit %d, want 2: a refused command line builds nothing", word, code)
+		}
+
+		if !strings.Contains(errout.String(), word) {
+			t.Errorf("the refusal %q does not name %s, the target the run was asked for", errout.String(), word)
+		}
+
+		for _, target := range containerTargets {
+			if !strings.Contains(errout.String(), target) {
+				t.Errorf("the refusal of container %s does not name %s, an architecture a container run builds for", word, target)
+			}
+		}
+
+		if len(*ran) != 0 {
+			t.Errorf("container %s ran %v, and a refused request assembles no ffmpeg and no container step", word, *ran)
+		}
 	}
 }
 
