@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"io"
 	"mime/multipart"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -680,5 +681,133 @@ func TestApplyMultipartReadsAListUnderTheCapWholeAndQuiet(t *testing.T) {
 
 	if warning != "" {
 		t.Errorf("warning = %q, want nothing said about a list under the cap", warning)
+	}
+}
+
+// TestTheReaderTakesAPostedTestFieldAsTheUploadersClaimThatASubmissionIsACheck pins the part an
+// uploader posts to say its submission only asks whether this server will take a recording. The
+// part is claimed on the call and carries nothing else: the number one and the word true are the two
+// values that claim it, every other value claims nothing and is read as nothing - the way a name the
+// reader has no case for is read today - and a submission that posts no such part claims nothing
+// however short it is. The announcement is the part's name and not its contents, so a JSON body that
+// names a test inside itself claims nothing here: the sidecar trunk-recorder posts beside a recording
+// is read by the reader that reads that JSON, and that reading is unchanged.
+func TestTheReaderTakesAPostedTestFieldAsTheUploadersClaimThatASubmissionIsACheck(t *testing.T) {
+	cases := []struct {
+		name   string
+		fields [][2]string
+		want   bool
+	}{
+		{
+			name:   "a test part carrying the number one",
+			fields: [][2]string{{"test", "1"}},
+			want:   true,
+		},
+		{
+			name:   "a test part carrying the word true",
+			fields: [][2]string{{"test", "true"}},
+			want:   true,
+		},
+		{
+			name:   "a test part carrying the number zero",
+			fields: [][2]string{{"test", "0"}},
+			want:   false,
+		},
+		{
+			name:   "a test part carrying the word false",
+			fields: [][2]string{{"test", "false"}},
+			want:   false,
+		},
+		{
+			name:   "a test part carrying a word that is neither a number nor a bool",
+			fields: [][2]string{{"test", "yes"}},
+			want:   false,
+		},
+		{
+			name:   "a test part carrying no value at all",
+			fields: [][2]string{{"test", ""}},
+			want:   false,
+		},
+		{
+			name:   "a submission that posts no test part beside its system",
+			fields: [][2]string{{"system", "10001"}},
+			want:   false,
+		},
+	}
+
+	for _, testCase := range cases {
+		call := applyUploadFields(t, domain.NewCall(), testCase.fields...)
+
+		if call.Meta.ConnectionCheck != testCase.want {
+			t.Errorf("the connection check claim for %s = %t, want %t: the part named test is the uploader's "+
+				"own word that its submission is a check, and a value the server has no word for claims nothing",
+				testCase.name, call.Meta.ConnectionCheck, testCase.want)
+		}
+	}
+
+	// The body a broadcaster's connection check posts, part for part: its credential, a system number,
+	// and the announcement, and no recording. The credential is not a field this reader reads - the
+	// endpoint reads it - and it is posted here so the rows below are the bodies a real client posts.
+	const postedMoment = 1794907800 // 2026-11-17 09:30:00 UTC
+
+	check := applyUploadFields(t, domain.NewCall(),
+		[2]string{"key", "check-apikey-open"},
+		[2]string{"system", "10001"},
+		[2]string{"dateTime", strconv.Itoa(postedMoment)},
+		[2]string{"test", "1"},
+	)
+
+	if !check.Meta.ConnectionCheck {
+		t.Errorf("the connection check claim for the posted check = %t, want it claimed: the announcement is read "+
+			"whatever the submission names beside it", check.Meta.ConnectionCheck)
+	}
+
+	if check.Meta.SystemRef != 10001 {
+		t.Errorf("the posted check names system %d, want 10001: the announcement does not stop the system part "+
+			"from landing", check.Meta.SystemRef)
+	}
+
+	if !check.Timestamp.Equal(time.Unix(postedMoment, 0)) {
+		t.Errorf("the posted check is stamped %v, want %v: the announcement does not stop the moment part from "+
+			"landing", check.Timestamp, time.Unix(postedMoment, 0))
+	}
+
+	if len(check.Audio) != 0 {
+		t.Errorf("the posted check carries %d bytes of audio, want none: a body posting no recording part is not "+
+			"given one", len(check.Audio))
+	}
+
+	named := applyUploadFields(t, domain.NewCall(),
+		[2]string{"key", "check-apikey-open"},
+		[2]string{"system", "10001"},
+		[2]string{"dateTime", strconv.Itoa(postedMoment)},
+		[2]string{"talkgroup", "999999"},
+		[2]string{"talkgroupLabel", "Unknown Dispatch"},
+		[2]string{"test", "1"},
+	)
+
+	if !named.Meta.ConnectionCheck {
+		t.Errorf("the connection check claim for a posted check that names a talkgroup it has no recording for = "+
+			"%t, want it claimed", named.Meta.ConnectionCheck)
+	}
+
+	if named.Meta.TalkgroupRef != 999999 || named.Meta.TalkgroupLabel != "Unknown Dispatch" {
+		t.Errorf("it names talkgroup %d %q, want 999999 \"Unknown Dispatch\": the announcement does not stop the "+
+			"talkgroup parts from landing", named.Meta.TalkgroupRef, named.Meta.TalkgroupLabel)
+	}
+
+	sidecar := applyUploadFields(t, domain.NewCall(),
+		[2]string{"meta", `{"talkgroup":1514000,"test":true}`},
+	)
+
+	if sidecar.Meta.ConnectionCheck {
+		t.Errorf("a meta part whose JSON names a test is read as the announcement that a submission is a check, " +
+			"want it read as nothing: the announcement is a part named test, and the sidecar trunk-recorder posts " +
+			"is read by the reader that reads its JSON, not here")
+	}
+
+	if sidecar.Meta.TalkgroupRef != 0 {
+		t.Errorf("a meta part claimed talkgroup %d through the multipart reader, want nothing read from its JSON "+
+			"here: that body is read by the sidecar reader alone", sidecar.Meta.TalkgroupRef)
 	}
 }
