@@ -749,10 +749,16 @@ rdio-admin .rdio-dashboard-figures dt {
   font-size: 14px;
 }
 
+/* A figures list lays its rows in one column, and that column is as wide as the widest row it holds. A
+   serving folder is one unbreakable fragment — a line only breaks at a space, and the folder a Windows
+   install sits in carries none between its separators — so a long one widens the column, the card's own
+   minimum, and the grid track the card is laid out in, and its value is drawn past the edge of its card
+   and over the card beside it. Breaking inside the value is what keeps a card the width the layout gave it. */
 rdio-admin .rdio-dashboard-figures dd {
   font-family: var(--rdio-mono);
   font-size: 14px;
   margin: 0;
+  overflow-wrap: anywhere;
   text-align: right;
 }
 
