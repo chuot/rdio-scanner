@@ -517,6 +517,81 @@ func (s *journeyServer) uploadRecording(t *testing.T, upload uploadedRecording) 
 	return rec
 }
 
+// uploadedConnectionCheck is a capture client's connection check: the credential it always sends,
+// the system number its own configuration names, and the part that says the submission is only a
+// test. It carries no recording, because a client asking whether the server is listening has no
+// recording to send.
+type uploadedConnectionCheck struct {
+	key       string
+	systemRef uint
+
+	// testValue is what the client writes in the part named test. "1" is what a capture client
+	// writes; an empty string leaves the part out, which is how a submission that is not a
+	// connection check posts.
+	testValue string
+
+	// talkgroup and at are what a connection check names when the client's own configuration knows
+	// more than a system: a talkgroup number this server has never been told about, and the moment
+	// the client stamps its submission with. A check names no recording either way.
+	talkgroup uint
+	at        time.Time
+}
+
+// uploadConnectionCheck posts a connection check the way a capture client posts one, and reports how
+// the server answered. Only the fields the client names are written, and no recording part is written
+// at all, which is what makes the submission short of a recording whatever the client named beside it.
+func (s *journeyServer) uploadConnectionCheck(t *testing.T, check uploadedConnectionCheck) *httptest.ResponseRecorder {
+	t.Helper()
+
+	body := bytes.Buffer{}
+	writer := multipart.NewWriter(&body)
+
+	fields := []struct{ name, value string }{
+		{name: "key", value: check.key},
+		{name: "system", value: fmt.Sprintf("%d", check.systemRef)},
+	}
+
+	if check.talkgroup != 0 {
+		fields = append(fields, struct{ name, value string }{
+			name:  "talkgroup",
+			value: fmt.Sprintf("%d", check.talkgroup),
+		})
+	}
+
+	if !check.at.IsZero() {
+		fields = append(fields, struct{ name, value string }{
+			name:  "dateTime",
+			value: fmt.Sprintf("%d", check.at.UnixMilli()),
+		})
+	}
+
+	if check.testValue != "" {
+		fields = append(fields, struct{ name, value string }{
+			name:  "test",
+			value: check.testValue,
+		})
+	}
+
+	for _, field := range fields {
+		if err := writer.WriteField(field.name, field.value); err != nil {
+			t.Fatalf("writing the %s field: %v", field.name, err)
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("closing the multipart body: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/call-upload", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	s.server.ServeHTTP(rec, req)
+
+	return rec
+}
+
 // encodeAccessCode encodes an access code the way a client does, because the wire carries it that way.
 func encodeAccessCode(code string) string {
 	return base64.StdEncoding.EncodeToString([]byte(code))
@@ -638,6 +713,26 @@ func logSourceOfMessage(t *testing.T, db *sql.DB, message string) string {
 	}
 
 	return source
+}
+
+// logLevelOfMessage is the level a stored entry was filed at, or an empty string when no entry carries
+// that message. A journey that expects an entry to be filed where an operator reads a routine upload
+// problem, rather than where a lost recording is, reads this beside logSourceOfMessage.
+func logLevelOfMessage(t *testing.T, db *sql.DB, message string) string {
+	t.Helper()
+
+	const query = `SELECT "level" FROM "logs" WHERE "message" = ? ORDER BY "logid" DESC LIMIT 1`
+
+	var level string
+	if err := db.QueryRow(query, message).Scan(&level); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ""
+		}
+
+		t.Fatalf("%s (%s): %v", query, message, err)
+	}
+
+	return level
 }
 
 // storedLogMentioning reads the first stored server log entry that mentions a fragment, from a database the
