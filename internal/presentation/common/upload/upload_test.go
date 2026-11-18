@@ -238,6 +238,12 @@ type recordingUploadParser struct {
 	// Truncation, when set, is the warning the reading reports for a
 	// read field: the shape a list over the server's cap earns.
 	Truncation string
+
+	// Apply, when set, replaces what the stand-in makes of a field beyond recording that it arrived.
+	// A guard that reads what a posted value reaches the field reading as needs a reading that builds
+	// the call out of the bytes it was handed, and not one handed back a call the test chose ahead of
+	// time; every guard that names the call it wants read leaves this unset and is read as before.
+	Apply func(part *multipart.Part, data []byte, call domain.Call) (domain.Call, string)
 }
 
 // produces sets the call the parser hands back for every field it is asked to read.
@@ -250,6 +256,10 @@ func (parser *recordingUploadParser) ApplyMultipart(part *multipart.Part, data [
 	parser.Fields = append(parser.Fields, part.FormName())
 	parser.FileNames = append(parser.FileNames, part.FileName())
 	parser.Bodies = append(parser.Bodies, data)
+
+	if parser.Apply != nil {
+		return parser.Apply(part, data, call)
+	}
 
 	if parser.HasCall {
 		return parser.Completed, parser.Truncation
