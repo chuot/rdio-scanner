@@ -39,6 +39,11 @@ type IngestMeta struct {
 	UnitRefs       []uint
 	UnitLabels     []string
 
+	// ConnectionCheck is the uploader's own word that its submission only asks whether this
+	// server will take a recording, and brings no recording to put in one. Only the call-upload
+	// endpoints set it, from the form part named test; a directory watch never claims it.
+	ConnectionCheck bool
+
 	// ChannelType is what the upload endpoint says the talkgroup is — trunked or
 	// conventional — and nothing else in the server acts on it. It is kept because the call
 	// payload a client is handed for a call that is happening now carries it, and the calls

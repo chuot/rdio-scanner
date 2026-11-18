@@ -248,11 +248,12 @@ func TestCallIsValidAcceptsACallThatStatesNoMomentAndRefusesOneStampedAtTheEpoch
 }
 
 // TestACallCarryingTheCheckClaimAndNoRecordingIsRecognisedAsAConnectionCheck pins what the server
-// reads a submission that announces itself as a probe as. The announcement alone, or the
-// announcement beside nothing but an audio container header, is a connection check: a submission
-// that asks whether this server will take a recording and brings no recording to it. The same
-// announcement beside audio past that header is a recording, because a probe never brings audio,
-// and a submission that announces nothing is never a check however short it is.
+// reads a submission that announces itself as a connection check as. The announcement alone, or
+// the announcement beside nothing but an audio container header, is a connection check: a
+// submission that asks whether this server will take a recording and brings no recording to it.
+// The same announcement beside audio past that header is a recording, because a connection check
+// never brings audio, and a submission that announces nothing is never a check however short it
+// is.
 func TestACallCarryingTheCheckClaimAndNoRecordingIsRecognisedAsAConnectionCheck(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -261,24 +262,24 @@ func TestACallCarryingTheCheckClaimAndNoRecordingIsRecognisedAsAConnectionCheck(
 		want  bool
 	}{
 		{
-			name: "announces a probe and carries no audio part",
+			name: "announces a connection check and carries no audio part",
 			meta: IngestMeta{ConnectionCheck: true, SystemRef: 10001},
 			want: true,
 		},
 		{
-			name:  "announces a probe and carries audio no longer than a container header",
+			name:  "announces a connection check and carries audio no longer than a container header",
 			meta:  IngestMeta{ConnectionCheck: true, SystemRef: 10001},
 			audio: bytes.Repeat([]byte{0}, MinimumAudioLength),
 			want:  true,
 		},
 		{
-			name:  "announces a probe and carries audio past a container header",
+			name:  "announces a connection check and carries audio past a container header",
 			meta:  IngestMeta{ConnectionCheck: true, SystemRef: 10001},
 			audio: bytes.Repeat([]byte{0}, MinimumAudioLength+1),
 			want:  false,
 		},
 		{
-			name:  "announces a probe and carries a recording beside the talkgroup it names",
+			name:  "announces a connection check and carries a recording beside the talkgroup it names",
 			meta:  IngestMeta{ConnectionCheck: true, SystemRef: 10001, TalkgroupRef: 1514000},
 			audio: bytes.Repeat([]byte{0}, 4096),
 			want:  false,
@@ -310,32 +311,32 @@ func TestACallCarryingTheCheckClaimAndNoRecordingIsRecognisedAsAConnectionCheck(
 	}
 }
 
-// TestTheCheckClaimDoesNotMakeACallOutOfASubmissionThatIsShortOfOne pins that announcing a probe is
-// only an announcement. A submission shaped like a probe is refused for the deficiency it has, by
-// the same four guards in the same order naming the same last deficiency as every other submission,
-// and a submission that carries everything a recording needs is accepted whatever it announces and
-// is never read as a check.
+// TestTheCheckClaimDoesNotMakeACallOutOfASubmissionThatIsShortOfOne pins that announcing a
+// connection check is only an announcement. A submission shaped like one is refused for the
+// deficiency it has, by the same four guards in the same order naming the same last deficiency as
+// every other submission, and a submission that carries everything a recording needs is accepted
+// whatever it announces and is never read as a check.
 func TestTheCheckClaimDoesNotMakeACallOutOfASubmissionThatIsShortOfOne(t *testing.T) {
-	probe := NewCall()
-	probe.Meta = IngestMeta{ConnectionCheck: true, SystemRef: 10001}
-	probe.Timestamp = time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC)
+	check := NewCall()
+	check.Meta = IngestMeta{ConnectionCheck: true, SystemRef: 10001}
+	check.Timestamp = time.Date(2026, 3, 14, 9, 30, 0, 0, time.UTC)
 
-	if err := probe.IsValid(); err == nil || err.Error() != "no talkgroup" {
-		t.Errorf("IsValid for a submission shaped like a probe = %v, want it refused for \"no talkgroup\": "+
-			"the deficiency decides the refusal, and a submission that names a system and no talkgroup is "+
-			"short of a talkgroup whatever it announces", err)
+	if err := check.IsValid(); err == nil || err.Error() != "no talkgroup" {
+		t.Errorf("IsValid for a submission shaped like a connection check = %v, want it refused for "+
+			"\"no talkgroup\": the deficiency decides the refusal, and a submission that names a system "+
+			"and no talkgroup is short of a talkgroup whatever it announces", err)
 	}
 
 	recording := validCall()
 	recording.Meta = IngestMeta{ConnectionCheck: true}
 
 	if err := recording.IsValid(); err != nil {
-		t.Errorf("IsValid for a complete submission that announces a probe = %v, want it accepted", err)
+		t.Errorf("IsValid for a complete submission that announces a connection check = %v, want it accepted", err)
 	}
 
 	if recording.IsConnectionCheck() {
-		t.Error("a complete submission that announces a probe is read as a connection check, want it read as " +
-			"the recording it carries")
+		t.Error("a complete submission that announces a connection check is read as a connection check, want " +
+			"it read as the recording it carries")
 	}
 
 	noAudio := func(call *Call) { call.Audio = bytes.Repeat([]byte{0}, MinimumAudioLength) }
@@ -360,7 +361,7 @@ func TestTheCheckClaimDoesNotMakeACallOutOfASubmissionThatIsShortOfOne(t *testin
 
 	// Every way a submission can be short, with the announcement set on each one: the guards run in
 	// the order audio, moment, system, talkgroup, and the refusal names the last one that fails, for
-	// a submission that announces a probe exactly as it does for one that announces nothing.
+	// a submission that announces a connection check exactly as it does for one that announces nothing.
 	cases := []struct {
 		missing string
 		strip   func(call *Call)
@@ -398,16 +399,16 @@ func TestTheCheckClaimDoesNotMakeACallOutOfASubmissionThatIsShortOfOne(t *testin
 		err := call.IsValid()
 
 		if err == nil {
-			t.Errorf("IsValid for a submission announcing a probe and missing %s = nil, want it refused for %q",
+			t.Errorf("IsValid for a submission announcing a connection check and missing %s = nil, want it refused for %q",
 				testCase.missing, testCase.want)
 			continue
 		}
 
 		if err.Error() != testCase.want {
-			t.Errorf("IsValid for a submission announcing a probe and missing %s reports %q, want %q: the guards "+
-				"run in the order audio, moment, system, talkgroup and name the last one that fails, and the "+
-				"announcement changes which submission is a check without changing which deficiency the refusal "+
-				"names", testCase.missing, err.Error(), testCase.want)
+			t.Errorf("IsValid for a submission announcing a connection check and missing %s reports %q, want %q: "+
+				"the guards run in the order audio, moment, system, talkgroup and name the last one that "+
+				"fails, and the announcement changes which submission is a check without changing which "+
+				"deficiency the refusal names", testCase.missing, err.Error(), testCase.want)
 		}
 	}
 }

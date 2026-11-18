@@ -239,6 +239,14 @@ func ApplyMultipart(part *multipart.Part, data []byte, call domain.Call) (domain
 			call.Meta.TalkgroupTag = tag
 		}
 
+	case "test":
+		// The uploader's own word that its submission only asks whether this server will take a
+		// recording. The number one and the word true are the only values that claim it; every
+		// other value, and a body that posts no such part, claim nothing.
+		if value := string(data); value == "1" || value == "true" {
+			call.Meta.ConnectionCheck = true
+		}
+
 	case "timestamp":
 		if millis, err := strconv.Atoi(string(data)); err == nil {
 			call.Timestamp = time.UnixMilli(int64(millis))

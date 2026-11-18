@@ -104,6 +104,15 @@ func (call Call) IsValid() error {
 	return reason
 }
 
+// IsConnectionCheck reports whether the submission is an uploader's connection check: the
+// uploader's own claim that it only asks whether this server will take a recording, and no audio
+// past a container header to put in one. A claim beside audio long enough to be a recording is
+// read as that recording, and a submission that claims nothing is never a check however short it
+// is.
+func (call Call) IsConnectionCheck() bool {
+	return call.Meta.ConnectionCheck && len(call.Audio) <= MinimumAudioLength
+}
+
 // HasSystem reports whether a system is attached to the call: one the server already
 // stores, or one auto-populate has just created for it and has not stored yet.
 func (call Call) HasSystem() bool {
