@@ -503,6 +503,7 @@ func (s *Server) wire(migrationLines []domain.LogEntry) error {
 
 	uploads := upload.New(upload.Deps{
 		Ingest: application.NewUploadCallHandler(apikeys, ingest),
+		Check:  application.NewCheckUploadConnectionQueryHandler(apikeys, systems),
 		Logs:   s.logs,
 		Parser: reader,
 		Clock:  s.clock,

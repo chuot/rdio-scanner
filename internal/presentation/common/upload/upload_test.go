@@ -132,6 +132,7 @@ func newUploadFixture() *uploadFixture {
 
 	New(Deps{
 		Ingest: application.NewUploadCallHandler(fixture.apikeys, ingest),
+		Check:  application.NewCheckUploadConnectionQueryHandler(fixture.apikeys, fixture.systems),
 		Parser: fixture.parser,
 		Logs:   fixture.logs,
 		Clock:  fixture.clock,
@@ -723,6 +724,7 @@ func TestCallUploadEndpointsAnswerTheConnectionCheckWithTheLastDeficiency(t *tes
 	for _, path := range paths {
 		fixture := newUploadFixture()
 
+		fixture.seedUploadSystem()
 		fixture.parser.produces(connectionCheckCall(uploadSystemRef))
 
 		body, contentType := postedBody(t, connectionCheckFields(uploadOpenKey, "10001")...)
@@ -1115,6 +1117,51 @@ func TestAConnectionCheckCreatesNothing(t *testing.T) {
 			fixture.assertStamped(t, "was refused")
 		})
 	}
+}
+
+// TestTheConnectionCheckWhoseConfigurationCannotBeReadIsAnsweredAsAFailure keeps a check from being
+// answered with the bytes a client reads as an all-clear when the configuration the answer is read out
+// of could not be read at all. A check and a recording are guarded by the same credential list and read
+// from the same system rows, so a server that cannot read them fails both alike.
+func TestTheConnectionCheckWhoseConfigurationCannotBeReadIsAnsweredAsAFailure(t *testing.T) {
+	fixture := newUploadFixture()
+
+	fixture.apikeys.Err = errors.New("the credentials cannot be read")
+	fixture.parser.produces(connectionCheckCall(uploadSystemRef))
+
+	body, contentType := postedBody(t, connectionCheckFields(uploadOpenKey, "10001")...)
+
+	rec := fixture.post("/api/call-upload", contentType, body)
+
+	if rec.Code != http.StatusExpectationFailed {
+		t.Fatalf("status = %d, want 417: %s", rec.Code, rec.Body.String())
+	}
+
+	if got := rec.Body.String(); !strings.HasPrefix(got, "Call upload failed: ") {
+		t.Errorf("answer = %q, want the answer an upload gets when the configuration guarding it cannot be read: "+
+			"a check answered from that same configuration is answered with the same failure", got)
+	}
+
+	if strings.HasPrefix(rec.Body.String(), "Incomplete call data") {
+		t.Errorf("answer = %q, want no deficiency answer: a client reads those bytes as an all-clear, and this "+
+			"server read nothing it could answer from", rec.Body.String())
+	}
+
+	if named := fixture.entriesNamingACheck(); len(named) != 0 {
+		t.Errorf("filed %v, want no entry naming a check: the server never read the configuration that says what "+
+			"a submission was", fixture.logs.Stored)
+	}
+
+	if !fixture.loggedContaining("the credentials cannot be read") {
+		t.Errorf("the failure to read is not in the log view: %v", fixture.logs.Stored)
+	}
+
+	if len(fixture.calls.Saved) != 0 || len(fixture.systems.Stored) != 0 {
+		t.Errorf("stored calls %v and systems %v, want nothing: a check decides nothing, even when the read it "+
+			"would have answered from failed", fixture.calls.Saved, fixture.systems.Stored)
+	}
+
+	fixture.assertStamped(t, "Call upload failed")
 }
 
 // TestCallUploadEndpointRefusesAMethodItDoesNotAnswerWithItsOwnBody refuses with
