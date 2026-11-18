@@ -140,8 +140,12 @@ func (upload *Endpoints) TrunkRecorderCallUpload(w http.ResponseWriter, r *http.
 
 // readCall reads the posted fields and hands back the call they
 // describe and the credential the upload carried. The credential
-// never reaches the parser. The reported failures are the legacy
-// server's own, written out per endpoint, as the frozen contract fixes.
+// never reaches the parser. Each posted value is read with one
+// trailing line break taken off it, which is the one an uploader that
+// frames its own body leaves behind, and the part that carries the
+// recording is read as it was posted. The reported failures are the
+// legacy server's own, written out per endpoint, as the frozen contract
+// fixes.
 func (upload *Endpoints) readCall(w http.ResponseWriter, r *http.Request, trunkRecorder bool) (domain.Call, string, bool) {
 	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
@@ -181,9 +185,21 @@ func (upload *Endpoints) readCall(w http.ResponseWriter, r *http.Request, trunkR
 			return domain.Call{}, "", false
 		}
 
+		name := part.FormName()
+
+		// The uploaders that write their own bodies close every part with a line break of their own and
+		// write one more before their closing delimiter. The grammar gives the reader the break the next
+		// boundary line needs, so the spare one arrives inside the value of whichever part the body ends
+		// with, and one trailing line break is taken off it. The part that carries the recording is read
+		// as it was posted: a line break at the end of a recording is a byte of that recording, not a line
+		// break that closes a part.
+		if name != "audio" {
+			body = trimTrailingLineEnd(body)
+		}
+
 		var warning string
 
-		switch part.FormName() {
+		switch name {
 		case "key":
 			key = string(body)
 
@@ -209,6 +225,24 @@ func (upload *Endpoints) readCall(w http.ResponseWriter, r *http.Request, trunkR
 	}
 
 	return call, key, true
+}
+
+// trimTrailingLineEnd takes one line ending off the end of a posted value, and only one: an uploader that
+// writes its own body closes the part it ends with a line break of its own, and the break the reader needs
+// for its next boundary line arrives inside that value. A value that ends with no line ending, or that ends
+// with more than one, is returned as it was read; the line endings inside a value are part of the value.
+func trimTrailingLineEnd(value []byte) []byte {
+	if len(value) == 0 || value[len(value)-1] != '\n' {
+		return value
+	}
+
+	value = value[:len(value)-1]
+
+	if len(value) > 0 && value[len(value)-1] == '\r' {
+		value = value[:len(value)-1]
+	}
+
+	return value
 }
 
 // readFailure wraps the failure of one step of reading the posted body, the way each endpoint has always
