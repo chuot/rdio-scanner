@@ -1929,10 +1929,10 @@ func migrateDownstreams(ctx context.Context, s store, progress Progress) error {
 // spellings and only sqlite's case-insensitive table names hid that.
 const v6DirwatchesTable = "rdioScannerDirWatches"
 
-// migrateDirwatches mirrors `migrateDirwatches` in `server/migrations.go`: the lookup maps that
-// resolve a dirwatch's system and talkgroup are the legacy cross product scanned with the legacy's
-// leftover variables, and the three statements naming the v6 table now name it once, in the
-// spelling v6 created it with.
+// migrateDirwatches mirrors `migrateDirwatches` in `server/migrations.go`, except that each half of
+// a dirwatch's reference pair is resolved from the table its own number names rather than from the
+// legacy cross product and its leftover scan variables, and the three statements naming the v6 table
+// name it once, in the spelling v6 created it with.
 func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 	const section, operation, part = "migration", "migrateDirwatches", "dirwatches"
 
@@ -1942,17 +1942,19 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 
 	progress(domain.LogLevelInfo, "migrating dirwatches...")
 
+	// Each half of a dirwatch's pair is looked up in the table its own number names, the
+	// way the talkgroups pass and the units pass read the systems they link: the systems a
+	// deployment really had are available whatever its groups hold, and a group number
+	// resolves against the group that carries it.
 	var (
-		systems    = map[int32]int32{}
-		talkgroups = map[int32]map[int32]int32{}
-
-		systemID     sql.NullInt32
-		systemRef    sql.NullInt32
-		talkgroupID  sql.NullInt32
-		talkgroupRef sql.NullInt32
+		systemIDs    = map[int32]int32{}
+		talkgroupIDs = map[int32]int32{}
 	)
 
-	query := `SELECT s."systemId", s."systemRef", t."talkgroupId", t."talkgroupRef" FROM "systems" AS s CROSS JOIN "talkgroups" AS t`
+	// The preload is the migration's map of what the server already holds: a read that
+	// ended early leaves a map missing entries, and the rows built from it point at the
+	// wrong identities.
+	query := `SELECT "systemId", "systemRef" FROM "systems"`
 
 	rows, err := s.query(ctx, query)
 	if err != nil {
@@ -1960,42 +1962,81 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 	}
 
 	for rows.Next() {
-		if err := rows.Scan(&systemID, &systemRef, &talkgroupID, &talkgroupRef); err != nil {
+		var (
+			systemID  sql.NullInt32
+			systemRef sql.NullInt32
+		)
+
+		if err := rows.Scan(&systemID, &systemRef); err != nil {
 			// A cancelled read is felt at the scan and not at the iterator: the
 			// preload map must not be built from the rows that happened to
 			// survive.
 			if readErr := rows.Err(); readErr != nil {
 				rows.Close()
 
-				return statementError("migration", "migrateDirwatches", readErr, query)
+				return statementError(section, operation, readErr, query)
 			}
 
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				rows.Close()
 
-				return statementError("migration", "migrateDirwatches", ctxErr, query)
+				return statementError(section, operation, ctxErr, query)
 			}
 
 			continue
 		}
 
-		if systemID.Valid && systemRef.Valid && talkgroupID.Valid && talkgroupRef.Valid {
-			if systems[systemRef.Int32] == 0 {
-				systems[systemRef.Int32] = systemID.Int32
-				talkgroups[systemRef.Int32] = map[int32]int32{}
-			}
-
-			talkgroups[systemRef.Int32][talkgroupRef.Int32] = talkgroupID.Int32
+		if systemID.Valid && systemRef.Valid {
+			systemIDs[systemRef.Int32] = systemID.Int32
 		}
 	}
 
-	// The preload is the migration's map of what the server already holds:
-	// a read that ended early leaves the map missing entries, and the rows
-	// built from it point at the wrong identities.
 	if err := rows.Err(); err != nil {
 		rows.Close()
 
-		return statementError("migration", "migrateDirwatches", err, query)
+		return statementError(section, operation, err, query)
+	}
+
+	rows.Close()
+
+	query = `SELECT "talkgroupId", "talkgroupRef" FROM "talkgroups"`
+
+	rows, err = s.query(ctx, query)
+	if err != nil {
+		return statementError(section, operation, err, query)
+	}
+
+	for rows.Next() {
+		var (
+			talkgroupID  sql.NullInt32
+			talkgroupRef sql.NullInt32
+		)
+
+		if err := rows.Scan(&talkgroupID, &talkgroupRef); err != nil {
+			if readErr := rows.Err(); readErr != nil {
+				rows.Close()
+
+				return statementError(section, operation, readErr, query)
+			}
+
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				rows.Close()
+
+				return statementError(section, operation, ctxErr, query)
+			}
+
+			continue
+		}
+
+		if talkgroupID.Valid && talkgroupRef.Valid {
+			talkgroupIDs[talkgroupRef.Int32] = talkgroupID.Int32
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		rows.Close()
+
+		return statementError(section, operation, err, query)
 	}
 
 	rows.Close()
@@ -2019,16 +2060,18 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 
 	for rows.Next() {
 		var (
-			dirwatchID  sql.NullInt64
-			delay       sql.NullInt32
-			deleteAfter sql.NullBool
-			directory   sql.NullString
-			disabled    sql.NullBool
-			extension   sql.NullString
-			frequency   sql.NullInt32
-			mask        sql.NullString
-			order       sql.NullInt32
-			kind        sql.NullString
+			dirwatchID   sql.NullInt64
+			delay        sql.NullInt32
+			deleteAfter  sql.NullBool
+			directory    sql.NullString
+			disabled     sql.NullBool
+			extension    sql.NullString
+			frequency    sql.NullInt32
+			mask         sql.NullString
+			order        sql.NullInt32
+			systemRef    sql.NullInt32
+			talkgroupRef sql.NullInt32
+			kind         sql.NullString
 		)
 
 		if err := rows.Scan(&dirwatchID, &delay, &deleteAfter, &directory, &disabled, &extension, &frequency, &mask, &order, &systemRef, &talkgroupRef, &kind); err != nil {
@@ -2076,15 +2119,28 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 			continue
 		}
 
-		var refSystem, refTalkgroup any
+		// Each half is the identity the number in the row's own column was carried under, or 0
+		// when the row named nothing or named a number this database does not have. Both
+		// columns are `NOT NULL DEFAULT 0`, so 0 is what a watch that names nothing costs it:
+		// a Go nil here is the refusal the v6 row's own NULL caused, and the parser only lets a
+		// mask answer a reference when the watch's own value is 0.
+		var (
+			refSystem    = int32(0)
+			refTalkgroup = int32(0)
+		)
 
-		if systemRef.Valid && systems[systemRef.Int32] > 0 {
-			refSystem = systems[systemRef.Int32]
+		if systemRef.Valid {
+			refSystem = systemIDs[systemRef.Int32]
 		}
 
-		if talkgroupID.Valid {
-			refTalkgroup = talkgroups[systemRef.Int32][talkgroupRef.Int32]
+		if talkgroupRef.Valid {
+			refTalkgroup = talkgroupIDs[talkgroupRef.Int32]
 		}
+
+		// A number the operator typed that this database does not have is carried as 0 and
+		// said; a row that named nothing has no number to name and is carried quietly.
+		systemUnresolved := systemRef.Valid && systemRef.Int32 != 0 && refSystem == 0
+		talkgroupUnresolved := talkgroupRef.Valid && talkgroupRef.Int32 != 0 && refTalkgroup == 0
 
 		var (
 			wait       int64
@@ -2129,11 +2185,6 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 			parser = kind.String
 		}
 
-		// An unresolved reference is passed on as it is: the legacy migration formatted it into
-		// the statement as `%!d(<nil>)`, which the database rejected as a syntax error, and the
-		// row was reported and lost. Parameterized, it is a NULL in a NOT NULL column, which the
-		// database rejects as a constraint failure. Same row lost, same line reported; only the
-		// database's complaint differs.
 		if carried, err := alreadyCarried(ctx, tx, "dirwatches", "dirwatchId", dirwatchID.Int64); err != nil {
 			tx.rollback()
 
@@ -2153,6 +2204,22 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 
 				return err
 			}
+
+			continue
+		}
+
+		// The reference is written only for a number this database actually has: the watch is
+		// carried, the reference is 0, and the number the row held is said, because once the v6
+		// table is dropped this report is the only place left that tells the operator the number
+		// they typed names nothing here.
+		if systemUnresolved {
+			progress(domain.LogLevelWarn, fmt.Sprintf("the migration carried %s without its system: system %d is not in this database",
+				namedRow("dirwatch", dirwatchID.Int64, directory), systemRef.Int32))
+		}
+
+		if talkgroupUnresolved {
+			progress(domain.LogLevelWarn, fmt.Sprintf("the migration carried %s without its talkgroup: talkgroup %d is not in this database",
+				namedRow("dirwatch", dirwatchID.Int64, directory), talkgroupRef.Int32))
 		}
 	}
 

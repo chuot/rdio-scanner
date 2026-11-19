@@ -1878,9 +1878,11 @@ func TestMigrateDirwatchesResolveSystemAndTalkgroupReferences(t *testing.T) {
 }
 
 // TestMigrateDirwatchesStoreZeroForATalkgroupThatDoesNotResolve: an unresolved talkgroup becomes 0,
-// which the column accepts, so the dirwatch is kept pointing at nothing and nothing is said.
+// which the column accepts, so the dirwatch is kept pointing at nothing. The number the row named is
+// said with it: the operator typed that number, and once the v6 table is dropped the migration report
+// is the only place they can learn that this database has no such group.
 func TestMigrateDirwatchesStoreZeroForATalkgroupThatDoesNotResolve(t *testing.T) {
-	db, _ := migrateLegacyV6Fixture(t)
+	db, progress := migrateLegacyV6Fixture(t)
 
 	got := rowsOf(t, db, "dirwatches", `"dirwatchId", "systemId", "talkgroupId"`)
 
@@ -1890,6 +1892,12 @@ func TestMigrateDirwatchesStoreZeroForATalkgroupThatDoesNotResolve(t *testing.T)
 				t.Errorf("the dirwatch naming a talkgroup nothing migrated landed as %v, want system 101 and talkgroup 0", row)
 			}
 
+			want := `the migration carried dirwatch 603 "/var/spool/dsdplus/1514999" without its talkgroup: talkgroup 1514999 is not in this database`
+
+			if !hasString(progress, want) {
+				t.Errorf("the migration kept a watch without the group its row named and said nothing about it, want %q: %v", want, progress)
+			}
+
 			return
 		}
 	}
@@ -1897,9 +1905,9 @@ func TestMigrateDirwatchesStoreZeroForATalkgroupThatDoesNotResolve(t *testing.T)
 	t.Errorf("the dirwatch naming a talkgroup nothing migrated was not kept: %v", got)
 }
 
-// A dirwatch naming a talkgroup no lookup found: the legacy pass built its
-// insert from a variable the dirwatch scan never filled, so the reference
-// went out as NULL and the row was rejected and lost.
+// A dirwatch whose talkgroup half resolves to nothing because no talkgroup was migrated. Each half is
+// looked up in the table its own number names, so the systems the deployment really had still arrive,
+// every watch that named a group says the number that row held, and no watch is refused or archived.
 func TestMigrateDirwatchesResolveNothingWhenNoTalkgroupWasMigrated(t *testing.T) {
 	db := openLegacyV6Database(t)
 
@@ -1907,20 +1915,157 @@ func TestMigrateDirwatchesResolveNothingWhenNoTalkgroupWasMigrated(t *testing.T)
 
 	progress := migrateDatabase(t, db)
 
-	if got := countRows(t, db, "dirwatches"); got != 0 {
-		t.Errorf("with no talkgroup migrated, %d dirwatches were kept, want 0", got)
+	got := rowsOf(t, db, "dirwatches", `"dirwatchId", "systemId", "talkgroupId"`)
+	want := [][]string{
+		{"601", "101", "0"},
+		{"602", "102", "0"},
+		{"603", "101", "0"},
+		{"605", "0", "0"},
+		{"606", "101", "0"},
 	}
 
-	found := 0
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("with no talkgroup migrated, the dirwatches kept:\n  got  %v\n  want %v", got, want)
+	}
 
 	for _, line := range progress {
 		if strings.Contains(line, "migration.migrateDirwatches:") {
-			found++
+			t.Errorf("a kept dirwatch was reported as a failure the database refused: %q", line)
 		}
 	}
 
-	if found != 3 {
-		t.Errorf("the lost dirwatches were reported %d times, want one per dirwatch; progress: %v", found, progress)
+	for _, want := range []string{
+		`the migration carried dirwatch 601 "/var/spool/dsdplus/1514000" without its talkgroup: talkgroup 1514000 is not in this database`,
+		`the migration carried dirwatch 602 "/var/spool/default/1514002" without its talkgroup: talkgroup 1514002 is not in this database`,
+		`the migration carried dirwatch 603 "/var/spool/dsdplus/1514999" without its talkgroup: talkgroup 1514999 is not in this database`,
+	} {
+		if !hasString(progress, want) {
+			t.Errorf("the migration said nothing about a watch it kept without the group its row named, want %q: %v", want, progress)
+		}
+	}
+
+	if rows := archivedRows(t, db, v6DirwatchesTable); len(rows) != 0 {
+		t.Errorf("the archive holds %v for dirwatches, want nothing: a watch whose group did not migrate is a watch "+
+			"the deployment still has", rows)
+	}
+}
+
+// TestMigrateDirwatchesCarriesAWatchThatNamesNeitherSystemNorTalkgroup is the shape the v6 table writes
+// for a watch whose identity comes from its mask and its file name: both reference columns empty. The
+// watch is carried naming 0 in both, and every other column of it arrives as the v6 row held it.
+func TestMigrateDirwatchesCarriesAWatchThatNamesNeitherSystemNorTalkgroup(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	progress := migrateDatabase(t, db)
+
+	got := rowsOf(t, db, "dirwatches", `"dirwatchId", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "systemId", "talkgroupId", "type"`)
+	want := [][]string{
+		{"601", "0", "0", "/var/spool/dsdplus/1514000", "0", "wav", "1514000000", "0644", "1", "101", "201", "dsdPlus"},
+		{"602", "5", "1", "/var/spool/default/1514002", "1", "mp3", "1514002000", "0755", "2", "102", "203", "default"},
+		{"603", "0", "0", "/var/spool/dsdplus/1514999", "0", "wav", "1514999000", "0644", "3", "101", "0", "dsdPlus"},
+		{"605", "0", "1", "/run/rtl_airband", "0", "", "0", "#MHZ", "4", "0", "0", "default"},
+		{"606", "0", "0", "/var/spool/dsdplus/10001", "0", "wav", "0", "0644", "5", "101", "0", "dsdPlus"},
+	}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the migrated dirwatches, the v6 count included:\n  got  %v\n  want %v", got, want)
+	}
+
+	if rows := archivedRows(t, db, v6DirwatchesTable); len(rows) != 0 {
+		t.Errorf("the archive holds %v for dirwatches, want nothing: every watch of this fixture is carryable", rows)
+	}
+
+	for _, line := range progress {
+		if strings.Contains(line, "605") {
+			t.Errorf("the pass said %q about the watch that named neither reference, want nothing said about it: %v", line, progress)
+		}
+	}
+}
+
+// TestMigrateDirwatchesCarriesAWatchThatNamesASystemAndNoTalkgroup: one half named and the other left
+// empty is the shape a v6 deployment writes when the operator filled in the system and let the mask
+// answer the group. The named half arrives as the row it names, the empty half as 0, with no line said
+// for a number the row never held.
+func TestMigrateDirwatchesCarriesAWatchThatNamesASystemAndNoTalkgroup(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	progress := migrateDatabase(t, db)
+
+	got := readRows(t, db, `SELECT "systemId", "talkgroupId", "directory", "type" FROM "dirwatches" WHERE "dirwatchId" = 606`)
+	want := [][]string{{"101", "0", "/var/spool/dsdplus/10001", "dsdPlus"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the dirwatch naming a system and no talkgroup: %v, want %v", got, want)
+	}
+
+	if archivedRow(t, db, v6DirwatchesTable, 606) != nil {
+		t.Errorf("the archive holds the dirwatch naming a system and no talkgroup, want it carried")
+	}
+
+	for _, line := range progress {
+		if strings.Contains(line, "606") {
+			t.Errorf("the pass said %q about a watch that named one reference and nothing else, want nothing said: %v", line, progress)
+		}
+	}
+}
+
+// TestMigrateDirwatchesResolveAWatchNamingASystemWithNoGroupAndAGroupOfAnotherSystem is the pair shape:
+// the system the row named has no group of its own, and the group number the row named belongs to a
+// different system. Both numbers are the row's own, and each half resolves to the identity of the
+// number it holds.
+func TestMigrateDirwatchesResolveAWatchNamingASystemWithNoGroupAndAGroupOfAnotherSystem(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `INSERT INTO "rdioScannerSystems" ("_id", "autoPopulate", "blacklists", "id", "label", "led", "order") VALUES (111, 0, '[]', 10011, 'Relay Only', NULL, 3)`)
+	mustExec(t, db, `INSERT INTO "rdioScannerDirWatches" ("_id", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "systemId", "talkgroupId", "type", "usePolling") VALUES (608, 0, 0, '/var/spool/relay/1514000', 0, 'wav', 1514000000, '0644', 6, 10011, 1514000, 'dsdPlus', 0)`)
+
+	progress := migrateDatabase(t, db)
+
+	got := readRows(t, db, `SELECT "systemId", "talkgroupId" FROM "dirwatches" WHERE "dirwatchId" = 608`)
+	want := [][]string{{"111", "201"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the dirwatch naming a system with no group of its own and a group of another system: %v, want %v", got, want)
+	}
+
+	if archivedRow(t, db, v6DirwatchesTable, 608) != nil {
+		t.Errorf("the archive holds the dirwatch whose two halves each resolve, want it carried: %v", progress)
+	}
+
+	for _, line := range progress {
+		if strings.Contains(line, "608") {
+			t.Errorf("the pass said %q about a watch whose every reference resolved, want nothing said: %v", line, progress)
+		}
+	}
+}
+
+// TestMigrateDirwatchesCarryAWatchNamingASystemThatIsNotInThisDatabase is the same rule on the system
+// half: a number the row held and this database does not have arrives as 0, the other half still
+// arrives as the row it names, and the number is said. Losing a system the operator typed is exactly
+// as worth telling them about as losing a group they typed.
+func TestMigrateDirwatchesCarryAWatchNamingASystemThatIsNotInThisDatabase(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `INSERT INTO "rdioScannerDirWatches" ("_id", "delay", "deleteAfter", "directory", "disabled", "extension", "frequency", "mask", "order", "systemId", "talkgroupId", "type", "usePolling") VALUES (607, 0, 0, '/var/spool/dsdplus/10003', 0, 'wav', 1514000000, '0644', 6, 10003, 1514000, 'dsdPlus', 0)`)
+
+	progress := migrateDatabase(t, db)
+
+	got := readRows(t, db, `SELECT "systemId", "talkgroupId" FROM "dirwatches" WHERE "dirwatchId" = 607`)
+	want := [][]string{{"0", "201"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the dirwatch naming a system nothing migrated: %v, want %v: the group it named is here and stays "+
+			"named, the system that is not here becomes 0", got, want)
+	}
+
+	warnLine := `the migration carried dirwatch 607 "/var/spool/dsdplus/10003" without its system: system 10003 is not in this database`
+
+	if !hasString(progress, warnLine) {
+		t.Errorf("the migration kept a watch without the system its row named and said nothing about it, want %q: %v", warnLine, progress)
+	}
+
+	if archivedRow(t, db, v6DirwatchesTable, 607) != nil {
+		t.Errorf("the archive holds the dirwatch naming a system nothing migrated, want it carried")
 	}
 }
 

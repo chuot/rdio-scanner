@@ -447,7 +447,7 @@ func liveDirwatches(t *testing.T, dialect Dialect) {
 
 	carried := auditIdentities(t, db, "dirwatches", "dirwatchId")
 
-	if want := []string{"601", "602", "603"}; !equalStrings(carried, want) {
+	if want := []string{"601", "602", "603", "605", "606"}; !equalStrings(carried, want) {
 		t.Errorf("%s carried %v of the deployment's dirwatches, want %v: a backend that does not find the v6 table "+
 			"skips the migration on every start and says nothing", dialect, carried, want)
 	}
