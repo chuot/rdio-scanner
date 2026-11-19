@@ -169,7 +169,7 @@ body:
       description: Optional. A file says more than a transcript when the problem follows a specific recording or a specific configuration.
     validations:
       required: false
-      accept: .zip,.gz,.tar.gz,.png,.jpg,.jpeg,.webp,.pdf,.log,.txt,.json
+      accept: .zip,.gz,.png,.jpg,.jpeg,.webp,.pdf,.log,.txt,.json
   - type: textarea
     id: anything-else
     attributes:
