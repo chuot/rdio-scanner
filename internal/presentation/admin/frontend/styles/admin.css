@@ -684,6 +684,15 @@ rdio-admin .rdio-dashboard-cards {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
+/* The dashboard's cards hold three columns at every width the column gives them room for, and the floor under a
+   card scales with the room so a fourth card never seats beside one an operator reads. Below 720 px the content
+   column is one column wide and the narrow group's single track takes the cards. */
+@media (min-width: 720px) {
+  rdio-admin .rdio-dashboard-cards {
+    grid-template-columns: repeat(auto-fit, minmax(max(280px, calc((100% - 2 * var(--rdio-space-3)) / 3)), 1fr));
+  }
+}
+
 rdio-admin .rdio-dashboard-card {
   border: 1px solid var(--rdio-border);
   border-radius: var(--rdio-radius-card);

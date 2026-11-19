@@ -28,6 +28,10 @@ const CARDS_GRID = /\.rdio-dashboard-cards$/;
 const ADMIN_CARD = /\.rdio-admin-card$/;
 const ANY_DASHBOARD_CARD = /\.rdio-dashboard\b/;
 
+// The media block the wider column starts at: 720 px is where the sheet's two narrow blocks are both behind it,
+// so a rule read there cannot reach the widths the narrow group owns.
+const WIDE_BOUNDARY = 'min-width: 720px';
+
 // A declaration that gives a box its own width, or hides what it cannot draw, instead of letting a line
 // break: each one either raises the minimum the card is measured at or moves part of the value out of reach.
 const WIDTH_OR_SCROLL = /(^|[;\s])(min-width|max-width|width|overflow|overflow-x|text-overflow)\s*:/i;
@@ -72,10 +76,13 @@ function topRules(css) {
     .map((block) => ({ selector: tidy(block.selector), block: block.body }));
 }
 
-// The rules every media block carries, at the same level the top-level rules are read at.
-function mediaRules(css) {
+// The rules the media blocks carry, at the same level the top-level rules are read at. With a condition, only
+// the block that names it is read: the shape a sheet hands the page from one width up is a different rule from
+// the one it hands at every width, and a guard that reads both cannot say which width each one answers.
+function mediaRules(css, condition) {
   return blocksAtOneLevel(css)
     .filter((block) => block.selector.startsWith('@media'))
+    .filter((block) => !condition || tidy(block.selector).includes(condition))
     .flatMap((block) => blocksAtOneLevel(block.body))
     .map((block) => ({ selector: tidy(block.selector), block: block.body }));
 }
@@ -164,24 +171,38 @@ test('a figure value is given no width, no minimum, and no hidden overflow to fi
     `a rule reaches figure values through a card attribute or a child position (${scoped.map((rule) => `"${rule.selector}"`).join(', ')}): the figures of every dashboard card are laid out the same way, so the break cannot belong to one card or to wherever a row happens to sit in a card's markup`);
 });
 
-test('the cards grid keeps the floor under a card that a longer value cannot move', () => {
-  const rules = rulesMatching(topRules(adminCss()), CARDS_GRID);
+test('the cards grid keeps the shipped floor and scales it from 720 px up', () => {
+  const css = adminCss();
+
+  const rules = rulesMatching(topRules(css), CARDS_GRID);
 
   assert.equal(rules.length, 1, `the sheet carries ${rules.length} rules for the cards grid itself`);
 
-  const [rule] = rules;
-  const columns = declared(rule.block, 'grid-template-columns');
-  const gap = declared(rule.block, 'gap');
+  const [grid] = rules;
+  const columns = declared(grid.block, 'grid-template-columns');
+  const gap = declared(grid.block, 'gap');
 
   assert.ok(columns, `the cards grid declares no columns: ${quoted(rules)}`);
-  assert.match(columns, /minmax\(\s*280px\s*,\s*1fr\s*\)/,
-    `the cards grid's track floor is ${columns}: a floor chosen to let a long figure value fit is a floor every card on the page is laid out at, and the cards that fit today are given tracks they do not need`);
+  assert.equal(columns, 'repeat(auto-fit, minmax(280px, 1fr))',
+    `the cards grid's plain rule now reads ${columns}: that rule is what lays the cards out at every width its wider rule is not read at, so changing it changes the cards at the widths this feature leaves as they are`);
   assert.match(columns, /auto-fit/,
     `the cards grid counts ${columns}, which is no longer the number of columns the room the card has decides`);
   assert.equal(gap, 'var(--rdio-space-3)', 'the cards grid no longer sits on the gap its tracks were measured with');
+
+  const wide = rulesMatching(mediaRules(css, WIDE_BOUNDARY), CARDS_GRID);
+
+  assert.equal(wide.length, 1, `the sheet carries ${wide.length} rules for the cards grid in the block that starts at 720 px: the room the column gives a card past the shipped 934 px box is answered there or nowhere, and a wide column that leaves the grid to the plain rule lays the cards out at a floor chosen for a 900 px column`);
+
+  const scaled = declared(wide[0].block, 'grid-template-columns');
+
+  assert.ok(scaled, `the cards grid's rule at 720 px and above declares no columns: ${quoted(wide)}`);
+  assert.equal(scaled, 'repeat(auto-fit, minmax(max(280px, calc((100% - 2 * var(--rdio-space-3)) / 3)), 1fr))',
+    `the cards grid's floor from 720 px up is ${scaled ?? 'nothing'}: a floor that does not scale with the room the column gives leaves the fit unconstrained, which seats four narrow cards beside one another in a wide column instead of three cards an operator reads across`);
+  assert.match(scaled, /max\(\s*280px\s*,/,
+    `the scaled floor starts at ${scaled}: the 280 px half still binds from 720 px to 1199 px, where three tracks of it do not fit the room yet, and a floor that drops it seats cards narrower than the shipped grid ever seated one`);
 });
 
-test('the cap every administration card is drawn under is still the page cap', () => {
+test('the cap every administration card is drawn under answers the room it is given', () => {
   const rules = rulesMatching(topRules(adminCss()), ADMIN_CARD);
 
   assert.equal(rules.length, 1, `the sheet carries ${rules.length} rules for a card itself`);
@@ -194,8 +215,8 @@ test('the cap every administration card is drawn under is still the page cap', (
 
   const capValue = tokenValue(themeCss(), '--rdio-content-width');
 
-  assert.equal(capValue, '900px',
-    `the cap the cards are capped with is now ${capValue}: widening it is the other way to make a long value fit, and it widens every card on the page and every other section the same sheet lays out, for a defect that one value's line has to settle inside`);
+  assert.equal(capValue, 'min(1400px, 100%)',
+    `the cap the cards are capped with is now ${capValue}: a cap frozen at one width leaves the room a wider window gives unread beside the cards — at 2560 px the shipped 900px cap fills 934 px of a 2308 px room, leaving 687 px at each edge of it — and the column has to answer the room it is given up to the width it stops growing at`);
 });
 
 test('no dashboard card and neither the cards grid nor the dashboard section is handed a sideways scroll', () => {

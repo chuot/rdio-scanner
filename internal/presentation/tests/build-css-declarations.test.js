@@ -42,6 +42,28 @@ function bannerRule(css) {
     return css.slice(at, css.indexOf('}', at));
 }
 
+// One media block of the built sheet, from its opening condition to the brace that closes it. A rule the
+// browser reads only from one width up has to survive the build inside that block: read loose it would apply
+// at every width the page is used at.
+function mediaBlock(css, condition) {
+    const opening = `@media(${condition}){`;
+    const at = css.indexOf(opening);
+
+    if (at === -1) return null;
+
+    let depth = 1;
+    let close = at + opening.length;
+
+    while (close < css.length && depth > 0) {
+        if (css[close] === '{') depth += 1;
+        else if (css[close] === '}') depth -= 1;
+
+        close += 1;
+    }
+
+    return css.slice(at, close);
+}
+
 describe('build — the administration stylesheet as the build emits it', () => {
     it('carries the banner centring and spacing declaration the browser needs', async () => {
         const rule = bannerRule(await builtStylesheet());
@@ -86,9 +108,9 @@ describe('build — the administration stylesheet as the build emits it', () => 
         );
     });
 
-    // The dashboard's two sizes the browser has to receive: the grid's 280 px track decides how many cards
-    // fit across the content column and when they drop to one line each, and the bar's floor is what keeps
-    // an hour with nothing in it a stub on the page instead of a gap an operator has to interpret.
+    // The dashboard's two sizes the browser has to receive: the grid's track decides how many cards fit across
+    // the content column and when they drop to one line each, and the bar's floor is what keeps an hour with
+    // nothing in it a stub on the page instead of a gap an operator has to interpret.
     it('carries the dashboard card grid and the floor under an empty chart bar', async () => {
         const css = await builtStylesheet();
 
@@ -101,6 +123,21 @@ describe('build — the administration stylesheet as the build emits it', () => 
         assert.ok(
             grid.includes('repeat(auto-fit,minmax(280px,1fr))'),
             `the built dashboard grid rule is ${JSON.stringify(grid)}; the track that decides how many cards fit did not survive the build`,
+        );
+
+        const block = mediaBlock(css, 'min-width:720px');
+
+        assert.ok(block, 'the built stylesheet carries no @media block that starts at 720 px; the room the column gives past the width the card was capped at has nothing to answer it');
+
+        const wideAt = block.indexOf('.rdio-dashboard-cards{');
+
+        assert.ok(wideAt >= 0, `the built 720 px block carries no dashboard card grid rule: ${JSON.stringify(block.slice(0, 220))}`);
+
+        const scaled = block.slice(wideAt, block.indexOf('}', wideAt));
+
+        assert.ok(
+            scaled.includes('repeat(auto-fit,minmax(max(280px,calc((100% - 2 * var(--rdio-space-3)) / 3)),1fr))'),
+            `the built dashboard grid rule from 720 px up is ${JSON.stringify(scaled)}; the scaled track floor that seats three cards and never a fourth did not survive the build`,
         );
 
         const barAt = css.indexOf('.rdio-dashboard-bar{');

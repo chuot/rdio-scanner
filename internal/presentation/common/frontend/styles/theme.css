@@ -168,11 +168,17 @@
      The border grey is a boundary a person uses to tell where a card, a row, and a bar end, so it
      is measured against the surfaces it sits on the same way text is: 3:1, the floor for a boundary
      that carries information. The grey the legacy palette used measured 1.3:1 on the card and 1.5:1
-     on the page behind it, which is a hairline that reads as a shadow and not as an edge. */
+     on the page behind it, which is a hairline that reads as a shadow and not as an edge.
+
+     The content width is the room one column of cards is given, and it is the smaller of two numbers: the
+     width the column actually has, and the ceiling that column stops at. A screen narrower than the ceiling
+     gets the room it has, so nothing is squeezed into a fixed column while the screen sits empty beside it;
+     a wide screen stops at the ceiling, so a paragraph or a row of fields never runs the whole width of a
+     large display. */
   --rdio-border: rgb(140, 140, 140);
   --rdio-radius-card: 6px;
   --rdio-radius-row: 4px;
-  --rdio-content-width: 900px;
+  --rdio-content-width: min(1400px, 100%);
   --rdio-card-padding: 16px;
   --rdio-space-1: 4px;
   --rdio-space-2: 8px;
