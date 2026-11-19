@@ -222,6 +222,15 @@ rdio-admin .rdio-admin-card {
   padding: var(--rdio-card-padding);
 }
 
+/* A paragraph held to a measure a person reads across. The widened column is what makes a paragraph this long, so
+   the measure opens at 1200 px — the first width the column gives a paragraph more room than it always did — and it
+   reaches every section card's paragraphs rather than each section choosing one of its own. */
+@media (min-width: 1200px) {
+  rdio-admin .rdio-admin-card p {
+    max-width: 70ch;
+  }
+}
+
 rdio-admin .rdio-admin-card > .row.top {
   align-items: flex-start;
   display: flex;

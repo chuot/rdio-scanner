@@ -156,4 +156,25 @@ describe('build — the administration stylesheet as the build emits it', () => 
             `the built dashboard bar rule is ${JSON.stringify(bar)}; the bar has no face of its own`,
         );
     });
+
+    // The one declaration standing between a paragraph and the whole width of a wide screen. It is a measure the
+    // browser has to receive inside the block that opens where the content column stops growing: read loose at
+    // every width it would hold a narrow screen's paragraphs back too.
+    it('carries the paragraph measure from the width the content column stops at', async () => {
+        const css = await builtStylesheet();
+
+        const measureBlock = mediaBlock(css, 'min-width:1200px');
+
+        assert.ok(measureBlock, 'the built stylesheet carries no @media block that starts at 1200 px; the measure the page holds its paragraphs to is nowhere in the bundle');
+
+        assert.ok(
+            measureBlock.includes('max-width:70ch'),
+            `the built 1200 px block is ${JSON.stringify(measureBlock.slice(0, 220))}; the declaration that holds a paragraph to 70ch did not survive the build`,
+        );
+
+        assert.ok(
+            measureBlock.includes('p{max-width:70ch'),
+            `the built 1200 px block carries no measure on a paragraph (${JSON.stringify(measureBlock.slice(0, 220))}); the 70ch landed on something other than the page's paragraphs`,
+        );
+    });
 });
