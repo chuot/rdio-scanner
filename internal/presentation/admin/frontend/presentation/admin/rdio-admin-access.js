@@ -15,6 +15,8 @@ import {
 } from './section-shell.js';
 import { attachSingleOpenRule, makePanel, markField, markRequired, markRowIdentity, onFieldEdit, rowKey, setRowMarker } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
+import { generateAccessCode } from '../../domain/random-generator.js';
+import { announce } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 const NAME = 'access';
 
@@ -142,23 +144,73 @@ class RdioAdminAccess extends HTMLElement {
       setRowMarker(panel, Object.keys(accessRowErrors(rows[index], index, rows)).length > 0);
     };
 
-    // the code field is hidden by default, with a visibility toggle to its right.
+    // the code field is hidden by default, with a visibility toggle and a control that draws a new code.
     const reveal = document.createElement('button');
     reveal.type = 'button';
     reveal.className = 'rdio-icon-button';
-    reveal.setAttribute('aria-label', 'Show code');
-    reveal.innerHTML = '<i class="material-icons" aria-hidden="true">visibility</i>';
+
+    // the toggle's words, its mark, and its pressed state are one state, written in one place: a control
+    // that says "Show code" while the code is already showing names the move it would undo, not the one it
+    // now makes.
+    const paintReveal = () => {
+      const showing = codeInput.type === 'text';
+
+      reveal.setAttribute('aria-pressed', String(showing));
+      reveal.setAttribute('aria-label', showing ? 'Hide code' : 'Show code');
+      reveal.innerHTML = `<i class="material-icons" aria-hidden="true">${showing ? 'visibility_off' : 'visibility'}</i>`;
+    };
+
     reveal.addEventListener('click', () => {
-      const hidden = codeInput.type === 'password';
-      codeInput.type = hidden ? 'text' : 'password';
-      reveal.innerHTML = `<i class="material-icons" aria-hidden="true">${hidden ? 'visibility_off' : 'visibility'}</i>`;
+      codeInput.type = codeInput.type === 'text' ? 'password' : 'text';
+
+      paintReveal();
     });
 
-    const codeField = this.field('Code', reveal, true);
+    const generate = document.createElement('button');
+    generate.type = 'button';
+    generate.className = 'rdio-icon-button';
+    generate.setAttribute('aria-label', 'Generate new code');
+    generate.innerHTML = '<i class="material-icons" aria-hidden="true">autorenew</i>';
+    generate.addEventListener('click', () => {
+      // the codes the section's other rows hold: writing one of them would only be refused at save, so the
+      // generator draws again instead.
+      const held = this.rows.filter((_, i) => i !== index).map((other) => other.code);
+
+      const code = generateAccessCode(globalThis.crypto, held);
+
+      if (code === null) {
+        announce('Could not generate an access code.');
+
+        return;
+      }
+
+      this.updateRow(index, { code });
+
+      // the code the operator is meant to hand to someone is a code they can read: the draw leaves the
+      // field showing it, and the toggle says so.
+      codeInput.value = code;
+      codeInput.type = 'text';
+
+      paintReveal();
+
+      // the message and the warning follow the value that landed: a duplicate message beside a code that
+      // is not one is a warning the operator has to second-guess.
+      const rows = this.rows;
+
+      refreshField(this, codeField, accessRowErrors(rows[index], index, rows).code ?? '');
+
+      refreshMarker();
+
+      announce('New access code generated. Save applies it.');
+    });
+
+    const codeField = this.field('Code', [reveal, generate], true);
     const codeInput = codeField.querySelector('input');
     codeInput.type = 'password';
     codeInput.value = row.code ?? '';
     codeInput.required = true;
+
+    paintReveal();
 
     this.bindText(codeInput, codeField, index, 'code', errors.code, refreshMarker);
 
@@ -224,6 +276,8 @@ class RdioAdminAccess extends HTMLElement {
     return panel;
   }
 
+  // a field's controls: the input, and when the field carries controls beside it an inline row holding the
+  // input first and the controls to its right, in the order they are handed in.
   field(label, trailing, required) {
     const field = document.createElement('rdio-form-field');
 
@@ -237,10 +291,10 @@ class RdioAdminAccess extends HTMLElement {
     // host; it declares that this section cannot leave the field empty.
     if (required) markRequired(field, labelEl);
 
-    if (trailing) {
+    if (trailing?.length) {
       const inline = document.createElement('div');
       inline.className = 'field-inline';
-      inline.append(input, trailing);
+      inline.append(input, ...trailing);
 
       field.append(labelEl, inline);
     } else {

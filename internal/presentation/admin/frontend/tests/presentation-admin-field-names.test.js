@@ -37,7 +37,7 @@ const SECTIONS = [
     seedRows: [{ id: 4, order: 1, label: 'Fire', alert: 'storm', led: 'red' }, { id: 5, order: 2, label: 'Car Talk' }],
   },
   {
-    name: 'access', tag: 'rdio-admin-access', key: 'section:access',
+    name: 'access', tag: 'rdio-admin-access', key: 'section:access', drawName: 'Generate new code',
     seedRows: [{ id: 7, order: 1, code: 'front-gate', ident: 'Front desk', systems: '*' }, { id: 8, order: 2, code: 'shop-line', ident: 'Shop door', systems: '*' }],
   },
   {
@@ -138,6 +138,30 @@ for (const section of SECTIONS) {
           announced.toLowerCase().includes(title.toLowerCase()),
           `the ${section.name} ${control.tag} announces ${JSON.stringify(announced)}, which does not carry the name the row shows (${JSON.stringify(title)})`,
         );
+      }
+    }
+
+    // the control that draws a new credential has no words beside it and no label of its own: it carries
+    // its own name, and every row of the section rides it in the inline row of the field whose value it
+    // replaces.
+    if (section.drawName) {
+      const panels = findAll(el, (node) => node.tag === 'details');
+
+      assert.ok(panels.length > 0, `the ${section.name} section rendered no rows to read`);
+
+      for (const panel of panels) {
+        const drawn = findAll(panel, (node) => node.tag === 'button' && node.getAttribute('aria-label') === section.drawName);
+
+        assert.equal(drawn.length, 1, `an ${section.name} row carries ${drawn.length} controls named ${JSON.stringify(section.drawName)}: the row offers no single control that draws a new credential`);
+
+        const inline = drawn[0].parent;
+
+        assert.ok(inline?.className?.split(/\s+/).includes('field-inline'), `an ${section.name} row's control that draws a credential rides no field's inline row`);
+
+        const input = findAll(inline, (node) => node.tag === 'input')[0];
+
+        assert.ok(input, `the ${section.name} inline row that draws a credential carries no field to write it into`);
+        assert.ok(fieldTitle(inline.parent) !== '', `an ${section.name} row's control that draws a credential does not ride the field it writes`);
       }
     }
   });

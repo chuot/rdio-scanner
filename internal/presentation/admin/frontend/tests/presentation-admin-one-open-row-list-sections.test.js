@@ -689,8 +689,8 @@ test('changing an open dirwatch row\'s type rebuilds its fields and keeps the ro
   assert.equal(store.getState()['section:dirwatch'].working[0].type, 'dsdplus', 'the type the operator picked is the row\'s type');
 });
 
-// the access code stays hidden until revealed; the stored value is intact
-test('the code reveal works in the opened access row and leaves the stored code untouched', () => {
+// the access code stays hidden until revealed; the control says which state it stands in, and the stored value is intact
+test('the code reveal names and marks its state in both states and leaves the stored code untouched', () => {
   const store = seed(SECTIONS.find((section) => section.name === 'access'));
 
   const el = attach('rdio-admin-access');
@@ -705,17 +705,43 @@ test('the code reveal works in the opened access row and leaves the stored code 
 
   assert.equal(codeInput.type, 'password', 'the code starts hidden');
 
-  const reveal = findAll(first, (node) => node.tag === 'button' && node.getAttribute('aria-label') === 'Show code')[0];
+  // the toggle is the control carrying a pressed state: the code field rides two icon controls, and only
+  // the one that shows the code says which way it stands.
+  const reveal = findAll(first, (node) => node.tag === 'button' && node.getAttribute('aria-pressed') !== null)[0];
 
-  assert.ok(reveal, 'the opened row carries the control that shows the code');
+  assert.ok(reveal, 'the opened row carries no control that says whether the code is showing');
+
+  // name, pressed state, and glyph are one state: read together, because a control whose words and whose
+  // marks come apart says something the operator has to guess at.
+  const revealState = () => ({
+    name: reveal.getAttribute('aria-label'),
+    pressed: reveal.getAttribute('aria-pressed'),
+    glyph: findAll(reveal, (node) => node.className === 'material-icons')[0]?.textContent,
+  });
+
+  assert.deepEqual(
+    revealState(),
+    { name: 'Show code', pressed: 'false', glyph: 'visibility' },
+    'while the code is hidden the reveal control does not say what pressing it would do',
+  );
 
   reveal.click();
 
   assert.equal(codeInput.type, 'text', 'the control shows the code in the opened row');
+  assert.deepEqual(
+    revealState(),
+    { name: 'Hide code', pressed: 'true', glyph: 'visibility_off' },
+    'with the code showing the reveal control names the move it already made instead of the one it now makes',
+  );
 
   reveal.click();
 
   assert.equal(codeInput.type, 'password', 'and hides it again');
+  assert.deepEqual(
+    revealState(),
+    { name: 'Show code', pressed: 'false', glyph: 'visibility' },
+    'after hiding the code again the reveal control carries neither its name nor its state',
+  );
   assert.equal(openRows(el).length, 1, 'using a control inside the row did not close it');
   assert.equal(openRows(el)[0], first);
   assert.equal(store.getState()['section:access'].working[0].code, 'front-gate', 'showing the code commits nothing');
