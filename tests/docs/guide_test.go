@@ -17,6 +17,7 @@ package docs
 
 import (
 	"encoding/json"
+	"html"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -25,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode"
 
 	"rdio-scanner/internal/domain"
 )
@@ -1982,6 +1984,299 @@ func TestTheGuideStatesOneLicencePositionForEveryInterface(t *testing.T) {
 	} {
 		if strings.Contains(all, withdrawn) {
 			t.Errorf("the guide still states a withdrawn position (%q)", withdrawn)
+		}
+	}
+}
+
+// guideCredentialCell returns the description one field's row carries in one of chapter 9's credential
+// tables, with the markup intact: the code spans and the emphasised control names a row carries are part of
+// what the row says.
+func guideCredentialCell(t *testing.T, body, caption, field string) string {
+	t.Helper()
+
+	for _, row := range regexp.MustCompile(`(?is)<tr>.*?</tr>`).FindAllString(tableWithCaption(t, body, caption), -1) {
+		cells := regexp.MustCompile(`(?is)<td\b[^>]*>(.*?)</td>`).FindAllStringSubmatch(row, -1)
+
+		if len(cells) < 2 {
+			continue
+		}
+
+		if strings.Join(strings.Fields(stripTags(cells[0][1])), " ") == field {
+			return strings.TrimSpace(cells[1][1])
+		}
+	}
+
+	t.Fatalf("the guide's table %q carries no row for the %q field", caption, field)
+
+	return ""
+}
+
+// jsStringConstant and jsNumberConstant read one constant the administration webapp's generator module
+// declares. The guide states what that generator produces, so a constant moved there is a sentence the guide
+// has to follow.
+func jsStringConstant(t *testing.T, parts []string, source, name string) string {
+	t.Helper()
+
+	m := regexp.MustCompile(`(?m)^const ` + regexp.QuoteMeta(name) + `\s*=\s*'([^']*)';`).FindStringSubmatch(source)
+
+	if m == nil {
+		t.Fatalf("%s no longer declares %s as a single-quoted string constant this guard can read", strings.Join(parts, "/"), name)
+	}
+
+	return m[1]
+}
+
+func jsNumberConstant(t *testing.T, parts []string, source, name string) int {
+	t.Helper()
+
+	m := regexp.MustCompile(`(?m)^const ` + regexp.QuoteMeta(name) + `\s*=\s*([0-9]+);`).FindStringSubmatch(source)
+
+	if m == nil {
+		t.Fatalf("%s no longer declares %s as a whole-number constant this guard can read", strings.Join(parts, "/"), name)
+	}
+
+	value, err := strconv.Atoi(m[1])
+	if err != nil {
+		t.Fatalf("%s declares %s as %q, which is not a number this guard can read", strings.Join(parts, "/"), name, m[1])
+	}
+
+	return value
+}
+
+// generateControlName reads the accessible name a section's row gives its generate control. The guide has to
+// call the button what the button calls itself.
+func generateControlName(t *testing.T, parts []string, source string) string {
+	t.Helper()
+
+	names := []string{}
+
+	for _, m := range regexp.MustCompile(`setAttribute\('aria-label',\s*'([^']*)'`).FindAllStringSubmatch(source, -1) {
+		if strings.Contains(strings.ToLower(m[1]), "generate") {
+			names = append(names, m[1])
+		}
+	}
+
+	if len(names) != 1 {
+		t.Fatalf("%s gives %d of its controls an accessible name naming generate, and the guide documents one generate control per row",
+			strings.Join(parts, "/"), len(names))
+	}
+
+	return names[0]
+}
+
+// guideRowCarriesItsGenerateControl reads the claim both credential rows have to make: the row names the
+// button by the accessible name the webapp gives it, and the sentence naming it says that saving the section
+// is what makes the value the button wrote the credential the server accepts.
+func guideRowCarriesItsGenerateControl(t *testing.T, caption, field, cell, control string) {
+	t.Helper()
+
+	if !strings.Contains(cell, "<em>"+control+"</em>") {
+		t.Errorf("the guide's %q row in the %q table does not name the %q control inside <em>, which is how the guide names a control a reader presses:\n%s",
+			field, caption, control, cell)
+	}
+
+	plain := strings.Join(strings.Fields(stripTags(cell)), " ")
+
+	named := []string{}
+
+	for _, sentence := range regexp.MustCompile(`\.\s+`).Split(plain, -1) {
+		sentence = strings.TrimSpace(sentence)
+
+		if sentence == "" {
+			continue
+		}
+
+		if strings.Contains(strings.ToLower(sentence), strings.ToLower(control)) {
+			named = append(named, sentence)
+		}
+	}
+
+	if len(named) == 0 {
+		t.Errorf("the guide's %q row in the %q table never names the %q control in a sentence of its own:\n%s", field, caption, control, cell)
+
+		return
+	}
+
+	applies := false
+
+	for _, sentence := range named {
+		lower := strings.ToLower(sentence)
+
+		if strings.Contains(lower, "sav") && strings.Contains(lower, "server") {
+			applies = true
+		}
+	}
+
+	if !applies {
+		t.Errorf("the guide's %q row names %q without saying, in the same sentence, that saving the section is what makes "+
+			"the new value the credential the server accepts: a reader who reads only that the button writes a value "+
+			"would take the value as applied the moment it appears:\n%s", field, control, strings.Join(named, "\n"))
+	}
+}
+
+// isMarkRune reports whether a character is one of the marks an access code may carry: neither a letter, a
+// digit, nor space.
+func isMarkRune(r rune) bool {
+	return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !unicode.IsSpace(r)
+}
+
+// marksOnly reports whether a code span names marks and nothing else, which is how the guide's credential
+// row lists the characters that are neither letters nor digits.
+func marksOnly(text string) bool {
+	if text == "" {
+		return false
+	}
+
+	for _, r := range text {
+		if !isMarkRune(r) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// chapter 9 documents both credentials an operator can have the administration webapp write for them: the
+// access code handed out over the phone, and the API key pasted into a recorder's configuration. Each row has
+// to name the button that writes a fresh value by the name the webapp gives that button, state the shape the
+// value takes, and say in the same sentence that the value applies only once the section is saved. The control
+// names, the code length and alphabet, and the key's byte count are read here from the source that produces
+// them, so the guide cannot promise a credential the webapp would not write or the server would not accept.
+//
+// The controls are documented inside the row of the field each one writes, and the chapter's two figures stay
+// the screenshots they are: neither shows a generate button, so neither may claim one.
+func TestTheGuideNamesTheTwoGenerateControlsAndWhatTheyWrite(t *testing.T) {
+	body := guidePath(t)
+
+	generatorParts := []string{"internal", "presentation", "admin", "frontend", "domain", "random-generator.js"}
+	apikeysParts := []string{"internal", "presentation", "admin", "frontend", "presentation", "admin", "rdio-admin-apikeys.js"}
+	accessParts := []string{"internal", "presentation", "admin", "frontend", "presentation", "admin", "rdio-admin-access.js"}
+
+	generator := repoFile(t, generatorParts...)
+	alphabet := jsStringConstant(t, generatorParts, generator, "ACCESS_CODE_ALPHABET")
+	length := jsNumberConstant(t, generatorParts, generator, "ACCESS_CODE_LENGTH")
+	keyBytes := jsNumberConstant(t, generatorParts, generator, "API_KEY_BYTES")
+
+	keyControl := generateControlName(t, apikeysParts, repoFile(t, apikeysParts...))
+	codeControl := generateControlName(t, accessParts, repoFile(t, accessParts...))
+
+	// The marks an access code is drawn over, in the order the generator lists them. "Special characters"
+	// alone would leave a reader guessing, and a mark the guide names that the generator does not draw is a
+	// mark the server refuses.
+	specials := []string{}
+
+	for _, r := range alphabet {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			continue
+		}
+
+		specials = append(specials, string(r))
+	}
+
+	if len(specials) == 0 {
+		t.Fatalf("%s draws an access code over letters and digits alone, which is not the alphabet the guide's Code row names", strings.Join(generatorParts, "/"))
+	}
+
+	codeCell := guideCredentialCell(t, body, "The access code row", "Code")
+	keyCell := guideCredentialCell(t, body, "The API key row", "Key")
+
+	guideRowCarriesItsGenerateControl(t, "The access code row", "Code", codeCell, codeControl)
+	guideRowCarriesItsGenerateControl(t, "The API key row", "Key", keyCell, keyControl)
+
+	// The shape of a generated access code: as long as the generator says, over letters and digits named as
+	// such, and over exactly the marks it draws.
+	plainCode := strings.Join(strings.Fields(stripTags(codeCell)), " ")
+
+	if !strings.Contains(plainCode, strconv.Itoa(length)) {
+		t.Errorf("the guide's Code row never states how long a generated access code is: the webapp writes %d characters, "+
+			"and the length is what someone handing the code out has to be able to count:\n%s", length, codeCell)
+	}
+
+	for _, part := range []string{"letters", "digits"} {
+		if !strings.Contains(strings.ToLower(plainCode), part) {
+			t.Errorf("the guide's Code row never says a generated access code is drawn over %s: naming only the marks leaves "+
+				"the rest of the %d-character alphabet a guess", part, len([]rune(alphabet)))
+		}
+	}
+
+	offered := []string{}
+
+	for _, span := range regexp.MustCompile(`(?is)<code\b[^>]*>(.*?)</code>`).FindAllString(codeCell, -1) {
+		text := strings.TrimSpace(html.UnescapeString(stripTags(span)))
+
+		if !marksOnly(text) {
+			continue
+		}
+
+		for _, r := range text {
+			offered = append(offered, string(r))
+		}
+	}
+
+	if strings.Join(offered, "") != strings.Join(specials, "") {
+		t.Errorf("the guide's Code row names %q as the marks a generated access code is drawn over, and the webapp's generator "+
+			"draws %q: the guide cannot promise a mark the server refuses, and it cannot leave a mark the operator may "+
+			"write unnamed. The alphabet is %q.", strings.Join(offered, ""), strings.Join(specials, ""), alphabet)
+	}
+
+	if strings.Contains(plainCode, "@") {
+		t.Errorf("the guide's Code row carries an @, and the alphabet the server accepts has none: an operator who reads "+
+			"that a code may carry one writes a code the server refuses")
+	}
+
+	// The form a generated API key takes: the sixteen bytes a UUID is, with the version the generator fixes.
+	// Naming the form is how a reader tells the key the button wrote from a secret they invented.
+	if keyBytes != 16 {
+		t.Fatalf("%s draws an API key from %d bytes, and only 16 are the sixteen bytes a UUID is, which is the form the guide's Key row names",
+			strings.Join(generatorParts, "/"), keyBytes)
+	}
+
+	plainKey := strings.Join(strings.Fields(stripTags(keyCell)), " ")
+
+	if !regexp.MustCompile(`(?i)version[ -]?4`).MatchString(plainKey) || !strings.Contains(strings.ToUpper(plainKey), "UUID") {
+		t.Errorf("the guide's Key row never names the form a generated API key takes: the webapp writes a version-4 UUID, and "+
+			"the form is what a reader recognises when they check a recorder's configuration:\n%s", keyCell)
+	}
+
+	// A generate control is a button beside a field, not a field an operator fills in: the guide says what it
+	// does inside the row of the credential field it writes.
+	for _, caption := range []string{"The access code row", "The API key row"} {
+		for _, cell := range regexp.MustCompile(`(?is)<tr><td>(.*?)</td>`).FindAllStringSubmatch(tableWithCaption(t, body, caption), -1) {
+			name := strings.ToLower(strings.Join(strings.Fields(stripTags(cell[1])), " "))
+
+			if strings.Contains(name, "generate") {
+				t.Errorf("the guide's %q table tabulates the generate control as a field named %q: it writes the credential field beside it, and its row is the credential's",
+					caption, name)
+			}
+		}
+	}
+
+	// The chapter carries two screenshots, and each says what the picture it carries shows. A generate button
+	// has no picture in the page, so no figure may claim one and the copy button's caption stays its own.
+	figures := regexp.MustCompile(`(?is)<figure\b.*?</figure>`).FindAllString(chapterOf(t, body, "ch-09-access-and-api-keys"), -1)
+
+	if len(figures) != 2 {
+		t.Fatalf("chapter 9 carries %d figures where it carried 2: a control this pair of rows gained has no screenshot of its own to carry", len(figures))
+	}
+
+	captions := []string{}
+
+	for _, figure := range figures {
+		m := regexp.MustCompile(`(?is)<figcaption\b[^>]*>(.*?)</figcaption>`).FindStringSubmatch(figure)
+
+		if m == nil {
+			t.Fatalf("chapter 9 carries a figure with no caption, and a screenshot nobody can tell what it shows is one nobody reads")
+		}
+
+		captions = append(captions, strings.Join(strings.Fields(stripTags(m[1])), " "))
+	}
+
+	for _, want := range []string{
+		"Access codes as the section shows them. The code is masked until you press the eye; the summary line under Choose systems says whether the scope is all systems or the ones you ticked.",
+		"API keys as the section shows them. The copy button is how a key gets into a recorder's configuration without being retyped off a screen.",
+	} {
+		if !slices.Contains(captions, want) {
+			t.Errorf("chapter 9 no longer captions one of its figures as %q: the caption is what the baked-in screenshot actually shows, and it may not be rewritten to describe a control the picture does not carry", want)
 		}
 	}
 }

@@ -1655,7 +1655,7 @@ bcrypt_cost = 12</code></pre>
     <caption>The access code row</caption>
     <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
     <tbody>
-      <tr><td>Code</td><td>The credential. Required. The field is masked; the eye button next to it reveals it so an administrator can read it out to someone over the phone.</td></tr>
+      <tr><td>Code</td><td>The credential. Required. The field is masked; the eye button next to it reveals it so an administrator can read it out to someone over the phone. The <em>Generate new code</em> button beside the field fills it with a fresh code — 10 characters drawn from the letters, digits, and the marks <code>!</code> <code>#</code> <code>$</code> <code>%</code> and <code>&amp;</code>, the same characters the server's own credential generators draw over — and saving the section is what makes that code the credential the server accepts. Pressing it replaces whatever the field held, and saving is what leaves the earlier code refused unless another row carries it.</td></tr>
       <tr><td>Ident</td><td>The name the log and the interface show for this code. It is what a log entry about an expired or locked code names.</td></tr>
       <tr><td>Expiration</td><td>A date and time. Leave it empty and the code never expires. Once the moment has passed, the code is refused and the listener is told its access has expired.</td></tr>
       <tr><td>Limit</td><td>How many listeners may hold this code at the same time. <code>0</code> or empty means no cap. A listener arriving at the cap is refused and told so.</td></tr>
@@ -1732,7 +1732,7 @@ bcrypt_cost = 12</code></pre>
     <thead><tr><th scope="col">Field</th><th scope="col">What it is for</th></tr></thead>
     <tbody>
       <tr><td>Disabled</td><td>Turns the key off. A disabled key uploads nothing, and the row stays where it is so you can turn it back on.</td></tr>
-      <tr><td>Key</td><td>The credential. Required. The copy button next to it puts it on the clipboard, which is what you paste into the recorder's configuration.</td></tr>
+      <tr><td>Key</td><td>The credential. Required. The copy button next to it puts it on the clipboard, which is what you paste into the recorder's configuration. The <em>Generate new key</em> button beside the field fills it with a fresh key in the form a version-4 UUID takes, and saving the section is what makes that key the credential the server accepts. Pressing it replaces whatever the field held, and saving is what leaves a recorder that pasted the earlier key unable to upload until you give it the new one.</td></tr>
       <tr><td>Ident</td><td>The name for this key.</td></tr>
       <tr><td>Choose systems</td><td>Opens the same scope dialog an access code uses.</td></tr>
       <tr><td>Delete API key</td><td>Removes the row.</td></tr>
