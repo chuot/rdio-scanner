@@ -211,9 +211,10 @@ function addButton(el) {
 }
 
 // A source the test scripts, one batch per scripted key: each call answers with the next key's sixteen
-// bytes, and hands nothing usable past the last scripted key so a draw that kept asking runs out and
-// refuses rather than being waited on. The source records every byte it handed, which is how a reading says
-// which bytes a value was drawn from.
+// bytes. Past the last scripted key it answers with no bytes at all, which is the shape of a source that
+// cannot draw: a draw that asked for more than the reading scripted refuses instead of inventing a value or
+// being asked again for ever. The source records every byte it handed, which is how a reading says which
+// bytes a value was drawn from.
 function keySource(keys) {
   const given = [];
   let batch = 0;
@@ -221,25 +222,19 @@ function keySource(keys) {
   return {
     given,
     getRandomValues(bytes) {
-      const scripted = batch < keys.length ? keys[batch] : null;
+      const scripted = keys[batch++];
 
-      batch++;
+      if (!scripted) return new Uint8Array(0);
 
       for (let index = 0; index < bytes.length; index++) {
-        const byte = scripted === null ? UNUSABLE_BYTE : scripted[index];
-
-        bytes[index] = byte;
-        given.push(byte);
+        bytes[index] = scripted[index];
+        given.push(scripted[index]);
       }
 
       return bytes;
     },
   };
 }
-
-// A byte past the end of the scripted keys: a draw that is still asking gets it, and a reading that sees it
-// knows the draw went past what the reading scripted.
-const UNUSABLE_BYTE = 0;
 
 // A source that cannot draw at all: it answers nothing usable, which is what a browser without the
 // entropy call gives the page.
