@@ -41,7 +41,7 @@ const SECTIONS = [
     seedRows: [{ id: 7, order: 1, code: 'front-gate', ident: 'Front desk', systems: '*' }, { id: 8, order: 2, code: 'shop-line', ident: 'Shop door', systems: '*' }],
   },
   {
-    name: 'api key', tag: 'rdio-admin-apikeys', key: 'section:apikeys',
+    name: 'api key', tag: 'rdio-admin-apikeys', key: 'section:apikeys', drawName: 'Generate new key',
     seedRows: [{ id: 10, order: 1, disabled: false, key: 'key-one', ident: 'Recorder', systems: '*' }, { id: 11, order: 2, disabled: true, key: 'key-two', ident: 'Booth line', systems: '*' }],
   },
   {

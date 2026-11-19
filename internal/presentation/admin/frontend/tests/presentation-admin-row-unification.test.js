@@ -103,7 +103,9 @@ test('the control that draws a new access code carries the autorenew ligature', 
   assert.equal(glyph.textContent, 'autorenew', `the control that draws a new code shows ${glyph.textContent}, not the renewal glyph that says it replaces the value`);
 });
 
-test('the copy-key button sits inline right of the key input', () => {
+// the key field rides two controls: the one that copies the key, and the one that draws a new one. They
+// share the field's inline row, and neither one is a control the row puts somewhere else.
+test('the copy-key and generate-key buttons sit inline right of the key input', () => {
   seed({ apikeys: [{ key: 'k1', ident: 'Harness', systems: '*', order: 1 }] });
 
   const el = section('rdio-admin-apikeys');
@@ -113,10 +115,60 @@ test('the copy-key button sits inline right of the key input', () => {
   assert.equal(inlines.length, 1, 'the key field has no inline row');
 
   const input = findAll(inlines[0], (node) => node.tag === 'input')[0];
-  const button = findAll(inlines[0], (node) => node.tag === 'button')[0];
+  const buttons = findAll(inlines[0], (node) => node.tag === 'button');
 
   assert.equal(input.value, 'k1', 'the inline row does not carry the key input');
-  assert.ok(button.className.includes('rdio-icon-button'), 'the inline row has no icon button');
+  assert.equal(buttons.length, 2, 'the key field does not ride both the control that copies its key and the control that draws a new one');
+
+  const names = [];
+
+  for (const button of buttons) {
+    assert.ok(button.className.includes('rdio-icon-button'), 'a control riding the key field is not an icon button');
+    assert.ok(button.getAttribute('aria-label'), 'a control riding the key field announces no name');
+    assert.equal(button.type, 'button', 'a control riding the key field submits the section it rides in');
+
+    names.push(button.getAttribute('aria-label'));
+  }
+
+  assert.ok(names.includes('Copy key to clipboard'), 'the key field no longer carries the control that copies its key');
+  assert.ok(names.includes('Generate new key'), 'the key field carries no control that draws a new key');
+  assert.notDeepEqual(names, [names[0], names[0]], 'the two controls riding the key field answer under the same name');
+});
+
+// the glyphs the key field is allowed to draw: the mark the copy control rides, and the one the control
+// that draws a new key rides.
+const APIKEY_ICON_WORDS = ['autorenew', 'content_copy'];
+
+test('every icon riding the key field is a ligature the icon font knows', () => {
+  seed({ apikeys: [{ key: 'k1', ident: 'Harness', systems: '*', order: 1 }] });
+
+  const inline = findAll(section('rdio-admin-apikeys'), (node) => node.tag === 'div' && node.className === 'field-inline')[0];
+
+  const icons = findAll(inline, (node) => node.className === 'material-icons');
+
+  assert.ok(icons.length >= 2, 'the key field rides no icons under its controls');
+
+  for (const icon of icons) {
+    assert.ok(APIKEY_ICON_WORDS.includes(icon.textContent), `the key field shows ${icon.textContent}, not a Material Icons ligature`);
+    assert.equal(icon.getAttribute('aria-hidden'), 'true', `the ${icon.textContent} mark is read out as text, which says a glyph's shape and not its meaning`);
+  }
+});
+
+// the two controls riding one field are told apart by sight as well as by name: the draw is the renewal
+// glyph, not another copy mark.
+test('the control that draws a new api key carries the autorenew ligature', () => {
+  seed({ apikeys: [{ key: 'k1', ident: 'Harness', systems: '*', order: 1 }] });
+
+  const inline = findAll(section('rdio-admin-apikeys'), (node) => node.tag === 'div' && node.className === 'field-inline')[0];
+
+  const draw = findAll(inline, (node) => node.tag === 'button' && node.getAttribute('aria-label') === 'Generate new key')[0];
+
+  assert.ok(draw, 'the key field carries no control named Generate new key');
+
+  const glyph = findAll(draw, (node) => node.className === 'material-icons')[0];
+
+  assert.ok(glyph, 'the control that draws a new key carries no icon under it');
+  assert.equal(glyph.textContent, 'autorenew', `the control that draws a new key shows ${glyph.textContent}, not the renewal glyph that says it replaces the value`);
 });
 
 test('Options opens with an intro caption like every other section', () => {

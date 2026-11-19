@@ -1,5 +1,6 @@
 // rdio-admin-apikeys: API keys section; collapsible panels, one row open at a time
-// the key is generated on add; hidden id/order round-trip; Save lives in the bar.
+// a key is drawn when a row is added, and the row can draw a new one; hidden id/order round-trip; Save
+// lives in the bar.
 
 import { openSystemsSelectionDialog } from './rdio-systems-selection.js';
 import {
@@ -15,7 +16,8 @@ import {
 } from './section-shell.js';
 import { attachSingleOpenRule, makePanel, markField, markRequired, markRowIdentity, onFieldEdit, rowKey, setRowMarker } from './row-builders.js';
 import { clearReached, harvestReached, refreshField, restoreReached } from './sub-section-shell.js';
-import { showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
+import { generateApiKey } from '../../domain/random-generator.js';
+import { announce, showSnackbar } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 const NAME = 'apikeys';
 
@@ -158,14 +160,50 @@ class RdioAdminApikeys extends HTMLElement {
 
     disabledRow.append(disabledLabel, disabledToggle);
 
-    // The copy button sits inline right of the key input, not on a row of its own.
+    // The copy button sits inline right of the key input, not on a row of its own; the control that draws a
+    // new key rides the same inline row beside it, so the operator who has lost the key the page showed can
+    // get a new one without leaving the row.
     const copy = document.createElement('button');
     copy.type = 'button';
     copy.className = 'rdio-icon-button';
     copy.setAttribute('aria-label', 'Copy key to clipboard');
     copy.innerHTML = '<i class="material-icons" aria-hidden="true">content_copy</i>';
 
-    const keyField = this.field('Key', copy, true);
+    const generate = document.createElement('button');
+    generate.type = 'button';
+    generate.className = 'rdio-icon-button';
+    generate.setAttribute('aria-label', 'Generate new key');
+    generate.innerHTML = '<i class="material-icons" aria-hidden="true">autorenew</i>';
+
+    generate.addEventListener('click', () => {
+      // the keys the section's other rows hold: writing one of them would only be refused at save, so the
+      // draw answers a different key instead.
+      const held = this.rows.filter((_, i) => i !== index).map((other) => other.key);
+
+      const key = generateApiKey(globalThis.crypto, held);
+
+      if (key === null) {
+        announce('Could not generate an API key.');
+
+        return;
+      }
+
+      this.updateRow(index, { key });
+
+      keyInput.value = key;
+
+      // the message and the warning follow the value that landed: a duplicate warning beside a key that
+      // is not one is a warning the operator has to second-guess.
+      const rows = this.rows;
+
+      refreshField(this, keyField, apiKeyRowErrors(rows[index], index, rows).key ?? '');
+
+      refreshMarker();
+
+      announce('New API key generated. Save applies it.');
+    });
+
+    const keyField = this.field('Key', [copy, generate], true);
     const keyInput = keyField.querySelector('input');
     keyInput.value = row.key ?? '';
     keyInput.required = true;
@@ -263,10 +301,10 @@ class RdioAdminApikeys extends HTMLElement {
     // host; it declares that this section cannot leave the field empty.
     if (required) markRequired(field, labelEl);
 
-    if (trailing) {
+    if (trailing?.length) {
       const inline = document.createElement('div');
       inline.className = 'field-inline';
-      inline.append(input, trailing);
+      inline.append(input, ...trailing);
 
       field.append(labelEl, inline);
     } else {
@@ -289,8 +327,14 @@ class RdioAdminApikeys extends HTMLElement {
   }
 
   add() {
-    // keys are generated with the standard crypto.randomUUID().
-    const fresh = markRowIdentity({ id: 0, order: 0, disabled: false, key: crypto.randomUUID(), ident: '', systems: '*' });
+    // The key is drawn through the same generator the row's own control uses, over the keys the section
+    // already holds. crypto.randomUUID is answered only in a secure context, and this page is reached over
+    // plain-HTTP addresses that do not answer it.
+    const generated = generateApiKey(globalThis.crypto, this.rows.map((row) => row.key));
+
+    if (generated === null) announce('Could not generate an API key.');
+
+    const fresh = markRowIdentity({ id: 0, order: 0, disabled: false, key: generated ?? '', ident: '', systems: '*' });
     const rows = [fresh, ...this.rows.map((row, i) => ({ ...row, order: i + 2 }))];
 
     // the added row opens as the section's one open row: the others close in the map
