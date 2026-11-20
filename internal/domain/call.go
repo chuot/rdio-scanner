@@ -131,9 +131,13 @@ func (call Call) hasSystemClaim() bool {
 	return call.System.ID > 0 || call.Meta.SystemID > 0 || call.Meta.SystemRef > 0 || call.Meta.SystemLabel != ""
 }
 
-// hasTalkgroupClaim reports whether the ingest source named a talkgroup in any form.
+// hasTalkgroupClaim reports whether the ingest source named the talkgroup the call is
+// filed under, which it does with a number: the stored identity or the client-facing
+// reference. A label is the name a stored talkgroup carries after the call has been
+// filed, never something a call is filed under, so a claim that names only a label
+// claims no talkgroup at all.
 func (call Call) hasTalkgroupClaim() bool {
-	return call.Talkgroup.ID > 0 || call.Meta.TalkgroupID > 0 || call.Meta.TalkgroupRef > 0 || call.Meta.TalkgroupLabel != ""
+	return call.Talkgroup.ID > 0 || call.Meta.TalkgroupID > 0 || call.Meta.TalkgroupRef > 0
 }
 
 // DuplicateWindow returns the inclusive timestamp bounds in which another call would

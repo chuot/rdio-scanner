@@ -78,8 +78,8 @@ func (sites Sites) ByRef(ref uint) (Site, bool) {
 }
 
 // ByLabel finds a site by the name the ingest source gave it. The default directory-watch
-// mask names a site by label, and only for a call whose system was resolved, because a site
-// belongs to a system.
+// mask names a site by label, and a site is only ever looked up within the system a call
+// lands on, because a site belongs to a system.
 func (sites Sites) ByLabel(label string) (Site, bool) {
 	for _, site := range sites {
 		if site.Label == label {

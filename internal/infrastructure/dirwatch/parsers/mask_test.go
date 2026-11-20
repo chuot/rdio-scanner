@@ -239,7 +239,9 @@ func TestExtractDefaultReadsTheExtensionTheWatchConfigured(t *testing.T) {
 }
 
 // TestExtractDefaultAddsTheFrequencyTheWatchNames is the watch-level carrier: every recording
-// in the directory was heard on one carrier, and the mask may name more.
+// in the directory was heard on one carrier, and it is the call's carrier when the mask names
+// no carrier of its own. A mask that does name one replaces it, which is the reading the pair
+// of tests that follow takes.
 func TestExtractDefaultAddsTheFrequencyTheWatchNames(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.SystemID = 1
@@ -258,7 +260,9 @@ func TestExtractDefaultAddsTheFrequencyTheWatchNames(t *testing.T) {
 }
 
 // TestExtractDefaultReadsTheTalkgroupFromEachShapeTheMaskNames covers the five ways a
-// recording tool writes down which talkgroup a call was on.
+// recording tool writes down which talkgroup a call was on, and the number each one names at
+// the widths a recording tool writes it to: the carrier and the reference drawn from it are
+// the number in the filename, whichever of the three units the mask names.
 func TestExtractDefaultReadsTheTalkgroupFromEachShapeTheMaskNames(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -270,11 +274,13 @@ func TestExtractDefaultReadsTheTalkgroupFromEachShapeTheMaskNames(t *testing.T) 
 		{name: "a plain reference", mask: "#SYS-#TG", filename: "10001-1514000.wav", wantRef: 1514000},
 		{name: "an Alpha-Net talkgroup", mask: "#SYS-#TGAFS", filename: "10001-12-345.wav", wantRef: 12<<7 | 34<<3 | 5},
 		{name: "a carrier in hertz", mask: "#SYS-#TGHZ", filename: "10001-1514000.wav", wantRef: 1514, wantFreq: 1514000},
+		{name: "a hertz carrier past twenty-four bits", mask: "#SYS-#TGHZ", filename: "10001-123456789.wav", wantRef: 123456, wantFreq: 123456789},
 		{name: "a carrier in kilohertz", mask: "#SYS-#TGKHZ", filename: "10001-1514.000.wav", wantRef: 1514, wantFreq: 1514000},
-		// A megahertz carrier is read as a 32-bit number and then scaled,
-		// as the legacy reads it: 151.4000 megahertz is 151399993 hertz,
-		// and the talkgroup reference derived from it is 151399.
-		{name: "a carrier in megahertz", mask: "#SYS-#TGMHZ", filename: "10001-151.4000.wav", wantRef: 151399, wantFreq: 151399993},
+		{name: "a kilohertz carrier to the thousandth", mask: "#SYS-#TGKHZ", filename: "10001-1514.001.wav", wantRef: 1514, wantFreq: 1514001},
+		{name: "a kilohertz carrier below one megahertz", mask: "#SYS-#TGKHZ", filename: "10001-851.112.wav", wantRef: 851, wantFreq: 851112},
+		{name: "a carrier in megahertz", mask: "#SYS-#TGMHZ", filename: "10001-151.4000.wav", wantRef: 151400, wantFreq: 151400000},
+		{name: "a megahertz carrier to four places", mask: "#SYS-#TGMHZ", filename: "10001-851.1125.wav", wantRef: 851112, wantFreq: 851112500},
+		{name: "a megahertz carrier below one gigahertz", mask: "#SYS-#TGMHZ", filename: "10001-999.999.wav", wantRef: 999999, wantFreq: 999999000},
 	}
 
 	for _, c := range cases {
@@ -303,7 +309,9 @@ func TestExtractDefaultReadsTheTalkgroupFromEachShapeTheMaskNames(t *testing.T) 
 }
 
 // TestExtractDefaultReadsTheCarrierFromEachUnitTheMaskNames covers the three units a recording
-// tool writes a carrier in.
+// tool writes a carrier in, each at a value whose exact number only a full-width read keeps: a
+// carrier is filed as the number the recording tool wrote down, not as the nearest number a
+// narrow read lands on.
 func TestExtractDefaultReadsTheCarrierFromEachUnitTheMaskNames(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -312,8 +320,12 @@ func TestExtractDefaultReadsTheCarrierFromEachUnitTheMaskNames(t *testing.T) {
 		want     uint
 	}{
 		{name: "hertz", mask: "#SYS-#TG-#HZ", filename: "10001-1514000-1514000.wav", want: 1514000},
+		{name: "hertz past twenty-four bits", mask: "#SYS-#TG-#HZ", filename: "10001-1514000-123456789.wav", want: 123456789},
 		{name: "kilohertz", mask: "#SYS-#TG-#KHZ", filename: "10001-1514000-1514.000.wav", want: 1514000},
-		{name: "megahertz", mask: "#SYS-#TG-#MHZ", filename: "10001-1514000-151.4000.wav", want: 151399993},
+		{name: "kilohertz to the thousandth", mask: "#SYS-#TG-#KHZ", filename: "10001-1514000-151400.001.wav", want: 151400001},
+		{name: "megahertz", mask: "#SYS-#TG-#MHZ", filename: "10001-1514000-151.4000.wav", want: 151400000},
+		{name: "megahertz to four places", mask: "#SYS-#TG-#MHZ", filename: "10001-1514000-851.1125.wav", want: 851112500},
+		{name: "megahertz below one gigahertz", mask: "#SYS-#TG-#MHZ", filename: "10001-1514000-999.999.wav", want: 999999000},
 	}
 
 	for _, c := range cases {
@@ -330,6 +342,195 @@ func TestExtractDefaultReadsTheCarrierFromEachUnitTheMaskNames(t *testing.T) {
 				t.Errorf("the call carriers are %#v, want one carrier at %d", extracted.Call.Frequencies, c.want)
 			}
 		})
+	}
+}
+
+// TestExtractDefaultReadsTheWholeHertzPieceAtATalkgroupCarrierToken covers what the
+// whole-hertz #TGHZ pattern captures, including the two names where a decimal point moves
+// where the mask anchors. A name the pattern cannot read whole is read at the whole-hertz
+// piece 6.6.3 read, whatever it looks like.
+func TestExtractDefaultReadsTheWholeHertzPieceAtATalkgroupCarrierToken(t *testing.T) {
+	cases := []struct {
+		name     string
+		mask     string
+		filename string
+		wantFreq uint
+		wantRef  uint
+		wantSys  uint
+	}{
+		{
+			name:     "a date and time mask over a decimal carrier",
+			mask:     "laurentides_#DATE_#TIME_#TGHZ",
+			filename: "laurentides_20201231_085343_151.4000.wav",
+			wantFreq: 151,
+		},
+		{
+			name:     "the mask re-anchors on the digit after the decimal point",
+			mask:     "#TGHZ_#SYS",
+			filename: "151.4_10001.wav",
+			wantFreq: 4,
+			wantSys:  10001,
+		},
+		{
+			name:     "the decimal piece is dropped",
+			mask:     "#SYS-#TGHZ",
+			filename: "10001-151.4.wav",
+			wantFreq: 151,
+			wantSys:  10001,
+		},
+		{
+			name:     "a whole-hertz carrier with a fraction on it",
+			mask:     "#SYS-#TGHZ",
+			filename: "10001-151399993.5.wav",
+			wantFreq: 151399993,
+			wantRef:  151399,
+			wantSys:  10001,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			watch := domain.NewDirwatch()
+			watch.Mask = c.mask
+
+			// The watch names its own system and talkgroup: a carrier below one kilohertz
+			// derives no talkgroup reference, and this is a reading of what the mask read.
+			watch.SystemID = 1
+			watch.TalkgroupID = 2
+
+			extracted, _, err := extract(t, watch, c.filename)
+			if err != nil {
+				t.Fatalf("Extract: %v", err)
+			}
+
+			if len(extracted.Call.Frequencies) != 1 || extracted.Call.Frequencies[0].Frequency != c.wantFreq {
+				t.Errorf("the call carriers are %#v, want one carrier at %d", extracted.Call.Frequencies, c.wantFreq)
+			}
+
+			if c.wantRef != 0 && extracted.Call.Meta.TalkgroupRef != c.wantRef {
+				t.Errorf("the talkgroup reference is %d, want %d", extracted.Call.Meta.TalkgroupRef, c.wantRef)
+			}
+
+			if c.wantSys != 0 && extracted.Call.Meta.SystemRef != c.wantSys {
+				t.Errorf("the system reference is %d, want %d: the token after the carrier reads the number the "+
+					"whole-hertz pattern left it", extracted.Call.Meta.SystemRef, c.wantSys)
+			}
+		})
+	}
+}
+
+// TestExtractDefaultReadsATalkgroupReferenceForBothTalkgroupTokensOnOneName: the #TG token
+// names the talkgroup and the carrier token only captures, in both builds. The anchor a
+// whole-hertz pattern moves is on the record as what the call shows.
+func TestExtractDefaultReadsATalkgroupReferenceForBothTalkgroupTokensOnOneName(t *testing.T) {
+	watch := domain.NewDirwatch()
+	watch.Mask = "#TGHZ-#TG"
+	watch.SystemID = 1
+
+	extracted, _, err := extract(t, watch, "151.4-2000.wav")
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+
+	if extracted.Call.Meta.TalkgroupRef != 2000 {
+		t.Errorf("the talkgroup reference is %d, want the one the #TG token named", extracted.Call.Meta.TalkgroupRef)
+	}
+
+	if len(extracted.Call.Frequencies) != 0 {
+		t.Errorf("the call carriers are %#v, want none: a token that only captures a carrier names no carrier "+
+			"when the mask also names the talkgroup itself", extracted.Call.Frequencies)
+	}
+}
+
+// TestExtractDefaultReadsAPublishedShapeTalkgroupCarrierTheSameInBothBuilds is the shape
+// the administrator guide publishes: a whole-hertz name needs no decimal point, and the
+// carrier and the reference it derives are exact in both builds.
+func TestExtractDefaultReadsAPublishedShapeTalkgroupCarrierTheSameInBothBuilds(t *testing.T) {
+	watch := domain.NewDirwatch()
+	watch.Mask = "#SYS-#TGHZ"
+
+	extracted, _, err := extract(t, watch, "10001-119100000.wav")
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+
+	if len(extracted.Call.Frequencies) != 1 || extracted.Call.Frequencies[0].Frequency != 119100000 {
+		t.Errorf("the call carriers are %#v, want one carrier at 119100000", extracted.Call.Frequencies)
+	}
+
+	if extracted.Call.Meta.TalkgroupRef != 119100 {
+		t.Errorf("the talkgroup reference is %d, want 119100", extracted.Call.Meta.TalkgroupRef)
+	}
+}
+
+// TestExtractDefaultFilesOnlyTheCarrierTheMaskNamesWhenItNamesOne: the watch's own carrier
+// says where in the directory the recordings came from, and a mask that names a carrier
+// replaces it rather than adding a second one. Both carriers are whole hertz, so the only
+// divergence these two cases read is how many carriers the call files.
+func TestExtractDefaultFilesOnlyTheCarrierTheMaskNamesWhenItNamesOne(t *testing.T) {
+	cases := []struct {
+		name     string
+		mask     string
+		filename string
+	}{
+		{name: "a unit the mask names on its own", mask: "#SYS-#TG-#HZ", filename: "10001-1514000-7890000.wav"},
+		{name: "a talkgroup named by its carrier", mask: "#SYS-#TGHZ", filename: "10001-7890000.wav"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			watch := domain.NewDirwatch()
+			watch.Mask = c.mask
+			watch.Frequency = 1514000
+
+			extracted, _, err := extract(t, watch, c.filename)
+			if err != nil {
+				t.Fatalf("Extract: %v", err)
+			}
+
+			if len(extracted.Call.Frequencies) != 1 || extracted.Call.Frequencies[0].Frequency != 7890000 {
+				t.Errorf("the call carriers are %#v, want only the carrier the mask names: the recording was "+
+					"heard on one carrier, and the filename says which", extracted.Call.Frequencies)
+			}
+		})
+	}
+}
+
+// TestExtractDefaultKeepsTheWatchCarrierWhenTheMaskNamesNoCarrier is the other half of that
+// reading: a mask that names the system and talkgroup and no carrier leaves the directory's
+// own carrier on the call.
+func TestExtractDefaultKeepsTheWatchCarrierWhenTheMaskNamesNoCarrier(t *testing.T) {
+	watch := domain.NewDirwatch()
+	watch.Mask = "#SYS-#TG"
+	watch.Frequency = 1514000
+
+	extracted, _, err := extract(t, watch, "10001-1514000.wav")
+	if err != nil {
+		t.Fatalf("Extract: %v", err)
+	}
+
+	if len(extracted.Call.Frequencies) != 1 || extracted.Call.Frequencies[0].Frequency != 1514000 {
+		t.Errorf("the call carriers are %#v, want the carrier the watch names", extracted.Call.Frequencies)
+	}
+}
+
+// TestExtractDefaultRefusesAFileWhoseMaskNamesOnlyATalkgroupLabel: a mask that names the
+// talkgroup by its label alone claims no talkgroup the server can file the call on, and the
+// recording is left where it is.
+func TestExtractDefaultRefusesAFileWhoseMaskNamesOnlyATalkgroupLabel(t *testing.T) {
+	watch := domain.NewDirwatch()
+	watch.Mask = "#SYSLBL-#TGLBL"
+	watch.SystemID = 1
+
+	_, recognized, err := extract(t, watch, "Grand Metro-Dispatch 1.wav")
+
+	if recognized {
+		t.Error("a recording that named only a talkgroup label was handed to the ingest path, want it refused")
+	}
+
+	if err == nil || !strings.Contains(err.Error(), "no talkgroup") {
+		t.Errorf("Extract = %v, want the reason the call was refused: the mask named a talkgroup label and no "+
+			"talkgroup number", err)
 	}
 }
 
@@ -395,9 +596,11 @@ func TestExtractDefaultReadsABareDateAsAUnixSecondCount(t *testing.T) {
 	}
 }
 
-// TestExtractDefaultResolvesASystemNamedByLabelAndTheSiteUnderIt: the
-// label resolves, and the site is looked up among that system's sites.
-func TestExtractDefaultResolvesASystemNamedByLabelAndTheSiteUnderIt(t *testing.T) {
+// TestExtractDefaultNamesTheSystemItsLabelReadsAndLeavesTheSiteToTheIngestPath: the label
+// resolves, which is what the parser has always done, and the site the mask names is no longer
+// looked up there. A site belongs to the system a call lands on, and that system is settled
+// after the parser has run.
+func TestExtractDefaultNamesTheSystemItsLabelReadsAndLeavesTheSiteToTheIngestPath(t *testing.T) {
 	watch := domain.NewDirwatch()
 	watch.Mask = "#SYSLBL-#SITE"
 	watch.TalkgroupID = 2
@@ -411,8 +614,120 @@ func TestExtractDefaultResolvesASystemNamedByLabelAndTheSiteUnderIt(t *testing.T
 		t.Errorf("the call belongs to system %#v, want the configured system the mask named by label", extracted.Call.System)
 	}
 
-	if extracted.Call.SiteRef != 7 {
-		t.Errorf("the call site reference is %d, want the site the mask named under that system", extracted.Call.SiteRef)
+	if extracted.Call.SiteRef != 0 {
+		t.Errorf("the call site reference is %d, want the parser to file no site on the call: the site is looked up "+
+			"under the system the call lands on, which is settled after the parser has run", extracted.Call.SiteRef)
+	}
+
+	if extracted.Call.Meta.SiteRef != 7 || extracted.Call.Meta.SiteID != 0 || extracted.Call.Meta.SiteLabel != "" {
+		t.Errorf("the call claims site %d/%d/%q, want the reference the mask named claimed for the ingest path to "+
+			"resolve under the system the call lands on",
+			extracted.Call.Meta.SiteID, extracted.Call.Meta.SiteRef, extracted.Call.Meta.SiteLabel)
+	}
+}
+
+// TestExtractDefaultReadsTheSiteTokensTheSameWayWhicheverWayTheMaskNamesItsSystem is the half
+// of the site tokens that has never worked: a mask naming its system by reference dropped both
+// tokens, because the system it named resolves only later, in the ingest path. Every way a mask
+// names its system settles that system in the ingest path, so the parser reads the site tokens the
+// same way for all of them: it files no site on the call, and it claims for the ingest path exactly
+// what the token named, the way a system named by reference is claimed and resolved later.
+func TestExtractDefaultReadsTheSiteTokensTheSameWayWhicheverWayTheMaskNamesItsSystem(t *testing.T) {
+	cases := []struct {
+		name        string
+		mask        string
+		filename    string
+		wantSiteRef uint
+		wantSiteLbl string
+	}{
+		{name: "a system named by reference", mask: "#SYS-#SITE", filename: "10001-7.wav", wantSiteRef: 7},
+		{name: "a system named by label", mask: "#SYSLBL-#SITE", filename: "Grand Metro-7.wav", wantSiteRef: 7},
+		{name: "a site named by label under a system named by label", mask: "#SYSLBL-#SITELBL", filename: "Grand Metro-North.wav", wantSiteLbl: "North"},
+		{name: "a site named by label under a system the configuration does not have", mask: "#SYSLBL-#SITELBL", filename: "Airport-North.wav", wantSiteLbl: "North"},
+	}
+
+	for _, testCase := range cases {
+		watch := domain.NewDirwatch()
+		watch.Mask = testCase.mask
+		watch.TalkgroupID = 2
+
+		extracted, _, err := extract(t, watch, testCase.filename)
+		if err != nil {
+			t.Fatalf("%s: Extract: %v", testCase.name, err)
+		}
+
+		if extracted.Call.SiteRef != 0 {
+			t.Errorf("%s: the call site reference is %d, want the parser to file no site on the call, the way it "+
+				"already does for a system it names by reference: a site is looked up under the system the call lands "+
+				"on, and that lookup belongs after the parser", testCase.name, extracted.Call.SiteRef)
+		}
+
+		meta := extracted.Call.Meta
+
+		if meta.SiteRef != testCase.wantSiteRef {
+			t.Errorf("%s: the call claims site reference %d, want %d: the reference the mask named, claimed for the "+
+				"ingest path to resolve under the system the call lands on", testCase.name, meta.SiteRef, testCase.wantSiteRef)
+		}
+
+		if meta.SiteLabel != testCase.wantSiteLbl {
+			t.Errorf("%s: the call claims site label %q, want %q: the name the mask named, claimed for the ingest "+
+				"path to resolve under the system the call lands on", testCase.name, meta.SiteLabel, testCase.wantSiteLbl)
+		}
+
+		if meta.SiteID != 0 {
+			t.Errorf("%s: the call claims site id %d, want no database identifier: a filename names a reference or "+
+				"a name, never a row", testCase.name, meta.SiteID)
+		}
+	}
+}
+
+// TestAWatchsSiteSelectClaimsASiteForItsDirectoryUnlessItsMaskNamesOne: the site an
+// administrator selected for a watch is a claim for every recording in that directory, which is
+// what the select has always looked like it should do. A mask that names a site of its own is the
+// exception: the recording's own name is more specific than the directory's setting, the way a
+// recording's own talkgroup label is more specific than the watch's, so the mask's claim stands
+// alone. A watch with no site selected claims nothing, which is every watch that came from 6.6.3.
+func TestAWatchsSiteSelectClaimsASiteForItsDirectoryUnlessItsMaskNamesOne(t *testing.T) {
+	cases := []struct {
+		name        string
+		mask        string
+		filename    string
+		siteID      uint64
+		wantSiteID  uint64
+		wantSiteRef uint
+		wantSiteLbl string
+	}{
+		{name: "the select, with no site token in the mask", mask: "#TG", filename: "1514000.wav", siteID: 5, wantSiteID: 5},
+		{name: "a reference the mask names beside the select", mask: "#TG-#SITE", filename: "1514000-7.wav", siteID: 5, wantSiteRef: 7},
+		{name: "a name the mask names beside the select", mask: "#SITELBL", filename: "North.wav", siteID: 5, wantSiteLbl: "North"},
+		{name: "no select and no site token", mask: "#TG", filename: "1514000.wav", wantSiteID: 0},
+	}
+
+	for _, testCase := range cases {
+		watch := domain.NewDirwatch()
+		watch.Mask = testCase.mask
+		watch.SystemID = 1
+		watch.TalkgroupID = 2
+		watch.SiteID = testCase.siteID
+
+		extracted, _, err := extract(t, watch, testCase.filename)
+		if err != nil {
+			t.Fatalf("%s: Extract: %v", testCase.name, err)
+		}
+
+		meta := extracted.Call.Meta
+
+		if meta.SiteID != testCase.wantSiteID || meta.SiteRef != testCase.wantSiteRef || meta.SiteLabel != testCase.wantSiteLbl {
+			t.Errorf("%s: the call claims site %d/%d/%q, want %d/%d/%q: the site the recording names, or the watch's "+
+				"select when the recording names none",
+				testCase.name, meta.SiteID, meta.SiteRef, meta.SiteLabel,
+				testCase.wantSiteID, testCase.wantSiteRef, testCase.wantSiteLbl)
+		}
+
+		if extracted.Call.SiteRef != 0 {
+			t.Errorf("%s: the call site reference is %d, want the parser to file no site on the call: the claim is "+
+				"resolved under the system the call lands on, in the ingest path", testCase.name, extracted.Call.SiteRef)
+		}
 	}
 }
 
@@ -436,50 +751,6 @@ func TestExtractDefaultClaimsTheNextFreeReferenceForASystemTheConfigurationDoesN
 	// configuration as the legacy computes it: for systems 10001 and 10002, it is 1.
 	if extracted.Call.Meta.SystemRef != 1 {
 		t.Errorf("the call claims system reference %d, want the lowest reference the configuration is not using", extracted.Call.Meta.SystemRef)
-	}
-}
-
-// TestExtractDefaultDropsTheSiteTokensForASystemNamedByReference: the
-// half of the site tokens that has never worked, because a reference claim
-// resolves only later, in the ingest path.
-func TestExtractDefaultDropsTheSiteTokensForASystemNamedByReference(t *testing.T) {
-	byRef := domain.NewDirwatch()
-	byRef.Mask = "#SYS-#SITE"
-	byRef.TalkgroupID = 2
-
-	extracted, _, err := extract(t, byRef, "10001-7.wav")
-	if err != nil {
-		t.Fatalf("Extract: %v", err)
-	}
-
-	if extracted.Call.SiteRef != 0 {
-		t.Errorf("the call site reference is %d, want the token to be dropped: the system was named by reference, not resolved", extracted.Call.SiteRef)
-	}
-
-	byLabel := domain.NewDirwatch()
-	byLabel.Mask = "#SYSLBL-#SITELBL"
-	byLabel.TalkgroupID = 2
-
-	extracted, _, err = extract(t, byLabel, "Grand Metro-North.wav")
-	if err != nil {
-		t.Fatalf("Extract: %v", err)
-	}
-
-	if extracted.Call.SiteRef != 7 {
-		t.Errorf("the call site reference is %d, want the site named by label under the resolved system", extracted.Call.SiteRef)
-	}
-
-	unresolved := domain.NewDirwatch()
-	unresolved.Mask = "#SYSLBL-#SITELBL"
-	unresolved.TalkgroupID = 2
-
-	extracted, _, err = extract(t, unresolved, "Airport-North.wav")
-	if err != nil {
-		t.Fatalf("Extract: %v", err)
-	}
-
-	if extracted.Call.SiteRef != 0 {
-		t.Errorf("the call site reference is %d, want the label token dropped for a system that is not configured", extracted.Call.SiteRef)
 	}
 }
 
@@ -721,4 +992,256 @@ func impossibleAfterTokens(t *testing.T) []string {
 	}
 
 	return impossible
+}
+
+// TestAMasksPiecesLandOnTheTokensThatNamedThem is how a mask is read: each filename piece
+// belongs to the token that piece sits under, whatever order the mask writes its tokens in and
+// whatever parentheses the mask itself carries. A token's piece used to be found by counting the
+// capture groups from the start and matching that count with where in the mask the token's text
+// happened to sit, and that count is wrong whenever the table visits a token that comes later in
+// the mask before one that comes earlier: each replacement shifts the rest of the mask along, so
+// the position recorded for an earlier token is a place in a string that no longer exists. What
+// the parser then files is one piece too far along, which for the shapes below puts a talkgroup
+// number on the site and a site name on the talkgroup.
+func TestAMasksPiecesLandOnTheTokensThatNamedThem(t *testing.T) {
+	cases := []struct {
+		name      string
+		mask      string
+		filename  string
+		watchSys  uint64
+		watchTG   uint64
+		systemID  uint64
+		systemRef uint
+		siteRef   uint
+		siteLabel string
+		tgRef     uint
+		tgLabel   string
+		group     string
+		unitRef   uint
+		unitLabel string
+		hertz     uint
+	}{
+		{
+			name:      "a site label written after a system label and a talkgroup",
+			mask:      "#SYSLBL-#TG-#SITELBL",
+			filename:  "Grand Metro-1514000-North.wav",
+			systemID:  1,
+			siteLabel: "North",
+			tgRef:     1514000,
+		},
+		{
+			name:      "a talkgroup label written between a system label and a site label",
+			mask:      "#SYSLBL-#TGLBL-#SITELBL",
+			filename:  "Grand Metro-Dispatch-North.wav",
+			watchTG:   2,
+			systemID:  1,
+			siteLabel: "North",
+			tgLabel:   "Dispatch",
+		},
+		{
+			name:      "a site written after a date and a time",
+			mask:      "#DATE-#TIME-#SYS-#TG-#SITE",
+			filename:  "20261006-120000-10001-1514000-7.wav",
+			systemRef: 10001,
+			siteRef:   7,
+			tgRef:     1514000,
+		},
+		{
+			name:      "a site label written after a date, a time, and a system label",
+			mask:      "#DATE-#TIME-#SYSLBL-#TG-#SITELBL",
+			filename:  "20261006-120000-Grand Metro-1514000-North.wav",
+			systemID:  1,
+			siteLabel: "North",
+			tgRef:     1514000,
+		},
+		{
+			name:     "a parenthesis the mask carries itself",
+			mask:     "call(1)-#TG-#SITE",
+			filename: "call1-1514000-7.wav",
+			watchSys: 1,
+			siteRef:  7,
+			tgRef:    1514000,
+		},
+		{
+			name:     "a group written after a system label and a talkgroup",
+			mask:     "#SYSLBL-#TG-#GROUP",
+			filename: "Grand Metro-1514000-Dispatch.wav",
+			systemID: 1,
+			group:    "Dispatch",
+			tgRef:    1514000,
+		},
+		{
+			name:     "a talkgroup label written after a system label and a talkgroup",
+			mask:     "#SYSLBL-#TG-#TGLBL",
+			filename: "Grand Metro-1514000-Dispatch.wav",
+			systemID: 1,
+			tgLabel:  "Dispatch",
+			tgRef:    1514000,
+		},
+		{
+			name:      "a site label written before a system label",
+			mask:      "#SITELBL-#SYSLBL-#TG",
+			filename:  "North-Grand Metro-1514000.wav",
+			systemID:  1,
+			siteLabel: "North",
+			tgRef:     1514000,
+		},
+		{
+			name:      "a site written before a system and a talkgroup",
+			mask:      "#SITE-#SYS-#TG",
+			filename:  "7-10001-1514000.wav",
+			systemRef: 10001,
+			siteRef:   7,
+			tgRef:     1514000,
+		},
+		{
+			name:     "a site written between a system label and a talkgroup",
+			mask:     "#SYSLBL-#SITE-#TG",
+			filename: "Grand Metro-7-1514000.wav",
+			systemID: 1,
+			siteRef:  7,
+			tgRef:    1514000,
+		},
+		{
+			name:      "a unit label written after a unit",
+			mask:      "#SYS-#TG-#UNIT-#UNITLBL",
+			filename:  "10001-1514000-6789-Dispatch.wav",
+			systemRef: 10001,
+			tgRef:     1514000,
+			unitRef:   6789,
+			unitLabel: "Dispatch",
+		},
+	}
+
+	for _, testCase := range cases {
+		watch := domain.NewDirwatch()
+		watch.Mask = testCase.mask
+		watch.SystemID = testCase.watchSys
+		watch.TalkgroupID = testCase.watchTG
+
+		extracted, _, err := extract(t, watch, testCase.filename)
+		if err != nil {
+			t.Errorf("%s: Extract: %v, want the mask read as it is written, each filename piece at the token it sits "+
+				"under", testCase.name, err)
+
+			continue
+		}
+
+		call := extracted.Call
+		meta := call.Meta
+
+		if testCase.systemID > 0 && call.System.ID != testCase.systemID {
+			t.Errorf("%s: the call belongs to system %#v, want the configured system the mask named by label",
+				testCase.name, call.System)
+		}
+
+		if testCase.systemRef > 0 && meta.SystemRef != testCase.systemRef {
+			t.Errorf("%s: the call claims system reference %d, want %d: the reference the mask names at its own place",
+				testCase.name, meta.SystemRef, testCase.systemRef)
+		}
+
+		if meta.SiteRef != testCase.siteRef || meta.SiteLabel != testCase.siteLabel {
+			t.Errorf("%s: the call claims site %d/%q, want %d/%q: the site the mask names at its own place",
+				testCase.name, meta.SiteRef, meta.SiteLabel, testCase.siteRef, testCase.siteLabel)
+		}
+
+		if meta.TalkgroupRef != testCase.tgRef {
+			t.Errorf("%s: the call claims talkgroup reference %d, want %d: the number the mask names at its own place",
+				testCase.name, meta.TalkgroupRef, testCase.tgRef)
+		}
+
+		if meta.TalkgroupLabel != testCase.tgLabel {
+			t.Errorf("%s: the call claims the talkgroup name %q, want %q: the name the mask names at its own place",
+				testCase.name, meta.TalkgroupLabel, testCase.tgLabel)
+		}
+
+		wantGroup := []string{}
+		if testCase.group != "" {
+			wantGroup = []string{testCase.group}
+		}
+
+		if len(meta.TalkgroupGroup) != len(wantGroup) || (len(wantGroup) > 0 && meta.TalkgroupGroup[0] != wantGroup[0]) {
+			t.Errorf("%s: the call claims the group %v, want %v: the group the mask names at its own place",
+				testCase.name, meta.TalkgroupGroup, wantGroup)
+		}
+
+		if testCase.unitRef > 0 && (len(call.Units) != 1 || call.Units[0].UnitRef != testCase.unitRef) {
+			t.Errorf("%s: the call units are %#v, want the one unit %d the mask names at its own place",
+				testCase.name, call.Units, testCase.unitRef)
+		}
+
+		if testCase.unitLabel != "" && (len(meta.UnitLabels) != 1 || meta.UnitLabels[0] != testCase.unitLabel) {
+			t.Errorf("%s: the call claims the unit names %v, want the one name %q the mask names beside its unit",
+				testCase.name, meta.UnitLabels, testCase.unitLabel)
+		}
+
+		if testCase.hertz > 0 && (len(call.Frequencies) != 1 || call.Frequencies[0].Frequency != testCase.hertz) {
+			t.Errorf("%s: the call carriers are %#v, want the one carrier %d Hz the mask names at its own place",
+				testCase.name, call.Frequencies, testCase.hertz)
+		}
+	}
+}
+
+// TestTheWatchMaskTokenTableCommentsSayEachTokenNamesAPieceInTheOrderWritten: the table's
+// comments are the account of how a mask is read that an administrator is given, and after the
+// change that makes a mask read each piece at the token that named it, each token needs a comment
+// of its own saying what it reads. Six tokens carry none today, and several of the comments that
+// do exist are fragments cut in the middle of a sentence, which says nothing to anyone.
+func TestTheWatchMaskTokenTableCommentsSayEachTokenNamesAPieceInTheOrderWritten(t *testing.T) {
+	source, err := os.ReadFile("mask.go")
+	if err != nil {
+		t.Fatalf("reading the mask parser source: %v", err)
+	}
+
+	text := string(source)
+
+	start := strings.Index(text, "var maskTokens = []maskToken{")
+
+	if start == -1 {
+		t.Fatal("the mask token table is not in the source the comments are read from")
+	}
+
+	table := text[start:]
+
+	if end := strings.Index(table, "\nfunc "); end != -1 {
+		table = table[:end]
+	}
+
+	lines := strings.Split(table, "\n")
+
+	for _, name := range []string{"#SITE", "#SITELBL", "#SYS", "#SYSLBL", "#TG", "#TGLBL"} {
+		doc := ""
+
+		for i, line := range lines {
+			if !strings.Contains(line, "\""+name+"\"") {
+				continue
+			}
+
+			for j := i - 1; j >= 0; j-- {
+				previous := strings.TrimSpace(lines[j])
+
+				if !strings.HasPrefix(previous, "//") {
+					break
+				}
+
+				doc = strings.TrimSpace(strings.TrimPrefix(previous, "//")) + " " + doc
+			}
+
+			break
+		}
+
+		words := strings.Fields(doc)
+
+		if len(words) < 4 {
+			t.Errorf("the token %s carries %d words of its own (%q), want a comment of its own saying what the "+
+				"token reads and which piece of the filename it is", name, len(words), doc)
+
+			continue
+		}
+
+		if !strings.HasSuffix(words[len(words)-1], ".") {
+			t.Errorf("the token %s comment %q stops in the middle of a sentence, want it to end one: the comment is "+
+				"what an administrator is told the token reads", name, doc)
+		}
+	}
 }

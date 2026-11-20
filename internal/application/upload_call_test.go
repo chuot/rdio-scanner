@@ -117,6 +117,31 @@ func TestUploadCallHandlerTakesAnUploadItsCredentialCovers(t *testing.T) {
 	if len(fixture.calls.Saved) != 1 {
 		t.Fatalf("the server stored %v, want the one call the upload carried", fixture.calls.Saved)
 	}
+
+	// A label beside the number the upload names is the shape a watch whose mask reads a
+	// talkgroup label beside its number sends, and it is still a complete call: the number
+	// files it and the label is what the stored talkgroup is renamed to. Its own fixture,
+	// because a second upload carrying the same moment and the same talkgroup is a duplicate
+	// of the first, and this reading is about the call being taken at all.
+	also := newUploadFixture()
+
+	also.seedUploadSystem()
+
+	call := uploadedCall()
+	call.Meta.TalkgroupLabel = "GASTON-FIRE"
+
+	result, err = also.upload(uploadOpenKey, call)
+	if err != nil {
+		t.Fatalf("upload naming a label beside its talkgroup number: %v", err)
+	}
+
+	if result.Outcome != UploadCallAccepted {
+		t.Errorf("outcome = %q, want accepted: %v", result.Outcome, also.logMessages())
+	}
+
+	if len(also.calls.Saved) != 1 {
+		t.Errorf("the server stored %v, want the one call that upload carried", also.calls.Saved)
+	}
 }
 
 // A credential the server does not know is refused, and nothing is stored: the refusal is the
@@ -267,6 +292,16 @@ func TestUploadCallHandlerReportsWhatASubmissionIsMissing(t *testing.T) {
 		{name: "no talkgroup", call: func() domain.Call {
 			call := uploadedCall()
 			call.Meta.TalkgroupRef = 0
+
+			return call
+		}, cause: "no talkgroup"},
+		{name: "a talkgroup named only by name", call: func() domain.Call {
+			// A submission that carries a talkgroup label and no number is the shape a
+			// mask that reads the talkgroup out of the recording's name sends: the name
+			// is where a label belongs only after the server has filed the call.
+			call := uploadedCall()
+			call.Meta.TalkgroupRef = 0
+			call.Meta.TalkgroupLabel = "GASTON-FIRE"
 
 			return call
 		}, cause: "no talkgroup"},

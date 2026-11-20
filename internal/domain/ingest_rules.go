@@ -24,8 +24,8 @@ const DefaultGroupLabel = "Unknown"
 const DefaultTagLabel = "Untagged"
 
 // IngestMeta is what an ingest source claims about a call: the identifiers it knows,
-// in whichever form it knows them. The resolver turns that claim into a system and a
-// talkgroup.
+// in whichever form it knows them. The resolver turns that claim into a system, a talkgroup,
+// and the site the call was heard at.
 type IngestMeta struct {
 	SystemID       uint64
 	SystemRef      uint
@@ -36,8 +36,15 @@ type IngestMeta struct {
 	TalkgroupName  string
 	TalkgroupGroup []string
 	TalkgroupTag   string
-	UnitRefs       []uint
-	UnitLabels     []string
+
+	// A site is a row that belongs to a system, so these three claims name the site the
+	// recording was heard at and are resolved only within the system the call lands on.
+	SiteID    uint64
+	SiteRef   uint
+	SiteLabel string
+
+	UnitRefs   []uint
+	UnitLabels []string
 
 	// ConnectionCheck is the uploader's own word that its submission only asks whether this
 	// server will take a recording, and brings no recording to put in one. Only the call-upload
@@ -70,8 +77,12 @@ func (systems Systems) ResolveSystem(meta IngestMeta) (System, bool) {
 }
 
 // ResolveTalkgroup finds the talkgroup an ingested call belongs to within a known
-// system, trying the database identifier first, then the client-facing reference,
-// then the label.
+// system, by the database identifier first and then the client-facing reference. A
+// label is never looked up: it is the name a stored talkgroup carries, so matching a
+// call against it would land the call on whichever talkgroup happens to be named
+// that, and the legacy server filed a call only under a number too. A call that names
+// a talkgroup is therefore resolved by number or not at all, and the auto-populate
+// rule writes the talkgroup the number names when the system has none.
 func (system System) ResolveTalkgroup(meta IngestMeta) (Talkgroup, bool) {
 	if meta.TalkgroupID > 0 {
 		return system.Talkgroups.ByID(meta.TalkgroupID)
@@ -81,11 +92,35 @@ func (system System) ResolveTalkgroup(meta IngestMeta) (Talkgroup, bool) {
 		return system.Talkgroups.ByRef(meta.TalkgroupRef)
 	}
 
-	if meta.TalkgroupLabel != "" {
-		return system.Talkgroups.ByLabel(meta.TalkgroupLabel)
+	return Talkgroup{}, false
+}
+
+// ResolveSite finds the site a call was heard at, within a known system: the database
+// identifier first, then the client-facing reference, then the label. A site is a row that
+// belongs to a system, so the search is that system's sites and never the whole table — a
+// reference or a name another system's site carries resolves nothing here. A claim that
+// matches nothing the system has leaves the call with no site, and the call is still filed.
+func (system System) ResolveSite(meta IngestMeta) (Site, bool) {
+	if meta.SiteID > 0 {
+		return system.Sites.ByID(meta.SiteID)
 	}
 
-	return Talkgroup{}, false
+	if meta.SiteRef > 0 {
+		return system.Sites.ByRef(meta.SiteRef)
+	}
+
+	if meta.SiteLabel != "" {
+		return system.Sites.ByLabel(meta.SiteLabel)
+	}
+
+	return Site{}, false
+}
+
+// HasSiteClaim reports whether an ingest source named the site a recording was heard at in
+// any form. It is what tells a watch's own site setting — a default for every recording in
+// the directory — from a site the recording named itself.
+func (meta IngestMeta) HasSiteClaim() bool {
+	return meta.SiteID > 0 || meta.SiteRef > 0 || meta.SiteLabel != ""
 }
 
 // ShouldCreateSystem reports whether auto-populate should invent the system the call
@@ -157,10 +192,11 @@ func (meta IngestMeta) NewTalkgroup(groupIDs []uint64, tagID uint64) Talkgroup {
 	}
 }
 
-// ShouldRepairTalkgroupLabels reports whether an ingested call may overwrite the
-// placeholder labels of an existing talkgroup. A prior auto-populated call may have
-// created the talkgroup with its numeric reference as the label; a later labeled
-// upload repairs only that generated placeholder, never a configured label.
+// ShouldRepairTalkgroupLabels reports whether an ingested call may rename the labels
+// of an existing talkgroup. The gate is the auto-populate one: the server-wide option
+// or the owning system's own flag. A call that names a talkgroup label renames the
+// label of whatever talkgroup it lands on, configured or generated, the way the legacy
+// server did, and renames nothing when neither switch is on.
 func ShouldRepairTalkgroupLabels(options Options, system System, meta IngestMeta, talkgroup Talkgroup) bool {
 	if meta.TalkgroupLabel == "" {
 		return false
@@ -177,25 +213,43 @@ func ShouldRepairTalkgroupLabels(options Options, system System, meta IngestMeta
 		return false
 	}
 
-	return talkgroup.HasGeneratedLabel()
+	return true
 }
 
-// RepairedTalkgroup applies the claimed labels to a talkgroup whose labels are still
-// placeholders, preserving a configured name and repairing only a generated one.
+// RepairedTalkgroup applies the claimed labels to an existing talkgroup and reports
+// whether anything changed. A claim the talkgroup already carries is not a change: the
+// legacy server marked the talkgroup changed only where the claim differed from what was
+// stored, so a recording that repeats a stored label saves nothing. A configured name
+// stands unless the call names a name over it; a name that is the placeholder
+// auto-populate itself wrote is filled from the claimed label.
 func RepairedTalkgroup(options Options, system System, meta IngestMeta, talkgroup Talkgroup) (Talkgroup, bool) {
 	if !ShouldRepairTalkgroupLabels(options, system, meta, talkgroup) {
 		return talkgroup, false
 	}
 
-	talkgroup.Label = meta.TalkgroupLabel
+	repaired := talkgroup
+	changed := false
 
-	if meta.TalkgroupName != "" {
-		talkgroup.Name = meta.TalkgroupName
-	} else if talkgroup.HasGeneratedName() {
-		talkgroup.Name = meta.TalkgroupLabel
+	if meta.TalkgroupLabel != talkgroup.Label {
+		repaired.Label = meta.TalkgroupLabel
+		changed = true
 	}
 
-	return talkgroup, true
+	if meta.TalkgroupName != "" {
+		if meta.TalkgroupName != talkgroup.Name {
+			repaired.Name = meta.TalkgroupName
+			changed = true
+		}
+	} else if talkgroup.HasGeneratedName() && talkgroup.Name != meta.TalkgroupLabel {
+		repaired.Name = meta.TalkgroupLabel
+		changed = true
+	}
+
+	if !changed {
+		return talkgroup, false
+	}
+
+	return repaired, true
 }
 
 // ClaimedUnits pairs the unit references a call claims with the labels it claims for
