@@ -7,7 +7,8 @@
 # are read and skipped, because that API answers open and closed discussions together and offers no state filter.
 # Each idle discussion gets the closing note first and is then closed, so whoever started it can see why. A
 # discussion that fails is reported with its number, title, and address and the walk goes on with the rest; the
-# counts are written to the run summary.
+# counts are written to the run summary, and a run summary the runner refuses is reported in the log rather than
+# making a run that finished its closes fail.
 #
 # Pull requests are not part of the Discussions API, and nothing in this workflow reads or writes one: the script
 # below answers the Discussions GraphQL API only.
@@ -287,17 +288,31 @@ jobs:
               );
             }
 
-            core.summary.addMarkdownBlock(
-              [
-                `### Discussions idle for ${STALE_DAYS} days or more`,
-                '',
-                `- Discussions read: ${discussionsRead.length} over ${pages} page(s)`,
-                `- ${dryRun ? 'Would close' : 'Closed'}: ${dryRun ? idleDiscussions.length : closedCount}`,
-                `- Closing notes posted: ${notedCount}`,
-                `- Failed: ${failedCount}`,
-                '',
-                dryRun
-                  ? 'This was a dry run: nothing was commented on and nothing was closed.'
-                  : 'Every discussion named in this run carries the note explaining why it was closed.',
-              ].join('\n')
-            );
+            // The summary is the run's report, not its work: a heading naming the rule, one line per total, then
+            // a closing sentence. These are the summary methods @actions/core provides, chained because that object
+            // returns itself, and the write is the step that puts them in front of the person watching the run — the
+            // action never writes the summary on the script's behalf.
+            //
+            // A summary the runner refuses is named in the log and left there. The closes it describes already
+            // happened, the same counts are in the line above, and a run made red by a missing report invites a
+            // second run that comments on and closes what is already closed.
+            try {
+              core.summary
+                .addHeading(`Discussions idle for ${STALE_DAYS} days or more`, 3)
+                .addList([
+                  `Discussions read: ${discussionsRead.length} over ${pages} page(s)`,
+                  `${dryRun ? 'Would close' : 'Closed'}: ${dryRun ? idleDiscussions.length : closedCount}`,
+                  `Closing notes posted: ${notedCount}`,
+                  `Failed: ${failedCount}`,
+                ])
+                .addRaw(
+                  dryRun
+                    ? 'This was a dry run: nothing was commented on and nothing was closed.'
+                    : 'Every discussion named in this run carries the note explaining why it was closed.',
+                  true
+                );
+
+              await core.summary.write();
+            } catch (error) {
+              core.warning(`could not write the run summary for ${owner}/${repo}: ${error.message}`);
+            }
