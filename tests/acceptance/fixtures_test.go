@@ -411,7 +411,7 @@ var capturedRuns = map[string]string{
         "system": 4660,
         "talkgroup": 1514000,
         "talkgroupLabel": "Dispatch",
-        "talkgroupName": "Talkgroup 1514000",
+        "talkgroupName": "Dispatch",
         "audioBytes": 2048
       }
     }
@@ -610,7 +610,7 @@ var capturedRuns = map[string]string{
       "frequency": 0,
       "label": "Dispatch",
       "led": "",
-      "name": "Talkgroup 1514000",
+      "name": "Dispatch",
       "order": 0,
       "systemId": 2,
       "tagId": 9,

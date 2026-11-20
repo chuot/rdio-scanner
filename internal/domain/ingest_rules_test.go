@@ -48,7 +48,7 @@ func TestResolveSystemPrefersIdentifierThenReferenceThenLabel(t *testing.T) {
 	}
 }
 
-func TestResolveTalkgroupPrefersIdentifierThenReferenceThenLabel(t *testing.T) {
+func TestResolveTalkgroupFindsATalkgroupByNumberOnly(t *testing.T) {
 	system := System{Talkgroups: Talkgroups{
 		{ID: 1, TalkgroupRef: 100, Label: "Fire"},
 		{ID: 2, TalkgroupRef: 200, Label: "Law"},
@@ -62,8 +62,16 @@ func TestResolveTalkgroupPrefersIdentifierThenReferenceThenLabel(t *testing.T) {
 		t.Errorf("ResolveTalkgroup = %+v, %v, want the talkgroup matched by reference", talkgroup, ok)
 	}
 
-	if talkgroup, ok := system.ResolveTalkgroup(IngestMeta{TalkgroupLabel: "Law"}); !ok || talkgroup.ID != 2 {
-		t.Errorf("ResolveTalkgroup = %+v, %v, want the talkgroup matched by label", talkgroup, ok)
+	// A label is a name an ingest source says the talkgroup has, not a number to look a
+	// talkgroup up by. 6.6.3 looked a talkgroup up by its number, and so does the server.
+	if _, ok := system.ResolveTalkgroup(IngestMeta{TalkgroupLabel: "Law"}); ok {
+		t.Error("ResolveTalkgroup reported a talkgroup for a claim that named only a label, want none")
+	}
+
+	// A reference the system does not have resolves nothing, even beside a label one of its
+	// talkgroups carries.
+	if _, ok := system.ResolveTalkgroup(IngestMeta{TalkgroupRef: 300, TalkgroupLabel: "Law"}); ok {
+		t.Error("ResolveTalkgroup reported a talkgroup for a reference the system does not have, want none")
 	}
 
 	if _, ok := system.ResolveTalkgroup(IngestMeta{}); ok {
@@ -148,7 +156,9 @@ func TestNewTalkgroupUsesClaimedLabelsOrPlaceholders(t *testing.T) {
 	}
 }
 
-func TestShouldRepairTalkgroupLabelsOnlyTouchesPlaceholders(t *testing.T) {
+// The gate 6.6.3 tests is the only condition: the call naming a label, and the server-wide
+// option or the owning system's own flag. What the stored label was does not decide it.
+func TestShouldRepairTalkgroupLabelsIsTheAutoPopulateGate(t *testing.T) {
 	auto := DefaultOptions()
 	manual := DefaultOptions()
 	manual.AutoPopulate = false
@@ -162,11 +172,12 @@ func TestShouldRepairTalkgroupLabelsOnlyTouchesPlaceholders(t *testing.T) {
 		t.Error("a talkgroup carrying only generated placeholders must be repaired")
 	}
 
-	// A configured talkgroup is never overwritten by an upload.
+	// A talkgroup the administrator configured is renamed too: 6.6.3 renamed it, and a
+	// recording naming #TGLBL is the same claim whichever talkgroup it lands on.
 	configured := Talkgroup{TalkgroupRef: 100, Label: "Dispatch 1", Name: "Dispatch One"}
 
-	if ShouldRepairTalkgroupLabels(auto, System{}, claim, configured) {
-		t.Error("a configured label must never be overwritten")
+	if !ShouldRepairTalkgroupLabels(auto, System{}, claim, configured) {
+		t.Error("a labeled call must rename the configured label 6.6.3 renamed")
 	}
 
 	// Repairing follows the same auto-populate switches as creating.
@@ -174,7 +185,11 @@ func TestShouldRepairTalkgroupLabelsOnlyTouchesPlaceholders(t *testing.T) {
 		t.Error("with auto-populate off everywhere, the placeholder must be left alone")
 	}
 
-	if !ShouldRepairTalkgroupLabels(manual, System{AutoPopulate: true}, claim, generated) {
+	if ShouldRepairTalkgroupLabels(manual, System{}, claim, configured) {
+		t.Error("with auto-populate off everywhere, the configured label must be left alone")
+	}
+
+	if !ShouldRepairTalkgroupLabels(manual, System{AutoPopulate: true}, claim, configured) {
 		t.Error("the owning system's own auto-populate flag must allow the repair")
 	}
 
@@ -182,9 +197,13 @@ func TestShouldRepairTalkgroupLabelsOnlyTouchesPlaceholders(t *testing.T) {
 	if ShouldRepairTalkgroupLabels(auto, System{}, IngestMeta{TalkgroupRef: 100}, generated) {
 		t.Error("a call with no claimed label must not trigger a repair")
 	}
+
+	if ShouldRepairTalkgroupLabels(auto, System{}, IngestMeta{TalkgroupRef: 100}, configured) {
+		t.Error("a call with no claimed label must not touch a configured talkgroup either")
+	}
 }
 
-func TestRepairedTalkgroupKeepsAConfiguredName(t *testing.T) {
+func TestRepairedTalkgroupRenamesTheLabelAndKeepsAConfiguredName(t *testing.T) {
 	auto := DefaultOptions()
 
 	generated := Talkgroup{TalkgroupRef: 100, Label: "100", Name: "Talkgroup 100"}
@@ -219,17 +238,92 @@ func TestRepairedTalkgroupKeepsAConfiguredName(t *testing.T) {
 		t.Errorf("Name = %q, want the configured name preserved", repaired.Name)
 	}
 
-	// Nothing to repair: the talkgroup is returned unchanged.
+	// A configured label is renamed, and its configured name is not.
 	configured := Talkgroup{TalkgroupRef: 100, Label: "Dispatch 1", Name: "Dispatch One"}
 
-	unchanged, changed := RepairedTalkgroup(auto, System{}, IngestMeta{TalkgroupRef: 100, TalkgroupLabel: "Fire Dispatch"}, configured)
+	renamed, changed := RepairedTalkgroup(auto, System{}, IngestMeta{TalkgroupRef: 100, TalkgroupLabel: "Fire Dispatch"}, configured)
 
-	if changed {
-		t.Error("RepairedTalkgroup reported a change on a fully configured talkgroup")
+	if !changed {
+		t.Error("RepairedTalkgroup reported no change on a talkgroup whose stored label the call named differently")
 	}
 
-	if unchanged.Label != configured.Label || unchanged.Name != configured.Name || unchanged.TalkgroupRef != configured.TalkgroupRef {
-		t.Errorf("unchanged = %+v, want the configured talkgroup returned as-is", unchanged)
+	if renamed.Label != "Fire Dispatch" {
+		t.Errorf("Label = %q, want the label the call named", renamed.Label)
+	}
+
+	if renamed.Name != configured.Name || renamed.TalkgroupRef != configured.TalkgroupRef {
+		t.Errorf("renamed = %+v, want the configured name and the reference kept", renamed)
+	}
+
+	// A claimed name replaces the stored name whenever it differs, which is how 6.6.3 wrote it,
+	// and it does so without turning a repeated label into a rename of its own.
+	renamed, changed = RepairedTalkgroup(auto, System{}, IngestMeta{
+		TalkgroupRef:   100,
+		TalkgroupLabel: "Dispatch 1",
+		TalkgroupName:  "Fire Dispatch",
+	}, configured)
+
+	if !changed {
+		t.Error("RepairedTalkgroup reported no change on a talkgroup whose stored name the call named differently")
+	}
+
+	if renamed.Label != "Dispatch 1" {
+		t.Errorf("Label = %q, want the stored label the call repeated left as it was", renamed.Label)
+	}
+
+	if renamed.Name != "Fire Dispatch" {
+		t.Errorf("Name = %q, want the name the call named", renamed.Name)
+	}
+
+	// With no name in the claim, the placeholder condition is what decides the name: a configured
+	// one stands, and a claim equal to what is stored is no change at all.
+	renamed, changed = RepairedTalkgroup(auto, System{}, IngestMeta{
+		TalkgroupRef:   100,
+		TalkgroupLabel: "Dispatch 1",
+	}, configured)
+
+	if changed {
+		t.Error("RepairedTalkgroup reported a change on a talkgroup whose stored label and name the call repeated")
+	}
+
+	if renamed.Name != "Dispatch One" {
+		t.Errorf("Name = %q, want the configured name kept: only a placeholder name is filled from the label", renamed.Name)
+	}
+
+	// A placeholder name is repaired by a claimed name, and the claim is what decides it.
+	halfGenerated := Talkgroup{TalkgroupRef: 100, Label: "Dispatch 1", Name: "Talkgroup 100"}
+
+	renamed, changed = RepairedTalkgroup(auto, System{}, IngestMeta{
+		TalkgroupRef:   100,
+		TalkgroupLabel: "Dispatch 1",
+		TalkgroupName:  "Fire Dispatch",
+	}, halfGenerated)
+
+	if !changed {
+		t.Error("RepairedTalkgroup reported no change on a talkgroup carrying a placeholder name the call named " +
+			"differently")
+	}
+
+	if renamed.Name != "Fire Dispatch" {
+		t.Errorf("Name = %q, want the name the call named for the placeholder", renamed.Name)
+	}
+
+	// Nothing to repair: a claim the talkgroup already carries changes nothing, so no
+	// configuration entry, no re-save, and no log line follow it.
+	already := Talkgroup{TalkgroupRef: 100, Label: "Dispatch", Name: "Dispatch"}
+
+	unchanged, changed := RepairedTalkgroup(auto, System{}, IngestMeta{
+		TalkgroupRef:   100,
+		TalkgroupLabel: "Dispatch",
+		TalkgroupName:  "Dispatch",
+	}, already)
+
+	if changed {
+		t.Error("RepairedTalkgroup reported a change on a talkgroup that already carries what the call named")
+	}
+
+	if unchanged.Label != already.Label || unchanged.Name != already.Name || unchanged.TalkgroupRef != already.TalkgroupRef {
+		t.Errorf("unchanged = %+v, want the stored talkgroup returned as-is", unchanged)
 	}
 }
 

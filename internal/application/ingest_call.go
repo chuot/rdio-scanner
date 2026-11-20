@@ -250,12 +250,15 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 		return IngestCallResult{Outcome: IngestCallBlacklisted}, nil
 	}
 
-	// A previous auto-populated call may have created this talkgroup with its numeric
-	// reference as its label. A later upload that does describe it repairs that
-	// placeholder, and only that placeholder, and only when both the system and the
-	// talkgroup are already attached to the call.
+	// A call that names a talkgroup label renames the label of the talkgroup it lands
+	// on, whether that label is the numeric placeholder an earlier auto-populated call
+	// wrote or one the administrator configured, and only under the auto-populate gate.
+	// A claim equal to what is stored renames nothing, so no configuration entry, save,
+	// or broadcast follows it.
 	if call.HasSystem() && call.HasTalkgroup() {
 		if repaired, ok := domain.RepairedTalkgroup(options, call.System, call.Meta, call.Talkgroup); ok {
+			stored := call.Talkgroup
+
 			call.System = call.System.WithTalkgroup(repaired)
 			call.Talkgroup = repaired
 
@@ -263,8 +266,20 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 
 			populated = true
 
-			logCreated(fmt.Sprintf("replaced the placeholder talkgroup %v with %q on the system %q",
-				repaired.TalkgroupRef, repaired.Label, call.System.Label))
+			// Only a label that actually moved is worth a line, and the two wordings tell an
+			// operator which talkgroup the recording changed: one replaced a placeholder the
+			// server itself wrote, the other renamed a label that was already there. Filling
+			// a name the server wrote is a change to the talkgroup, but not a rename of a
+			// label, and the legacy server filled it without reporting it.
+			if repaired.Label != stored.Label {
+				if stored.HasGeneratedLabel() {
+					logCreated(fmt.Sprintf("replaced the placeholder talkgroup %v with %q on the system %q",
+						repaired.TalkgroupRef, repaired.Label, call.System.Label))
+				} else {
+					logCreated(fmt.Sprintf("renamed the talkgroup %v from %q to %q on the system %q",
+						repaired.TalkgroupRef, stored.Label, repaired.Label, call.System.Label))
+				}
+			}
 		}
 	}
 

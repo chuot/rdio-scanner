@@ -157,10 +157,11 @@ func (meta IngestMeta) NewTalkgroup(groupIDs []uint64, tagID uint64) Talkgroup {
 	}
 }
 
-// ShouldRepairTalkgroupLabels reports whether an ingested call may overwrite the
-// placeholder labels of an existing talkgroup. A prior auto-populated call may have
-// created the talkgroup with its numeric reference as the label; a later labeled
-// upload repairs only that generated placeholder, never a configured label.
+// ShouldRepairTalkgroupLabels reports whether an ingested call may rename the labels
+// of an existing talkgroup. The gate is the auto-populate one: the server-wide option
+// or the owning system's own flag. A call that names a talkgroup label renames the
+// label of whatever talkgroup it lands on, configured or generated, the way the legacy
+// server did, and renames nothing when neither switch is on.
 func ShouldRepairTalkgroupLabels(options Options, system System, meta IngestMeta, talkgroup Talkgroup) bool {
 	if meta.TalkgroupLabel == "" {
 		return false
@@ -177,25 +178,43 @@ func ShouldRepairTalkgroupLabels(options Options, system System, meta IngestMeta
 		return false
 	}
 
-	return talkgroup.HasGeneratedLabel()
+	return true
 }
 
-// RepairedTalkgroup applies the claimed labels to a talkgroup whose labels are still
-// placeholders, preserving a configured name and repairing only a generated one.
+// RepairedTalkgroup applies the claimed labels to an existing talkgroup and reports
+// whether anything changed. A claim the talkgroup already carries is not a change: the
+// legacy server marked the talkgroup changed only where the claim differed from what was
+// stored, so a recording that repeats a stored label saves nothing. A configured name
+// stands unless the call names a name over it; a name that is the placeholder
+// auto-populate itself wrote is filled from the claimed label.
 func RepairedTalkgroup(options Options, system System, meta IngestMeta, talkgroup Talkgroup) (Talkgroup, bool) {
 	if !ShouldRepairTalkgroupLabels(options, system, meta, talkgroup) {
 		return talkgroup, false
 	}
 
-	talkgroup.Label = meta.TalkgroupLabel
+	repaired := talkgroup
+	changed := false
 
-	if meta.TalkgroupName != "" {
-		talkgroup.Name = meta.TalkgroupName
-	} else if talkgroup.HasGeneratedName() {
-		talkgroup.Name = meta.TalkgroupLabel
+	if meta.TalkgroupLabel != talkgroup.Label {
+		repaired.Label = meta.TalkgroupLabel
+		changed = true
 	}
 
-	return talkgroup, true
+	if meta.TalkgroupName != "" {
+		if meta.TalkgroupName != talkgroup.Name {
+			repaired.Name = meta.TalkgroupName
+			changed = true
+		}
+	} else if talkgroup.HasGeneratedName() && talkgroup.Name != meta.TalkgroupLabel {
+		repaired.Name = meta.TalkgroupLabel
+		changed = true
+	}
+
+	if !changed {
+		return talkgroup, false
+	}
+
+	return repaired, true
 }
 
 // ClaimedUnits pairs the unit references a call claims with the labels it claims for

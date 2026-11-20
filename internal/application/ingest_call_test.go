@@ -448,32 +448,183 @@ func TestIngestCallRepairsGeneratedTalkgroupLabel(t *testing.T) {
 	}
 }
 
-func TestIngestCallNeverRepairsAConfiguredLabel(t *testing.T) {
+// TestIngestCallRenamesAConfiguredLabelInsideTheAutoPopulateGate is the label a mask reads out
+// of a recording's name reaching a talkgroup the administrator configured: the rename happens on
+// the auto-populate gate alone — the server-wide option or the owning system's own flag — and
+// nothing is renamed when neither is on. The gate is the one an operator already has.
+func TestIngestCallRenamesAConfiguredLabelInsideTheAutoPopulateGate(t *testing.T) {
+	cases := []struct {
+		name           string
+		optionAutoPop  bool
+		systemAutoPop  bool
+		wantLabel      string
+		wantEntry      string
+		wantBroadcasts int
+	}{
+		{
+			name:          "the owning system's own flag",
+			systemAutoPop: true,
+			wantLabel:     "Something Else",
+			wantEntry: `the recording labeled.wav renamed the talkgroup 1514000 from "Dispatch 1" to ` +
+				`"Something Else" on the system "Gaston County Conventional"`,
+			wantBroadcasts: 1,
+		},
+		{
+			name:          "the server-wide option",
+			optionAutoPop: true,
+			wantLabel:     "Something Else",
+			wantEntry: `the recording labeled.wav renamed the talkgroup 1514000 from "Dispatch 1" to ` +
+				`"Something Else" on the system "Gaston County Conventional"`,
+			wantBroadcasts: 1,
+		},
+		{
+			name:      "neither switch",
+			wantLabel: "Dispatch 1",
+		},
+	}
+
+	for _, testCase := range cases {
+		fixture := newIngestFixture()
+		fixture.options.Stored.AutoPopulate = testCase.optionAutoPop
+
+		system := domain.System{ID: 1, SystemRef: 4, Label: "Gaston County Conventional", AutoPopulate: testCase.systemAutoPop}
+		system.Talkgroups = domain.Talkgroups{{ID: 10, TalkgroupRef: 1514000, Label: "Dispatch 1", Name: "Dispatch 1"}}
+		fixture.systems.Stored = append(fixture.systems.Stored, system)
+
+		call := validIngestCall()
+		call.AudioFilename = "labeled.wav"
+		call.System = system
+		call.Talkgroup = system.Talkgroups[0]
+		call.Meta.TalkgroupLabel = "Something Else"
+
+		if _, err := fixture.ingest(call); err != nil {
+			t.Fatalf("%s: ingest: %v", testCase.name, err)
+		}
+
+		stored, _ := storedSystemByRef(fixture.systems.Stored, 4)
+
+		talkgroup, ok := stored.Talkgroups.ByRef(1514000)
+		if !ok {
+			t.Fatalf("%s: the talkgroup is gone: %+v", testCase.name, stored)
+		}
+
+		if talkgroup.Label != testCase.wantLabel {
+			t.Errorf("%s: talkgroup label = %q, want %q", testCase.name, talkgroup.Label, testCase.wantLabel)
+		}
+
+		if talkgroup.Name != "Dispatch 1" {
+			t.Errorf("%s: talkgroup name = %q, want the name the administrator configured left alone", testCase.name, talkgroup.Name)
+		}
+
+		got := fixture.configEntries()
+
+		if testCase.wantEntry == "" {
+			if len(got) != 0 {
+				t.Errorf("%s: the configuration entries are %v, want nothing: a label the server was not allowed to "+
+					"change is not a change", testCase.name, got)
+			}
+		} else if len(got) != 1 || got[0] != testCase.wantEntry {
+			t.Errorf("%s: the configuration entries are %v, want %v: a rename of a configured label says the "+
+				"recording renamed it, and does not call what was a configured name a placeholder", testCase.name, got, testCase.wantEntry)
+		}
+
+		if len(fixture.hub.BroadcastConfigs) != testCase.wantBroadcasts {
+			t.Errorf("%s: configuration broadcasts = %d, want %d: the listeners are told about the configuration "+
+				"only when this recording changed it", testCase.name, len(fixture.hub.BroadcastConfigs), testCase.wantBroadcasts)
+		}
+	}
+}
+
+// TestIngestCallFilesNothingWhenALabelClaimIsWhatTheTalkgroupAlreadyHas is the comparison the
+// gate writes the change behind: a labeled recording on an auto-populated system names the same
+// talkgroup on every recording of it, and a claim equal to what is stored renames nothing, so it
+// saves no configuration, files no log entry, and broadcasts no configuration frame.
+func TestIngestCallFilesNothingWhenALabelClaimIsWhatTheTalkgroupAlreadyHas(t *testing.T) {
 	fixture := newIngestFixture()
 	fixture.options.Stored.AutoPopulate = false
 
 	system := domain.System{ID: 1, SystemRef: 4, AutoPopulate: true}
-	system.Talkgroups = domain.Talkgroups{{ID: 10, TalkgroupRef: 1514000, Label: "Dispatch 1", Name: "Dispatch 1"}}
+	system.Talkgroups = domain.Talkgroups{{ID: 10, TalkgroupRef: 1514000, Label: "Dispatch", Name: "Dispatch"}}
 	fixture.systems.Stored = append(fixture.systems.Stored, system)
 
 	call := validIngestCall()
+	call.AudioFilename = "labeled.wav"
 	call.System = system
 	call.Talkgroup = system.Talkgroups[0]
-	call.Meta.TalkgroupLabel = "Something Else"
+	call.Meta.TalkgroupLabel = "Dispatch"
 
-	if _, err := fixture.handler.Handle(context.Background(), IngestCallCommand{Call: call}); err != nil {
+	if _, err := fixture.ingest(call); err != nil {
 		t.Fatalf("ingest: %v", err)
 	}
 
 	stored, _ := storedSystemByRef(fixture.systems.Stored, 4)
 
-	if talkgroup, _ := stored.Talkgroups.ByRef(1514000); talkgroup.Label != "Dispatch 1" {
-		t.Errorf("talkgroup label = %q, want the configured label left alone", talkgroup.Label)
+	talkgroup, ok := stored.Talkgroups.ByRef(1514000)
+	if !ok {
+		t.Fatalf("the talkgroup is gone: %+v", stored)
+	}
+
+	if talkgroup.Label != "Dispatch" || talkgroup.Name != "Dispatch" {
+		t.Errorf("the talkgroup is %q named %q, want it left exactly as stored", talkgroup.Label, talkgroup.Name)
 	}
 
 	if got := fixture.configEntries(); len(got) != 0 {
-		t.Errorf("the configuration entries are %v, want nothing: a label the server was not allowed to "+
-			"change is not a change", got)
+		t.Errorf("the configuration entries are %v, want nothing: a recording that repeated what was already "+
+			"stored changed nothing", got)
+	}
+
+	if len(fixture.hub.BroadcastConfigs) != 0 {
+		t.Errorf("configuration broadcasts = %d, want none: a change that did not happen is not a reason to re-save "+
+			"the systems and tell every listener about them", len(fixture.hub.BroadcastConfigs))
+	}
+}
+
+// TestIngestCallFilesNoEntryWhenOnlyThePlaceholderNameChanged is the recording that names its
+// talkgroup by number and label and nothing else, the shape a dsd+ recording carries: the label is
+// what the talkgroup already has, and only the name auto-populate itself wrote is filled from it.
+// 6.6.3 filled that name and said nothing about it, so the recording changes the configuration
+// without reporting a rename of a label that never moved.
+func TestIngestCallFilesNoEntryWhenOnlyThePlaceholderNameChanged(t *testing.T) {
+	fixture := newIngestFixture()
+	fixture.options.Stored.AutoPopulate = false
+
+	system := domain.System{ID: 1, SystemRef: 4660, Label: "System 4660", AutoPopulate: true}
+	system.Talkgroups = domain.Talkgroups{{ID: 10, TalkgroupRef: 1514000, Label: "Dispatch", Name: "Talkgroup 1514000"}}
+	fixture.systems.Stored = append(fixture.systems.Stored, system)
+
+	call := validIngestCall()
+	call.AudioFilename = "120000_1514000_P25_0001.1234-5_1514000[Dispatch]_6789[Car 4].mp3"
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+	call.Meta.TalkgroupLabel = "Dispatch"
+
+	if _, err := fixture.ingest(call); err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	stored, _ := storedSystemByRef(fixture.systems.Stored, 4660)
+
+	talkgroup, ok := stored.Talkgroups.ByRef(1514000)
+	if !ok {
+		t.Fatalf("the talkgroup is gone: %+v", stored)
+	}
+
+	if talkgroup.Label != "Dispatch" {
+		t.Errorf("talkgroup label = %q, want the label the call repeated left as it was", talkgroup.Label)
+	}
+
+	if talkgroup.Name != "Dispatch" {
+		t.Errorf("talkgroup name = %q, want the placeholder name filled from the label the call named", talkgroup.Name)
+	}
+
+	if got := fixture.configEntries(); len(got) != 0 {
+		t.Errorf("the configuration entries are %v, want nothing: the label did not move, so there is no rename to "+
+			"report about it", got)
+	}
+
+	if len(fixture.hub.BroadcastConfigs) != 1 {
+		t.Errorf("configuration broadcasts = %d, want 1: the talkgroup did change, so the listeners are told about "+
+			"the configuration", len(fixture.hub.BroadcastConfigs))
 	}
 }
 
