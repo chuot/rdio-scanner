@@ -209,9 +209,57 @@ class RdioAdminApikeys extends HTMLElement {
     keyInput.required = true;
 
     copy.addEventListener('click', async () => {
-      await navigator.clipboard.writeText(keyInput.value);
+      const value = keyInput.value;
 
-      showSnackbar('Key copied to clipboard');
+      // A plain HTTP address is not a secure context, and the browser gives a page on one no clipboard to write
+      // into at all; the selection command on the field the key is typed into is the copy such an origin has.
+      // Which way the key leaves is read off what the page can call at the moment of the press, and a refusal
+      // on one way is never answered by falling to the other.
+      const clipboard = navigator.clipboard;
+      const write = typeof clipboard?.writeText === 'function' ? clipboard.writeText : null;
+
+      let copied = false;
+
+      if (value) {
+        if (write) {
+          try {
+            await write.call(clipboard, value);
+
+            copied = true;
+          } catch {
+            copied = false;
+          }
+        } else {
+          // The command runs over the control the keyboard stands on, so the field holding the key is the one
+          // put in front of it, with its whole value selected.
+          keyInput.focus();
+          keyInput.select();
+
+          // The command answers true even when the selection it ran over covered none of the field's value, and
+          // leaves the clipboard holding what it held: what makes a copy is the value the field holds and the
+          // range its selection covers, not the answer the command gives.
+          const ran = document.execCommand('copy');
+          const wholeValue = keyInput.selectionStart === 0 && keyInput.selectionEnd === value.length;
+
+          copied = ran === true && wholeValue;
+        }
+      }
+
+      if (copied) {
+        showSnackbar('Key copied to clipboard');
+
+        return;
+      }
+
+      // The key is left selected, with the keyboard standing on the field that holds it, so the operator's own
+      // Ctrl+C finishes a copy the page could not make.
+      keyInput.focus();
+      keyInput.select();
+
+      const notCopied = 'Could not copy the key. It is selected — press Ctrl+C to copy it.';
+
+      showSnackbar(notCopied);
+      announce(notCopied);
     });
 
     if (errors.key) this.errorTargets.push({ field: keyField, error: errors.key });

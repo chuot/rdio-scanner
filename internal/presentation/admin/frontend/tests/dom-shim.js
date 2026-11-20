@@ -172,8 +172,15 @@ class ShimNode {
     return CONTROL_TAGS.has(this.tag) ? '' : undefined;
   }
 
+  // writing a control's value leaves the caret at its end: the selection covers none of what the
+  // control now holds, which is the state a copy command is asked over after a keystroke.
   set value(value) {
     this._value = String(value);
+
+    if (CONTROL_TAGS.has(this.tag)) {
+      this._selectionStart = this._value.length;
+      this._selectionEnd = this._value.length;
+    }
   }
 
   // el.id is the id attribute: skip links read it back through getAttribute
@@ -297,10 +304,37 @@ class ShimNode {
     const bubbles = event.bubbles !== false;
 
     for (let node = this; node; node = node.parent) {
-      for (const fn of node.listeners?.[event.type] ?? []) fn(event);
+      for (const fn of node.listeners?.[event.type] ?? []) reportHandlerResult(fn(event));
 
       if (!bubbles) break;
     }
+  }
+
+  // A form field's selection is the range a copy command is asked to copy. A control nobody has
+  // selected answers with a collapsed selection at its start, the way a fresh control does.
+  get selectionStart() {
+    return CONTROL_TAGS.has(this.tag) ? this._selectionStart ?? 0 : undefined;
+  }
+
+  set selectionStart(value) {
+    this._selectionStart = Number(value);
+  }
+
+  get selectionEnd() {
+    return CONTROL_TAGS.has(this.tag) ? this._selectionEnd ?? 0 : undefined;
+  }
+
+  set selectionEnd(value) {
+    this._selectionEnd = Number(value);
+  }
+
+  // select() puts the control's whole value in the selection: what a keyboard does when a field is
+  // focused and its contents are asked for in one go. It moves no focus, as in a browser.
+  select() {
+    if (!CONTROL_TAGS.has(this.tag)) return;
+
+    this._selectionStart = 0;
+    this._selectionEnd = String(this.value).length;
   }
 
   // form.elements is the control list the login form disables while submitting:
@@ -376,8 +410,78 @@ globalThis.document.removeEventListener = function (type, handler) {
 };
 
 globalThis.document.dispatchEvent = function (event) {
-  for (const handler of this.listeners.get(event.type) ?? []) handler(event);
+  for (const handler of this.listeners.get(event.type) ?? []) reportHandlerResult(handler(event));
 };
+
+// A page's event handler that rejects is a failure the browser reports to the console and carries on past:
+// the dispatch is over either way. The shim holds those rejections so a reading can name what the page left
+// in its console, rather than the run ending on them.
+const failedHandlers = [];
+
+function reportHandlerResult(result) {
+  if (result === null || typeof result?.then !== 'function') return;
+
+  result.then(undefined, (reason) => failedHandlers.push(reason));
+}
+
+// handlerFailures are the page errors the dispatched events left behind, in the order they failed.
+export function handlerFailures() {
+  return [...failedHandlers];
+}
+
+export function clearHandlerFailures() {
+  failedHandlers.length = 0;
+}
+
+// The document's legacy selection command. It is recorded rather than carried out: a browser answers a copy
+// command true even when the selection it was asked over covered nothing, so what a reading needs is the
+// command the page asked for and the range of the focused control's value that command ran over. The shim
+// installs no clipboard of its own, which is what lets a suite run with navigator.clipboard absent.
+const copyCommandsRun = [];
+
+let copyCommandAnswer = true;
+
+globalThis.document.execCommand = function (command) {
+  const control = globalThis.document.activeElement;
+  const value = CONTROL_TAGS.has(control?.tag) ? String(control.value ?? '') : '';
+  const start = Math.min(Number(control?.selectionStart ?? 0), value.length);
+  const end = Math.min(Number(control?.selectionEnd ?? start), value.length);
+
+  copyCommandsRun.push({
+    command: String(command),
+    control,
+    value,
+    selectedText: value.slice(start, Math.max(start, end)),
+    selectionStart: start,
+    selectionEnd: end,
+  });
+
+  // a browser runs a command it was not asked for no other way than by refusing it
+  return command === 'copy' ? copyCommandAnswer : false;
+};
+
+// copyCommandCalls are the commands the shimmed document was asked to run, oldest first, each carrying the
+// control it ran over and the selection range it ran over that control's value with.
+export function copyCommandCalls() {
+  return copyCommandsRun.map(({ command, control, value, selectedText, selectionStart, selectionEnd }) => ({
+    command,
+    control,
+    value,
+    selectedText,
+    selectionStart,
+    selectionEnd,
+  }));
+}
+
+export function clearCopyCommandCalls() {
+  copyCommandsRun.length = 0;
+}
+
+// setCopyCommandAnswer is the document answering the copy command: a browser answers true when the command
+// ran, and false when no command could run. The measured answer behind a click is true.
+export function setCopyCommandAnswer(answer) {
+  copyCommandAnswer = answer === true;
+}
 
 // setPageVisibility is the browser putting the page somewhere else: the state changes and every page that
 // is listening is told, in the order the page registered.
