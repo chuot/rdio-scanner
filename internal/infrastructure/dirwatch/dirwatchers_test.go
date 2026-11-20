@@ -583,6 +583,52 @@ func TestARecordingTheIngestPathRefusesStillCostsTheRecording(t *testing.T) {
 	}
 }
 
+// TestARecordingWhoseMaskNamesOnlyATalkgroupLabelIsLeftWhereItIs is the watch's half of a
+// mask that reads the talkgroup out of the recording's name and never a number: 6.6.3 refused
+// the call it read out of such a name, and the recording stayed where the recording tool wrote
+// it for the operator to see. A call the watch itself refused never reaches the ingest path, so
+// the watch reports it once in its own words.
+func TestARecordingWhoseMaskNamesOnlyATalkgroupLabelIsLeftWhereItIs(t *testing.T) {
+	t.Parallel()
+
+	watched := watching(t, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.Mask = "#TGLBL"
+		watch.SystemID = 1
+
+		return watch
+	})
+
+	path := putRecording(t, watched.directory, "Dispatch 1.wav")
+
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the recording is not there before the watch reads it: %v", err)
+	}
+
+	watched.calls.nothingArrivesWithin(t, settleWait)
+
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("the recording whose mask named no talkgroup number is gone (%v), want it left where the recording tool wrote it", err)
+	}
+
+	lines := watched.reportedAfterStarting()
+
+	if len(lines) != 1 {
+		t.Fatalf("the watch wrote %v to the administrator's log, want one line saying the recording names no talkgroup", lines)
+	}
+
+	if !strings.Contains(lines[0], "the recording "+path+" could not be ingested: no talkgroup") {
+		t.Errorf("the watch wrote %q, want the refusal naming the recording and saying it names no talkgroup", lines[0])
+	}
+
+	if !watched.loggedAs(domain.LogSourceDirwatch, "no talkgroup") {
+		t.Errorf("the watch wrote %v, want the line filed under the directory watchers", lines)
+	}
+
+	if !strings.Contains(lines[0], "warn:") {
+		t.Errorf("the watch wrote %q at the wrong severity, want a warning", lines[0])
+	}
+}
+
 // TestADirectoryThatAppearsInsideAWatchedDirectoryIsWatchedToo is how the recording tools that
 // write one directory per day work: the watch is pointed at the parent, and the day's directory
 // appears while the server is running.

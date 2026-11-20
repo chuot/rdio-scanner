@@ -70,8 +70,12 @@ func (systems Systems) ResolveSystem(meta IngestMeta) (System, bool) {
 }
 
 // ResolveTalkgroup finds the talkgroup an ingested call belongs to within a known
-// system, trying the database identifier first, then the client-facing reference,
-// then the label.
+// system, by the database identifier first and then the client-facing reference. A
+// label is never looked up: it is the name a stored talkgroup carries, so matching a
+// call against it would land the call on whichever talkgroup happens to be named
+// that, and the legacy server filed a call only under a number too. A call that names
+// a talkgroup is therefore resolved by number or not at all, and the auto-populate
+// rule writes the talkgroup the number names when the system has none.
 func (system System) ResolveTalkgroup(meta IngestMeta) (Talkgroup, bool) {
 	if meta.TalkgroupID > 0 {
 		return system.Talkgroups.ByID(meta.TalkgroupID)
@@ -79,10 +83,6 @@ func (system System) ResolveTalkgroup(meta IngestMeta) (Talkgroup, bool) {
 
 	if meta.TalkgroupRef > 0 {
 		return system.Talkgroups.ByRef(meta.TalkgroupRef)
-	}
-
-	if meta.TalkgroupLabel != "" {
-		return system.Talkgroups.ByLabel(meta.TalkgroupLabel)
 	}
 
 	return Talkgroup{}, false

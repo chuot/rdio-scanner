@@ -120,11 +120,14 @@ func TestCallIsValidAcceptsAnySystemClaim(t *testing.T) {
 	}
 }
 
+// TestCallIsValidAcceptsAnyTalkgroupClaim pins the IsValid disjunction: an unresolved
+// talkgroup is acceptable as long as the ingest source claimed it by number, either the
+// stored identity or the client-facing reference. A name is not a number, and a call is
+// only ever filed under one.
 func TestCallIsValidAcceptsAnyTalkgroupClaim(t *testing.T) {
 	claims := []IngestMeta{
 		{TalkgroupID: 21},
 		{TalkgroupRef: 1514000},
-		{TalkgroupLabel: "GASTON-FIRE"},
 	}
 
 	for _, meta := range claims {
@@ -135,6 +138,36 @@ func TestCallIsValidAcceptsAnyTalkgroupClaim(t *testing.T) {
 		if err := call.IsValid(); err != nil {
 			t.Errorf("IsValid with claim %+v = %v, want the claim to satisfy the requirement", meta, err)
 		}
+	}
+}
+
+// TestCallIsValidRefusesACallWhoseOnlyTalkgroupClaimIsAName is the mask shape that reads
+// a talkgroup by name and nothing else: the recording carries a label where a number
+// belongs, and 6.6.3 refused it for the same reason it refuses a recording that names no
+// talkgroup at all. The label is what auto-populate writes after a call is filed, never
+// what a call is filed under, so a name beside a number stays a label.
+func TestCallIsValidRefusesACallWhoseOnlyTalkgroupClaimIsAName(t *testing.T) {
+	call := validCall()
+	call.Talkgroup = Talkgroup{}
+	call.Meta = IngestMeta{
+		SystemRef:      4,
+		TalkgroupLabel: "GASTON-FIRE",
+	}
+
+	err := call.IsValid()
+
+	if err == nil {
+		t.Fatal("a call whose only talkgroup claim is a name was accepted, want it refused: the server files a call under a talkgroup number")
+	}
+
+	if err.Error() != "no talkgroup" {
+		t.Errorf("IsValid = %v, want the reason to say the call names no talkgroup", err)
+	}
+
+	call.Meta.TalkgroupRef = 1514000
+
+	if err := call.IsValid(); err != nil {
+		t.Errorf("IsValid with a number beside the name = %v, want the number to satisfy the requirement and the name to stay a label", err)
 	}
 }
 

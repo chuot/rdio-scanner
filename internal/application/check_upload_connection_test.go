@@ -318,6 +318,20 @@ func TestTheConnectionCheckQueryReportsTheDeficiencyTheCallIsValidReports(t *tes
 			want: "no audio",
 		},
 		{
+			name: "a recording naming a talkgroup only by name",
+			call: func() domain.Call {
+				// A submission that carries everything a recording carries except a talkgroup
+				// number: the name is where a label belongs only after the server has filed the call.
+				call := recordingCall()
+
+				call.Meta.TalkgroupRef = 0
+				call.Meta.TalkgroupLabel = "GASTON-FIRE"
+
+				return call
+			},
+			want: "no talkgroup",
+		},
+		{
 			name: "a submission that is a recording",
 			call: recordingCall,
 			want: "",
