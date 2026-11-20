@@ -24,8 +24,8 @@ const DefaultGroupLabel = "Unknown"
 const DefaultTagLabel = "Untagged"
 
 // IngestMeta is what an ingest source claims about a call: the identifiers it knows,
-// in whichever form it knows them. The resolver turns that claim into a system and a
-// talkgroup.
+// in whichever form it knows them. The resolver turns that claim into a system, a talkgroup,
+// and the site the call was heard at.
 type IngestMeta struct {
 	SystemID       uint64
 	SystemRef      uint
@@ -36,8 +36,15 @@ type IngestMeta struct {
 	TalkgroupName  string
 	TalkgroupGroup []string
 	TalkgroupTag   string
-	UnitRefs       []uint
-	UnitLabels     []string
+
+	// A site is a row that belongs to a system, so these three claims name the site the
+	// recording was heard at and are resolved only within the system the call lands on.
+	SiteID    uint64
+	SiteRef   uint
+	SiteLabel string
+
+	UnitRefs   []uint
+	UnitLabels []string
 
 	// ConnectionCheck is the uploader's own word that its submission only asks whether this
 	// server will take a recording, and brings no recording to put in one. Only the call-upload
@@ -86,6 +93,34 @@ func (system System) ResolveTalkgroup(meta IngestMeta) (Talkgroup, bool) {
 	}
 
 	return Talkgroup{}, false
+}
+
+// ResolveSite finds the site a call was heard at, within a known system: the database
+// identifier first, then the client-facing reference, then the label. A site is a row that
+// belongs to a system, so the search is that system's sites and never the whole table — a
+// reference or a name another system's site carries resolves nothing here. A claim that
+// matches nothing the system has leaves the call with no site, and the call is still filed.
+func (system System) ResolveSite(meta IngestMeta) (Site, bool) {
+	if meta.SiteID > 0 {
+		return system.Sites.ByID(meta.SiteID)
+	}
+
+	if meta.SiteRef > 0 {
+		return system.Sites.ByRef(meta.SiteRef)
+	}
+
+	if meta.SiteLabel != "" {
+		return system.Sites.ByLabel(meta.SiteLabel)
+	}
+
+	return Site{}, false
+}
+
+// HasSiteClaim reports whether an ingest source named the site a recording was heard at in
+// any form. It is what tells a watch's own site setting — a default for every recording in
+// the directory — from a site the recording named itself.
+func (meta IngestMeta) HasSiteClaim() bool {
+	return meta.SiteID > 0 || meta.SiteRef > 0 || meta.SiteLabel != ""
 }
 
 // ShouldCreateSystem reports whether auto-populate should invent the system the call

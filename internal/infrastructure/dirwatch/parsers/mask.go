@@ -36,17 +36,29 @@ type maskToken struct {
 	Pattern string
 }
 
-// maskTokens is the table of mask tokens, applied longest-first so a
-// prefix token never eats a longer one.
+// maskTokens is the table of mask tokens: the text an administrator writes into a mask, and the
+// pattern it stands for. The table is applied longest-first, which is the order the init below
+// sorts it into, so a token that is the front of a longer token never eats that longer one.
+//
+// A token stands for the filename piece written at the place the mask puts that token, and
+// maskPattern gives each of those pieces a capture group named for the token. Reading the pieces
+// by name is what keeps them where the mask wrote them, whatever order the table applies the
+// tokens in.
 var maskTokens = []maskToken{
 	{Name: "date", Text: "#DATE", Pattern: `\d{4}[-_]{0,1}\d{2}[-_]{0,1}\d{2}`},
 	{Name: "group", Text: "#GROUP", Pattern: `[a-zA-Z0-9\.\ -]+`},
 	{Name: "hz", Text: "#HZ", Pattern: `\d+`},
 	{Name: "khz", Text: "#KHZ", Pattern: `[\d\.]+`},
 	{Name: "mhz", Text: "#MHZ", Pattern: `[\d\.]+`},
+	// The name of the site the recording was heard at, written here.
 	{Name: "sitelbl", Text: "#SITELBL", Pattern: `[a-zA-Z0-9,\.\ -]+`},
+	// The site the recording was heard at, written here as the reference that site carries
+	// under its system.
 	{Name: "site", Text: "#SITE", Pattern: `\d+`},
+	// The name of the system the call belongs to, written here. A name the configuration has
+	// attaches that system; a name it does not claim a system to be created.
 	{Name: "syslbl", Text: "#SYSLBL", Pattern: `[a-zA-Z0-9,\.\ -]+`},
+	// The system the call belongs to, written here as the reference that system carries.
 	{Name: "sys", Text: "#SYS", Pattern: `\d+`},
 	{Name: "tag", Text: "#TAG", Pattern: `[a-zA-Z0-9\.\ -]+`},
 	{Name: "tgafs", Text: "#TGAFS", Pattern: `\d{2}-\d{3}`},
@@ -55,8 +67,11 @@ var maskTokens = []maskToken{
 	// point here would read past it and take the digits a later token in the same mask needs.
 	{Name: "tghz", Text: "#TGHZ", Pattern: `\d+`},
 	{Name: "tgkhz", Text: "#TGKHZ", Pattern: `[\d\.]+`},
+	// The name of the talkgroup the call was on, written here. A name is not a talkgroup on its
+	// own: the mask has to name the talkgroup too, by number or by one of the carrier tokens.
 	{Name: "tglbl", Text: "#TGLBL", Pattern: `[a-zA-Z0-9,\.\ -]+`},
 	{Name: "tgmhz", Text: "#TGMHZ", Pattern: `[\d\.]+`},
+	// The talkgroup the call was on, written here as its number.
 	{Name: "tg", Text: "#TG", Pattern: `\d+`},
 	{Name: "time", Text: "#TIME", Pattern: `\d{2}[-:]{0,1}\d{2}[-:]{0,1}\d{2}`},
 	{Name: "unit", Text: "#UNIT", Pattern: `\d+`},
@@ -72,35 +87,40 @@ func init() {
 	})
 }
 
-// maskPosition is where in the mask a token was found, which is what lines the filename's
-// captured groups up with the values they name.
-type maskPosition struct {
-	Name     string
-	Position int
+// maskPattern builds the regex a watch's mask becomes: every token the mask names is replaced by
+// the pattern that token carries, in the table's longest-first order. Each replacement is
+// captured as a group named for the token it came from, which is how a filename's pieces are read
+// back: by name, each one at the token it sits under. Counting the groups from the start and
+// pairing the count with a remembered place in the mask cannot do that, because every replacement
+// shifts the rest of the mask along and the remembered place is then a place in a string that no
+// longer exists.
+func maskPattern(mask string) (pattern string, tokens int) {
+	pattern = mask
+
+	for _, token := range maskTokens {
+		if strings.Index(pattern, token.Text) == -1 {
+			continue
+		}
+
+		tokens++
+
+		pattern = strings.Replace(pattern, token.Text, "(?P<"+token.Name+">"+token.Pattern+")", 1)
+	}
+
+	return pattern, tokens
 }
 
-// MaskWarning reports the mismatch a mask's own regex shows: more
-// captured groups than the tokens it names - the call reads the wrong
-// pieces.
+// MaskWarning reports the mismatch a mask's own regex shows: more captured groups than the mask
+// names tokens for. The extra groups are pieces of the filename no token claims, which is what a
+// mask carrying parentheses of its own writes.
 func MaskWarning(mask string) string {
 	if len(mask) == 0 {
 		return ""
 	}
 
-	remaining := mask
-	tokens := 0
+	pattern, tokens := maskPattern(mask)
 
-	// The same replacement applyMask makes, applied the same longest-first way: the
-	// regex to count groups in is the one the watch will actually compile.
-	for _, token := range maskTokens {
-		if strings.Index(remaining, token.Text) != -1 {
-			tokens++
-
-			remaining = strings.Replace(remaining, token.Text, fmt.Sprintf("(%v)", token.Pattern), 1)
-		}
-	}
-
-	compiled, err := regexp.Compile(remaining)
+	compiled, err := regexp.Compile(pattern)
 	if err != nil {
 		// The mask is refused at apply; a mask that cannot compile has
 		// nothing left to say about its groups.
@@ -108,7 +128,8 @@ func MaskWarning(mask string) string {
 	}
 
 	if groups := compiled.NumSubexp(); groups > tokens {
-		return fmt.Sprintf("the mask %q captures %d groups and names %d tokens: the values it reads will not line up", mask, groups, tokens)
+		return fmt.Sprintf("the mask %q captures %d groups and names %d tokens: the extra groups are pieces of the "+
+			"filename no token names", mask, groups, tokens)
 	}
 
 	return ""
@@ -122,30 +143,22 @@ func (parsers *Parsers) applyMask(ctx context.Context, watch domain.Dirwatch, ca
 		return nil
 	}
 
-	mask := watch.Mask
-	positions := []maskPosition{}
-
-	for _, token := range maskTokens {
-		if i := strings.Index(mask, token.Text); i != -1 {
-			positions = append(positions, maskPosition{Name: token.Name, Position: i})
-
-			mask = strings.Replace(mask, token.Text, fmt.Sprintf("(%v)", token.Pattern), 1)
-		}
-	}
-
-	sort.Slice(positions, func(i, j int) bool {
-		return positions[i].Position < positions[j].Position
-	})
+	pattern, _ := maskPattern(watch.Mask)
 
 	// The mask is matched against the filename without its extension, which
 	// already selected the file and the mask has no reason to mention.
 	base := strings.TrimSuffix(call.AudioFilename, path.Ext(call.AudioFilename))
 
+	compiled := regexp.MustCompile(pattern)
+	pieces := compiled.FindStringSubmatch(base)
+
 	values := map[string]string{}
 
-	for i, value := range regexp.MustCompile(mask).FindStringSubmatch(base) {
-		if i > 0 && i-1 < len(positions) {
-			values[positions[i-1].Name] = value
+	for _, token := range maskTokens {
+		group := compiled.SubexpIndex(token.Name)
+
+		if group > 0 && group < len(pieces) {
+			values[token.Name] = pieces[group]
 		}
 	}
 
@@ -295,38 +308,21 @@ func applyMaskFrequencies(values map[string]string, call *domain.Call) {
 	}
 }
 
-// applyMaskSites reads the site the call was heard at; both tokens only
-// do anything when the call already has a system attached, because a
-// site has nowhere to be looked up without one.
+// applyMaskSites claims the site the recording was heard at. A site is a row that belongs to a
+// system, and the system a call lands on is not settled until after the parser has run, so the
+// token claims what its own name says and the ingest path looks it up under that system — the way
+// a system named by reference and a talkgroup named by number are settled.
 func applyMaskSites(values map[string]string, call *domain.Call) {
 	if value, ok := values["site"]; ok {
-		ref, err := strconv.Atoi(value)
-		if err != nil {
-			return
-		}
-
-		if !call.HasSystem() {
-			return
-		}
-
-		if site, ok := call.System.Sites.ByRef(uint(ref)); ok {
-			call.SiteRef = site.SiteRef
+		if ref, err := strconv.Atoi(value); err == nil {
+			call.Meta.SiteRef = uint(ref)
 		}
 
 		return
 	}
 
-	value, ok := values["sitelbl"]
-	if !ok {
-		return
-	}
-
-	if !call.HasSystem() {
-		return
-	}
-
-	if site, ok := call.System.Sites.ByLabel(value); ok {
-		call.SiteRef = site.SiteRef
+	if value, ok := values["sitelbl"]; ok {
+		call.Meta.SiteLabel = value
 	}
 }
 

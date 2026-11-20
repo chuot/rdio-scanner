@@ -234,6 +234,16 @@ func (handler *IngestCallHandler) Handle(ctx context.Context, cmd IngestCallComm
 		}
 	}
 
+	// A site is a row that belongs to a system, so it is settled under the system the call
+	// landed on, and only where the source claimed one: a source that wrote the site on the call
+	// itself keeps what it wrote. A claim naming nothing that system has leaves the call with no
+	// site, and the call is still filed.
+	if call.HasSystem() && call.SiteRef == 0 {
+		if site, ok := call.System.ResolveSite(call.Meta); ok {
+			call.SiteRef = site.SiteRef
+		}
+	}
+
 	// The units the source names become part of the call itself, independently of the
 	// units the server keeps on the system.
 	if len(call.Units) == 0 && call.Meta.UnitRefs != nil {

@@ -1342,6 +1342,172 @@ func TestIngestCallResolvesByStoredIdentifiersBeforeLabels(t *testing.T) {
 	}
 }
 
+// TestIngestCallFilesTheSiteTheCallClaimsUnderTheSystemItLandsOn: a site is settled where the
+// system and the talkgroup are settled, and under the system the call landed on. The reference a
+// recording claimed becomes the reference the stored call names; a claim naming nothing that
+// system has leaves the call with no site, and the call is still stored.
+func TestIngestCallFilesTheSiteTheCallClaimsUnderTheSystemItLandsOn(t *testing.T) {
+	cases := []struct {
+		name  string
+		claim domain.IngestMeta
+		want  uint
+	}{
+		{name: "a site reference", claim: domain.IngestMeta{SiteRef: 7}, want: 7},
+		{name: "a site name", claim: domain.IngestMeta{SiteLabel: "North"}, want: 7},
+		{name: "a stored site identifier", claim: domain.IngestMeta{SiteID: 5}, want: 7},
+		{name: "a reference another system's site carries", claim: domain.IngestMeta{SiteRef: 11}, want: 0},
+		{name: "a name another system's site carries", claim: domain.IngestMeta{SiteLabel: "Nowhere"}, want: 0},
+		{name: "no claim at all", claim: domain.IngestMeta{}, want: 0},
+	}
+
+	for _, testCase := range cases {
+		fixture := newIngestFixture()
+
+		system := fixture.seedKnownSystem()
+		system.Sites = domain.Sites{{ID: 5, SiteRef: 7, Label: "North"}}
+		fixture.systems.Stored[0] = system
+
+		// Another system's site, so that a claim is only ever answered within the system the
+		// call landed on.
+		fixture.systems.Stored = append(fixture.systems.Stored, domain.System{
+			ID:        2,
+			SystemRef: 9,
+			Label:     "Harbour",
+			Sites:     domain.Sites{{ID: 11, SiteRef: 11, Label: "Nowhere"}},
+		})
+
+		call := validIngestCall()
+		call.Meta.SystemID = 1
+		call.Meta.TalkgroupID = 10
+		call.Meta.SiteID = testCase.claim.SiteID
+		call.Meta.SiteRef = testCase.claim.SiteRef
+		call.Meta.SiteLabel = testCase.claim.SiteLabel
+
+		result, err := fixture.ingest(call)
+		if err != nil {
+			t.Fatalf("%s: ingest: %v", testCase.name, err)
+		}
+
+		if result.Outcome != IngestCallAccepted {
+			t.Fatalf("%s: outcome = %q, want %q: a site is not what decides whether a call is a call",
+				testCase.name, result.Outcome, IngestCallAccepted)
+		}
+
+		if len(fixture.calls.Saved) != 1 {
+			t.Fatalf("%s: %d calls stored, want the one call", testCase.name, len(fixture.calls.Saved))
+		}
+
+		if stored := fixture.calls.Saved[0]; stored.SiteRef != testCase.want {
+			t.Errorf("%s: the stored call names site %d, want %d", testCase.name, stored.SiteRef, testCase.want)
+		}
+	}
+}
+
+// TestIngestCallKeepsASiteItsSourceWroteDirectly: an upload endpoint names the site on the call
+// itself, and the resolve only writes a site where a claim exists, so that direct write survives
+// it.
+func TestIngestCallKeepsASiteItsSourceWroteDirectly(t *testing.T) {
+	fixture := newIngestFixture()
+
+	system := fixture.seedKnownSystem()
+	system.Sites = domain.Sites{{ID: 5, SiteRef: 7, Label: "North"}}
+	fixture.systems.Stored[0] = system
+
+	call := validIngestCall()
+	call.System = system
+	call.Talkgroup = system.Talkgroups[0]
+	call.SiteRef = 2
+
+	result, err := fixture.ingest(call)
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if result.Outcome != IngestCallAccepted {
+		t.Fatalf("outcome = %q, want %q", result.Outcome, IngestCallAccepted)
+	}
+
+	if stored := fixture.calls.Saved[0]; stored.SiteRef != 2 {
+		t.Errorf("the stored call names site %d, want the 2 its source named: a source that wrote the site on the "+
+			"call keeps it, because the resolve writes a site only where the source claimed one", stored.SiteRef)
+	}
+}
+
+// TestACallClaimingASiteTheSystemHasIsADuplicateOfTheCallAlreadyOnThatSite: the site a call
+// names is a term of the duplicate match for every call, including one whose site only became
+// known when it was resolved. A recording that names site 7 is the same call as the one already
+// stored on site 7.
+func TestACallClaimingASiteTheSystemHasIsADuplicateOfTheCallAlreadyOnThatSite(t *testing.T) {
+	fixture := newIngestFixture()
+
+	system := fixture.seedKnownSystem()
+	system.Sites = domain.Sites{{ID: 5, SiteRef: 7, Label: "North"}}
+	fixture.systems.Stored[0] = system
+
+	earlier := validIngestCall()
+	earlier.ID = 900
+	earlier.System = system
+	earlier.Talkgroup = system.Talkgroups[0]
+	earlier.SiteRef = 7
+	earlier.Timestamp = ingestTime.Add(-300 * time.Millisecond)
+	fixture.calls.Stored[900] = earlier
+
+	call := validIngestCall()
+	call.Meta.SystemID = 1
+	call.Meta.TalkgroupID = 10
+	call.Meta.SiteRef = 7
+
+	result, err := fixture.ingest(call)
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if result.Outcome != IngestCallDuplicate {
+		t.Errorf("outcome = %q, want %q: the resolved site is a term of the duplicate match, the way the site a "+
+			"source wrote directly already was", result.Outcome, IngestCallDuplicate)
+	}
+
+	if len(fixture.calls.Saved) != 0 {
+		t.Error("a duplicate call must not be stored")
+	}
+}
+
+// TestACallWithNoSiteClaimIsStillADuplicateOfTheCallItMatched: a watch whose Site select is
+// unset, which is every watch a 6.6.3 deployment brought over, names no site for its recordings
+// and their duplicate readings are the ones they always were.
+func TestACallWithNoSiteClaimIsStillADuplicateOfTheCallItMatched(t *testing.T) {
+	fixture := newIngestFixture()
+
+	system := fixture.seedKnownSystem()
+	system.Sites = domain.Sites{{ID: 5, SiteRef: 7, Label: "North"}}
+	fixture.systems.Stored[0] = system
+
+	earlier := validIngestCall()
+	earlier.ID = 900
+	earlier.System = system
+	earlier.Talkgroup = system.Talkgroups[0]
+	earlier.Timestamp = ingestTime.Add(-300 * time.Millisecond)
+	fixture.calls.Stored[900] = earlier
+
+	call := validIngestCall()
+	call.Meta.SystemID = 1
+	call.Meta.TalkgroupID = 10
+
+	result, err := fixture.ingest(call)
+	if err != nil {
+		t.Fatalf("ingest: %v", err)
+	}
+
+	if result.Outcome != IngestCallDuplicate {
+		t.Errorf("outcome = %q, want %q: a call that names no site is matched against the calls that name no "+
+			"site, exactly as before", result.Outcome, IngestCallDuplicate)
+	}
+
+	if len(fixture.calls.Saved) != 0 {
+		t.Error("a duplicate call must not be stored")
+	}
+}
+
 func TestIngestCallReportsFailureWhenARepositoryFails(t *testing.T) {
 	fixture := newIngestFixture()
 	fixture.systems.Err = errors.New("database is locked")

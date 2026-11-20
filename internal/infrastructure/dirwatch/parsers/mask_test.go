@@ -618,26 +618,32 @@ func TestExtractDefaultNamesTheSystemItsLabelReadsAndLeavesTheSiteToTheIngestPat
 		t.Errorf("the call site reference is %d, want the parser to file no site on the call: the site is looked up "+
 			"under the system the call lands on, which is settled after the parser has run", extracted.Call.SiteRef)
 	}
+
+	if extracted.Call.Meta.SiteRef != 7 || extracted.Call.Meta.SiteID != 0 || extracted.Call.Meta.SiteLabel != "" {
+		t.Errorf("the call claims site %d/%d/%q, want the reference the mask named claimed for the ingest path to "+
+			"resolve under the system the call lands on",
+			extracted.Call.Meta.SiteID, extracted.Call.Meta.SiteRef, extracted.Call.Meta.SiteLabel)
+	}
 }
 
 // TestExtractDefaultReadsTheSiteTokensTheSameWayWhicheverWayTheMaskNamesItsSystem is the half
 // of the site tokens that has never worked: a mask naming its system by reference dropped both
 // tokens, because the system it named resolves only later, in the ingest path. Every way a mask
 // names its system settles that system in the ingest path, so the parser reads the site tokens the
-// same way for all of them: it files no site on the call, and what each shape claims for the
-// ingest path to resolve is pinned at the resolve rule and the ingest path, beside the system and
-// talkgroup resolves. Those claim readings are T120-005's, because they name claim fields the
-// domain does not have yet.
+// same way for all of them: it files no site on the call, and it claims for the ingest path exactly
+// what the token named, the way a system named by reference is claimed and resolved later.
 func TestExtractDefaultReadsTheSiteTokensTheSameWayWhicheverWayTheMaskNamesItsSystem(t *testing.T) {
 	cases := []struct {
-		name     string
-		mask     string
-		filename string
+		name        string
+		mask        string
+		filename    string
+		wantSiteRef uint
+		wantSiteLbl string
 	}{
-		{name: "a system named by reference", mask: "#SYS-#SITE", filename: "10001-7.wav"},
-		{name: "a system named by label", mask: "#SYSLBL-#SITE", filename: "Grand Metro-7.wav"},
-		{name: "a site named by label under a system named by label", mask: "#SYSLBL-#SITELBL", filename: "Grand Metro-North.wav"},
-		{name: "a site named by label under a system the configuration does not have", mask: "#SYSLBL-#SITELBL", filename: "Airport-North.wav"},
+		{name: "a system named by reference", mask: "#SYS-#SITE", filename: "10001-7.wav", wantSiteRef: 7},
+		{name: "a system named by label", mask: "#SYSLBL-#SITE", filename: "Grand Metro-7.wav", wantSiteRef: 7},
+		{name: "a site named by label under a system named by label", mask: "#SYSLBL-#SITELBL", filename: "Grand Metro-North.wav", wantSiteLbl: "North"},
+		{name: "a site named by label under a system the configuration does not have", mask: "#SYSLBL-#SITELBL", filename: "Airport-North.wav", wantSiteLbl: "North"},
 	}
 
 	for _, testCase := range cases {
@@ -654,6 +660,73 @@ func TestExtractDefaultReadsTheSiteTokensTheSameWayWhicheverWayTheMaskNamesItsSy
 			t.Errorf("%s: the call site reference is %d, want the parser to file no site on the call, the way it "+
 				"already does for a system it names by reference: a site is looked up under the system the call lands "+
 				"on, and that lookup belongs after the parser", testCase.name, extracted.Call.SiteRef)
+		}
+
+		meta := extracted.Call.Meta
+
+		if meta.SiteRef != testCase.wantSiteRef {
+			t.Errorf("%s: the call claims site reference %d, want %d: the reference the mask named, claimed for the "+
+				"ingest path to resolve under the system the call lands on", testCase.name, meta.SiteRef, testCase.wantSiteRef)
+		}
+
+		if meta.SiteLabel != testCase.wantSiteLbl {
+			t.Errorf("%s: the call claims site label %q, want %q: the name the mask named, claimed for the ingest "+
+				"path to resolve under the system the call lands on", testCase.name, meta.SiteLabel, testCase.wantSiteLbl)
+		}
+
+		if meta.SiteID != 0 {
+			t.Errorf("%s: the call claims site id %d, want no database identifier: a filename names a reference or "+
+				"a name, never a row", testCase.name, meta.SiteID)
+		}
+	}
+}
+
+// TestAWatchsSiteSelectClaimsASiteForItsDirectoryUnlessItsMaskNamesOne: the site an
+// administrator selected for a watch is a claim for every recording in that directory, which is
+// what the select has always looked like it should do. A mask that names a site of its own is the
+// exception: the recording's own name is more specific than the directory's setting, the way a
+// recording's own talkgroup label is more specific than the watch's, so the mask's claim stands
+// alone. A watch with no site selected claims nothing, which is every watch that came from 6.6.3.
+func TestAWatchsSiteSelectClaimsASiteForItsDirectoryUnlessItsMaskNamesOne(t *testing.T) {
+	cases := []struct {
+		name        string
+		mask        string
+		filename    string
+		siteID      uint64
+		wantSiteID  uint64
+		wantSiteRef uint
+		wantSiteLbl string
+	}{
+		{name: "the select, with no site token in the mask", mask: "#TG", filename: "1514000.wav", siteID: 5, wantSiteID: 5},
+		{name: "a reference the mask names beside the select", mask: "#TG-#SITE", filename: "1514000-7.wav", siteID: 5, wantSiteRef: 7},
+		{name: "a name the mask names beside the select", mask: "#SITELBL", filename: "North.wav", siteID: 5, wantSiteLbl: "North"},
+		{name: "no select and no site token", mask: "#TG", filename: "1514000.wav", wantSiteID: 0},
+	}
+
+	for _, testCase := range cases {
+		watch := domain.NewDirwatch()
+		watch.Mask = testCase.mask
+		watch.SystemID = 1
+		watch.TalkgroupID = 2
+		watch.SiteID = testCase.siteID
+
+		extracted, _, err := extract(t, watch, testCase.filename)
+		if err != nil {
+			t.Fatalf("%s: Extract: %v", testCase.name, err)
+		}
+
+		meta := extracted.Call.Meta
+
+		if meta.SiteID != testCase.wantSiteID || meta.SiteRef != testCase.wantSiteRef || meta.SiteLabel != testCase.wantSiteLbl {
+			t.Errorf("%s: the call claims site %d/%d/%q, want %d/%d/%q: the site the recording names, or the watch's "+
+				"select when the recording names none",
+				testCase.name, meta.SiteID, meta.SiteRef, meta.SiteLabel,
+				testCase.wantSiteID, testCase.wantSiteRef, testCase.wantSiteLbl)
+		}
+
+		if extracted.Call.SiteRef != 0 {
+			t.Errorf("%s: the call site reference is %d, want the parser to file no site on the call: the claim is "+
+				"resolved under the system the call lands on, in the ingest path", testCase.name, extracted.Call.SiteRef)
 		}
 	}
 }
@@ -919,4 +992,256 @@ func impossibleAfterTokens(t *testing.T) []string {
 	}
 
 	return impossible
+}
+
+// TestAMasksPiecesLandOnTheTokensThatNamedThem is how a mask is read: each filename piece
+// belongs to the token that piece sits under, whatever order the mask writes its tokens in and
+// whatever parentheses the mask itself carries. A token's piece used to be found by counting the
+// capture groups from the start and matching that count with where in the mask the token's text
+// happened to sit, and that count is wrong whenever the table visits a token that comes later in
+// the mask before one that comes earlier: each replacement shifts the rest of the mask along, so
+// the position recorded for an earlier token is a place in a string that no longer exists. What
+// the parser then files is one piece too far along, which for the shapes below puts a talkgroup
+// number on the site and a site name on the talkgroup.
+func TestAMasksPiecesLandOnTheTokensThatNamedThem(t *testing.T) {
+	cases := []struct {
+		name      string
+		mask      string
+		filename  string
+		watchSys  uint64
+		watchTG   uint64
+		systemID  uint64
+		systemRef uint
+		siteRef   uint
+		siteLabel string
+		tgRef     uint
+		tgLabel   string
+		group     string
+		unitRef   uint
+		unitLabel string
+		hertz     uint
+	}{
+		{
+			name:      "a site label written after a system label and a talkgroup",
+			mask:      "#SYSLBL-#TG-#SITELBL",
+			filename:  "Grand Metro-1514000-North.wav",
+			systemID:  1,
+			siteLabel: "North",
+			tgRef:     1514000,
+		},
+		{
+			name:      "a talkgroup label written between a system label and a site label",
+			mask:      "#SYSLBL-#TGLBL-#SITELBL",
+			filename:  "Grand Metro-Dispatch-North.wav",
+			watchTG:   2,
+			systemID:  1,
+			siteLabel: "North",
+			tgLabel:   "Dispatch",
+		},
+		{
+			name:      "a site written after a date and a time",
+			mask:      "#DATE-#TIME-#SYS-#TG-#SITE",
+			filename:  "20261006-120000-10001-1514000-7.wav",
+			systemRef: 10001,
+			siteRef:   7,
+			tgRef:     1514000,
+		},
+		{
+			name:      "a site label written after a date, a time, and a system label",
+			mask:      "#DATE-#TIME-#SYSLBL-#TG-#SITELBL",
+			filename:  "20261006-120000-Grand Metro-1514000-North.wav",
+			systemID:  1,
+			siteLabel: "North",
+			tgRef:     1514000,
+		},
+		{
+			name:     "a parenthesis the mask carries itself",
+			mask:     "call(1)-#TG-#SITE",
+			filename: "call1-1514000-7.wav",
+			watchSys: 1,
+			siteRef:  7,
+			tgRef:    1514000,
+		},
+		{
+			name:     "a group written after a system label and a talkgroup",
+			mask:     "#SYSLBL-#TG-#GROUP",
+			filename: "Grand Metro-1514000-Dispatch.wav",
+			systemID: 1,
+			group:    "Dispatch",
+			tgRef:    1514000,
+		},
+		{
+			name:     "a talkgroup label written after a system label and a talkgroup",
+			mask:     "#SYSLBL-#TG-#TGLBL",
+			filename: "Grand Metro-1514000-Dispatch.wav",
+			systemID: 1,
+			tgLabel:  "Dispatch",
+			tgRef:    1514000,
+		},
+		{
+			name:      "a site label written before a system label",
+			mask:      "#SITELBL-#SYSLBL-#TG",
+			filename:  "North-Grand Metro-1514000.wav",
+			systemID:  1,
+			siteLabel: "North",
+			tgRef:     1514000,
+		},
+		{
+			name:      "a site written before a system and a talkgroup",
+			mask:      "#SITE-#SYS-#TG",
+			filename:  "7-10001-1514000.wav",
+			systemRef: 10001,
+			siteRef:   7,
+			tgRef:     1514000,
+		},
+		{
+			name:     "a site written between a system label and a talkgroup",
+			mask:     "#SYSLBL-#SITE-#TG",
+			filename: "Grand Metro-7-1514000.wav",
+			systemID: 1,
+			siteRef:  7,
+			tgRef:    1514000,
+		},
+		{
+			name:      "a unit label written after a unit",
+			mask:      "#SYS-#TG-#UNIT-#UNITLBL",
+			filename:  "10001-1514000-6789-Dispatch.wav",
+			systemRef: 10001,
+			tgRef:     1514000,
+			unitRef:   6789,
+			unitLabel: "Dispatch",
+		},
+	}
+
+	for _, testCase := range cases {
+		watch := domain.NewDirwatch()
+		watch.Mask = testCase.mask
+		watch.SystemID = testCase.watchSys
+		watch.TalkgroupID = testCase.watchTG
+
+		extracted, _, err := extract(t, watch, testCase.filename)
+		if err != nil {
+			t.Errorf("%s: Extract: %v, want the mask read as it is written, each filename piece at the token it sits "+
+				"under", testCase.name, err)
+
+			continue
+		}
+
+		call := extracted.Call
+		meta := call.Meta
+
+		if testCase.systemID > 0 && call.System.ID != testCase.systemID {
+			t.Errorf("%s: the call belongs to system %#v, want the configured system the mask named by label",
+				testCase.name, call.System)
+		}
+
+		if testCase.systemRef > 0 && meta.SystemRef != testCase.systemRef {
+			t.Errorf("%s: the call claims system reference %d, want %d: the reference the mask names at its own place",
+				testCase.name, meta.SystemRef, testCase.systemRef)
+		}
+
+		if meta.SiteRef != testCase.siteRef || meta.SiteLabel != testCase.siteLabel {
+			t.Errorf("%s: the call claims site %d/%q, want %d/%q: the site the mask names at its own place",
+				testCase.name, meta.SiteRef, meta.SiteLabel, testCase.siteRef, testCase.siteLabel)
+		}
+
+		if meta.TalkgroupRef != testCase.tgRef {
+			t.Errorf("%s: the call claims talkgroup reference %d, want %d: the number the mask names at its own place",
+				testCase.name, meta.TalkgroupRef, testCase.tgRef)
+		}
+
+		if meta.TalkgroupLabel != testCase.tgLabel {
+			t.Errorf("%s: the call claims the talkgroup name %q, want %q: the name the mask names at its own place",
+				testCase.name, meta.TalkgroupLabel, testCase.tgLabel)
+		}
+
+		wantGroup := []string{}
+		if testCase.group != "" {
+			wantGroup = []string{testCase.group}
+		}
+
+		if len(meta.TalkgroupGroup) != len(wantGroup) || (len(wantGroup) > 0 && meta.TalkgroupGroup[0] != wantGroup[0]) {
+			t.Errorf("%s: the call claims the group %v, want %v: the group the mask names at its own place",
+				testCase.name, meta.TalkgroupGroup, wantGroup)
+		}
+
+		if testCase.unitRef > 0 && (len(call.Units) != 1 || call.Units[0].UnitRef != testCase.unitRef) {
+			t.Errorf("%s: the call units are %#v, want the one unit %d the mask names at its own place",
+				testCase.name, call.Units, testCase.unitRef)
+		}
+
+		if testCase.unitLabel != "" && (len(meta.UnitLabels) != 1 || meta.UnitLabels[0] != testCase.unitLabel) {
+			t.Errorf("%s: the call claims the unit names %v, want the one name %q the mask names beside its unit",
+				testCase.name, meta.UnitLabels, testCase.unitLabel)
+		}
+
+		if testCase.hertz > 0 && (len(call.Frequencies) != 1 || call.Frequencies[0].Frequency != testCase.hertz) {
+			t.Errorf("%s: the call carriers are %#v, want the one carrier %d Hz the mask names at its own place",
+				testCase.name, call.Frequencies, testCase.hertz)
+		}
+	}
+}
+
+// TestTheWatchMaskTokenTableCommentsSayEachTokenNamesAPieceInTheOrderWritten: the table's
+// comments are the account of how a mask is read that an administrator is given, and after the
+// change that makes a mask read each piece at the token that named it, each token needs a comment
+// of its own saying what it reads. Six tokens carry none today, and several of the comments that
+// do exist are fragments cut in the middle of a sentence, which says nothing to anyone.
+func TestTheWatchMaskTokenTableCommentsSayEachTokenNamesAPieceInTheOrderWritten(t *testing.T) {
+	source, err := os.ReadFile("mask.go")
+	if err != nil {
+		t.Fatalf("reading the mask parser source: %v", err)
+	}
+
+	text := string(source)
+
+	start := strings.Index(text, "var maskTokens = []maskToken{")
+
+	if start == -1 {
+		t.Fatal("the mask token table is not in the source the comments are read from")
+	}
+
+	table := text[start:]
+
+	if end := strings.Index(table, "\nfunc "); end != -1 {
+		table = table[:end]
+	}
+
+	lines := strings.Split(table, "\n")
+
+	for _, name := range []string{"#SITE", "#SITELBL", "#SYS", "#SYSLBL", "#TG", "#TGLBL"} {
+		doc := ""
+
+		for i, line := range lines {
+			if !strings.Contains(line, "\""+name+"\"") {
+				continue
+			}
+
+			for j := i - 1; j >= 0; j-- {
+				previous := strings.TrimSpace(lines[j])
+
+				if !strings.HasPrefix(previous, "//") {
+					break
+				}
+
+				doc = strings.TrimSpace(strings.TrimPrefix(previous, "//")) + " " + doc
+			}
+
+			break
+		}
+
+		words := strings.Fields(doc)
+
+		if len(words) < 4 {
+			t.Errorf("the token %s carries %d words of its own (%q), want a comment of its own saying what the "+
+				"token reads and which piece of the filename it is", name, len(words), doc)
+
+			continue
+		}
+
+		if !strings.HasSuffix(words[len(words)-1], ".") {
+			t.Errorf("the token %s comment %q stops in the middle of a sentence, want it to end one: the comment is "+
+				"what an administrator is told the token reads", name, doc)
+		}
+	}
 }

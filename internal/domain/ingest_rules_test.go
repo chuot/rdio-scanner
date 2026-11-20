@@ -79,6 +79,40 @@ func TestResolveTalkgroupFindsATalkgroupByNumberOnly(t *testing.T) {
 	}
 }
 
+func TestResolveSiteFindsTheSiteTheCallClaimsUnderTheSystemItLandsOn(t *testing.T) {
+	system := System{Sites: Sites{
+		{ID: 5, SiteRef: 7, Label: "North"},
+		{ID: 6, SiteRef: 8, Label: "South"},
+	}}
+
+	// An identifier wins even when the reference and label point elsewhere.
+	if site, ok := system.ResolveSite(IngestMeta{SiteID: 6, SiteRef: 7, SiteLabel: "North"}); !ok || site.ID != 6 {
+		t.Errorf("ResolveSite = %+v, %v, want the site matched by identifier", site, ok)
+	}
+
+	if site, ok := system.ResolveSite(IngestMeta{SiteRef: 7, SiteLabel: "South"}); !ok || site.SiteRef != 7 {
+		t.Errorf("ResolveSite = %+v, %v, want the site matched by reference", site, ok)
+	}
+
+	if site, ok := system.ResolveSite(IngestMeta{SiteLabel: "South"}); !ok || site.ID != 6 {
+		t.Errorf("ResolveSite = %+v, %v, want the site matched by label", site, ok)
+	}
+
+	// A site belongs to a system, so only the sites of the system the call landed on are
+	// searched: a reference or a name another system's site carries resolves nothing here.
+	if _, ok := system.ResolveSite(IngestMeta{SiteRef: 11}); ok {
+		t.Error("ResolveSite reported a site for a reference this system does not have, want none")
+	}
+
+	if _, ok := system.ResolveSite(IngestMeta{SiteLabel: "Nowhere"}); ok {
+		t.Error("ResolveSite reported a site for a label this system does not have, want none")
+	}
+
+	if _, ok := system.ResolveSite(IngestMeta{}); ok {
+		t.Error("ResolveSite with no claim reported a site, want none")
+	}
+}
+
 func TestShouldCreateTalkgroupRequiresAReferenceAndAutoPopulate(t *testing.T) {
 	auto := DefaultOptions()
 

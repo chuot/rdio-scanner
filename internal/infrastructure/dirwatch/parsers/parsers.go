@@ -133,6 +133,14 @@ func (parsers *Parsers) extractDefault(ctx context.Context, watch domain.Dirwatc
 		call.Meta.TalkgroupID = watch.TalkgroupID
 	}
 
+	// A watch's site is a default for its directory, not a claim over each recording: a
+	// recording that names a site of its own keeps that site, and one that names none takes
+	// the watch's. A watch with no site selected claims nothing, which is every watch a 6.6.3
+	// deployment brought over.
+	if watch.SiteID > 0 && !call.Meta.HasSiteClaim() {
+		call.Meta.SiteID = watch.SiteID
+	}
+
 	if err := call.IsValid(); err != nil {
 		return Extracted{}, false, err
 	}

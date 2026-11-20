@@ -629,6 +629,63 @@ func TestARecordingWhoseMaskNamesOnlyATalkgroupLabelIsLeftWhereItIs(t *testing.T
 	}
 }
 
+// TestAWatchHandsOverTheSiteItsSelectOrItsMaskNames is the site reaching the ingest path from
+// the watch that read the recording: an administrator's site select covers every recording in the
+// directory, a site the recording's own name claims covers that recording alone, and a watch with
+// no site selected claims nothing, which is every watch a 6.6.3 deployment brought over. The watch
+// hands over the claim and not a resolved site: the site is looked up under the system the call
+// lands on, which is the ingest path's work.
+func TestAWatchHandsOverTheSiteItsSelectOrItsMaskNames(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		mask        string
+		filename    string
+		siteID      uint64
+		wantSiteID  uint64
+		wantSiteRef uint
+		wantSiteLbl string
+	}{
+		{name: "the select fills a mask naming no site", mask: "#SYS-#TG", filename: "10001-1514000.wav", siteID: 5, wantSiteID: 5},
+		{name: "a reference the mask names beats the select", mask: "#SYS-#TG-#SITE", filename: "10001-1514000-7.wav", siteID: 5, wantSiteRef: 7},
+		{name: "a name the mask names beats the select", mask: "#SYS-#TG-#SITELBL", filename: "10001-1514000-North.wav", siteID: 5, wantSiteLbl: "North"},
+		{name: "no select and a mask naming no site", mask: "#SYS-#TG", filename: "10001-1514000.wav"},
+	}
+
+	for _, testCase := range cases {
+		watched := watching(t, func(watch domain.Dirwatch) domain.Dirwatch {
+			watch.Mask = testCase.mask
+			watch.SystemID = 1
+			watch.SiteID = testCase.siteID
+
+			return watch
+		})
+
+		putRecordingUntilIngested(t, watched, testCase.filename)
+
+		handed := watched.calls.handed()
+
+		if len(handed) != 1 {
+			t.Fatalf("%s: the watch handed over %d calls, want the one recording's call", testCase.name, len(handed))
+		}
+
+		call := handed[0]
+		meta := call.Meta
+
+		if meta.SiteID != testCase.wantSiteID || meta.SiteRef != testCase.wantSiteRef || meta.SiteLabel != testCase.wantSiteLbl {
+			t.Errorf("%s: the call the watch handed over claims site %d/%d/%q, want %d/%d/%q",
+				testCase.name, meta.SiteID, meta.SiteRef, meta.SiteLabel,
+				testCase.wantSiteID, testCase.wantSiteRef, testCase.wantSiteLbl)
+		}
+
+		if call.SiteRef != 0 {
+			t.Errorf("%s: the call the watch handed over names site %d, want no site on it: the watch claims the "+
+				"site, and the ingest path resolves it under the system the call lands on", testCase.name, call.SiteRef)
+		}
+	}
+}
+
 // TestADirectoryThatAppearsInsideAWatchedDirectoryIsWatchedToo is how the recording tools that
 // write one directory per day work: the watch is pointed at the parent, and the day's directory
 // appears while the server is running.
@@ -1378,6 +1435,16 @@ func TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart(t *testing.T) {
 		lines := watched.reportedAfterStarting()
 
 		t.Errorf("the watch wrote %v, want a line saying the mask captures more groups than it names tokens", lines)
+	}
+
+	// Each token's piece is captured as a group named for that token, so the extra groups are
+	// ones the mask captured and named nothing for: the line says that, and not that the values
+	// the watch reads are misplaced, which is no longer what an extra group means.
+	if !watched.loggedAs(domain.LogSourceDirwatch, "no token names") {
+		lines := watched.reportedAfterStarting()
+
+		t.Errorf("the watch wrote %v, want the line to say the extra groups are pieces of the filename no token "+
+			"names", lines)
 	}
 }
 
