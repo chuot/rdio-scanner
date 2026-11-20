@@ -2280,3 +2280,84 @@ func TestTheGuideNamesTheTwoGenerateControlsAndWhatTheyWrite(t *testing.T) {
 		}
 	}
 }
+
+// the dirwatch table's Site and Frequency rows say what those two fields do to the calls a
+// directory files: a system and a talkgroup select override whatever a file name claims, a site
+// select stands only against a name that claims no site of its own, and the frequency the row
+// names is the carrier a mask's own read replaces.
+func TestTheGuideSaysWhatADirwatchsSiteSelectAndFrequencyDo(t *testing.T) {
+	body := guidePath(t)
+
+	table := tableWithCaption(t, body, "The dirwatch row")
+
+	rows := []struct {
+		field string
+		need  []string
+		ban   []string
+	}{
+		{
+			field: "System, Site, Talkgroup",
+			need:  []string{"override", "claims no site"},
+			ban:   []string{"whatever the file says"},
+		},
+		{
+			field: "Frequency",
+			need:  []string{"replaces", "hertz"},
+			ban:   []string{"fake"},
+		},
+	}
+
+	for _, row := range rows {
+		cellAt := regexp.MustCompile(`(?is)<tr><td>` + regexp.QuoteMeta(row.field) + `</td><td>(.*?)</td>`)
+
+		m := cellAt.FindStringSubmatch(table)
+		if m == nil {
+			t.Fatalf("the dirwatch table carries no %q row to read", row.field)
+		}
+
+		cell := strings.Join(strings.Fields(stripTags(m[1])), " ")
+		lowered := strings.ToLower(cell)
+
+		for _, want := range row.need {
+			if !strings.Contains(lowered, strings.ToLower(want)) {
+				t.Errorf("the dirwatch table's %q row says nothing about %q: it says %q", row.field, want, cell)
+			}
+		}
+
+		for _, unwanted := range row.ban {
+			if strings.Contains(lowered, strings.ToLower(unwanted)) {
+				t.Errorf("the dirwatch table's %q row still says %q, which is not what the field does: %q", row.field, unwanted, cell)
+			}
+		}
+	}
+
+	// The caption under the chapter's screenshot states the same rule in one sentence,
+	// so it has to carry the same shape as the two rows it sits beside.
+	caption := ""
+
+	for _, found := range regexp.MustCompile(`(?is)<figcaption\b[^>]*>(.*?)</figcaption>`).FindAllStringSubmatch(chapterOf(t, body, "ch-10-getting-audio-in"), -1) {
+		plain := strings.Join(strings.Fields(stripTags(found[1])), " ")
+		if strings.HasPrefix(plain, "A watched directory as the section shows it") {
+			caption = plain
+			break
+		}
+	}
+
+	if caption == "" {
+		t.Fatalf("chapter 10 carries no figure caption describing a watched directory, which is where the row table's override rule is stated beside the screenshot")
+	}
+
+	loweredCaption := strings.ToLower(caption)
+
+	for _, unwanted := range []string{"system, site, and talkgroup"} {
+		if strings.Contains(loweredCaption, unwanted) {
+			t.Errorf("the chapter's dirwatch caption still names %q as a set that overrides what a file name claims, which is no longer true of a site: %q", unwanted, caption)
+		}
+	}
+
+	for _, want := range []string{"claims no site"} {
+		if !strings.Contains(loweredCaption, want) {
+			t.Errorf("the chapter's dirwatch caption says nothing about %q: %q", want, caption)
+		}
+	}
+}

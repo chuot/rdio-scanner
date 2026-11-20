@@ -149,3 +149,83 @@ func TestTheVersionEightEntryGroupsItsChanges(t *testing.T) {
 		}
 	}
 }
+
+// versionEightGroup returns the entries one group of the Version 8.0 entry carries: from that
+// group's heading to the next heading of the same rank, so a claim is read against the group it
+// belongs to and not against whatever the entry says elsewhere.
+func versionEightGroup(t *testing.T, section, name string) string {
+	t.Helper()
+
+	title := "### " + name + "\n"
+
+	at := strings.Index(section, title)
+	if at < 0 {
+		t.Fatalf("the Version 8.0 entry does not carry the group %q", name)
+	}
+
+	rest := section[at+len(title):]
+
+	if next := strings.Index(rest, "\n### "); next >= 0 {
+		return rest[:next]
+	}
+
+	return rest
+}
+
+// the entry tells an upgrading operator what the directory watcher now makes of a file name, in
+// the words the operator would search the entry for.
+func TestTheVersionEightEntrySaysWhatTheWatcherReadsOutOfAFileName(t *testing.T) {
+	section := versionEightSection(t)
+
+	claims := []struct {
+		group  string
+		states string
+		need   []string
+	}{
+		{
+			group:  "Getting audio in",
+			states: "that a mask's frequency read is exact now",
+			need:   []string{"mask", "exactly"},
+		},
+		{
+			group:  "Getting audio in",
+			states: "that the frequency a mask reads replaces the one the directory names",
+			need:   []string{"replaces"},
+		},
+		{
+			group:  "Getting audio in",
+			states: "that whole-hertz talkgroup names read as they did in version 6.6.3",
+			need:   []string{"#TGHZ"},
+		},
+		{
+			group:  "Getting audio in",
+			states: "that a file name's talkgroup label renames the channel it lands on",
+			need:   []string{"renames", "auto-populate"},
+		},
+		{
+			group:  "Getting audio in",
+			states: "that a recording naming only a channel label stays where it is",
+			need:   []string{"watched directory"},
+		},
+		{
+			group:  "Getting audio in",
+			states: "that a watched directory's site reaches its calls",
+			need:   []string{"#SITE", "#SITELBL"},
+		},
+		{
+			group:  "Updating from version 6.6.3",
+			states: "that frequencies read out of file names come out exact from the first call the upgraded server files",
+			need:   []string{"hertz"},
+		},
+	}
+
+	for _, claim := range claims {
+		group := strings.ToLower(versionEightGroup(t, section, claim.group))
+
+		for _, want := range claim.need {
+			if !strings.Contains(group, strings.ToLower(want)) {
+				t.Errorf("the group %q does not state %s: it carries no %q", claim.group, claim.states, want)
+			}
+		}
+	}
+}
