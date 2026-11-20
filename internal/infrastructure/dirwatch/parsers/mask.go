@@ -50,7 +50,10 @@ var maskTokens = []maskToken{
 	{Name: "sys", Text: "#SYS", Pattern: `\d+`},
 	{Name: "tag", Text: "#TAG", Pattern: `[a-zA-Z0-9\.\ -]+`},
 	{Name: "tgafs", Text: "#TGAFS", Pattern: `\d{2}-\d{3}`},
-	{Name: "tghz", Text: "#TGHZ", Pattern: `[\d\.]+`},
+	// #TGHZ names a whole hertz count, which is what a hertz piece of a filename is: a decimal
+	// carrier belongs to the kilohertz and megahertz tokens. A pattern that accepted a decimal
+	// point here would read past it and take the digits a later token in the same mask needs.
+	{Name: "tghz", Text: "#TGHZ", Pattern: `\d+`},
 	{Name: "tgkhz", Text: "#TGKHZ", Pattern: `[\d\.]+`},
 	{Name: "tglbl", Text: "#TGLBL", Pattern: `[a-zA-Z0-9,\.\ -]+`},
 	{Name: "tgmhz", Text: "#TGMHZ", Pattern: `[\d\.]+`},
@@ -254,37 +257,40 @@ func applyMaskGroups(values map[string]string, call *domain.Call) {
 	}
 }
 
+// fileCarrier files the carrier the filename names as the call's only carrier. A watch's own
+// carrier says where in the directory its recordings came from; a name that says which carrier
+// one recording was heard on replaces it, the way the legacy assigned a call's single frequency,
+// rather than filing both on the same call.
+func fileCarrier(call *domain.Call, hertz uint) {
+	call.Frequencies = []domain.CallFrequency{{
+		Frequency: hertz,
+		Offset:    0,
+	}}
+}
+
 // applyMaskFrequencies reads the carrier the call was heard on, in whichever unit the mask
-// names.
+// names. The whole value is read at full width: a carrier in hertz is well past what a
+// 32-bit read reaches, and a decimal in kilohertz or megahertz loses its last digits there.
 func applyMaskFrequencies(values map[string]string, call *domain.Call) {
 	if value, ok := values["hz"]; ok {
-		if hz, err := strconv.ParseFloat(value, 32); err == nil {
-			call.Frequencies = append(call.Frequencies, domain.CallFrequency{
-				Frequency: uint(hz),
-				Offset:    0,
-			})
+		if hz, err := strconv.ParseFloat(value, 64); err == nil {
+			fileCarrier(call, uint(hz))
 		}
 
 		return
 	}
 
 	if value, ok := values["khz"]; ok {
-		if khz, err := strconv.ParseFloat(value, 32); err == nil {
-			call.Frequencies = append(call.Frequencies, domain.CallFrequency{
-				Frequency: uint(khz * 1e3),
-				Offset:    0,
-			})
+		if khz, err := strconv.ParseFloat(value, 64); err == nil {
+			fileCarrier(call, uint(khz*1e3))
 		}
 
 		return
 	}
 
 	if value, ok := values["mhz"]; ok {
-		if mhz, err := strconv.ParseFloat(value, 32); err == nil {
-			call.Frequencies = append(call.Frequencies, domain.CallFrequency{
-				Frequency: uint(mhz * 1e6),
-				Offset:    0,
-			})
+		if mhz, err := strconv.ParseFloat(value, 64); err == nil {
+			fileCarrier(call, uint(mhz*1e6))
 		}
 	}
 }
@@ -352,29 +358,20 @@ func applyMaskTalkgroup(values map[string]string, call *domain.Call) {
 			}
 		}
 	} else if value, ok := values["tghz"]; ok {
-		if hz, err := strconv.ParseFloat(value, 32); err == nil {
-			call.Frequencies = append(call.Frequencies, domain.CallFrequency{
-				Frequency: uint(hz),
-				Offset:    0,
-			})
+		if hz, err := strconv.ParseFloat(value, 64); err == nil {
+			fileCarrier(call, uint(hz))
 
 			call.Meta.TalkgroupRef = uint(hz / 1e3)
 		}
 	} else if value, ok := values["tgkhz"]; ok {
-		if khz, err := strconv.ParseFloat(value, 32); err == nil {
-			call.Frequencies = append(call.Frequencies, domain.CallFrequency{
-				Frequency: uint(khz * 1e3),
-				Offset:    0,
-			})
+		if khz, err := strconv.ParseFloat(value, 64); err == nil {
+			fileCarrier(call, uint(khz*1e3))
 
 			call.Meta.TalkgroupRef = uint(khz)
 		}
 	} else if value, ok := values["tgmhz"]; ok {
-		if mhz, err := strconv.ParseFloat(value, 32); err == nil {
-			call.Frequencies = append(call.Frequencies, domain.CallFrequency{
-				Frequency: uint(mhz * 1e6),
-				Offset:    0,
-			})
+		if mhz, err := strconv.ParseFloat(value, 64); err == nil {
+			fileCarrier(call, uint(mhz*1e6))
 
 			call.Meta.TalkgroupRef = uint(mhz * 1e3)
 		}
