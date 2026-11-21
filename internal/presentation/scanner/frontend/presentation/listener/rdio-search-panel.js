@@ -5,7 +5,7 @@
 import { getAppContext } from '../../application/context.js';
 import { computeFilterOptions, resolveCallSearchCriteria } from '../../domain/search-filters.js';
 import { clientSlice, needsRefetch, serverOffset } from '../../../../common/frontend/domain/search-pagination.js';
-import { formatDuration, formatMonthDay, formatTime, toLocalInputValue } from '../../../../common/frontend/presentation/display-format.js';
+import { formatDuration, formatMonthDay, formatTime, talkgroupText, toLocalInputValue } from '../../../../common/frontend/presentation/display-format.js';
 import { announce, escapeHtml } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 const SERVER_PAGE = 200;
@@ -127,7 +127,19 @@ class RdioSearchPanel extends HTMLElement {
     const selection = this.selection();
     const options = computeFilterOptions(config, selection);
 
-    const fill = (name, allLabel, labels) => {
+    // A filter names a talkgroup by a label and asks for the reference that label stands
+    // for, so an option keeps its label as its value and only its visible text follows the
+    // rule the call list follows: the label an operator wrote, else the form the type the
+    // configuration carries for it numbers that reference in.
+    const selectedSystem = config.systems.find((system) => system.label === selection.system);
+
+    const talkgroupOptionText = (label) => {
+      const talkgroup = selectedSystem?.talkgroups.find((tg) => tg.label === label);
+
+      return talkgroup ? talkgroupText(talkgroup, talkgroup.id, selectedSystem) : label;
+    };
+
+    const fill = (name, allLabel, labels, optionText = (label) => label) => {
       const select = this.form.elements[name];
       const current = select.value;
 
@@ -136,7 +148,7 @@ class RdioSearchPanel extends HTMLElement {
       for (const label of labels) {
         const option = document.createElement('option');
         option.value = label;
-        option.textContent = label;
+        option.textContent = optionText(label);
         select.append(option);
       }
 
@@ -144,7 +156,7 @@ class RdioSearchPanel extends HTMLElement {
     };
 
     fill('system', 'All Systems', options.systems);
-    fill('talkgroup', 'All Talkgroups', options.talkgroups);
+    fill('talkgroup', 'All Talkgroups', options.talkgroups, talkgroupOptionText);
     fill('group', 'All Groups', options.groups);
     fill('tag', 'All Tags', options.tags);
   }
@@ -281,7 +293,7 @@ class RdioSearchPanel extends HTMLElement {
 
       const date = new Date(row.dateTime);
 
-      return `<tr><td>${control}</td><td><span>${formatMonthDay(date)}</span></td><td><span>${formatTime(date)}</span></td><td><span>${formatDuration(row.audioLength)}</span></td><td><span>${escapeHtml(row.systemData?.label ?? row.system)}</span></td><td><span>${escapeHtml(row.talkgroupData?.label ?? row.talkgroup)}</span></td><td><span>${escapeHtml(row.talkgroupData?.name ?? '')}</span></td></tr>`;
+      return `<tr><td>${control}</td><td><span>${formatMonthDay(date)}</span></td><td><span>${formatTime(date)}</span></td><td><span>${formatDuration(row.audioLength)}</span></td><td><span>${escapeHtml(row.systemData?.label ?? row.system)}</span></td><td><span>${escapeHtml(talkgroupText(row.talkgroupData, row.talkgroup, row.systemData))}</span></td><td><span>${escapeHtml(row.talkgroupData?.name ?? '')}</span></td></tr>`;
     }).join('');
   }
 

@@ -3,6 +3,8 @@
 // any timed window on it.
 
 import { getAppContext } from '../../application/context.js';
+import { talkgroupText } from '../../../../common/frontend/presentation/display-format.js';
+import { escapeHtml } from '../../../../common/frontend/presentation/ui/primitives.js';
 
 class RdioSelectPanel extends HTMLElement {
   connectedCallback() {
@@ -30,7 +32,7 @@ class RdioSelectPanel extends HTMLElement {
       html += '<fieldset class="fieldset"><div>';
 
       for (const category of categories) {
-        html += `<button type="button" class="rdio-button ${category.status}" data-category="${encodeURIComponent(JSON.stringify(category))}">${category.label}<span class="rdio-visually-hidden">${category.status}</span></button>`;
+        html += `<button type="button" class="rdio-button ${category.status}" data-category="${encodeURIComponent(JSON.stringify(category))}">${escapeHtml(category.label)}<span class="rdio-visually-hidden">${category.status}</span></button>`;
       }
 
       html += '<button type="button" class="rdio-button-mini all-off" data-all="off">OFF</button>';
@@ -41,14 +43,18 @@ class RdioSelectPanel extends HTMLElement {
     for (const system of config?.systems ?? []) {
       if (!system.talkgroups?.length) continue;
 
-      html += `<fieldset class="fieldset"><legend>${system.label}</legend><div>`;
+      html += `<fieldset class="fieldset"><legend>${escapeHtml(system.label)}</legend><div>`;
 
       for (const talkgroup of system.talkgroups) {
         const lfm = map?.[system.id]?.[talkgroup.id];
         const cls = lfm?.minutes ? 'blink' : lfm?.active ? 'on' : 'off';
         const timed = lfm?.minutes ? `<span class="rdio-visually-hidden">avoided for ${lfm.minutes} minutes</span>` : '';
 
-        html += `<button type="button" class="rdio-button ${cls}" aria-pressed="${lfm?.active ? 'true' : 'false'}" data-system="${system.id}" data-talkgroup="${talkgroup.id}">${talkgroup.label}${timed}</button>`;
+        // The button names the talkgroup but acts on the reference the name stands for,
+        // so data-talkgroup keeps the identifier whatever text the name takes.
+        const name = escapeHtml(talkgroupText(talkgroup, talkgroup.id, system));
+
+        html += `<button type="button" class="rdio-button ${cls}" aria-pressed="${lfm?.active ? 'true' : 'false'}" data-system="${system.id}" data-talkgroup="${talkgroup.id}">${name}${timed}</button>`;
       }
 
       if (system.talkgroups.length > 1) {
