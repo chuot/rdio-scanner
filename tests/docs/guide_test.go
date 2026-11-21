@@ -648,6 +648,60 @@ func TestTheGuideSaysWhichColourWinsAtEachLevelThatOffersOne(t *testing.T) {
 	}
 }
 
+// systemTypeNames are the types an administrator chooses from beside a system, in the order
+// the guide's system row prints them.
+var systemTypeNames = []string{"AM", "DMR", "EDACS", "FM", "NFM", "NXDN", "P25", "Provoice", "SmartNet", "Tetra"}
+
+// guideFieldRow returns one field's row of a captioned table as the plain words a reader
+// reads, with the whitespace the document wraps its cells with collapsed away.
+func guideFieldRow(t *testing.T, body, caption, field string) string {
+	t.Helper()
+
+	needle := "<td>" + field + "</td>"
+
+	for _, row := range regexp.MustCompile(`(?is)<tr\b.*?</tr>`).FindAllString(tableWithCaption(t, body, caption), -1) {
+		if strings.Contains(row, needle) {
+			return strings.Join(strings.Fields(stripTags(row)), " ")
+		}
+	}
+
+	t.Fatalf("the table captioned %q carries no %s row", caption, field)
+
+	return ""
+}
+
+// TestTheGuideSaysWhatASystemTypeDoes covers the row an administrator reads while choosing a
+// system's type: it names every type the administration offers, and it says what choosing one
+// does — the listener's screens number that system's talkgroups in agency, fleet and subfleet
+// form, while the administration pages keep the decimal identifier.
+func TestTheGuideSaysWhatASystemTypeDoes(t *testing.T) {
+	body := guidePath(t)
+
+	row := guideFieldRow(t, body, "The system row", "Type")
+
+	for _, name := range systemTypeNames {
+		if !strings.Contains(row, name) {
+			t.Errorf("the system row's Type cell does not name %s among the types an administrator chooses from: %q", name, row)
+		}
+	}
+
+	// The form is named beside the pages that show it, and the decimal identifier beside the
+	// pages that keep it, so the reader is not left to guess which side of the product they are
+	// configuring.
+	for _, want := range [][]string{
+		{"agency-fleet-subfleet", "listener"},
+		{"decimal", "administration"},
+	} {
+		if !guideSentenceSays(row, want) {
+			t.Errorf("no sentence of the system row's Type cell says all of %q at once: %q", strings.Join(want, ", "), row)
+		}
+	}
+
+	if strings.Contains(row, "nothing in the server's behaviour depends on it") {
+		t.Errorf("the system row's Type cell still says the type drives nothing, which is no longer true: %q", row)
+	}
+}
+
 // serverFlag is one flag the composition root registers, with the default expression the source writes.
 type serverFlag struct {
 	name string

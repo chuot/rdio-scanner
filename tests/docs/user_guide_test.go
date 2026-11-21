@@ -929,9 +929,9 @@ func TestTheGuideCarriesTheDisplayDuringACall(t *testing.T) {
 // to the back of the guide.
 //
 // userGuideSystemTypes are the type names that chapter prints, in the order it
-// prints them, and the same names the administration offers beside a system and
-// beside a talkgroup.
-var userGuideSystemTypes = []string{"AM", "DMR", "EDACS", "FM", "NFM", "NXDN", "P25", "Provoice", "SmartNet", "Tetra"}
+// prints them: the same names the administration offers beside a system and beside
+// a talkgroup, which is what the administrator guide's system row carries too.
+var userGuideSystemTypes = systemTypeNames
 
 // numberWords are the written counts the guide's sentences use, so a count stated in
 // words can be read against the number of names the sentence beside it prints.
@@ -946,10 +946,10 @@ func TestTheGuideExplainsTheSystemType(t *testing.T) {
 	chapter := userGuideChapter(t, body, "ch-06-the-screen")
 
 	display := userGuideSpokenText(t, chapter)
-	requireUserGuideFacts(t, display,
-		"system type", "modulation",
-		"AM", "DMR", "EDACS", "FM", "NFM", "NXDN", "P25", "Provoice", "SmartNet", "Tetra",
-	)
+
+	facts := append([]string{"system type", "modulation"}, userGuideSystemTypes...)
+
+	requireUserGuideFacts(t, display, facts...)
 
 	// The chapter counts the names it prints, and the count is the number of names
 	// the reader can actually read in the list beside it.
@@ -1007,16 +1007,16 @@ func TestTheGuideExplainsAgencyFleetSubfleetNumbering(t *testing.T) {
 		{"agency-fleet-subfleet", "listening"},
 		{"decimal", "administration"},
 	} {
-		if !guideChapterSays(chapter, want) {
+		if !guideSentenceSays(chapter, want) {
 			t.Errorf("no sentence of the chapter that walks the screen says all of %q at once", strings.Join(want, ", "))
 		}
 	}
 }
 
-// guideChapterSays reports whether one sentence of the chapter carries every name the
+// guideSentenceSays reports whether one sentence of the guide text carries every name the
 // claim needs, whatever case the guide prints them in, so a fact stated somewhere in the
-// chapter but never beside its own subject does not pass.
-func guideChapterSays(text string, wants []string) bool {
+// document but never beside its own subject does not pass.
+func guideSentenceSays(text string, wants []string) bool {
 	for _, sentence := range regexp.MustCompile(`\.\s+|\.\n`).Split(text, -1) {
 		lowered := strings.ToLower(sentence)
 		found := true
