@@ -16,6 +16,7 @@ import {
   progressDate,
   resolveUnit,
   shouldShowDate,
+  talkgroupText,
 } from '../../../../common/frontend/presentation/display-format.js';
 import { announce, escapeHtml } from '../../../../common/frontend/presentation/ui/primitives.js';
 
@@ -241,7 +242,7 @@ class RdioDisplay extends HTMLElement {
   // the display writes the listener's state it shows into the shell's
   // polite region, in the page's own words; the first render stays silent.
   announceState(call, pause, queue) {
-    const playing = call ? (call.talkgroupData?.label ?? `${call.talkgroup}`) : null;
+    const playing = call ? talkgroupText(call.talkgroupData, call.talkgroup, call.systemData) : null;
 
     if (this.lastAnnounced === undefined) {
       this.lastAnnounced = { id: call?.id ?? null, pause: !!pause, queue, name: playing };
@@ -315,12 +316,14 @@ class RdioDisplay extends HTMLElement {
 
       this.write(this.el.systemType, typeOverride ? systemType.toUpperCase() : '');
 
-      this.write(this.el.talkgroup, call.talkgroupData?.label ?? `${isAfs ? formatAfs(call.talkgroup) : call.talkgroup}`);
+      this.write(this.el.talkgroup, talkgroupText(call.talkgroupData, call.talkgroup, call.systemData));
       this.write(this.el.name, call.talkgroupData?.name ?? formatFrequency(call.frequency));
 
       const freq = activeFrequency(call, this.callTime);
       this.write(this.el.frequency, `F: ${freq.frequency || 0}`);
       this.write(this.el.stats, `E: ${freq.error || 0} S: ${freq.spike || 0} `);
+      // the id line names the identifier, not the name, so it writes the form the
+      // type numbers it in even beside a label the operator wrote.
       this.write(this.el.tgid, `TGID: ${isAfs ? formatAfs(call.talkgroup) : call.talkgroup}`);
 
       const unit = resolveUnit(call, this.callTime);
@@ -380,7 +383,7 @@ class RdioDisplay extends HTMLElement {
 
       const time = formatTime(new Date(previousCall.dateTime));
       const system = previousCall.systemData?.label ?? previousCall.system;
-      const talkgroup = previousCall.talkgroupData?.label ?? previousCall.talkgroup;
+      const talkgroup = talkgroupText(previousCall.talkgroupData, previousCall.talkgroup, previousCall.systemData);
       const name = previousCall.talkgroupData?.name ?? previousCall.frequency;
       const replaying = currentCall && currentCall.id === previousCall.id ? ' class="replaying"' : '';
 
