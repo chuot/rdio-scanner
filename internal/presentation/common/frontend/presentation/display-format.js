@@ -1,7 +1,39 @@
 // Display formatting helpers for the listener's call views.
 
+// The types whose talkgroup identifiers are eleven-bit group ids read as agency, fleet
+// and subfleet: EDACS, and the Provoice trunking carried over the same scheme. Every
+// other type's identifier is a decimal number looked up in a fleet map.
+const AFS_TYPES = ['edacs', 'provoice'];
+
+// The largest identifier those eleven bits carry: agency 00-15, fleet 00-15, subfleet 0-7.
+const MAX_AFS_REFERENCE = 2047;
+
+export function isAfsSystem(call) {
+  return AFS_TYPES.includes(call.systemData?.type) || AFS_TYPES.includes(call.talkgroupData?.type);
+}
+
+// The agency-fleet-subfleet form of an identifier. An identifier the eleven bits cannot
+// carry is not a talkgroup in this scheme, and folding it into one would name a talkgroup
+// the system does not have, so it keeps the decimal the system names it in.
 export function formatAfs(n) {
+  if (!Number.isInteger(n) || n < 0 || n > MAX_AFS_REFERENCE) return `${n}`;
+
   return `${(n >> 7 & 15).toString().padStart(2, '0')}-${(n >> 3 & 15).toString().padStart(2, '0')}${n & 7}`;
+}
+
+// The text a surface names a talkgroup by: the label an operator wrote, else the form the
+// type numbers it in, else the decimal identifier. An empty label, or the decimal text of
+// the very reference it stands for, is the placeholder auto-populate gives a talkgroup
+// nobody has described yet — the identifier in disguise rather than a name. The same rule
+// the domain's own placeholder check states.
+export function talkgroupText(talkgroupData, reference, systemData) {
+  const label = talkgroupData?.label;
+
+  if (label && `${label}` !== `${reference}`) return label;
+
+  if (isAfsSystem({ talkgroupData, systemData })) return formatAfs(reference);
+
+  return `${reference}`;
 }
 
 export function formatFrequency(frequency) {
@@ -12,10 +44,6 @@ export function formatFrequency(frequency) {
         .replace(/(\d)(?=(\d{3})+$)/g, '$1 ')
         .concat(' Hz')
     : '';
-}
-
-export function isAfsSystem(call) {
-  return call.systemData?.type === 'provoice' || call.talkgroupData?.type === 'provoice';
 }
 
 // The clock format is the browser locale's hour cycle: a 12-hour locale
