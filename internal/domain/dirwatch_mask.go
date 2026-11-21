@@ -131,10 +131,16 @@ func (dirwatch Dirwatch) MaskRegexp() (*regexp.Regexp, error) {
 	return compiled, nil
 }
 
-// MaskWarning reports the mismatch a watch's mask shows in its own regex: more captured groups than
-// the mask names tokens for. The extra groups are pieces of the filename no token claims, which is
-// what a mask carrying parentheses of its own writes. They are said, not refused: the mask still
-// compiles, and the pieces it names are still read.
+// MaskWarning is what a watch's mask has to say when the watch starts. A mask the watcher cannot
+// read — one whose substituted form will not parse, or one that parses while capturing fewer
+// pieces than it names tokens for — is said plainly, naming the watch's directory and the mask:
+// the watch still runs, every recording it cannot read is refused at the read with the same reason
+// the start gives, and an operator has to learn about the mask once, here, not from a line per
+// file. Such a mask should never reach a stored watch, because the save refuses it; the sentence is
+// for the watch that carries one from before the save checked. A mask that captures more groups
+// than it names tokens for is reported the way it always was: the extra groups are pieces of the
+// filename no token claims, said and not refused, because the pieces the mask does name are still
+// read. A mask named by none of the three sentences is one that reads its filenames as written.
 func (dirwatch Dirwatch) MaskWarning() string {
 	if len(dirwatch.Mask) == 0 {
 		return ""
@@ -144,9 +150,14 @@ func (dirwatch Dirwatch) MaskWarning() string {
 
 	compiled, err := regexp.Compile(pattern)
 	if err != nil {
-		// The mask is refused at the read; a mask that cannot compile has
-		// nothing left to say about its groups.
-		return ""
+		return fmt.Sprintf("the dirwatch on %q carries a mask the watcher cannot read: the mask %q does not "+
+			"compile once its tokens are replaced: %v", dirwatch.Directory, dirwatch.Mask, err)
+	}
+
+	if groups := compiled.NumSubexp(); groups < tokens {
+		return fmt.Sprintf("the dirwatch on %q carries a mask the watcher cannot read: the mask %q compiles while "+
+			"capturing %d pieces and naming %d tokens: a token it names has no piece of the filename to read",
+			dirwatch.Directory, dirwatch.Mask, groups, tokens)
 	}
 
 	if groups := compiled.NumSubexp(); groups > tokens {
