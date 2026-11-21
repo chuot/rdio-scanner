@@ -2267,7 +2267,7 @@ rm -f ${basename}.*</code></pre>
     <tbody>
       <tr><td>Id</td><td>The system identifier, in decimal, as your recorder numbers it. This is the identifier a recorder's metadata is matched against, and the one an access code's scope names.</td></tr>
       <tr><td>Label</td><td>The name listeners see, on the main screen and in the search panel.</td></tr>
-      <tr><td>Type</td><td>The system's modulation or trunking standard: AM, DMR, FM, NFM, NXDN, P25, Provoice, SmartNet, Tetra, or no type. It is shown with the system; nothing in the server's behaviour depends on it.</td></tr>
+      <tr><td>Type</td><td>The system's modulation or trunking standard: AM, DMR, EDACS, FM, NFM, NXDN, P25, Provoice, SmartNet, Tetra, or no type. It is shown with the system. On an EDACS or Provoice system, the listener's screens write that system's talkgroups in agency-fleet-subfleet form, while the administration pages keep the decimal identifier you type and the one this table's Id row names.</td></tr>
       <tr><td>Audio alert</td><td>An alert tone prefixed to every call assigned to this system. The alerts are the named oscillator sequences the server knows; they are listed in <a href="#ch-16-rest-api">chapter 16</a>.</td></tr>
       <tr><td>Led Color</td><td>The colour a listener's display shows for this system's calls. It wins over the talkgroup's own colour and loses to a group or a tag the talkgroup carries. Left alone, it colours nothing, and a call no level colours shows green.</td></tr>
       <tr><td>Auto Populate</td><td>Creates this system's talkgroups and units when a recording names ones you have not configured. It works beside the server-wide option: see <a href="#ch-10-getting-audio-in">auto populate</a>.</td></tr>

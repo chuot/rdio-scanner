@@ -709,9 +709,16 @@ them, then the talkgroup's name or number. The line under that shows the call's 
 call is not from today, beside a clock that counts the call's minutes.
 </p>
 <p>
-The system type is the system's modulation or trunking standard. Nine names are possible: <em>AM</em>,
-<em>DMR</em>, <em>FM</em>, <em>NFM</em>, <em>NXDN</em>, <em>P25</em>, <em>Provoice</em>,
+The system type is the system's modulation or trunking standard. Ten names are possible: <em>AM</em>,
+<em>DMR</em>, <em>EDACS</em>, <em>FM</em>, <em>NFM</em>, <em>NXDN</em>, <em>P25</em>, <em>Provoice</em>,
 <em>SmartNet</em>, <em>Tetra</em>. A system can also have no type.
+</p>
+<p>
+Two of those types, <em>EDACS</em> and <em>Provoice</em>, number their talkgroups in three parts: an agency, a fleet
+inside that agency, and a subfleet inside that fleet. The listening screens write such a talkgroup in
+agency-fleet-subfleet form — <em>11-061</em> rather than one number — because the three parts are what a listening
+screen has to show. The administration still asks for and shows the same talkgroup as one decimal number, so the number
+you type in the administration is the decimal one and only the way a listening screen prints it changes.
 </p>
 <p>
 The display says the type once when it can. When the talkgroup's type differs from the system's, the

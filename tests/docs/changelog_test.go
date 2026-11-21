@@ -74,7 +74,7 @@ func versionEightSection(t *testing.T) string {
 func TestTheVersionEightEntryGroupsItsChanges(t *testing.T) {
 	section := versionEightSection(t)
 
-	bulletAtLineStart := regexp.MustCompile(`(?m)^- `)
+	bulletLines := regexp.MustCompile(`(?m)^- .*`)
 	groupHeading := regexp.MustCompile(`\n### `)
 
 	// The groups name what each change touches, and they follow one another in
@@ -96,7 +96,7 @@ func TestTheVersionEightEntryGroupsItsChanges(t *testing.T) {
 			next = at + len(title) + later[0]
 		}
 
-		if entries := bulletAtLineStart.FindAllString(section[at+len(title):next], -1); len(entries) == 0 {
+		if entries := bulletLines.FindAllString(section[at+len(title):next], -1); len(entries) == 0 {
 			t.Errorf("the group %q carries no entry under its heading", name)
 		}
 
@@ -105,7 +105,7 @@ func TestTheVersionEightEntryGroupsItsChanges(t *testing.T) {
 
 	// The summary that closes the entry names the three parts of the product the
 	// release touches, so it reads as the entry's own close and not one more group.
-	bullets := bulletAtLineStart.FindAllString(section, -1)
+	bullets := bulletLines.FindAllString(section, -1)
 
 	if len(bullets) == 0 {
 		t.Fatalf("the Version 8.0 entry carries no entry to read")
@@ -128,7 +128,7 @@ func TestTheVersionEightEntryGroupsItsChanges(t *testing.T) {
 	found := ""
 
 	for _, group := range versionEightGroups {
-		for _, entry := range bulletAtLineStart.FindAllString(versionEightGroup(t, section, group), -1) {
+		for _, entry := range bulletLines.FindAllString(versionEightGroup(t, section, group), -1) {
 			lowered := strings.ToLower(entry)
 
 			if !strings.Contains(lowered, "edacs") {

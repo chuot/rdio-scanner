@@ -16,6 +16,7 @@
 
 ### The listening page
 
+- A talkgroup of an EDACS or Provoice system is numbered in agency-fleet-subfleet form — agency, fleet, subfleet — on the listening screens, where the older page wrote one decimal number. The administration pages still ask for that number in decimal and show it that way.
 - It is built to be used with a keyboard and a screen reader, where the older page was built for a mouse. What you have selected is always visible, a skip link jumps past the navigation, announcements reach a screen reader as they happen, and every control — the player, the call list, the menus, the dialogs — can be reached without a mouse.
 
 ### The log and the administration page
