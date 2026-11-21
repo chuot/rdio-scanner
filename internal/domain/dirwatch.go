@@ -152,10 +152,12 @@ const maxDirwatchDelayMinutes = 24 * 60
 // backslash, a dot, or ".." is not an extension — it is a path walk wearing one.
 var extensionPattern = regexp.MustCompile(`^[A-Za-z0-9]{1,10}$`)
 
-// Validate refuses a watch list carrying a mask that does not compile or an
-// extension that is not a file extension. An uncompilable mask must be refused
-// here, at apply, where an administrator can be told: stored, it crashes the
-// server from a timer goroutine on the next matching file, with no recovery.
+// Validate refuses a watch list carrying a mask the watcher could not read, or an
+// extension that is not a file extension. The mask is checked against the string its
+// tokens become, which is the string the watch later reads a filename through, so a
+// mask is never accepted here and then refused at the read. An unreadable mask has to
+// be refused here, at apply, where an administrator can be told: stored, it stops the
+// watch on the next matching file.
 func (dirwatches Dirwatches) Validate() error {
 	for _, dirwatch := range dirwatches {
 		if err := dirwatch.Validate(); err != nil {
@@ -166,15 +168,13 @@ func (dirwatches Dirwatches) Validate() error {
 	return nil
 }
 
-// Validate refuses this watch's mask when it does not compile, and its extension when it is
+// Validate refuses this watch's mask when the watch could not read it, and its extension when it is
 // not a file extension. A watch with no mask parses generically and a watch with no
 // extension uses the parser's own default, as they always have; the rule is on the values
 // that are named.
 func (dirwatch Dirwatch) Validate() error {
-	if dirwatch.Mask != "" {
-		if _, err := regexp.Compile(dirwatch.Mask); err != nil {
-			return fmt.Errorf("the dirwatch on %q has a mask that does not compile: %v", dirwatch.Directory, err)
-		}
+	if _, err := dirwatch.MaskRegexp(); err != nil {
+		return fmt.Errorf("the dirwatch on %q carries a mask the watcher cannot read: %v", dirwatch.Directory, err)
 	}
 
 	if dirwatch.Extension != "" && !extensionPattern.MatchString(dirwatch.Extension) {
