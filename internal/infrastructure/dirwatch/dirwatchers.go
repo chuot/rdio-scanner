@@ -143,7 +143,7 @@ func (watchers *Dirwatchers) Start(ctx context.Context, watches domain.Dirwatche
 		// A mask whose regex captures more groups than it names tokens lines the
 		// filename's pieces up with the wrong values: said when the watch
 		// starts, where the operator can read it, once, not per file.
-		if warning := parsers.MaskWarning(dirwatch.Mask); warning != "" {
+		if warning := dirwatch.MaskWarning(); warning != "" {
 			watchers.log(ctx, domain.LogLevelWarn, warning)
 		}
 

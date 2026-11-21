@@ -151,30 +151,17 @@ func TestDirwatchesValidateAcceptsAListWithRealMasks(t *testing.T) {
 	}
 }
 
-// maskTokenTexts are the twenty tokens a watch mask names a filename's pieces by. They are written
-// out here, rather than read from the code that replaces them, because what this rule has to say
-// about them is what an operator who types them sees.
-var maskTokenTexts = []string{
-	"#DATE",
-	"#GROUP",
-	"#HZ",
-	"#KHZ",
-	"#MHZ",
-	"#SITE",
-	"#SITELBL",
-	"#SYS",
-	"#SYSLBL",
-	"#TAG",
-	"#TG",
-	"#TGAFS",
-	"#TGHZ",
-	"#TGKHZ",
-	"#TGLBL",
-	"#TGMHZ",
-	"#TIME",
-	"#UNIT",
-	"#UNITLBL",
-	"#ZTIME",
+// maskTokenTexts are the twenty tokens a watch mask names a filename's pieces by, read from the table
+// that replaces them: a token added to that table is a token the save has to answer when an operator
+// types it between brackets, and one the watch has to keep reading when its brackets are escaped.
+func maskTokenTexts() []string {
+	texts := []string{}
+
+	for _, token := range MaskTokens {
+		texts = append(texts, token.Text)
+	}
+
+	return texts
 }
 
 // bracketsAroundTokens are each token wrapped in the brackets an operator types around one. Typed,
@@ -184,7 +171,7 @@ var maskTokenTexts = []string{
 func bracketsAroundTokens() []string {
 	bracketed := []string{}
 
-	for _, token := range maskTokenTexts {
+	for _, token := range maskTokenTexts() {
 		bracketed = append(bracketed, "["+token+"]")
 	}
 
@@ -197,7 +184,7 @@ func bracketsAroundTokens() []string {
 func escapedBracketsAroundTokens() []string {
 	escaped := []string{}
 
-	for _, token := range maskTokenTexts {
+	for _, token := range maskTokenTexts() {
 		escaped = append(escaped, "\\["+token+"\\]")
 	}
 

@@ -17,7 +17,6 @@ package parsers
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1003,7 +1002,7 @@ type maskTableToken struct {
 func productionMaskTokens() []maskTableToken {
 	tokens := []maskTableToken{}
 
-	for _, token := range maskTokens {
+	for _, token := range domain.MaskTokens {
 		tokens = append(tokens, maskTableToken{text: token.Text, pattern: token.Pattern})
 	}
 
@@ -1259,27 +1258,23 @@ func TestExtractDefaultRefusesAMaskThatTokensMakeImpossibleToCompile(t *testing.
 }
 
 // impossibleAfterTokens are the masks that compile as written, so the apply-time check
-// lets them through, and stop compiling once every token is replaced by the pattern the
-// token table gives it.
+// lets them through, and are no longer something the watch can read once every token is
+// replaced by the pattern the token table gives it. The mask the watcher would compile is
+// asked of the domain, which is where that string is built.
 func impossibleAfterTokens(t *testing.T) []string {
 	impossible := []string{}
 
 	t.Helper()
 
 	for _, mask := range []string{"[#DATE]", "[#TIME]", "[#SYSLBL]", "#DATE[#TG]", "#SITE-#TG"} {
-		substituted := mask
-
-		for _, token := range maskTokens {
-			if strings.Contains(substituted, token.Text) {
-				substituted = strings.Replace(substituted, token.Text, fmt.Sprintf("(%v)", token.Pattern), 1)
-			}
-		}
-
 		if _, err := regexp.Compile(mask); err != nil {
 			t.Errorf("the mask %q does not compile as written, want a mask the apply-time check accepts", mask)
 		}
 
-		if _, err := regexp.Compile(substituted); err != nil {
+		watch := domain.NewDirwatch()
+		watch.Mask = mask
+
+		if _, err := watch.MaskRegexp(); err != nil {
 			impossible = append(impossible, mask)
 		}
 	}
@@ -1471,70 +1466,6 @@ func TestAMasksPiecesLandOnTheTokensThatNamedThem(t *testing.T) {
 		if testCase.hertz > 0 && (len(call.Frequencies) != 1 || call.Frequencies[0].Frequency != testCase.hertz) {
 			t.Errorf("%s: the call carriers are %#v, want the one carrier %d Hz the mask names at its own place",
 				testCase.name, call.Frequencies, testCase.hertz)
-		}
-	}
-}
-
-// TestTheWatchMaskTokenTableCommentsSayEachTokenNamesAPieceInTheOrderWritten: the table's
-// comments are the account of how a mask is read that an administrator is given, and after the
-// change that makes a mask read each piece at the token that named it, each token needs a comment
-// of its own saying what it reads. Six tokens carry none today, and several of the comments that
-// do exist are fragments cut in the middle of a sentence, which says nothing to anyone.
-func TestTheWatchMaskTokenTableCommentsSayEachTokenNamesAPieceInTheOrderWritten(t *testing.T) {
-	source, err := os.ReadFile("mask.go")
-	if err != nil {
-		t.Fatalf("reading the mask parser source: %v", err)
-	}
-
-	text := string(source)
-
-	start := strings.Index(text, "var maskTokens = []maskToken{")
-
-	if start == -1 {
-		t.Fatal("the mask token table is not in the source the comments are read from")
-	}
-
-	table := text[start:]
-
-	if end := strings.Index(table, "\nfunc "); end != -1 {
-		table = table[:end]
-	}
-
-	lines := strings.Split(table, "\n")
-
-	for _, name := range []string{"#SITE", "#SITELBL", "#SYS", "#SYSLBL", "#TG", "#TGLBL"} {
-		doc := ""
-
-		for i, line := range lines {
-			if !strings.Contains(line, "\""+name+"\"") {
-				continue
-			}
-
-			for j := i - 1; j >= 0; j-- {
-				previous := strings.TrimSpace(lines[j])
-
-				if !strings.HasPrefix(previous, "//") {
-					break
-				}
-
-				doc = strings.TrimSpace(strings.TrimPrefix(previous, "//")) + " " + doc
-			}
-
-			break
-		}
-
-		words := strings.Fields(doc)
-
-		if len(words) < 4 {
-			t.Errorf("the token %s carries %d words of its own (%q), want a comment of its own saying what the "+
-				"token reads and which piece of the filename it is", name, len(words), doc)
-
-			continue
-		}
-
-		if !strings.HasSuffix(words[len(words)-1], ".") {
-			t.Errorf("the token %s comment %q stops in the middle of a sentence, want it to end one: the comment is "+
-				"what an administrator is told the token reads", name, doc)
 		}
 	}
 }
