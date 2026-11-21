@@ -229,6 +229,15 @@ const builtFromTheLabel = (el) =>
   findAll(el, (n) => n.tag === 'img' || n.tag === 'b' || n.tag === 'script' || n.attributes.onerror !== undefined)
     .map((n) => (n.attributes.onerror !== undefined ? `${n.tag}[onerror]` : n.tag));
 
+// A category label reaches the panel the same way: the panel builds the category
+// buttons out of its own markup, and shows them only when two or more categories
+// are configured.
+
+const CATEGORY_LABEL_WITH_MARKUP = [
+  { label: 'Fire <img src="x" onerror="arm()"> Station', status: 'on', type: 'group' },
+  { label: 'Police', status: 'off', type: 'group' },
+];
+
 describe('presentation/listener/rdio-select-panel — labels a saved configuration carries', () => {
   it('names a system by a label that carries markup, building no element out of that label', () => {
     const el = mountedPanel(SYSTEM_LABEL_WITH_MARKUP);
@@ -249,6 +258,7 @@ describe('presentation/listener/rdio-select-panel — labels a saved configurati
   it('names a talkgroup by a label that carries markup, building no element out of that label', () => {
     const el = mountedPanel(TALKGROUP_LABEL_WITH_MARKUP);
 
+
     try {
       const button = talkgroupButton(el, 210);
 
@@ -257,6 +267,101 @@ describe('presentation/listener/rdio-select-panel — labels a saved configurati
 
       assert.deepEqual(builtFromTheLabel(el), [],
         'the talkgroup label built an element or an attribute of its own into the panel');
+    } finally {
+      el.disconnectedCallback();
+    }
+  });
+
+  it('names a category by a label that carries markup, building no element out of that label', () => {
+    const { store } = getAppContext();
+
+    store.setState({ categories: CATEGORY_LABEL_WITH_MARKUP, config: CONFIG, map: {} });
+
+    const el = document.createElement('rdio-select-panel');
+
+    el.connectedCallback();
+
+    try {
+      const button = categoryButton(el, CATEGORY_LABEL_WITH_MARKUP[0].label);
+
+      assert.ok(button, 'the panel dropped the category button');
+      assert.ok(button.textContent.includes('Station'), 'the category button does not name the category by its label');
+
+      assert.deepEqual(builtFromTheLabel(el), [],
+        'the category label built an element or an attribute of its own into the panel');
+    } finally {
+      el.disconnectedCallback();
+    }
+  });
+});
+
+// A panel mounted on one configuration, holding one talkgroup: the type the
+// configuration carries beside the label is what decides the form the panel
+// names the talkgroup by.
+
+function mountedTalkgroup(talkgroup, system = { id: 40, label: 'Metro' }) {
+  const { store } = getAppContext();
+
+  store.setState({ categories: [], config: { systems: [{ ...system, talkgroups: [talkgroup] }] }, map: {} });
+
+  const el = document.createElement('rdio-select-panel');
+
+  el.connectedCallback();
+
+  return el;
+}
+
+describe('presentation/listener/rdio-select-panel — the talkgroup a type numbers in agency, fleet and subfleet', () => {
+  it('names an edacs talkgroup the configuration named with its own reference by the form its type calls for', () => {
+    const el = mountedTalkgroup({ id: 1457, label: '1457', type: 'edacs' });
+
+    try {
+      const button = talkgroupButton(el, 1457);
+
+      assert.ok(button, 'the panel dropped the talkgroup button');
+      assert.equal(button.textContent, '11-061',
+        'the button names the talkgroup by the decimal id its type numbers it in');
+      assert.equal(button.dataset.talkgroup, '1457',
+        'the button no longer carries the reference the panel acts on');
+      assert.equal(button.dataset.system, '40',
+        'the button no longer carries the system the talkgroup belongs to');
+    } finally {
+      el.disconnectedCallback();
+    }
+  });
+
+  it('names it that way when only the system carries the type', () => {
+    const el = mountedTalkgroup({ id: 1457, label: '1457' }, { id: 41, label: 'Metro', type: 'edacs' });
+
+    try {
+      assert.equal(talkgroupButton(el, 1457)?.textContent, '11-061',
+        'the button ignores the type the system the talkgroup sits under carries');
+    } finally {
+      el.disconnectedCallback();
+    }
+  });
+
+  it('names a talkgroup an operator named with the name the operator wrote', () => {
+    const el = mountedTalkgroup({ id: 1457, label: 'Dispatch 1', type: 'edacs' });
+
+    try {
+      const button = talkgroupButton(el, 1457);
+
+      assert.equal(button?.textContent, 'Dispatch 1',
+        'the button replaced the label the operator wrote with the form the type calls for');
+      assert.equal(button?.dataset.talkgroup, '1457',
+        'the button no longer carries the reference the label stands for');
+    } finally {
+      el.disconnectedCallback();
+    }
+  });
+
+  it('keeps the decimal id for a talkgroup the rule does not cover', () => {
+    const el = mountedTalkgroup({ id: 1457, label: '1457', type: 'smartnet' });
+
+    try {
+      assert.equal(talkgroupButton(el, 1457)?.textContent, '1457',
+        'the button wrote an agency-fleet-subfleet form for a type that has none');
     } finally {
       el.disconnectedCallback();
     }

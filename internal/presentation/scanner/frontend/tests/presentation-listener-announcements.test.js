@@ -110,6 +110,40 @@ describe('listener announcements — the page says what the screen shows', () =>
     assert.equal(said(el), 'Playing Fire dispatch', 'the page did not say the talkgroup it started playing');
   });
 
+  // what the page says about a talkgroup is what the panel shows for it:
+  // the agency-fleet-subfleet form where the type numbers the talkgroup in
+  // it, the decimal id where it does not, and the operator's own label
+  // wherever the talkgroup has one.
+  it('says the talkgroup in the form the panel shows it in', () => {
+    const el = shell();
+
+    const numbered = { ...CALL, id: 21, talkgroup: 1457, talkgroupData: { label: '1457', type: 'edacs' } };
+
+    getAppContext().store.setState({ ...getAppContext().store.getState(), call: numbered });
+
+    assert.equal(said(el), 'Playing 11-061', 'the page named a talkgroup numbered by agency, fleet and subfleet in a form the panel does not show');
+  });
+
+  it('says the talkgroup the operator named with the label they wrote', () => {
+    const el = shell();
+
+    const named = { ...CALL, id: 22, talkgroup: 1457, talkgroupData: { label: 'Dispatch 1', type: 'edacs' } };
+
+    getAppContext().store.setState({ ...getAppContext().store.getState(), call: named });
+
+    assert.equal(said(el), 'Playing Dispatch 1', 'the page did not say the talkgroup the operator named it with');
+  });
+
+  it('says a talkgroup that carries no such form in decimal', () => {
+    const el = shell();
+
+    const uncovered = { ...CALL, id: 23, talkgroup: 1457, talkgroupData: { label: '1457', type: 'smartnet' } };
+
+    getAppContext().store.setState({ ...getAppContext().store.getState(), call: uncovered });
+
+    assert.equal(said(el), 'Playing 1457', 'the page wrote an agency-fleet-subfleet form for a type that carries none');
+  });
+
   it('names the talkgroup the listener stopped playing', () => {
     const el = shell();
 

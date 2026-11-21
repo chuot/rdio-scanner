@@ -34,6 +34,10 @@ const CONFIG = {
         // A talkgroup the configuration has and the history has no recorded calls for: the filter is
         // a filter the operator can legitimately pick, and the answer is nothing.
         { id: 12, label: 'Car dispatch', groups: ['Dispatch'], tag: 'Fire' },
+        // Two talkgroups the configuration numbers in the eleven-bit form: one the auto-populate
+        // named with its own reference, one an operator named.
+        { id: 1457, label: '1457', groups: ['Dispatch'], tag: 'Fire', type: 'edacs' },
+        { id: 1458, label: 'Dispatch 1', groups: ['Dispatch'], tag: 'Fire', type: 'edacs' },
       ],
     },
     {
@@ -423,6 +427,131 @@ describe('the search screen — a search in flight', () => {
 
     assert.equal(sent.length, 2, 'the filter form never came back to the operator');
     assert.equal(sent.at(-1).system, 2);
+  });
+});
+
+// The talkgroup column, the row's own text, and the type the configuration
+// carries beside its label. Auto-populate labels a talkgroup it has never seen
+// described with its own reference as text, and such a label is the id in
+// disguise rather than a name the operator chose.
+
+describe('the search screen — the talkgroup the list names', () => {
+  function callRow(id, talkgroup, talkgroupData, systemData = { label: 'Metro' }) {
+    return { ...ARCHIVE[0], id, system: 1, talkgroup, talkgroupData, systemData };
+  }
+
+  // the list painted with the calls a search answered with, and the talkgroup
+  // column read off each row the way the operator reads it.
+  function listed(...calls) {
+    const { panel } = searchScreen();
+
+    answeredWindow(calls, calls.length);
+
+    return { panel, cells: rows(panel).map((row) => column(row, 5)) };
+  }
+
+  it('names an agency-fleet-subfleet talkgroup by agency, fleet and subfleet', () => {
+    const { panel, cells } = listed(callRow(301, 1457, { label: '1457', type: 'edacs' }));
+
+    assert.deepEqual(cells, ['11-061'],
+      'the talkgroup column writes the decimal id an edacs talkgroup is numbered in');
+
+    const headers = findAll(panel, (node) => node.tag === 'th').map((node) => node.textContent);
+    const row = rows(panel)[0];
+    const cell = findAll(row, (node) => node.tag === 'td')[5];
+
+    assert.equal(headers[5], 'Talkgroup', 'the talkgroup column has no header the row is read against');
+    assert.deepEqual(findAll(cell, (node) => node.tag === 'span').map((node) => node.textContent), ['11-061'],
+      'the talkgroup cell carries something other than the form as its own text');
+
+    for (const node of [row, cell, ...findAll(cell, (node) => node.tag === 'span')]) {
+      assert.equal(node.attributes.title ?? null, null, 'the list carries the other form as a tooltip');
+    }
+  });
+
+  it('reads the type the system carries when the talkgroup does not carry one', () => {
+    const { cells } = listed(callRow(302, 1457, { label: '1457' }, { label: 'Metro', type: 'edacs' }));
+
+    assert.deepEqual(cells, ['11-061'],
+      'the talkgroup column ignores the type the call’s system carries');
+  });
+
+  it('names a talkgroup with the label an operator wrote', () => {
+    const { cells } = listed(callRow(303, 1457, { label: 'Dispatch 1', type: 'edacs' }));
+
+    assert.deepEqual(cells, ['Dispatch 1'],
+      'the talkgroup column overrode the label the operator wrote with the form the type calls for');
+  });
+
+  it('keeps the decimal id for a talkgroup the rule does not cover', () => {
+    const { cells } = listed(
+      callRow(304, 1457, { label: '1457', type: 'smartnet' }),
+      callRow(305, 1457, { label: '1457', type: 'p25' }, { label: 'Metro', type: 'smartnet' }),
+      callRow(306, 53102, { label: '53102', type: 'edacs' }),
+    );
+
+    assert.deepEqual(cells, ['1457', '1457', '53102'],
+      'the talkgroup column wrote an agency-fleet-subfleet form for a talkgroup the rule does not cover');
+  });
+});
+
+// The filter controls name a talkgroup by a label and send the reference that
+// label stands for: the text is what the operator reads, the reference is what
+// the history is narrowed by, and the two are not the same thing.
+
+describe('the search screen — the talkgroup the filter offers', () => {
+  const optionValue = (option) => option.value ?? option.attributes.value;
+
+  function talkgroupOptions(panel) {
+    return findAll(panel.form.elements.talkgroup, (node) => node.tag === 'option')
+      .map((option) => ({ text: option.textContent, value: optionValue(option) }));
+  }
+
+  function offeredOptions(label) {
+    const { panel, sent } = searchScreen();
+
+    pick(panel, 'system', label);
+
+    return { panel, sent, options: talkgroupOptions(panel) };
+  }
+
+  it('names an agency-fleet-subfleet talkgroup in the form its type numbers it in, and asks for it by its reference', () => {
+    const { panel, sent, options } = offeredOptions('Metro');
+
+    const offered = options.find((option) => option.value === '1457');
+
+    assert.ok(offered, 'the filter dropped a talkgroup the configuration has');
+    assert.equal(offered.text, '11-061',
+      'the filter names the talkgroup by the decimal id its type numbers it in');
+
+    pick(panel, 'talkgroup', offered.value);
+
+    assert.deepEqual(
+      { system: sent.at(-1).system, talkgroup: sent.at(-1).talkgroup },
+      { system: 1, talkgroup: 1457 },
+      'the request no longer carries the reference the label the filter offers stands for',
+    );
+  });
+
+  it('names a talkgroup an operator named with the name the operator wrote', () => {
+    const { options } = offeredOptions('Metro');
+
+    const offered = options.find((option) => option.value === 'Dispatch 1');
+
+    assert.ok(offered, 'the filter dropped the talkgroup the operator named');
+    assert.equal(offered.text, 'Dispatch 1',
+      'the filter replaced the label the operator wrote with the form the type calls for');
+  });
+
+  it('names a talkgroup the rule does not cover by its label', () => {
+    const { options } = offeredOptions('Metro');
+
+    for (const label of ['Fire dispatch', 'Tac dispatch', 'Car dispatch']) {
+      const offered = options.find((option) => option.value === label);
+
+      assert.ok(offered, `the filter dropped ${label}`);
+      assert.equal(offered.text, label, `the filter renamed ${label} it has no agency-fleet-subfleet rule for`);
+    }
   });
 });
 

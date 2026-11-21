@@ -927,19 +927,114 @@ func TestTheGuideCarriesTheDisplayDuringACall(t *testing.T) {
 // the system type is and names every type the server can write; the quick-
 // reference word list carries the same term for the reader who goes straight
 // to the back of the guide.
+//
+// userGuideSystemTypes are the type names that chapter prints, in the order it
+// prints them, and the same names the administration offers beside a system and
+// beside a talkgroup.
+var userGuideSystemTypes = []string{"AM", "DMR", "EDACS", "FM", "NFM", "NXDN", "P25", "Provoice", "SmartNet", "Tetra"}
+
+// numberWords are the written counts the guide's sentences use, so a count stated in
+// words can be read against the number of names the sentence beside it prints.
+var numberWords = map[string]int{
+	"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+	"eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+}
+
 func TestTheGuideExplainsTheSystemType(t *testing.T) {
 	body := userGuidePath(t)
 
-	display := userGuideSpokenText(t, userGuideChapter(t, body, "ch-06-the-screen"))
+	chapter := userGuideChapter(t, body, "ch-06-the-screen")
+
+	display := userGuideSpokenText(t, chapter)
 	requireUserGuideFacts(t, display,
 		"system type", "modulation",
-		"AM", "DMR", "FM", "NFM", "NXDN", "P25", "Provoice", "SmartNet", "Tetra",
+		"AM", "DMR", "EDACS", "FM", "NFM", "NXDN", "P25", "Provoice", "SmartNet", "Tetra",
 	)
+
+	// The chapter counts the names it prints, and the count is the number of names
+	// the reader can actually read in the list beside it.
+	counted := regexp.MustCompile(`(?is)([A-Za-z]+|\d+)\s+names are possible:\s*(.*?)\.\s`).FindStringSubmatch(chapter)
+
+	if counted == nil {
+		t.Fatalf("the chapter that names the system types no longer states the count beside the list of names")
+	}
+
+	want := numberWords[strings.ToLower(counted[1])]
+
+	if want == 0 {
+		if digits, err := strconv.Atoi(counted[1]); err == nil {
+			want = digits
+		}
+	}
+
+	printed := []string{}
+
+	for _, piece := range regexp.MustCompile(`(?is)<em>\s*([^<]+?)\s*</em>`).FindAllStringSubmatch(counted[2], -1) {
+		printed = append(printed, strings.TrimSpace(piece[1]))
+	}
+
+	if len(printed) != want {
+		t.Errorf("the chapter says %s names are possible and then prints %d: %v",
+			counted[1], len(printed), printed)
+	}
+
+	if strings.Join(printed, ", ") != strings.Join(userGuideSystemTypes, ", ") {
+		t.Errorf("the chapter prints %v as the type names, want %v", printed, userGuideSystemTypes)
+	}
 
 	glossary := userGuideChapter(t, body, "ch-11-quick-reference")
 	if !regexp.MustCompile(`(?is)<th scope="row">\s*<em>\s*system type\b`).MatchString(glossary) {
 		t.Errorf("the quick-reference word list carries no row for the system type")
 	}
+}
+
+// TestTheGuideExplainsAgencyFleetSubfleetNumbering covers the reader who sees a
+// talkgroup written as three numbers joined by hyphens and has nothing in the guide to
+// say what the three numbers are. The chapter that walks the screen names the form, its
+// three parts, the two types that produce it, the pages that show it, and the one page
+// that keeps the plain decimal number.
+func TestTheGuideExplainsAgencyFleetSubfleetNumbering(t *testing.T) {
+	body := userGuidePath(t)
+
+	chapter := userGuideSpokenText(t, userGuideChapter(t, body, "ch-06-the-screen"))
+
+	// Each fact has to sit in the one sentence that says what it is: the form beside the
+	// two types that number talkgroups that way, the form beside the pages that show it,
+	// and the decimal id beside the pages that keep it. A name the chapter carries
+	// somewhere else does not tell the reader what they are looking at.
+	for _, want := range [][]string{
+		{"EDACS", "Provoice", "agency", "fleet", "subfleet"},
+		{"agency-fleet-subfleet", "listening"},
+		{"decimal", "administration"},
+	} {
+		if !guideChapterSays(chapter, want) {
+			t.Errorf("no sentence of the chapter that walks the screen says all of %q at once", strings.Join(want, ", "))
+		}
+	}
+}
+
+// guideChapterSays reports whether one sentence of the chapter carries every name the
+// claim needs, whatever case the guide prints them in, so a fact stated somewhere in the
+// chapter but never beside its own subject does not pass.
+func guideChapterSays(text string, wants []string) bool {
+	for _, sentence := range regexp.MustCompile(`\.\s+|\.\n`).Split(text, -1) {
+		lowered := strings.ToLower(sentence)
+		found := true
+
+		for _, want := range wants {
+			if !strings.Contains(lowered, strings.ToLower(want)) {
+				found = false
+
+				break
+			}
+		}
+
+		if found {
+			return true
+		}
+	}
+
+	return false
 }
 
 // The name's spoken form is the one the operator's guide teaches: the written

@@ -307,6 +307,54 @@ func TestExtractDefaultReadsTheTalkgroupFromEachShapeTheMaskNames(t *testing.T) 
 	}
 }
 
+// TestExtractDefaultReadsTheAgencyFleetSubfleetFormTheDisplayWrites pairs each form the listener
+// is shown for an agency-fleet-subfleet talkgroup with the reference a recording named by that same
+// form must reach: a call filed under the name the listener was shown is the call the listener was
+// shown. The two ends split the eleven bits the same way, so each pair is one row here and one row
+// beside the display formatter.
+func TestExtractDefaultReadsTheAgencyFleetSubfleetFormTheDisplayWrites(t *testing.T) {
+	cases := []struct {
+		form    string
+		wantRef uint
+		// The lowest form the eleven bits write names zero, and zero is no talkgroup: the
+		// recording that carries it is refused rather than filed under a talkgroup that is not
+		// there. The pair is on the table so the two ends say the same thing about it.
+		wantsErr string
+	}{
+		{form: "00-000", wantsErr: "no talkgroup"},
+		{form: "00-001", wantRef: 1},
+		{form: "00-010", wantRef: 8},
+		{form: "11-061", wantRef: 1457},
+		{form: "15-157", wantRef: 2047},
+	}
+
+	for _, c := range cases {
+		t.Run(c.form, func(t *testing.T) {
+			watch := domain.NewDirwatch()
+			watch.Mask = "#SYS-#TGAFS"
+
+			extracted, _, err := extract(t, watch, "10001-"+c.form+".wav")
+
+			if c.wantsErr != "" {
+				if err == nil || !strings.Contains(err.Error(), c.wantsErr) {
+					t.Fatalf("the recording named by %s was read as %v, want the refusal naming %q",
+						c.form, err, c.wantsErr)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Extract: %v", err)
+			}
+
+			if extracted.Call.Meta.TalkgroupRef != c.wantRef {
+				t.Errorf("the talkgroup reference read from %s is %d, want %d", c.form, extracted.Call.Meta.TalkgroupRef, c.wantRef)
+			}
+		})
+	}
+}
+
 // TestExtractDefaultReadsTheCarrierFromEachUnitTheMaskNames covers the three units a recording
 // tool writes a carrier in, each at a value whose exact number only a full-width read keeps: a
 // carrier is filed as the number the recording tool wrote down, not as the nearest number a

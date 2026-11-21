@@ -119,6 +119,41 @@ func TestTheVersionEightEntryGroupsItsChanges(t *testing.T) {
 		}
 	}
 
+	// The entry tells an operator about the type the release adds and the talkgroup
+	// numbering that type brings, in one line under the group that change belongs to.
+	// A claim spread over two bullets, or one written outside a named group, is not an
+	// entry a reader scanning the headings will find.
+	afsClaims := []string{"edacs", "agency-fleet-subfleet", "agency", "fleet", "subfleet"}
+
+	found := ""
+
+	for _, group := range versionEightGroups {
+		for _, entry := range bulletAtLineStart.FindAllString(versionEightGroup(t, section, group), -1) {
+			lowered := strings.ToLower(entry)
+
+			if !strings.Contains(lowered, "edacs") {
+				continue
+			}
+
+			for _, want := range afsClaims {
+				if !strings.Contains(lowered, want) {
+					t.Errorf("the Version 8.0 entry's %q line does not say %q: %q", group, want, strings.TrimSpace(entry))
+				}
+			}
+
+			if found != "" {
+				t.Errorf("the Version 8.0 entry carries the EDACS line in more than one group: %q and %q",
+					strings.TrimSpace(found), strings.TrimSpace(entry))
+			}
+
+			found = entry
+		}
+	}
+
+	if found == "" {
+		t.Errorf("no group of the Version 8.0 entry names the %s type and the talkgroup numbering it writes", "EDACS")
+	}
+
 	// The warning about backing up comes before any group, where a reader scanning
 	// the group headings still meets it.
 	warning := "**Make sure to backup your config and your database before updating to Version 8.0.**"

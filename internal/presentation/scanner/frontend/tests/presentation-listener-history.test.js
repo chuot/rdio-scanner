@@ -1,7 +1,8 @@
 // the history table: five fixed rows, blank before any entry is made,
 // an entry recorded when the call after it arrives, the row being
 // played set bold, and the four columns reading the call's labels
-// with the raw values as fallbacks. the ring is the domain's.
+// with the raw values as fallbacks, the talkgroup column naming a
+// talkgroup the way its type numbers it. the ring is the domain's.
 
 import './dom-shim.js';
 
@@ -170,5 +171,53 @@ describe('presentation/listener/rdio-display — the v6.6.3 history', () => {
     const filled = bodyRows().filter((row) => cells(row).some((td) => td.children.length > 0));
 
     assert.equal(filled.length, 1, 'the same call was recorded into the history twice');
+  });
+
+  it('names a talkgroup numbered by agency, fleet and subfleet in that form', () => {
+    const { store } = getAppContext();
+
+    const afs = call(1, {
+      talkgroup: 1457,
+      talkgroupData: { label: '1457', type: 'edacs' },
+    });
+
+    previous.slot.call = afs;
+
+    store.setState({ call: call(2) });
+
+    const row = cells(bodyRows()[0]);
+
+    assert.equal(findAll(el, (node) => node.tag === 'th')[2]?.textContent, 'Talkgroup',
+      'the column the history names the talkgroup in is not headed by its own column header');
+    assert.equal(row[2].textContent, '11-061', 'the history does not name the talkgroup the way its type numbers it');
+    assert.equal(row[2].getAttribute('title'), '11-061',
+      'the history cell clips the form it shows and carries the decimal id as the name it clips');
+    assert.equal(row[2].children.length, 1, 'the history cell holds more than the id it names');
+  });
+
+  it('names a talkgroup the operator named with the label they wrote', () => {
+    const { store } = getAppContext();
+
+    const covered = call(3, { talkgroup: 1457, talkgroupData: { label: 'Dispatch 1', type: 'edacs' } });
+
+    previous.slot.call = covered;
+
+    store.setState({ call: call(4) });
+
+    assert.equal(cells(bodyRows()[0])[2].textContent, 'Dispatch 1',
+      'the history does not name the talkgroup the operator named it with');
+  });
+
+  it('keeps the decimal id in the history for a type that carries no such form', () => {
+    const { store } = getAppContext();
+
+    const uncovered = call(5, { talkgroup: 1457, talkgroupData: { label: '1457', type: 'smartnet' } });
+
+    previous.slot.call = uncovered;
+
+    store.setState({ call: call(6) });
+
+    assert.equal(cells(bodyRows()[0])[2].textContent, '1457',
+      'the history writes an agency-fleet-subfleet form for a type that carries none');
   });
 });
