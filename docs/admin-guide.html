@@ -1935,11 +1935,28 @@ bcrypt_cost = 12</code></pre>
   </p>
 
   <p>
-    Two details follow from masks being compiled as regular expressions. The first is reassuring: a mask
-    that is not a valid expression is refused when the section is saved, so a stray bracket never makes it
-    to the watcher. The second is a diagnostic to recognise: when the watch starts, a mask whose groups do
-    not line up with the tokens it names is reported, with the watcher saying it captures more pieces than
-    the mask names. That report is the shape a call with the wrong values in it takes, so do not ignore it.
+    Two details follow from masks being compiled as regular expressions. The first is reassuring: the save
+    checks the mask as the string the watcher compiles — the mask after its tokens are replaced by the
+    patterns the tokens name, which is exactly the string the watcher then compiles — so a mask that is not a
+    valid expression once its tokens are read is refused when the section is saved, and a stray bracket
+    never makes it to the watcher. A bracket written around a token is refused for that reason:
+    <code>[#DATE]</code> becomes a pattern wrapped in a bracket that pattern never closes, and
+    <code>[#TG]</code> becomes a character class that captures nothing. A mask that has to read the
+    brackets a file name really carries writes them escaped, as <code>\[#DATE\]</code>; a mask written
+    around bare tokens reads the file names it was written for. The second detail is a diagnostic to
+    recognise: when the watch starts, a mask whose groups do not line up with the tokens it names is
+    reported, with the watcher saying it captures more pieces than the mask names. That report is the shape
+    a call with the wrong values in it takes, so do not ignore it.
+  </p>
+
+  <p>
+    A watch stored with a mask the watcher cannot read — one whose substituted form does not compile, or one
+    that keeps no piece of the name for a token the mask names — says so once, when the watch starts, in a
+    log line naming the mask and the directory it was stored on. The watch still runs. Each recording that
+    directory holds is refused at the read with the same reason the start gave, in a line naming the
+    recording, and the recording stays where the recorder wrote it instead of being consumed or deleted.
+    Nothing is retried by itself: the server does not read a second time at such a file until the mask is
+    corrected, and the recordings waiting there are read then.
   </p>
 
   <h3>Uploading a call</h3>
