@@ -35,15 +35,20 @@ func (parsers *Parsers) applyMask(ctx context.Context, watch domain.Dirwatch, ca
 		return nil
 	}
 
-	// The string compiled here is the one the domain builds from the watch's mask and its tokens,
-	// which is the only place that substitution is written.
-	pattern, _ := domain.MaskPattern(watch.Mask)
+	// The pattern is the watch's own: the same string the save compiled when the watch was
+	// stored, built from the mask and the token table in one place. A mask that does not
+	// compile once its tokens are replaced, or that keeps no group for a token it names, is
+	// answered with the reason the domain gives, on the path every other unreadable
+	// recording already travels — the recording is reported and the walk carries on.
+	compiled, err := watch.MaskRegexp()
+	if err != nil {
+		return err
+	}
 
 	// The mask is matched against the filename without its extension, which
 	// already selected the file and the mask has no reason to mention.
 	base := strings.TrimSuffix(call.AudioFilename, path.Ext(call.AudioFilename))
 
-	compiled := regexp.MustCompile(pattern)
 	pieces := compiled.FindStringSubmatch(base)
 
 	values := map[string]string{}

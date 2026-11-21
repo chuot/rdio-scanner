@@ -35,7 +35,7 @@ type MaskToken struct {
 // sorts it into, so a token that is the front of a longer token never eats that longer one.
 //
 // A token stands for the filename piece written at the place the mask puts that token, and
-// MaskPattern gives each of those pieces a capture group named for the token. Reading the pieces
+// maskPattern gives each of those pieces a capture group named for the token. Reading the pieces
 // by name is what keeps them where the mask wrote them, whatever order the table applies the
 // tokens in.
 var MaskTokens = []MaskToken{
@@ -81,14 +81,14 @@ func init() {
 	})
 }
 
-// MaskPattern builds the regex a watch's mask becomes: every token the mask names is replaced by
+// maskPattern builds the regex a watch's mask becomes: every token the mask names is replaced by
 // the pattern that token carries, in the table's longest-first order. Each replacement is
 // captured as a group named for the token it came from, which is how a filename's pieces are read
 // back: by name, each one at the token it sits under. Counting the groups from the start and
 // pairing the count with a remembered place in the mask cannot do that, because every replacement
 // shifts the rest of the mask along and the remembered place is then a place in a string that no
 // longer exists.
-func MaskPattern(mask string) (pattern string, tokens int) {
+func maskPattern(mask string) (pattern string, tokens int) {
 	pattern = mask
 
 	for _, token := range MaskTokens {
@@ -116,7 +116,7 @@ func (dirwatch Dirwatch) MaskRegexp() (*regexp.Regexp, error) {
 		return nil, nil
 	}
 
-	pattern, tokens := MaskPattern(dirwatch.Mask)
+	pattern, tokens := maskPattern(dirwatch.Mask)
 
 	compiled, err := regexp.Compile(pattern)
 	if err != nil {
@@ -140,7 +140,7 @@ func (dirwatch Dirwatch) MaskWarning() string {
 		return ""
 	}
 
-	pattern, tokens := MaskPattern(dirwatch.Mask)
+	pattern, tokens := maskPattern(dirwatch.Mask)
 
 	compiled, err := regexp.Compile(pattern)
 	if err != nil {
