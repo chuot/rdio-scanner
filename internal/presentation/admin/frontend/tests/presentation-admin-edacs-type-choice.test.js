@@ -101,10 +101,10 @@ test('the system form offers EDACS as a type, and its caption legend names it', 
 
   assert.ok(item, 'the system Type caption legend says nothing about EDACS');
 
-  const [pairName, ...description] = item.text.split(' - ');
-
-  assert.equal(pairName, 'EDACS', 'the EDACS legend entry does not name the type the way the others do');
-  assert.ok(description.join(' - ').trim().length > 0, 'the EDACS legend entry names the type without describing it');
+  // The legend names each type in its own element, and the description is the text that
+  // follows that name.
+  assert.equal(item.name, 'EDACS', 'the EDACS legend entry does not name the type the way the others do');
+  assert.ok(item.text.slice(item.name.length).trim().length > 0, 'the EDACS legend entry names the type without describing it');
   assert.match(item.text, /\.$/, 'the EDACS legend entry is not a sentence like the ones beside it');
 
   assert.deepEqual(legend.map((entry) => entry.name), offeredChoices(row, 'Type').filter((choice) => choice.value !== '').map((choice) => choice.text),

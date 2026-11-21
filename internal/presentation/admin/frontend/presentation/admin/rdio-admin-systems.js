@@ -51,6 +51,7 @@ const TYPES = [
   ['', 'No Type'],
   ['am', 'AM'],
   ['dmr', 'DMR'],
+  ['edacs', 'EDACS'],
   ['fm', 'FM'],
   ['nfm', 'NFM'],
   ['nxdn', 'NXDN'],
@@ -63,6 +64,7 @@ const TYPES = [
 const TYPE_CAPTION = [
   ['AM', 'Amplitude modulation.'],
   ['DMR', 'Digital mobile radio system.'],
+  ['EDACS', 'Enhanced digital access communications system.'],
   ['FM', 'Frequency modulation.'],
   ['NFM', 'Narrow frequency modulation.'],
   ['NXDN', 'Next Generation Digital Narrowband radio system.'],
