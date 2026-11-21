@@ -2361,3 +2361,47 @@ func TestTheGuideSaysWhatADirwatchsSiteSelectAndFrequencyDo(t *testing.T) {
 		}
 	}
 }
+
+// the mask tokens subsection is where a reader building a mask looks, so it is where the guide has to say
+// that the save checks the same string the watcher compiles — each token replaced by its pattern, the
+// captured pieces counted against the tokens named — what that means for a bracket typed around a token,
+// and what an operator who already has such a mask stored sees. The claims are read in the order the reader
+// needs them: what the save refuses, how to mean the brackets a recording tool wrote, and what a mask that
+// reached the server already unreadable costs.
+func TestTheGuideSaysTheMaskCheckIsTheStringTheWatcherCompiles(t *testing.T) {
+	body := guidePath(t)
+
+	plain := strings.ToLower(stripTags(subsectionOf(t, body, "The mask tokens")))
+
+	states := []struct {
+		fragment string
+		says     string
+	}{
+		{fragment: "tokens are replaced", says: "that the mask is checked as the string the watcher compiles, after each token has become its pattern"},
+		{fragment: "around a token is refused", says: "that a bracket written around a token is what the save refuses"},
+		{fragment: "escaped", says: "that a mask meaning the brackets in a file name writes them escaped"},
+		{fragment: "once, when the watch starts", says: "that a watch stored with a mask it cannot read reports it once, at its start"},
+		{fragment: "naming the mask", says: "and names the mask it cannot read"},
+		{fragment: "the directory it was stored on", says: "and the directory carrying it"},
+		{fragment: "where the recorder wrote it", says: "that a recording the watch cannot read stays where it arrived"},
+		{fragment: "read a second time", says: "and is not read again"},
+	}
+
+	at := -1
+
+	for _, state := range states {
+		found := strings.Index(plain, state.fragment)
+
+		if found < 0 {
+			t.Errorf("the mask tokens section does not say %s: it carries no %q", state.says, state.fragment)
+
+			continue
+		}
+
+		if found < at {
+			t.Errorf("the mask tokens section says %s out of order: %q comes before the claim it follows", state.says, state.fragment)
+		}
+
+		at = found
+	}
+}

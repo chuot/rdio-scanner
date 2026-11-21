@@ -229,3 +229,27 @@ func TestTheVersionEightEntrySaysWhatTheWatcherReadsOutOfAFileName(t *testing.T)
 		}
 	}
 }
+
+// the entry also has to reach the operator whose mask holds a bracket, or whose watched directory already
+// holds a mask the watcher cannot read. The four words are what that person searches the entry for.
+func TestTheVersionEightEntrySaysAMaskWithABracketAroundATokenIsRefused(t *testing.T) {
+	section := versionEightSection(t)
+
+	claims := []struct {
+		states string
+		need   string
+	}{
+		{states: "that the mask a watched directory carries is checked as the watcher reads it", need: "mask"},
+		{states: "that a bracket written around a mask token is what the check refuses", need: "brackets"},
+		{states: "that such a mask is refused when the watch is saved", need: "refused"},
+		{states: "that a mask already stored and unreadable is reported, not left silent", need: "reported"},
+	}
+
+	group := strings.ToLower(versionEightGroup(t, section, "Getting audio in"))
+
+	for _, claim := range claims {
+		if !strings.Contains(group, strings.ToLower(claim.need)) {
+			t.Errorf("the group %q does not state %s: it carries no %q", "Getting audio in", claim.states, claim.need)
+		}
+	}
+}

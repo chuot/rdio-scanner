@@ -257,6 +257,35 @@ func (watched *watchedDirectory) loggedAs(source domain.LogSource, fragment stri
 	return false
 }
 
+// reportedWarningsNaming counts the warnings the watch wrote, from the dirwatch source, naming every
+// fragment. A mask the watch cannot read is reported once for the watch and once for each recording
+// it stops, so a test that wants the recordings named counts them by their own names.
+func (watched *watchedDirectory) reportedWarningsNaming(fragments ...string) int {
+	found := 0
+
+	for _, entry := range watched.logs.Recorded() {
+		if entry.Source != domain.LogSourceDirwatch || entry.Level != domain.LogLevelWarn {
+			continue
+		}
+
+		named := true
+
+		for _, fragment := range fragments {
+			if !strings.Contains(entry.Message, fragment) {
+				named = false
+
+				break
+			}
+		}
+
+		if named {
+			found++
+		}
+	}
+
+	return found
+}
+
 // TestARecordingAlreadyInTheWatchedDirectoryIsIngested is the shortest path a watch has: the
 // recording was already in the directory when the server started watching it, and the first pass
 // over the directory reads it.
@@ -1445,6 +1474,72 @@ func TestAMaskWhoseGroupsOutnumberItsTokensIsReportedAtStart(t *testing.T) {
 
 		t.Errorf("the watch wrote %v, want the line to say the extra groups are pieces of the filename no token "+
 			"names", lines)
+	}
+}
+
+// TestAWatchStoredWithAMaskItCannotReadSaysSoAtItsStart: a mask that reaches the read — carried in
+// from an older server, or stored before the save rule reached it — leaves the watch unable to read a
+// single recording in its directory. That is said once, when the watch starts, naming the mask and the
+// directory, the way the mismatch a mask's own groups show is said. Without it the watch is simply
+// silent, and the recordings pile up in a directory nobody is reading.
+func TestAWatchStoredWithAMaskItCannotReadSaysSoAtItsStart(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	watched := watchingOver(t, directory, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.Mask = "[#DATE]"
+
+		return watch
+	})
+
+	if reported := watched.reportedWarningsNaming("[#DATE]"); reported != 1 {
+		t.Errorf("the watch wrote %v, want one warning naming the mask it cannot read", watched.reportedAfterStarting())
+	}
+
+	if reported := watched.reportedWarningsNaming("[#DATE]", directory); reported != 1 {
+		t.Errorf("the watch wrote %v, want the warning naming the mask it cannot read to name the directory it was "+
+			"stored on", watched.reportedAfterStarting())
+	}
+}
+
+// TestTheStartPassReadsEveryRecordingAfterOneItsMaskCannotRead: one recording whose mask cannot be
+// read does not end the pass over the directory. Each recording the mask stops is its own line, naming
+// that recording and the mask; the recordings stay where the recorder wrote them, and nothing is
+// retried. Today the read stops the pass at the first file, which is reported as the whole directory
+// failing to be read at startup — a line that says nothing about the mask, and a watch that goes deaf
+// to the rest of the directory.
+func TestTheStartPassReadsEveryRecordingAfterOneItsMaskCannotRead(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	unreadable := putRecording(t, directory, recordedFile)
+	alsoUnreadable := putRecording(t, directory, "10002-1514000-20261006-120001.wav")
+
+	watched := watchingOver(t, directory, func(watch domain.Dirwatch) domain.Dirwatch {
+		watch.Mask = "[#DATE]"
+
+		return watch
+	})
+
+	watched.calls.nothingArrivesWithin(t, settleWait+settleWait)
+
+	// The pass reads a recording and refuses it; it does not take the recording away.
+	for _, path := range []string{unreadable, alsoUnreadable} {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("the recording %s is not where the recorder wrote it: %v, want it left alone", path, err)
+		}
+	}
+
+	if reported := watched.reportedWarningsNaming("[#DATE]", unreadable); reported != 1 {
+		t.Errorf("the watch wrote %v, want a line naming the recording %s and the mask that cannot read it",
+			watched.reportedAfterStarting(), unreadable)
+	}
+
+	if reported := watched.reportedWarningsNaming("[#DATE]", alsoUnreadable); reported != 1 {
+		t.Errorf("the watch wrote %v, want the pass to go on to the recording %s after one its mask cannot read",
+			watched.reportedAfterStarting(), alsoUnreadable)
 	}
 }
 

@@ -16,6 +16,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -147,6 +148,155 @@ func TestDirwatchesValidateAcceptsAListWithRealMasks(t *testing.T) {
 
 	if err := dirwatches.Validate(); err != nil {
 		t.Errorf("Validate = %v, want the list accepted", err)
+	}
+}
+
+// maskTokenTexts are the twenty tokens a watch mask names a filename's pieces by. They are written
+// out here, rather than read from the code that replaces them, because what this rule has to say
+// about them is what an operator who types them sees.
+var maskTokenTexts = []string{
+	"#DATE",
+	"#GROUP",
+	"#HZ",
+	"#KHZ",
+	"#MHZ",
+	"#SITE",
+	"#SITELBL",
+	"#SYS",
+	"#SYSLBL",
+	"#TAG",
+	"#TG",
+	"#TGAFS",
+	"#TGHZ",
+	"#TGKHZ",
+	"#TGLBL",
+	"#TGMHZ",
+	"#TIME",
+	"#UNIT",
+	"#UNITLBL",
+	"#ZTIME",
+}
+
+// bracketsAroundTokens are each token wrapped in the brackets an operator types around one. Typed,
+// those brackets are a character class, so a mask built from them is a string that parses; the
+// tokens then carry their patterns into those brackets, and what the watcher compiles from the mask
+// either no longer parses or keeps no capture group for the token it names.
+func bracketsAroundTokens() []string {
+	bracketed := []string{}
+
+	for _, token := range maskTokenTexts {
+		bracketed = append(bracketed, "["+token+"]")
+	}
+
+	return bracketed
+}
+
+// escapedBracketsAroundTokens are the same masks with each bracket written escaped, which is how a
+// mask says the brackets belong to the file name itself. The escaped brackets survive the
+// substitution as the literal characters they are, and each token keeps the capture group it names.
+func escapedBracketsAroundTokens() []string {
+	escaped := []string{}
+
+	for _, token := range maskTokenTexts {
+		escaped = append(escaped, "\\["+token+"\\]")
+	}
+
+	return escaped
+}
+
+// TestDirwatchValidateRefusesEachMaskWhoseTokensBreakThePatternTheWatcherCompiles is the door read
+// against every token the mask table names: a mask the plain check accepts, and which the watcher
+// could not compile once its tokens are replaced, is refused at the save that offered it, with a
+// reason naming the mask. Stored, the same mask stops the server from a timer goroutine on the next
+// file that reaches the watch.
+func TestDirwatchValidateRefusesEachMaskWhoseTokensBreakThePatternTheWatcherCompiles(t *testing.T) {
+	for _, mask := range bracketsAroundTokens() {
+		dirwatch := Dirwatch{ID: 1, Directory: "/var/spool/rdio", Kind: "wild", Mask: mask, Extension: "wav"}
+
+		err := dirwatch.Validate()
+
+		if err == nil {
+			t.Errorf("Validate of the mask %q = nil, want it refused: the watcher cannot compile the string its tokens become", mask)
+
+			continue
+		}
+
+		if !strings.Contains(err.Error(), mask) {
+			t.Errorf("Validate refused the mask %q with %v, want the reason to name the mask", mask, err)
+		}
+	}
+}
+
+// TestDirwatchesValidateRefusesAListCarryingEachMaskWhoseTokensBreakItsPattern is the same rule
+// through the list the endpoint applies, which is how the administration page is told.
+func TestDirwatchesValidateRefusesAListCarryingEachMaskWhoseTokensBreakItsPattern(t *testing.T) {
+	for _, mask := range bracketsAroundTokens() {
+		dirwatches := Dirwatches{
+			{ID: 1, Directory: "/var/spool/rdio", Kind: "wild", Mask: mask, Extension: "wav"},
+		}
+
+		err := dirwatches.Validate()
+
+		if err == nil {
+			t.Errorf("Validate of a list carrying the mask %q = nil, want the mask refused", mask)
+
+			continue
+		}
+
+		if !strings.Contains(err.Error(), mask) {
+			t.Errorf("Validate refused the list carrying the mask %q with %v, want the reason to name the mask", mask, err)
+		}
+	}
+}
+
+// TestDirwatchValidateRefusesAMaskWhoseTokensCaptureFewerPiecesThanItNames: this mask compiles
+// before and after its tokens are replaced — the brackets sit between two tokens, and one of them
+// swallows a token's capture group into a character class — and it names two tokens while capturing
+// one piece. A filename's pieces are then lined up with the wrong values, which is a watch reading
+// its recordings wrong rather than one that says it cannot read them.
+func TestDirwatchValidateRefusesAMaskWhoseTokensCaptureFewerPiecesThanItNames(t *testing.T) {
+	dirwatch := Dirwatch{ID: 1, Directory: "/var/spool/rdio", Kind: "wild", Mask: "#DATE[#TG]", Extension: "wav"}
+
+	err := dirwatch.Validate()
+
+	if err == nil {
+		t.Fatal("Validate of the mask \"#DATE[#TG]\" = nil, want it refused: it captures one piece and names two tokens")
+	}
+
+	if !strings.Contains(err.Error(), "#DATE[#TG]") {
+		t.Errorf("Validate refused the mask \"#DATE[#TG]\" with %v, want the reason to name the mask", err)
+	}
+}
+
+// TestDirwatchValidateAcceptsEachMaskThatMeansTheBracketsItCarries keeps the refusal narrow: the
+// rule refuses a token that lost the capture group it stands for, not regular-expression
+// punctuation. A mask that means the brackets a recording tool wrote into the file name escapes
+// them, and stays storable.
+func TestDirwatchValidateAcceptsEachMaskThatMeansTheBracketsItCarries(t *testing.T) {
+	for _, mask := range escapedBracketsAroundTokens() {
+		dirwatch := Dirwatch{ID: 1, Directory: "/var/spool/rdio", Kind: "wild", Mask: mask, Extension: "wav"}
+
+		if err := dirwatch.Validate(); err != nil {
+			t.Errorf("Validate of the mask %q = %v, want the mask accepted: its escaped brackets are the file name's own", mask, err)
+		}
+	}
+}
+
+// TestDirwatchValidateRefusesAMaskWhoseTokensCaptureFewerPiecesThanItNamesWhereTheBracketsLead is
+// the same shape with the brackets at the front of the mask: it compiles before and after its
+// tokens are replaced, and it names two tokens while capturing one piece — the watch then files the
+// digits the class swallowed as the date, which is a recording read wrong rather than one refused.
+func TestDirwatchValidateRefusesAMaskWhoseTokensCaptureFewerPiecesThanItNamesWhereTheBracketsLead(t *testing.T) {
+	dirwatch := Dirwatch{ID: 1, Directory: "/var/spool/rdio", Kind: "wild", Mask: "[#TG]-#DATE", Extension: "wav"}
+
+	err := dirwatch.Validate()
+
+	if err == nil {
+		t.Fatal("Validate of the mask \"[#TG]-#DATE\" = nil, want it refused: it captures one piece and names two tokens")
+	}
+
+	if !strings.Contains(err.Error(), "[#TG]-#DATE") {
+		t.Errorf("Validate refused the mask \"[#TG]-#DATE\" with %v, want the reason to name the mask", err)
 	}
 }
 

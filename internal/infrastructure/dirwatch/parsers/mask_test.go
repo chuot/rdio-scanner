@@ -917,6 +917,299 @@ func TestExtractDefaultReportsAConfigurationItCannotRead(t *testing.T) {
 	}
 }
 
+// maskShape is one filename the mask token table has to read, and the values the token it stands
+// for names in it. The table is read a token at a time: each shape names the one token it stands
+// for beside the system and talkgroup every recording needs, so a token whose pattern stops
+// working, or stops being substituted, shows up as the value it stops handing over.
+type maskShape struct {
+	token     string
+	mask      string
+	filename  string
+	systemID  uint64
+	systemRef uint
+	siteRef   uint
+	siteLabel string
+	tgRef     uint
+	tgLabel   string
+	tgTag     string
+	tgGroup   string
+	unitRef   uint
+	unitLabel string
+	hertz     uint
+	timestamp time.Time
+}
+
+// wholeTableShapes are the shapes the mask token table has to read, one per token the table
+// names, each written the way a recording tool writes it.
+var wholeTableShapes = []maskShape{
+	{token: "#DATE", mask: "#SYS-#TG-#DATE", filename: "10001-1514000-20261006.wav", systemRef: 10001, tgRef: 1514000, timestamp: time.Unix(20261006, 0).UTC()},
+	{token: "#GROUP", mask: "#SYS-#TG-#GROUP", filename: "10001-1514000-1-3.wav", systemRef: 10001, tgRef: 1514000, tgGroup: "1-3"},
+	{token: "#HZ", mask: "#SYS-#TG-#HZ", filename: "10001-1514000-1514000.wav", systemRef: 10001, tgRef: 1514000, hertz: 1514000},
+	{token: "#KHZ", mask: "#SYS-#TG-#KHZ", filename: "10001-1514000-1514.000.wav", systemRef: 10001, tgRef: 1514000, hertz: 1514000},
+	{token: "#MHZ", mask: "#SYS-#TG-#MHZ", filename: "10001-1514000-151.4000.wav", systemRef: 10001, tgRef: 1514000, hertz: 151400000},
+	{token: "#SITE", mask: "#SYS-#TG-#SITE", filename: "10001-1514000-7.wav", systemRef: 10001, tgRef: 1514000, siteRef: 7},
+	{token: "#SITELBL", mask: "#SYS-#TG-#SITELBL", filename: "10001-1514000-North.wav", systemRef: 10001, tgRef: 1514000, siteLabel: "North"},
+	{token: "#SYS", mask: "#SYS-#TG", filename: "10001-1514000.wav", systemRef: 10001, tgRef: 1514000},
+	{token: "#SYSLBL", mask: "#SYSLBL-#TG", filename: "Grand Metro-1514000.wav", systemID: 1, tgRef: 1514000},
+	{token: "#TAG", mask: "#SYS-#TG-#TAG", filename: "10001-1514000-Z3.wav", systemRef: 10001, tgRef: 1514000, tgTag: "Z3"},
+	{token: "#TG", mask: "#SYS-#TG", filename: "10001-1514000.wav", systemRef: 10001, tgRef: 1514000},
+	{token: "#TGAFS", mask: "#SYS-#TGAFS", filename: "10001-12-345.wav", systemRef: 10001, tgRef: 12<<7 | 34<<3 | 5},
+	{token: "#TGHZ", mask: "#SYS-#TGHZ", filename: "10001-1514000.wav", systemRef: 10001, tgRef: 1514, hertz: 1514000},
+	{token: "#TGKHZ", mask: "#SYS-#TGKHZ", filename: "10001-1514.000.wav", systemRef: 10001, tgRef: 1514, hertz: 1514000},
+	{token: "#TGLBL", mask: "#SYS-#TG-#TGLBL", filename: "10001-1514000-Dispatch.wav", systemRef: 10001, tgRef: 1514000, tgLabel: "Dispatch"},
+	{token: "#TGMHZ", mask: "#SYS-#TGMHZ", filename: "10001-151.4000.wav", systemRef: 10001, tgRef: 151400, hertz: 151400000},
+	{token: "#TIME", mask: "#SYS-#TG-#DATE-#TIME", filename: "10001-1514000-20261006-120000.wav", systemRef: 10001, tgRef: 1514000, timestamp: time.Date(2026, 10, 6, 16, 0, 0, 0, time.UTC)},
+	{token: "#UNIT", mask: "#SYS-#TG-#UNIT", filename: "10001-1514000-4500.wav", systemRef: 10001, tgRef: 1514000, unitRef: 4500},
+	{token: "#UNITLBL", mask: "#SYS-#TG-#UNIT-#UNITLBL", filename: "10001-1514000-4500-Dispatch.wav", systemRef: 10001, tgRef: 1514000, unitRef: 4500, unitLabel: "Dispatch"},
+	{token: "#ZTIME", mask: "#SYS-#TG-#DATE-#ZTIME", filename: "10001-1514000-20261006-120000.wav", systemRef: 10001, tgRef: 1514000, timestamp: time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)},
+}
+
+// bracketedTableShapes are the same shapes with every token of the mask wrapped in brackets the
+// mask escapes, which is how a mask that means the brackets a recording tool wrote into the file
+// name is written: the brackets stay the filename's own, and each token still hands its piece to
+// the value it names.
+var bracketedTableShapes = []maskShape{
+	{token: "#DATE", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#DATE\\]", filename: "[10001]-[1514000]-[20261006].wav", systemRef: 10001, tgRef: 1514000, timestamp: time.Unix(20261006, 0).UTC()},
+	{token: "#GROUP", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#GROUP\\]", filename: "[10001]-[1514000]-[1-3].wav", systemRef: 10001, tgRef: 1514000, tgGroup: "1-3"},
+	{token: "#HZ", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#HZ\\]", filename: "[10001]-[1514000]-[1514000].wav", systemRef: 10001, tgRef: 1514000, hertz: 1514000},
+	{token: "#KHZ", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#KHZ\\]", filename: "[10001]-[1514000]-[1514.000].wav", systemRef: 10001, tgRef: 1514000, hertz: 1514000},
+	{token: "#MHZ", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#MHZ\\]", filename: "[10001]-[1514000]-[151.4000].wav", systemRef: 10001, tgRef: 1514000, hertz: 151400000},
+	{token: "#SITE", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#SITE\\]", filename: "[10001]-[1514000]-[450].wav", systemRef: 10001, tgRef: 1514000, siteRef: 450},
+	{token: "#SITELBL", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#SITELBL\\]", filename: "[10001]-[1514000]-[North].wav", systemRef: 10001, tgRef: 1514000, siteLabel: "North"},
+	{token: "#SYS", mask: "\\[#SYS\\]-\\[#TG\\]", filename: "[10001]-[1514000].wav", systemRef: 10001, tgRef: 1514000},
+	{token: "#SYSLBL", mask: "\\[#SYSLBL\\]-\\[#TG\\]", filename: "[Grand Metro]-[1514000].wav", systemID: 1, tgRef: 1514000},
+	{token: "#TAG", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#TAG\\]", filename: "[10001]-[1514000]-[Z3].wav", systemRef: 10001, tgRef: 1514000, tgTag: "Z3"},
+	{token: "#TG", mask: "\\[#SYS\\]-\\[#TG\\]", filename: "[10001]-[1514000].wav", systemRef: 10001, tgRef: 1514000},
+	{token: "#TGAFS", mask: "\\[#SYS\\]-\\[#TGAFS\\]", filename: "[10001]-[12-345].wav", systemRef: 10001, tgRef: 12<<7 | 34<<3 | 5},
+	{token: "#TGHZ", mask: "\\[#SYS\\]-\\[#TGHZ\\]", filename: "[10001]-[1514000].wav", systemRef: 10001, tgRef: 1514, hertz: 1514000},
+	{token: "#TGKHZ", mask: "\\[#SYS\\]-\\[#TGKHZ\\]", filename: "[10001]-[1514.000].wav", systemRef: 10001, tgRef: 1514, hertz: 1514000},
+	{token: "#TGLBL", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#TGLBL\\]", filename: "[10001]-[1514000]-[Dispatch].wav", systemRef: 10001, tgRef: 1514000, tgLabel: "Dispatch"},
+	{token: "#TGMHZ", mask: "\\[#SYS\\]-\\[#TGMHZ\\]", filename: "[10001]-[151.4000].wav", systemRef: 10001, tgRef: 151400, hertz: 151400000},
+	{token: "#TIME", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#DATE\\]-\\[#TIME\\]", filename: "[10001]-[1514000]-[20261006]-[120000].wav", systemRef: 10001, tgRef: 1514000, timestamp: time.Date(2026, 10, 6, 16, 0, 0, 0, time.UTC)},
+	{token: "#UNIT", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#UNIT\\]", filename: "[10001]-[1514000]-[4500].wav", systemRef: 10001, tgRef: 1514000, unitRef: 4500},
+	{token: "#UNITLBL", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#UNIT\\]-\\[#UNITLBL\\]", filename: "[10001]-[1514000]-[4500]-[Dispatch].wav", systemRef: 10001, tgRef: 1514000, unitRef: 4500, unitLabel: "Dispatch"},
+	{token: "#ZTIME", mask: "\\[#SYS\\]-\\[#TG\\]-\\[#DATE\\]-\\[#ZTIME\\]", filename: "[10001]-[1514000]-[20261006]-[120000].wav", systemRef: 10001, tgRef: 1514000, timestamp: time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)},
+}
+
+// maskTableToken is one token of the table the mask parser substitutes with, as the tests that
+// read the whole table need it.
+type maskTableToken struct {
+	text    string
+	pattern string
+}
+
+// productionMaskTokens are the mask tokens, read from the code that substitutes them, so that a
+// token added to the table is a token these tests have to read.
+func productionMaskTokens() []maskTableToken {
+	tokens := []maskTableToken{}
+
+	for _, token := range maskTokens {
+		tokens = append(tokens, maskTableToken{text: token.Text, pattern: token.Pattern})
+	}
+
+	return tokens
+}
+
+// checkEveryMaskTokenHasAShape reports a token of the production table that no shape names, which
+// is a token nothing reads.
+func checkEveryMaskTokenHasAShape(t *testing.T, shapes []maskShape) {
+	t.Helper()
+
+	for _, token := range productionMaskTokens() {
+		covered := false
+
+		for _, shape := range shapes {
+			if shape.token == token.text {
+				covered = true
+
+				break
+			}
+		}
+
+		if !covered {
+			t.Errorf("the mask token table names %s and no shape reads it, want every token of the table read", token.text)
+		}
+	}
+}
+
+// readMaskShapes reads each shape through a default watch and reports every value its mask names
+// that the read did not hand to the field the token it sits under owns.
+func readMaskShapes(t *testing.T, shapes []maskShape) {
+	t.Helper()
+
+	for _, shape := range shapes {
+		watch := domain.NewDirwatch()
+		watch.Mask = shape.mask
+
+		extracted, recognized, err := extract(t, watch, shape.filename)
+
+		if err != nil {
+			t.Errorf("the mask %q did not read %q: %v, want the mask read as it is written", shape.mask, shape.filename, err)
+
+			continue
+		}
+
+		if !recognized {
+			t.Errorf("the mask %q did not read %q as a recording, want the file handed to the ingest path", shape.mask, shape.filename)
+
+			continue
+		}
+
+		checkMaskShapeRead(t, shape, extracted.Call)
+	}
+}
+
+// checkMaskShapeRead reports each value the shape's mask names that the call it read does not
+// carry.
+func checkMaskShapeRead(t *testing.T, shape maskShape, call domain.Call) {
+	t.Helper()
+
+	if shape.systemID > 0 && call.System.ID != shape.systemID {
+		t.Errorf("%s: the call belongs to system %#v, want the configured system the mask named by name", shape.token, call.System)
+	}
+
+	if shape.systemRef > 0 && call.Meta.SystemRef != shape.systemRef {
+		t.Errorf("%s: the call claims system reference %d, want %d", shape.token, call.Meta.SystemRef, shape.systemRef)
+	}
+
+	if call.Meta.SiteRef != shape.siteRef || call.Meta.SiteLabel != shape.siteLabel {
+		t.Errorf("%s: the call claims site %d/%q, want %d/%q", shape.token, call.Meta.SiteRef, call.Meta.SiteLabel, shape.siteRef, shape.siteLabel)
+	}
+
+	if shape.tgRef > 0 && call.Meta.TalkgroupRef != shape.tgRef {
+		t.Errorf("%s: the call claims talkgroup reference %d, want %d", shape.token, call.Meta.TalkgroupRef, shape.tgRef)
+	}
+
+	if call.Meta.TalkgroupLabel != shape.tgLabel {
+		t.Errorf("%s: the call claims the talkgroup name %q, want %q", shape.token, call.Meta.TalkgroupLabel, shape.tgLabel)
+	}
+
+	if call.Meta.TalkgroupTag != shape.tgTag {
+		t.Errorf("%s: the call claims the talkgroup tag %q, want %q", shape.token, call.Meta.TalkgroupTag, shape.tgTag)
+	}
+
+	wantGroup := []string{}
+	if shape.tgGroup != "" {
+		wantGroup = []string{shape.tgGroup}
+	}
+
+	if len(call.Meta.TalkgroupGroup) != len(wantGroup) || (len(wantGroup) > 0 && call.Meta.TalkgroupGroup[0] != wantGroup[0]) {
+		t.Errorf("%s: the call claims the group %v, want %v", shape.token, call.Meta.TalkgroupGroup, wantGroup)
+	}
+
+	if shape.unitRef > 0 && (len(call.Units) != 1 || call.Units[0].UnitRef != shape.unitRef) {
+		t.Errorf("%s: the call units are %#v, want the one unit %d", shape.token, call.Units, shape.unitRef)
+	}
+
+	if shape.unitLabel != "" && (len(call.Meta.UnitLabels) != 1 || call.Meta.UnitLabels[0] != shape.unitLabel) {
+		t.Errorf("%s: the call claims the unit names %v, want the one name %q", shape.token, call.Meta.UnitLabels, shape.unitLabel)
+	}
+
+	if shape.hertz > 0 && (len(call.Frequencies) != 1 || call.Frequencies[0].Frequency != shape.hertz) {
+		t.Errorf("%s: the call carriers are %#v, want the one carrier %d Hz", shape.token, call.Frequencies, shape.hertz)
+	}
+
+	if !shape.timestamp.IsZero() && !call.Timestamp.Equal(shape.timestamp) {
+		t.Errorf("%s: the call timestamp is %v, want %v", shape.token, call.Timestamp, shape.timestamp)
+	}
+}
+
+// TestExtractDefaultReadsEveryTokenTheMaskTableNames is the whole token table read: every token
+// the mask carries is named by one shape below, its own piece lands on the value that token
+// names, and a token whose pattern or substitution changes is a token this test stops reading.
+func TestExtractDefaultReadsEveryTokenTheMaskTableNames(t *testing.T) {
+	checkEveryMaskTokenHasAShape(t, wholeTableShapes)
+
+	readMaskShapes(t, wholeTableShapes)
+}
+
+// TestExtractDefaultReadsAMaskThatWrapsEveryTokenInLiteralBrackets is the same read through the
+// brackets themselves: a mask that means the brackets a recording tool wrote into the file name
+// escapes them, and the escaped token keeps the capture group and the piece it names. The read
+// has always done this, and it is the shape a mask carrying brackets has to keep working for.
+func TestExtractDefaultReadsAMaskThatWrapsEveryTokenInLiteralBrackets(t *testing.T) {
+	checkEveryMaskTokenHasAShape(t, bracketedTableShapes)
+
+	readMaskShapes(t, bracketedTableShapes)
+}
+
+// unescapedBracketMasks are the whole token table with each token wrapped in the brackets an
+// operator types: brackets that are regular-expression syntax in themselves, so the plain check
+// a mask is given when the watch is saved accepts them, and the substitution then folds them into
+// the pattern the token stands for.
+func unescapedBracketMasks(t *testing.T) []string {
+	t.Helper()
+
+	masks := []string{}
+
+	for _, token := range productionMaskTokens() {
+		masks = append(masks, "["+token.text+"]")
+	}
+
+	return masks
+}
+
+// TestExtractDefaultRefusesEveryMaskThatWrapsATokenInUnescapedBrackets is the read half of the same
+// shape: a mask whose substituted string will not compile, or compiles while capturing nothing the
+// mask names, is refused with a reason naming the mask, and the watcher is not stopped. A panic
+// here lands in the goroutine reading the directory notification, and the watch ends there, deaf to
+// that directory until the server restarts; a call built from a degenerate character class files a
+// recording with the wrong things on it.
+func TestExtractDefaultRefusesEveryMaskThatWrapsATokenInUnescapedBrackets(t *testing.T) {
+	name := "10001-1514000-20261006-120000.wav"
+
+	for _, mask := range unescapedBracketMasks(t) {
+		watch := domain.NewDirwatch()
+		watch.Mask = mask
+		watch.Extension = "wav"
+
+		path := watchedFile(t, name)
+
+		var (
+			extracted  Extracted
+			recognized bool
+			err        error
+			crashed    any
+		)
+
+		func() {
+			defer func() {
+				crashed = recover()
+			}()
+
+			extracted, recognized, err = newParsers(configuredSystems()).Extract(context.Background(), watch, path)
+		}()
+
+		if crashed != nil {
+			t.Errorf("reading %q through the mask %q stopped the watcher with a panic: %v, want the mask refused", name, mask, crashed)
+
+			continue
+		}
+
+		if recognized {
+			t.Errorf("the mask %q handed %q to the ingest path, want it refused: the string the watcher compiles from it captures nothing the mask names", mask, name)
+		}
+
+		if extracted.Call.AudioFilename != "" {
+			t.Errorf("the mask %q returned the call %q, want no call at all", mask, extracted.Call.AudioFilename)
+		}
+
+		if err == nil {
+			t.Errorf("Extract through the mask %q = nil, want the reason the mask cannot be read", mask)
+
+			continue
+		}
+
+		if !strings.Contains(err.Error(), "mask") {
+			t.Errorf("Extract through the mask %q = %v, want the error to name the mask as the reason", mask, err)
+		}
+
+		if !strings.Contains(err.Error(), mask) {
+			t.Errorf("Extract through the mask %q = %v, want the error to name the mask it refused", mask, err)
+		}
+	}
+}
+
 // TestExtractDefaultRefusesAMaskThatTokensMakeImpossibleToCompile: a mask the plain
 // regex check accepts, brackets and all, becomes impossible to compile once the tokens
 // are swapped for the patterns they name. The watcher still has to be told, not
