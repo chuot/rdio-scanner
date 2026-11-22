@@ -74,8 +74,9 @@ class RdioSearchPanel extends HTMLElement {
 
     // the counter rides every call-list answer, so the results render,
     // the progress bar ends, and the form comes back even when the
-    // answer equals the list already on screen.
-    this.unsubscribe = store.subscribe(['playbackList', 'playbackListSeq', 'call', 'livefeedMode', 'config'], () => {
+    // answer equals the list already on screen. The hold is the same news:
+    // a paused feed renders its play controls out of reach.
+    this.unsubscribe = store.subscribe(['playbackList', 'playbackListSeq', 'call', 'livefeedMode', 'config', 'pause'], () => {
       const seq = getAppContext().store.getState().playbackListSeq ?? 0;
 
       // when the counter moves, the search that left is over and the
@@ -287,6 +288,9 @@ class RdioSearchPanel extends HTMLElement {
         control = '<button type="button" class="row-action" disabled aria-label="Loading"><i class="material-icons spin">cached</i></button>';
       } else if (state.call && row.id === state.call.id) {
         control = `<button type="button" class="row-action" data-stop="${row.id}" aria-label="Stop"><i class="material-icons">stop</i></button>`;
+      } else if (state.pause) {
+        // a held feed starts nothing: the control keeps its name and its place, out of reach.
+        control = '<button type="button" class="row-action" disabled aria-label="Play"><i class="material-icons">play_arrow</i></button>';
       } else {
         control = `<button type="button" class="row-action" data-play="${row.id}" aria-label="Play"><i class="material-icons">play_arrow</i></button>`;
       }
@@ -327,7 +331,7 @@ class RdioSearchPanel extends HTMLElement {
 
     if (button.dataset.play) useCases.loadAndPlay(Number(button.dataset.play));
     else if (button.dataset.download) useCases.download(Number(button.dataset.download));
-    else if (button.dataset.stop) useCases.stop();
+    else if (button.dataset.stop) useCases.stopPlayingCall();
   }
 }
 

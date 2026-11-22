@@ -301,6 +301,17 @@ export function createListenerUseCases({
 
   // — public use-cases —
 
+  // A searched playback is a walk to the next searched call, and that walk ends
+  // with the call the operator stopped; a call the live feed reached is only itself.
+  function stopPlayingCall() {
+    if (livefeedMode === LivefeedMode.Playback) {
+      stopPlaybackMode();
+      return;
+    }
+
+    stop();
+  }
+
   function livefeed() {
     if (livefeedMode === LivefeedMode.Offline) startLivefeed();
     else if (livefeedMode === LivefeedMode.Online) stopLivefeed();
@@ -681,6 +692,7 @@ export function createListenerUseCases({
     skip,
     stop,
     stopPlaybackMode,
+    stopPlayingCall,
     setSystemStatus,
     toggleAll,
     toggleCategory,
