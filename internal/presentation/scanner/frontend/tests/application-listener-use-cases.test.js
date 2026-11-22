@@ -748,6 +748,106 @@ describe('application/listener-use-cases — auth', () => {
     });
 });
 
+// a restricted server asks for the access code again whenever its configuration
+// changes under a connected listener. the client already holds the code the person
+// gave it once, so it answers that ask itself, and it only reaches the unlock screen
+// when it has nothing to answer with or when the answer it gave has just been refused.
+// one ask is worth at most one submission: the code is gone from storage the moment it
+// is sent, so the refusal's follow-up ask finds nothing to send again.
+
+describe('application/listener-use-cases — answering a server request with the stored code', () => {
+    const submissions = (socket) => socket.sent.filter(([command]) => command === 'PIN');
+
+    it('a stored code answers a PIN request with one submission and no prompt', () => {
+        const { useCases, socket, storage, events } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        assert.equal(storage.local.getItem('rdio-scanner-pin'), btoa('saved'));
+
+        socket.inject('PIN');
+
+        assert.deepEqual(submissions(socket), [['PIN', btoa('saved'), undefined]]);
+        assert.equal(events.filter((event) => event.auth?.status === 'pin-required').length, 0);
+        assert.equal(useCases.auth.status, 'authenticating');
+    });
+
+    it('the stored code is gone the moment the client answers with it', () => {
+        const { useCases, socket, storage } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        assert.deepEqual([...storage.stored], [['rdio-scanner-pin', btoa('saved')]]);
+
+        socket.inject('PIN');
+
+        assert.deepEqual([...storage.stored], []);
+        assert.equal(submissions(socket).length, 1);
+    });
+
+    it('a refused answer reaches the person and is not submitted a second time', () => {
+        const { useCases, socket, storage } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        socket.inject('PIN');
+        socket.inject('PIN');
+
+        assert.deepEqual(submissions(socket), [['PIN', btoa('saved'), undefined]]);
+        assert.equal(useCases.auth.status, 'pin-required');
+        assert.equal(useCases.auth.denied, true);
+        assert.equal(storage.local.getItem('rdio-scanner-pin'), null);
+    });
+
+    it('with nothing stored a PIN request still reaches the prompt as it does today', () => {
+        const { useCases, socket, storage } = setup();
+
+        socket.inject('PIN');
+
+        assert.equal(submissions(socket).length, 0);
+        assert.equal(useCases.auth.status, 'pin-required');
+        assert.equal(useCases.auth.denied, false);
+        assert.equal(storage.local.getItem('rdio-scanner-pin'), null);
+    });
+});
+
+// the stored code across a reconnect. a fresh connection offers the code the person
+// gave earlier, and that offer spends it too: a code the server refused is not offered
+// again on the next reconnect, and only a code the server accepted goes back into
+// storage. one connection is worth at most one submission.
+
+describe('application/listener-use-cases — the stored code across a reconnect', () => {
+    const submissions = (socket) => socket.sent.filter(([command]) => command === 'PIN');
+
+    it('a fresh connection offers the stored code once and spends it', () => {
+        const { socket, storage } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        assert.deepEqual([...storage.stored], [['rdio-scanner-pin', btoa('saved')]]);
+
+        socket.linked();
+
+        assert.deepEqual(submissions(socket), [['PIN', btoa('saved'), undefined]]);
+        assert.deepEqual([...storage.stored], []);
+    });
+
+    it('a code the server refused is not offered again on the next reconnect', () => {
+        const { useCases, socket, storage } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        socket.linked();
+        socket.inject('PIN');
+        socket.linked();
+
+        assert.deepEqual(submissions(socket), [['PIN', btoa('saved'), undefined]]);
+        assert.equal(useCases.auth.status, 'pin-required');
+        assert.equal(useCases.auth.denied, true);
+        assert.equal(storage.local.getItem('rdio-scanner-pin'), null);
+    });
+
+    it('a code the server accepted is stored again where it was', () => {
+        const { useCases, socket, storage } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        socket.linked();
+        socket.inject('CFG', cfgPayload);
+
+        assert.equal(useCases.auth.status, 'authenticated');
+        assert.equal(storage.local.getItem('rdio-scanner-pin'), btoa('saved'));
+    });
+});
+
 // the alert tone in front of a live call. the fake engine keeps the
 // tone sequences and recordings it is asked for, in order, and holds
 // each tone open until the test ends it. the tone is a live arrival's:

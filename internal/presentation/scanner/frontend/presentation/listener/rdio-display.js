@@ -411,9 +411,14 @@ class RdioDisplay extends HTMLElement {
 
       const field = this.el.auth.querySelector('rdio-form-field');
 
+      // The words a refused code earns belong to a code the listener submitted. A code the
+      // application offered from what it holds was never theirs to get wrong, so that refusal
+      // brings the screen back as a fresh empty request.
+      const listenerSubmitted = this.lastSubmittedPin !== null;
+
       if (auth.status === 'expired') field.setError('This unlock code has expired');
       else if (auth.status === 'too-many') field.setError('Too many connections');
-      else if (auth.denied) field.setError('Invalid unlock code');
+      else if (auth.denied && listenerSubmitted) field.setError('Invalid unlock code');
       else field.setError('');
 
       this.el.authInput.focus();
@@ -423,6 +428,9 @@ class RdioDisplay extends HTMLElement {
       const pin = this.lastSubmittedPin ?? readPin(getAppContext().storage.local);
       if (pin) savePin(getAppContext().storage.local, pin);
 
+      // The code has done its work, so the field stops carrying it: the next ask the listener
+      // sees is empty rather than prefilled with a code that already worked.
+      this.el.authInput.value = '';
       this.lastSubmittedPin = null;
     }
   }

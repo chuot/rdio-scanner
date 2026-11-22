@@ -12,6 +12,8 @@ import { getAppContext } from '../application/context.js';
 
 import '../../../common/frontend/presentation/ui/primitives.js';
 
+import { PIN_STORAGE_KEY } from '../domain/pin.js';
+
 import '../presentation/listener/rdio-display.js';
 import '../presentation/listener/rdio-search-panel.js';
 
@@ -31,6 +33,7 @@ function display() {
   return {
     el,
     store,
+    storage: context.storage,
     useCases: context.useCases,
     field: el.querySelector('rdio-form-field'),
     input: el.querySelector('#unlock-code'),
@@ -76,6 +79,47 @@ describe('presentation/listener/rdio-display — the unlock code panel', () => {
 
       assert.equal(fieldMessage(field), 'Invalid unlock code', 'submitting the form reaches the field it submits');
     } finally {
+      close();
+    }
+  });
+
+  it('empties the unlock field once the server has accepted the code typed into it', () => {
+    const { store, storage, useCases, input, form, close } = display();
+
+    try {
+      store.setState({ auth: { status: 'pin-required', denied: false } });
+      useCases.authenticate = () => store.setState({ auth: { status: 'authenticated', denied: false } });
+
+      input.value = '1234';
+      form.dispatchEvent({ type: 'submit', preventDefault: () => {} });
+
+      // The code has done its work: the next time the screen comes back it is a fresh request, and
+      // a field still carrying the code that worked is not one.
+      assert.equal(input.value, '', 'an accepted code leaves the field it was typed into');
+    } finally {
+      storage.local.removeItem(PIN_STORAGE_KEY);
+      close();
+    }
+  });
+
+  it('shows a fresh empty request when the code the page held was refused', () => {
+    const { store, storage, useCases, field, input, form, close } = display();
+
+    try {
+      // The listener unlocked earlier in this session, and that code was accepted.
+      store.setState({ auth: { status: 'pin-required', denied: false } });
+      useCases.authenticate = () => store.setState({ auth: { status: 'authenticated', denied: false } });
+
+      input.value = '1234';
+      form.dispatchEvent({ type: 'submit', preventDefault: () => {} });
+
+      // A later ask is answered by the page from what it holds, and the server refuses that answer.
+      store.setState({ auth: { status: 'pin-required', denied: true } });
+
+      assert.equal(fieldMessage(field), '', 'a refusal of a code nobody typed writes nothing under the field');
+      assert.equal(input.value, '', 'the request a refused code brings back is empty');
+    } finally {
+      storage.local.removeItem(PIN_STORAGE_KEY);
       close();
     }
   });
