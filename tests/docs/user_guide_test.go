@@ -1078,6 +1078,57 @@ func TestTheGuideCarriesTheSearchPanelFacts(t *testing.T) {
 	)
 }
 
+// TestTheGuideSaysStoppingASearchedRecordingEndsThePlayback covers what a row's stop button
+// does now: it silences the recording and ends the playback with it, so no further recording of
+// that search follows, and the live feed comes back from its own button. The claim has to sit in
+// one sentence of the recorded-calls chapter, beside the screen the reader is holding.
+func TestTheGuideSaysStoppingASearchedRecordingEndsThePlayback(t *testing.T) {
+	body := userGuidePath(t)
+
+	chapter := userGuideSpokenText(t, userGuideChapter(t, body, "ch-05-recorded-calls"))
+
+	wants := []string{"ends the sound", "ends the playback", "no further recording", "LIVE FEED"}
+
+	if !guideSentenceSays(chapter, wants) {
+		t.Errorf("no sentence of the recorded-calls chapter says all of %q at once", strings.Join(wants, ", "))
+	}
+}
+
+// TestTheGuideSaysAPausedFeedLeavesTheSearchRowPlayUnavailable covers the rows of a search answer
+// while the live feed is held: each row still names its play button, and none of them can be
+// pressed until the live feed is playing again.
+func TestTheGuideSaysAPausedFeedLeavesTheSearchRowPlayUnavailable(t *testing.T) {
+	body := userGuidePath(t)
+
+	chapter := userGuideSpokenText(t, userGuideChapter(t, body, "ch-05-recorded-calls"))
+
+	wants := []string{"paused", "Play", "unavailable"}
+
+	if !guideSentenceSays(chapter, wants) {
+		t.Errorf("no sentence of the recorded-calls chapter says all of %q at once", strings.Join(wants, ", "))
+	}
+}
+
+// TestTheQuickReferenceSaysLiveFeedReturnsAfterAStoppedRecording holds the controls table's own
+// line for the live feed button: it is what brings the live calls back after a recording, however
+// that recording ended.
+func TestTheQuickReferenceSaysLiveFeedReturnsAfterAStoppedRecording(t *testing.T) {
+	body := userGuidePath(t)
+
+	chapter := userGuideChapter(t, body, "ch-11-quick-reference")
+
+	row := regexp.MustCompile(`(?is)<th scope="row">\s*<code>\s*LIVE FEED\s*</code>\s*</th>\s*<td>(.*?)</td>`).FindStringSubmatch(chapter)
+	if row == nil {
+		t.Fatal("the controls table no longer carries a row for LIVE FEED")
+	}
+
+	wants := []string{"return to live calls", "you stopped it"}
+
+	if !guideSentenceSays(userGuideSpokenText(t, row[1]), wants) {
+		t.Errorf("the controls table's LIVE FEED row does not say all of %q at once: %s", strings.Join(wants, ", "), userGuideSpokenText(t, row[1]))
+	}
+}
+
 // The access-code chapter carries the field's own label and the refusals the
 // application prints, word for word.
 func TestTheGuideCarriesTheAccessCodeFacts(t *testing.T) {
@@ -1090,6 +1141,24 @@ func TestTheGuideCarriesTheAccessCodeFacts(t *testing.T) {
 		"Invalid unlock code",
 		"Too many connections",
 	)
+}
+
+// TestTheGuideSaysARememberedAccessCodeIsUsedWithoutAskingAgain covers the listener
+// who is mid-listening when the operator changes the access configuration: the page
+// answers that re-ask with the code it kept on the device, and the unlock screen
+// returns only when the server turns that code down. The claim has to sit in one
+// sentence of the access-code chapter, so a reader there learns it beside the screen
+// they are looking at.
+func TestTheGuideSaysARememberedAccessCodeIsUsedWithoutAskingAgain(t *testing.T) {
+	body := userGuidePath(t)
+
+	chapter := userGuideSpokenText(t, userGuideChapter(t, body, "ch-07-access-codes"))
+
+	wants := []string{"remembers", "without asking", "refuses"}
+
+	if !guideSentenceSays(chapter, wants) {
+		t.Errorf("no sentence of the access-code chapter says all of %q at once", strings.Join(wants, ", "))
+	}
 }
 
 // The phone chapter carries the update dialog's own title, question, and

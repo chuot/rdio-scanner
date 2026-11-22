@@ -18,7 +18,7 @@ import { expireAvoid, nextAvoidStep } from '../domain/avoid.js';
 import { resolveAlertSequence } from '../domain/alert-priority.js';
 import { holdSystemMap, holdTalkgroupMap } from '../domain/hold.js';
 import { enqueue, filterActive, playbackQueueCount as playbackQueueCountOf } from '../domain/playback-queue.js';
-import { initialAuthState, nextAuthState, readPin } from '../domain/pin.js';
+import { clearPin, initialAuthState, nextAuthState, readPin, savePin } from '../domain/pin.js';
 import { PLAYBACK_GAP_MS } from '../infrastructure/audio-engine.js';
 
 export const LivefeedMode = { Offline: 'offline', Online: 'online', Playback: 'playback' };
@@ -57,6 +57,10 @@ export function createListenerUseCases({
 
   let auth = initialAuthState();
   let listeners = 0;
+
+  // the code this client last offered the server, kept only so that an answer the
+  // server accepts can be put back where it came from. a refused one is dropped.
+  let offeredPin = null;
 
   const emit = (event) => store.setState(event);
 
@@ -297,6 +301,17 @@ export function createListenerUseCases({
 
   // — public use-cases —
 
+  // A searched playback is a walk to the next searched call, and that walk ends
+  // with the call the operator stopped; a call the live feed reached is only itself.
+  function stopPlayingCall() {
+    if (livefeedMode === LivefeedMode.Playback) {
+      stopPlaybackMode();
+      return;
+    }
+
+    stop();
+  }
+
   function livefeed() {
     if (livefeedMode === LivefeedMode.Offline) startLivefeed();
     else if (livefeedMode === LivefeedMode.Online) stopLivefeed();
@@ -489,6 +504,10 @@ export function createListenerUseCases({
   }
 
   function authenticate(pin) {
+    // remember what this client offered, so that only an answer the server
+    // accepts can be put back where the code came from
+    offeredPin = pin;
+
     auth = nextAuthState(auth, { type: 'pin-submit' });
     emit({ auth });
 
@@ -525,8 +544,15 @@ export function createListenerUseCases({
     if (event.type === 'linked') {
       emit({ linked: true });
 
+      // A fresh connection offers the code the person gave earlier, and this offer
+      // spends it like any other: only an answer the server accepts puts it back,
+      // so a code it refused is not offered again on the next reconnect.
       const pin = readPin(storage.local);
-      if (pin) authenticate(pin);
+
+      if (pin) {
+        clearPin(storage.local);
+        authenticate(pin);
+      }
 
       return;
     }
@@ -563,6 +589,15 @@ export function createListenerUseCases({
 
         saveMap();
         rebuildCategories();
+
+        // the config frame is the server accepting the code this client offered:
+        // the accepted answer goes back into storage, where a refused one stays
+        // spent and the next reconnect reaches the person instead of answering
+        // with a code the server has already turned down.
+        if (auth.status === 'authenticating' && offeredPin) {
+          savePin(storage.local, offeredPin);
+          offeredPin = null;
+        }
 
         auth = nextAuthState(auth, { type: 'config' });
 
@@ -604,10 +639,24 @@ export function createListenerUseCases({
         emit({ auth });
         break;
 
-      case 'PIN':
+      case 'PIN': {
+        // The server asks for the access code whenever it needs one, including on
+        // a connection it has already authenticated and then reconfigured. A code
+        // the person gave earlier answers that ask, and it is spent on it: read
+        // and cleared in the same step, so the follow-up ask a refusal sends
+        // finds nothing to offer a second time and reaches the prompt instead.
+        const storedPin = readPin(storage.local);
+
+        if (storedPin) {
+          clearPin(storage.local);
+          authenticate(storedPin);
+          break;
+        }
+
         auth = nextAuthState(auth, { type: 'pin-prompt' });
         emit({ auth });
         break;
+      }
 
       case 'XPR':
         auth = nextAuthState(auth, { type: 'expired' });
@@ -643,6 +692,7 @@ export function createListenerUseCases({
     skip,
     stop,
     stopPlaybackMode,
+    stopPlayingCall,
     setSystemStatus,
     toggleAll,
     toggleCategory,

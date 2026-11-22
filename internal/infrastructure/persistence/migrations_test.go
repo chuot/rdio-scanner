@@ -151,6 +151,67 @@ func announcements(progress []string) []string {
 	return found
 }
 
+// callsLines keeps every line the calls stage can print about the calls table: the line it opens a
+// migration with, the lines the archive writes for rows it could not carry, and the line the drop
+// writes when it leaves the table where it found it.
+func callsLines(progress []string) []string {
+	found := []string{}
+
+	for _, line := range progress {
+		if strings.Contains(line, "calls") || strings.Contains(line, "call ") {
+			found = append(found, line)
+		}
+	}
+
+	return found
+}
+
+// leftoverCallsTable puts the legacy calls table back into a database whose migration already
+// finished, holding the given rows exactly as the legacy server wrote them. It is the shape a start
+// after the upgrade meets: the migration's own tables are in place, and the legacy table is where
+// the legacy server left it.
+func leftoverCallsTable(t *testing.T, db *sql.DB, rows []string) {
+	t.Helper()
+
+	if !hasV6Table(t, db, "rdioScannerCalls") {
+		for _, statement := range legacyV6Schema {
+			if strings.Contains(statement, "`rdioScannerCalls`") {
+				mustExec(t, db, statement)
+			}
+		}
+	}
+
+	for _, statement := range rows {
+		mustExec(t, db, statement)
+	}
+}
+
+// v6CallRows picks the recorded calls inserts with the given identities out of a fixture's rows. With
+// no identity named it picks every calls row the fixture records.
+func v6CallRows(rows []string, ids ...int) []string {
+	found := []string{}
+
+	for _, statement := range rows {
+		if !strings.HasPrefix(statement, `INSERT INTO "rdioScannerCalls"`) {
+			continue
+		}
+
+		if len(ids) == 0 {
+			found = append(found, statement)
+
+			continue
+		}
+
+		for _, id := range ids {
+			if strings.HasPrefix(statement, fmt.Sprintf(`INSERT INTO "rdioScannerCalls" VALUES(%d,`, id)) {
+				found = append(found, statement)
+			}
+		}
+	}
+
+	return found
+}
+
 // readRows runs a query and returns every value as a string, so a whole table can be compared at
 // once. A NULL comes back as "NULL" and a blob as its bytes.
 func readRows(t *testing.T, db *sql.DB, query string) [][]string {
@@ -984,6 +1045,135 @@ func TestMigrateLeavesAV6TableItCouldNotReadWhole(t *testing.T) {
 		if !hasString(progress, want) {
 			t.Errorf("the migration said nothing about the table it left behind: %v", progress)
 		}
+	}
+}
+
+// The report's repeat read as a test: the upgrade is finished, the live calls table holds every row
+// of the legacy table under the same identity, and the legacy table is still where the legacy server
+// left it. The pass has nothing to carry, so it says nothing about calls and finishes the table.
+func TestMigrateFinishesALeftoverCallsTableTheLiveCallsTableAlreadyHolds(t *testing.T) {
+	db, first := migrateLegacyV6Fixture(t)
+
+	if hasV6Table(t, db, "rdioScannerCalls") {
+		t.Fatalf("the fixture's calls table survived the pass that was meant to finish it: %v", first)
+	}
+
+	carried := rowsOf(t, db, "calls", `"callId"`)
+	archived := archivedRows(t, db, "rdioScannerCalls")
+
+	leftoverCallsTable(t, db, v6CallRows(legacyV6Rows))
+
+	progress := migrateDatabase(t, db)
+
+	if lines := callsLines(progress); len(lines) != 0 {
+		t.Errorf("a pass with nothing to carry said something about calls: %v", lines)
+	}
+
+	if hasV6Table(t, db, "rdioScannerCalls") {
+		t.Errorf("the pass left a calls table whose every row is accounted for: %v", progress)
+	}
+
+	if got := rowsOf(t, db, "calls", `"callId"`); !equalStrings(flat(got), flat(carried)) {
+		t.Errorf("a pass over a finished deployment changed the calls table:\n  was  %v\n  now  %v", flat(carried), flat(got))
+	}
+
+	if got := archivedRows(t, db, "rdioScannerCalls"); !equalStrings(flat(got), flat(archived)) {
+		t.Errorf("a pass over a finished deployment archived a row a second time:\n  was  %v\n  now  %v", flat(archived), flat(got))
+	}
+}
+
+// Three starts on one finished deployment. The report is about a startup log entry per start, so the
+// reading is taken three times over the same database, and the second and third starts are the ones
+// the operator actually sees.
+func TestMigrateSaysNothingAboutCallsAtEachOfThreeStartsOnAFinishedDeployment(t *testing.T) {
+	db, _ := migrateLegacyV6Fixture(t)
+
+	leftoverCallsTable(t, db, v6CallRows(legacyV6Rows))
+
+	for start := 1; start <= 3; start++ {
+		progress := migrateDatabase(t, db)
+
+		if lines := callsLines(progress); len(lines) != 0 {
+			t.Errorf("start %d on a finished deployment named the calls table: %v", start, lines)
+		}
+	}
+
+	if hasV6Table(t, db, "rdioScannerCalls") {
+		t.Errorf("three passes left the legacy calls table where they found it")
+	}
+}
+
+// A row this server cannot read keeps the whole table, and it is the only thing that does. The start
+// after the one that left it behind has nothing to carry: it says what it left and why, and it does
+// not announce a migration it is not running.
+func TestMigrateLeavesACallsTableWithARowItCannotReadWithoutAnnouncingAMigration(t *testing.T) {
+	db := openLegacyV6PartialDatabase(t)
+
+	first := migrateDatabase(t, db)
+
+	if !hasString(first, "migrating calls...") {
+		t.Fatalf("the pass that carried the fixture's calls did not announce them: %v", first)
+	}
+
+	carried := rowsOf(t, db, "calls", `"callId"`)
+	archived := archivedRows(t, db, "rdioScannerCalls")
+
+	progress := migrateDatabase(t, db)
+
+	warn := "the migration left the calls table where it found it: a row of it could not be read"
+
+	if !hasString(progress, warn) {
+		t.Errorf("the pass that left the calls table said nothing about why: %v", progress)
+	}
+
+	if !hasV6Table(t, db, "rdioScannerCalls") {
+		t.Errorf("a pass dropped a calls table holding the row it could not read: %v", progress)
+	}
+
+	if hasString(progress, "migrating calls...") {
+		t.Errorf("the pass announced a calls migration for a table whose rows it does not carry: %v", progress)
+	}
+
+	// The row it cannot read is untouched, and so are the rows it carried and archived on the first
+	// pass: keeping a table is not the same as changing what is already in the live tables.
+	got := readRows(t, db, `SELECT "id", "dateTime", "audioName" FROM "rdioScannerCalls" WHERE "id" = 709`)
+	want := [][]string{{"709", "not a timestamp", "709.wav"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the pass rewrote the row it could not read:\n  got  %v\n  want %v", got, want)
+	}
+
+	if rows := rowsOf(t, db, "calls", `"callId"`); !equalStrings(flat(rows), flat(carried)) {
+		t.Errorf("a repeat pass changed the carried calls:\n  was  %v\n  now  %v", flat(carried), flat(rows))
+	}
+
+	if rows := archivedRows(t, db, "rdioScannerCalls"); !equalStrings(flat(rows), flat(archived)) {
+		t.Errorf("a repeat pass archived a row a second time:\n  was  %v\n  now  %v", flat(archived), flat(rows))
+	}
+}
+
+// A row the pass read and archived is accounted for the same way a row it carried is: a table whose
+// only odd rows are archived ones is finished, and a start that has nothing to carry says nothing
+// about it.
+func TestMigrateFinishesALeftoverCallsTableWhoseRowsItOnlyArchives(t *testing.T) {
+	db, _ := migrateLegacyV6Fixture(t)
+
+	leftoverCallsTable(t, db, v6CallRows(legacyV6Rows, 705, 710))
+
+	progress := migrateDatabase(t, db)
+
+	if hasV6Table(t, db, "rdioScannerCalls") {
+		t.Errorf("the pass left a calls table whose every row it had already read and archived: %v", progress)
+	}
+
+	if lines := callsLines(progress); len(lines) != 0 {
+		t.Errorf("a pass with nothing to carry said something about calls: %v", lines)
+	}
+
+	archived := archivedRows(t, db, "rdioScannerCalls")
+
+	if len(archived) != 2 || archived[0][1] != "705" || archived[1][1] != "710" {
+		t.Errorf("the archived calls after a pass that carried nothing: %v, want the two rows the fixture could not carry", archived)
 	}
 }
 

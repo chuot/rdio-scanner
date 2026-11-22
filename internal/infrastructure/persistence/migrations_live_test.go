@@ -182,46 +182,54 @@ func liveStatements(dialect Dialect) []string {
 func seedLive(t *testing.T, db *sql.DB, dialect Dialect) {
 	t.Helper()
 
-	// The v6.6.3 fixture is the recorded statements, applied to a database of this dialect's own
-	// schema, so that a live run seeds the same rows the sqlite tests seed.
+	for _, table := range liveSeedOrder {
+		seedLiveTable(t, db, dialect, table)
+	}
+}
+
+// seedLiveTable copies one table of the recorded v6.6.3 fixture into a live backend of the given
+// dialect. The v6.6.3 fixture is the recorded statements, applied to a database of this dialect's own
+// schema, so that a live run seeds the same rows the sqlite tests seed, and one table at a time is
+// what lets a test put a single legacy table back after the pass finished with it.
+func seedLiveTable(t *testing.T, db *sql.DB, dialect Dialect, table string) {
+	t.Helper()
+
 	fixture := buildRecordedDatabase(t, append(append([]string{}, legacyV6Schema...), legacyV6Rows...))
 
 	defer fixture.Close()
 
 	s := newStore(db, dialect)
 
-	for _, table := range liveSeedOrder {
-		columns, declared := liveFixtureColumns(t, fixture, table)
-		rows := liveFixtureRows(t, fixture, table)
+	columns, declared := liveFixtureColumns(t, fixture, table)
+	rows := liveFixtureRows(t, fixture, table)
 
-		if len(rows) == 0 {
-			t.Fatalf("the v6.6.3 fixture holds no %s rows, so seeding %s proves nothing", table, dialect)
+	if len(rows) == 0 {
+		t.Fatalf("the v6.6.3 fixture holds no %s rows, so seeding %s proves nothing", table, dialect)
+	}
+
+	names := make([]string, 0, len(columns))
+
+	for _, column := range columns {
+		names = append(names, `"`+column+`"`)
+	}
+
+	holders := make([]string, 0, len(columns))
+
+	for range columns {
+		holders = append(holders, "?")
+	}
+
+	query := `INSERT INTO "` + table + `" (` + strings.Join(names, ", ") + `) VALUES (` + strings.Join(holders, ", ") + `)`
+
+	for _, row := range rows {
+		args := make([]any, 0, len(row))
+
+		for i, value := range row {
+			args = append(args, liveSeedValue(t, dialect, table, columns[i], declared[i], value))
 		}
 
-		names := make([]string, 0, len(columns))
-
-		for _, column := range columns {
-			names = append(names, `"`+column+`"`)
-		}
-
-		holders := make([]string, 0, len(columns))
-
-		for range columns {
-			holders = append(holders, "?")
-		}
-
-		query := `INSERT INTO "` + table + `" (` + strings.Join(names, ", ") + `) VALUES (` + strings.Join(holders, ", ") + `)`
-
-		for _, row := range rows {
-			args := make([]any, 0, len(row))
-
-			for i, value := range row {
-				args = append(args, liveSeedValue(t, dialect, table, columns[i], declared[i], value))
-			}
-
-			if _, err := s.exec(context.Background(), query, args...); err != nil {
-				t.Fatalf("seeding %s into %s: %v", table, dialect, err)
-			}
+		if _, err := s.exec(context.Background(), query, args...); err != nil {
+			t.Fatalf("seeding %s into %s: %v", table, dialect, err)
 		}
 	}
 }
@@ -1016,5 +1024,240 @@ func liveCallIndexSetAfterMigrate(t *testing.T, dialect Dialect) {
 	if !found {
 		t.Errorf("the migrated calls table on %s reports (%s), want %s among its indexes",
 			dialect, strings.Join(indexShapes(carries), ", "), cover.name)
+	}
+}
+
+// liveV6CallsTableDDL returns the statements that put the v6.6.3 calls table back on a live backend of
+// this dialect after a migration pass has finished with it: the table as that dialect's own v6.6.3
+// deployment declares it, with its key. They are the two statements of the recorded fixture's DDL for
+// that table, because a deployment whose calls migration never finished has exactly those in it.
+func liveV6CallsTableDDL(dialect Dialect) []string {
+	statements := liveMariadbSchema
+
+	if dialect == DialectPostgresql {
+		statements = livePostgresqlSchema
+	}
+
+	for i, statement := range statements {
+		if !strings.Contains(statement, "rdioScannerCalls") {
+			continue
+		}
+
+		return statements[i : i+2]
+	}
+
+	return nil
+}
+
+// liveLeftoverCallsTable puts the v6.6.3 calls table back on a live backend, holding the fixture's rows.
+// That is the table a deployment whose calls migration never finished still has sitting in it, and the
+// server meets it on a database that already has the v8 calls table filled.
+func liveLeftoverCallsTable(t *testing.T, db *sql.DB, dialect Dialect) {
+	t.Helper()
+
+	applyStatements(t, db, liveV6CallsTableDDL(dialect))
+
+	seedLiveTable(t, db, dialect, "rdioScannerCalls")
+}
+
+// liveUnreadableRow puts a timestamp this server cannot read into one row of the v6 calls table on a
+// live backend. A datetime column holds only a value its own backend's timestamp rule accepts, and the
+// calls migration counts a timestamp it cannot turn into a time as a row it never read, so the column is
+// first widened to text wide enough for the table's own key — the key length is why it is not a plain
+// text column — with every other row's timestamp rendered in the shape the v6 databases write. The row
+// that gets the unreadable value keeps every other value it had: the only thing about it the arrange
+// changes is the column the pass reads.
+func liveUnreadableRow(t *testing.T, db *sql.DB, dialect Dialect, rowId int) {
+	t.Helper()
+
+	widen := ""
+
+	switch dialect {
+	case DialectMariadb:
+		widen = `ALTER TABLE "rdioScannerCalls" MODIFY "dateTime" varchar(64) not null`
+	case DialectPostgresql:
+		widen = `ALTER TABLE "rdioScannerCalls" ALTER COLUMN "dateTime" TYPE varchar(64) ` +
+			`USING to_char("dateTime", 'YYYY-MM-DD HH24:MI:SS') || ' +0000 UTC'`
+	default:
+		t.Fatalf("liveUnreadableRow has no statement for the %s backend", dialect)
+	}
+
+	if _, err := db.ExecContext(context.Background(), widen); err != nil {
+		t.Fatalf("%s: %v", widen, err)
+	}
+
+	s := newStore(db, dialect)
+
+	if _, err := s.exec(context.Background(), `UPDATE "rdioScannerCalls" SET "dateTime" = ? WHERE "id" = ?`, "not a timestamp", rowId); err != nil {
+		t.Fatalf("writing the timestamp this server cannot read: %v", err)
+	}
+
+	value := ""
+
+	query := `SELECT "dateTime" FROM "rdioScannerCalls" WHERE "id" = ?`
+
+	if err := s.queryRow(context.Background(), query, rowId).Scan(&value); err != nil {
+		t.Fatalf("%s: %v", query, err)
+	}
+
+	if value != "not a timestamp" {
+		t.Fatalf("the row's dateTime reads %q: the row has to hold the text itself, because the pass counts a "+
+			"row whose timestamp it cannot read as one it never saw", value)
+	}
+}
+
+// liveProgressText returns the messages a live pass reported, in the order it said them.
+func liveProgressText(lines []progressLine) []string {
+	messages := make([]string, 0, len(lines))
+
+	for _, line := range lines {
+		messages = append(messages, line.message)
+	}
+
+	return messages
+}
+
+// liveAnnouncedCalls reports whether a live pass announced that it was migrating calls.
+func liveAnnouncedCalls(lines []progressLine) bool {
+	for _, line := range lines {
+		if strings.Contains(line.message, "migrating calls") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// liveWarnedAbout returns the warning lines a live pass named one table with.
+func liveWarnedAbout(lines []progressLine, table string) []string {
+	warnings := []string{}
+
+	for _, line := range lines {
+		if line.level == domain.LogLevelWarn && strings.Contains(line.message, table) {
+			warnings = append(warnings, line.message)
+		}
+	}
+
+	return warnings
+}
+
+// On MariaDB and on PostgreSQL: a leftover calls table whose every row the live calls table already
+// holds, or the migration archive already holds, is finished. Each backend gets its own database of its
+// own dialect, seeded with the same recorded v6.6.3 deployment the sqlite tests seed.
+func TestMigrateLiveOnMariaDBFinishesALeftoverCallsTableTheLiveCallsTableAlreadyHolds(t *testing.T) {
+	liveFinishedLeftoverCallsTable(t, DialectMariadb)
+}
+
+func TestMigrateLiveOnPostgreSQLFinishesALeftoverCallsTableTheLiveCallsTableAlreadyHolds(t *testing.T) {
+	liveFinishedLeftoverCallsTable(t, DialectPostgresql)
+}
+
+// liveFinishedLeftoverCallsTable runs the finished-table reading on a live backend: migrate the recorded
+// v6.6.3 deployment, put its calls table back with the same rows in it, and start again. The second
+// start has nothing to carry, so it says nothing about calls and drops the table it found finished.
+func liveFinishedLeftoverCallsTable(t *testing.T, dialect Dialect) {
+	t.Helper()
+
+	db := liveDatabase(t, dialect)
+
+	liveMigrate(t, db, dialect)
+
+	carried := rowsOf(t, db, "calls", `"callId"`)
+	archived := archivedRows(t, db, "rdioScannerCalls")
+
+	liveLeftoverCallsTable(t, db, dialect)
+
+	if held := countRows(t, db, "rdioScannerCalls"); held != len(carried)+len(archived) {
+		t.Fatalf("the leftover calls table on %s holds %d rows, want the %d the migration carried plus the %d "+
+			"it archived", dialect, held, len(carried), len(archived))
+	}
+
+	second := liveMigrate(t, db, dialect)
+
+	if liveAnnouncedCalls(second) {
+		t.Errorf("the %s pass with nothing to carry announced it was migrating calls: %v", dialect, liveProgressText(second))
+	}
+
+	if warnings := liveWarnedAbout(second, "rdioScannerCalls"); len(warnings) != 0 {
+		t.Errorf("the %s pass said something about a finished calls table: %v", dialect, warnings)
+	}
+
+	if hasTable(t, db, dialect, "rdioScannerCalls") {
+		t.Errorf("the %s pass left a calls table whose every row is accounted for: %v", dialect, liveProgressText(second))
+	}
+
+	if now := rowsOf(t, db, "calls", `"callId"`); !equalStrings(flat(now), flat(carried)) {
+		t.Errorf("the %s pass over a finished deployment changed the calls table:\n  was  %v\n  now  %v",
+			dialect, flat(carried), flat(now))
+	}
+
+	if now := archivedRows(t, db, "rdioScannerCalls"); !equalStrings(flat(now), flat(archived)) {
+		t.Errorf("the %s pass over a finished deployment archived a row a second time:\n  was  %v\n  now  %v",
+			dialect, flat(archived), flat(now))
+	}
+}
+
+func TestMigrateLiveOnMariaDBLeavesACallsTableWithARowItCannotReadWithoutAnnouncingAMigration(t *testing.T) {
+	liveUnreadableRowKeepsTheTable(t, DialectMariadb)
+}
+
+func TestMigrateLiveOnPostgreSQLLeavesACallsTableWithARowItCannotReadWithoutAnnouncingAMigration(t *testing.T) {
+	liveUnreadableRowKeepsTheTable(t, DialectPostgresql)
+}
+
+// liveUnreadableRowKeepsTheTable runs the unread-row reading on a live backend, from the seeded v6.6.3
+// deployment with one of its call timestamps rewritten into something this server cannot read. The first
+// start carries the rows it can and leaves the table with the row it could not read; the start after that
+// has nothing to carry, so the only thing it says about calls is the sentence naming the table and the
+// row, and not a migration it is not running.
+func liveUnreadableRowKeepsTheTable(t *testing.T, dialect Dialect) {
+	t.Helper()
+
+	db := liveDatabase(t, dialect)
+
+	liveUnreadableRow(t, db, dialect, 702)
+
+	first := liveMigrate(t, db, dialect)
+
+	if !hasString(liveProgressText(first), "migrating calls...") {
+		t.Fatalf("the %s pass that carried the readable calls did not announce them, so the row it could not "+
+			"read is not the only odd thing about this database: %v", dialect, liveProgressText(first))
+	}
+
+	carried := rowsOf(t, db, "calls", `"callId"`)
+	archived := archivedRows(t, db, "rdioScannerCalls")
+	unreadable := readRows(t, db, `SELECT "id", "dateTime", "audioName" FROM "rdioScannerCalls" WHERE "id" = 702`)
+
+	if len(unreadable) != 1 {
+		t.Fatalf("the calls table does not hold the row 702 whose timestamp was rewritten: %v", unreadable)
+	}
+
+	second := liveMigrate(t, db, dialect)
+
+	warn := "the migration left the calls table where it found it: a row of it could not be read"
+
+	if !hasString(liveProgressText(second), warn) {
+		t.Errorf("the %s pass that left the calls table said nothing about why: %v", dialect, liveProgressText(second))
+	}
+
+	if !hasTable(t, db, dialect, "rdioScannerCalls") {
+		t.Errorf("a %s pass dropped a calls table holding the row it could not read: %v", dialect, liveProgressText(second))
+	}
+
+	if hasString(liveProgressText(second), "migrating calls...") {
+		t.Errorf("the %s pass announced a calls migration for a table whose rows it does not carry: %v", dialect, liveProgressText(second))
+	}
+
+	if now := readRows(t, db, `SELECT "id", "dateTime", "audioName" FROM "rdioScannerCalls" WHERE "id" = 702`); !equalStrings(flat(now), flat(unreadable)) {
+		t.Errorf("the %s pass rewrote the row it could not read:\n  was  %v\n  now  %v", dialect, flat(unreadable), flat(now))
+	}
+
+	if now := rowsOf(t, db, "calls", `"callId"`); !equalStrings(flat(now), flat(carried)) {
+		t.Errorf("the %s pass left a row behind and changed which rows the calls table holds:\n  was  %v\n  now  %v",
+			dialect, flat(carried), flat(now))
+	}
+
+	if now := archivedRows(t, db, "rdioScannerCalls"); !equalStrings(flat(now), flat(archived)) {
+		t.Errorf("the %s pass archived a row a second time:\n  was  %v\n  now  %v", dialect, flat(archived), flat(now))
 	}
 }

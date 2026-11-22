@@ -191,6 +191,22 @@ func alreadyCarried(ctx context.Context, tx transaction, table, column string, i
 	return count > 0, nil
 }
 
+// alreadyArchived asks the migration archive the question alreadyCarried asks the live tables: has this
+// server already accounted for the row with this identity, out of the v6 table with this name. A row the
+// archive holds is a row the pass read, could not carry, and kept with its reason, so a later pass has
+// nothing left to do with it.
+func alreadyArchived(ctx context.Context, tx transaction, table string, rowId int64) (bool, error) {
+	query := `SELECT COUNT(*) FROM "migrationArchive" WHERE "tableName" = ? AND "rowId" = ?`
+
+	var count int
+
+	if err := tx.queryRow(ctx, query, table, rowId).Scan(&count); err != nil {
+		return false, statementError("migration", "alreadyArchived", err, query)
+	}
+
+	return count > 0, nil
+}
+
 // readV6Table opens the v6 table a migration is carrying rows out of: on the
 // pool for the server backends, on the transaction itself for the file
 // backend. The cursor stays open while the carry, the archive, and the
@@ -2237,6 +2253,86 @@ func migrateDirwatches(ctx context.Context, s store, progress Progress) error {
 	return nil
 }
 
+// callsRowsToCarry looks at a leftover v6 calls table before the stage says anything about it: it reads
+// the identity and the timestamp of each row — no audio, no reference columns — and answers how many rows
+// this server still has to carry, and how many rows it could not read. A row is accounted for, and in
+// neither count, when the live calls table already holds it under the same identity, which is the same
+// question the carrying loop asks at its alreadyCarried pre-check, or when the migration archive already
+// holds it under that identity. A timestamp no shape the pass can decode fits is counted as unreadable:
+// it is not something the stage can carry, and it is why the table stays where it was found.
+func callsRowsToCarry(ctx context.Context, s store, tx transaction) (int, int, error) {
+	const section, operation = "migration", "migrateCalls"
+
+	query := `SELECT "id", "dateTime" FROM "rdioScannerCalls"`
+
+	rows, err := readV6Table(ctx, s, tx, query)
+	if err != nil {
+		return 0, 0, statementError(section, operation, err, query)
+	}
+
+	var toCarry, unreadable int
+
+	for rows.Next() {
+		var (
+			callID      sql.NullInt32
+			rawDateTime any
+		)
+
+		if err := rows.Scan(&callID, &rawDateTime); err != nil {
+			unreadable++
+
+			continue
+		}
+
+		// A row with no identity has no identity for the live table or the archive to hold, so it is
+		// always a row the stage reads again: the archive can keep one such row, and dropping a table
+		// that holds several would lose the ones the archive never took.
+		if callID.Valid {
+			carried, err := alreadyCarried(ctx, tx, "calls", "callId", int64(callID.Int32))
+			if err != nil {
+				rows.Close()
+
+				return 0, 0, err
+			}
+
+			if carried {
+				continue
+			}
+
+			archived, err := alreadyArchived(ctx, tx, "rdioScannerCalls", int64(callID.Int32))
+			if err != nil {
+				rows.Close()
+
+				return 0, 0, err
+			}
+
+			if archived {
+				continue
+			}
+		}
+
+		// Read the timestamp the way the carrying loop reads it, so the two agree on which rows this
+		// server is able to carry before either of them reads a byte of audio.
+		if _, err := v6DateTime(rawDateTime); err != nil {
+			unreadable++
+
+			continue
+		}
+
+		toCarry++
+	}
+
+	if err := rows.Err(); err != nil {
+		rows.Close()
+
+		return 0, 0, statementError(section, operation, err, query)
+	}
+
+	rows.Close()
+
+	return toCarry, unreadable, nil
+}
+
 // migrateCalls mirrors `migrateCalls` in `server/migrations.go`: a call is carried only when its
 // audio, its timestamp, and both of its aggregate references resolve, and it is archived with its
 // audio when it does not.
@@ -2249,6 +2345,37 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 	}
 
 	if !exists {
+		return nil
+	}
+
+	tx, err := s.begin(ctx)
+	if err != nil {
+		return operationError(section, operation, err)
+	}
+
+	// Look, say, carry. The stage counts what the leftover table still has to give it before it
+	// announces anything, so a start whose upgrade is already finished says nothing about calls and never
+	// reads the audio of a row it is not going to carry.
+	toCarry, unreadable, err := callsRowsToCarry(ctx, s, tx)
+	if err != nil {
+		tx.rollback()
+
+		return err
+	}
+
+	if toCarry == 0 {
+		// A timestamp the pass cannot read is the one thing that keeps a table it is not carrying: the row
+		// stays where the operator can reach it, and the sentence that says so is the one the carrying pass
+		// already prints. A table whose every row is carried or archived is finished, and a finished table
+		// goes without a word about it.
+		dropV6Table(ctx, tx, progress, part, section, operation, "rdioScannerCalls", unreadable > 0)
+
+		if err := tx.commit(); err != nil {
+			tx.rollback()
+
+			return operationError(section, operation, err)
+		}
+
 		return nil
 	}
 
@@ -2313,11 +2440,6 @@ func migrateCalls(ctx context.Context, s store, progress Progress) error {
 	}
 
 	rows.Close()
-
-	tx, err := s.begin(ctx)
-	if err != nil {
-		return operationError(section, operation, err)
-	}
 
 	arch := archiving(ctx, tx, progress, "rdioScannerCalls", "call", "calls")
 

@@ -748,6 +748,106 @@ describe('application/listener-use-cases — auth', () => {
     });
 });
 
+// a restricted server asks for the access code again whenever its configuration
+// changes under a connected listener. the client already holds the code the person
+// gave it once, so it answers that ask itself, and it only reaches the unlock screen
+// when it has nothing to answer with or when the answer it gave has just been refused.
+// one ask is worth at most one submission: the code is gone from storage the moment it
+// is sent, so the refusal's follow-up ask finds nothing to send again.
+
+describe('application/listener-use-cases — answering a server request with the stored code', () => {
+    const submissions = (socket) => socket.sent.filter(([command]) => command === 'PIN');
+
+    it('a stored code answers a PIN request with one submission and no prompt', () => {
+        const { useCases, socket, storage, events } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        assert.equal(storage.local.getItem('rdio-scanner-pin'), btoa('saved'));
+
+        socket.inject('PIN');
+
+        assert.deepEqual(submissions(socket), [['PIN', btoa('saved'), undefined]]);
+        assert.equal(events.filter((event) => event.auth?.status === 'pin-required').length, 0);
+        assert.equal(useCases.auth.status, 'authenticating');
+    });
+
+    it('the stored code is gone the moment the client answers with it', () => {
+        const { useCases, socket, storage } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        assert.deepEqual([...storage.stored], [['rdio-scanner-pin', btoa('saved')]]);
+
+        socket.inject('PIN');
+
+        assert.deepEqual([...storage.stored], []);
+        assert.equal(submissions(socket).length, 1);
+    });
+
+    it('a refused answer reaches the person and is not submitted a second time', () => {
+        const { useCases, socket, storage } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        socket.inject('PIN');
+        socket.inject('PIN');
+
+        assert.deepEqual(submissions(socket), [['PIN', btoa('saved'), undefined]]);
+        assert.equal(useCases.auth.status, 'pin-required');
+        assert.equal(useCases.auth.denied, true);
+        assert.equal(storage.local.getItem('rdio-scanner-pin'), null);
+    });
+
+    it('with nothing stored a PIN request still reaches the prompt as it does today', () => {
+        const { useCases, socket, storage } = setup();
+
+        socket.inject('PIN');
+
+        assert.equal(submissions(socket).length, 0);
+        assert.equal(useCases.auth.status, 'pin-required');
+        assert.equal(useCases.auth.denied, false);
+        assert.equal(storage.local.getItem('rdio-scanner-pin'), null);
+    });
+});
+
+// the stored code across a reconnect. a fresh connection offers the code the person
+// gave earlier, and that offer spends it too: a code the server refused is not offered
+// again on the next reconnect, and only a code the server accepted goes back into
+// storage. one connection is worth at most one submission.
+
+describe('application/listener-use-cases — the stored code across a reconnect', () => {
+    const submissions = (socket) => socket.sent.filter(([command]) => command === 'PIN');
+
+    it('a fresh connection offers the stored code once and spends it', () => {
+        const { socket, storage } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        assert.deepEqual([...storage.stored], [['rdio-scanner-pin', btoa('saved')]]);
+
+        socket.linked();
+
+        assert.deepEqual(submissions(socket), [['PIN', btoa('saved'), undefined]]);
+        assert.deepEqual([...storage.stored], []);
+    });
+
+    it('a code the server refused is not offered again on the next reconnect', () => {
+        const { useCases, socket, storage } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        socket.linked();
+        socket.inject('PIN');
+        socket.linked();
+
+        assert.deepEqual(submissions(socket), [['PIN', btoa('saved'), undefined]]);
+        assert.equal(useCases.auth.status, 'pin-required');
+        assert.equal(useCases.auth.denied, true);
+        assert.equal(storage.local.getItem('rdio-scanner-pin'), null);
+    });
+
+    it('a code the server accepted is stored again where it was', () => {
+        const { useCases, socket, storage } = setup({ storage: { 'rdio-scanner-pin': btoa('saved') } });
+
+        socket.linked();
+        socket.inject('CFG', cfgPayload);
+
+        assert.equal(useCases.auth.status, 'authenticated');
+        assert.equal(storage.local.getItem('rdio-scanner-pin'), btoa('saved'));
+    });
+});
+
 // the alert tone in front of a live call. the fake engine keeps the
 // tone sequences and recordings it is asked for, in order, and holds
 // each tone open until the test ends it. the tone is a live arrival's:
@@ -1160,5 +1260,167 @@ describe('application/listener-use-cases — the queue number stays truthful acr
         await settle();
 
         assert.equal(store.getState().queue, 10, 'the resumed call left the queue');
+    });
+});
+
+// stopping the call that is playing is what a row's stop control asks for.
+// what that means depends on the mode the app is in: a searched playback has
+// a walk to the next searched call that has to end with the call, the live
+// feed has a queue of arrivals that the call's end does not touch, and a
+// call that arrived while the app was already out of both has neither.
+describe('application/listener-use-cases — stopping the playing call follows the mode', () => {
+    // A searched playback on the second row of an answered page: the row was
+    // pressed, the search was answered with four calls, and the recording the
+    // server handed over is playing.
+    function playbackOn({ sort = 1, page = [1, 2, 3, 4], from = 1 } = {}) {
+        const { useCases, socket, store, audio } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.loadAndPlay(page[from]);
+
+        socket.inject('LCL', { count: page.length, options: { limit: 200, offset: 0, sort }, results: page.map((id) => ({ id, system: 10, talkgroup: 100 })) });
+        socket.inject('CAL', { id: page[from], system: 10, talkgroup: 100, audio: { data: [0] } }, 'play');
+
+        return { useCases, socket, store, audio };
+    }
+
+    const playRequests = (sent) => sent.filter((frame) => frame[0] === 'CAL' && frame[2] === 'play').map((frame) => frame[1]);
+
+    it('stopping a searched playback silences its recording and leaves nothing waiting', () => {
+        const { useCases, socket, store, audio } = playbackOn();
+
+        assert.equal(store.getState().queue, 3, 'three searched calls waited behind the one being played');
+
+        useCases.stopPlayingCall();
+
+        assert.equal(audio.played[0].stopped, true, 'the recording the operator stopped is still audible');
+        assert.equal(store.getState().call, null, 'the call the operator stopped is still the call being played');
+        assert.equal(store.getState().queue, 0, 'the searched calls that waited behind it are still counted as waiting');
+        assert.deepEqual(playRequests(socket.sent), ['2'], 'the stop asked the server for a further searched call');
+    });
+
+    it('stopping a searched playback leaves the app out of playback mode', () => {
+        const { useCases, store } = playbackOn();
+
+        useCases.stopPlayingCall();
+
+        assert.equal(useCases.livefeedMode, 'offline', `the stop left the app in ${useCases.livefeedMode} mode`);
+        assert.equal(store.getState().livefeedMode, 'offline', 'the page still shows a mode the stop did not end');
+    });
+
+    it('stopping a searched playback keeps the answer the search gave on the results list', () => {
+        const { useCases, store } = playbackOn();
+
+        useCases.stopPlayingCall();
+
+        assert.deepEqual(store.getState().playbackList.results.map((row) => row.id), [1, 2, 3, 4], 'the list the operator searched out is gone with the call');
+    });
+
+    it('stopping a call the live feed reached leaves the live feed running', () => {
+        const { useCases, socket, store, audio } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.livefeed();
+
+        socket.inject('CAL', { id: 7, system: 10, talkgroup: 100, audio: { data: [1] } });
+
+        const frames = socket.sent.slice();
+
+        useCases.stopPlayingCall();
+
+        assert.equal(audio.played[0].stopped, true, 'the call the operator stopped is still audible');
+        assert.equal(useCases.livefeedMode, 'online', `stopping a live call left the app in ${useCases.livefeedMode} mode`);
+        assert.equal(store.getState().livefeedMode, 'online', 'the page left the live feed it was in');
+        assert.deepEqual(socket.sent, frames, 'the stop asked the server for something the live feed did not already ask for');
+    });
+
+    it('stopping a call while the app is out of both modes leaves it out of both', () => {
+        const { useCases, socket, store } = setup();
+
+        socket.inject('CFG', cfgPayload);
+
+        socket.inject('CAL', { id: 9, system: 10, talkgroup: 100, audio: { data: [1] } }, 'play');
+
+        assert.equal(useCases.livefeedMode, 'offline', 'the call did not arrive while the app was out of both modes');
+
+        useCases.stopPlayingCall();
+
+        assert.equal(useCases.livefeedMode, 'offline', `the stop moved the app into ${useCases.livefeedMode} mode`);
+        assert.equal(store.getState().call, null, 'the call the operator stopped is still the call being played');
+    });
+});
+
+// A searched recording leaves a one second gap before the walk asks for the
+// next call. The gap is where the walk is between two calls: the operator can
+// close it by pressing another row, and a stop taken there must leave the walk
+// ended rather than start the call the gap was heading to.
+describe('application/listener-use-cases — the gap a searched recording leaves between its calls', () => {
+    // A searched playback on the second row of an ascending page of four calls,
+    // with its recording playing and the gap timer available to the case.
+    function walkingPlayback() {
+        const { useCases, socket, store, audio, timers } = setup();
+
+        socket.inject('CFG', cfgPayload);
+        useCases.loadAndPlay(2);
+
+        socket.inject('LCL', {
+            count: 4,
+            options: { limit: 200, offset: 0, sort: 1 },
+            results: [1, 2, 3, 4].map((id) => ({ id, system: 10, talkgroup: 100 })),
+        });
+        socket.inject('CAL', { id: 2, system: 10, talkgroup: 100, audio: { data: [0] } }, 'play');
+
+        return { useCases, socket, store, audio, timers };
+    }
+
+    it('a searched recording that ends on its own walks to the next searched call', () => {
+        const { useCases, socket, audio, timers } = walkingPlayback();
+
+        assert.equal(useCases.livefeedMode, 'playback', 'the row that was pressed started no searched playback');
+
+        audio.played[0].ended();
+
+        assert.equal(timers.scheduled.at(-1).delay, 1000, 'the gap the ended recording opened was never scheduled');
+        assert.equal(useCases.call, null, 'the recording that ended stayed on the display, so no row offered a stop');
+
+        timers.fireAll();
+
+        assert.deepEqual(socket.sent.at(-1), ['CAL', '3', 'play'], 'the walk the ended recording was heading took no next searched call');
+    });
+
+    it('pressing another row during that gap closes it', () => {
+        const { useCases, socket, audio, timers } = walkingPlayback();
+
+        audio.played[0].ended();
+
+        assert.equal(timers.scheduled.length, 1, 'the gap the ended recording opened was never scheduled');
+
+        const asked = socket.sent.length;
+
+        useCases.loadAndPlay(4);
+
+        assert.equal(timers.scheduled.length, 0, 'the gap outlived the row the operator pressed');
+        assert.deepEqual(socket.sent.slice(asked), [['CAL', '4', 'play']], 'the row the operator pressed asked for no recording');
+        assert.deepEqual(socket.sent.slice(asked).filter((frame) => frame[1] === '3'), [], 'the gap the row closed still asked for the call it was heading to');
+    });
+
+    it('a stop taken during that gap starts nothing when the gap closes', () => {
+        const { useCases, socket, store, audio, timers } = walkingPlayback();
+
+        audio.played[0].ended();
+
+        const asked = socket.sent.length;
+
+        useCases.stopPlayingCall();
+
+        assert.equal(useCases.livefeedMode, 'offline', `the stop left the app in ${useCases.livefeedMode} mode`);
+        assert.deepEqual(socket.sent.slice(asked), [], 'stopping the walk during its gap asked the server for something');
+
+        timers.fireAll();
+
+        assert.deepEqual(socket.sent.slice(asked), [], 'the gap the stopped walk left behind asked for the call it was heading to');
+        assert.equal(audio.played.length, 1, 'the gap the stopped walk left behind started a recording');
+        assert.equal(useCases.call, null, 'the call the gap reached is on the display');
+        assert.equal(store.getState().queue, 0, 'the stopped walk left searched calls counted as waiting');
     });
 });

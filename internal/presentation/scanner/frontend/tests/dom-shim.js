@@ -559,6 +559,12 @@ function parseHTML(html) {
 }
 
 function matches(node, selector) {
+  // A selector list — `button[data-play],button[data-download]` — names the node by any one of its
+  // groups, which is how the row click handler picks the control a click landed on.
+  const groups = selector.split(',');
+
+  if (groups.length > 1) return groups.some((group) => matches(node, group));
+
   // A descendant selector — `.auth form`, `.history tbody` — names the control by the panel it sits
   // in: the node answers the last part, one of its ancestors answers the part before it.
   const parts = selector.trim().split(/\s+/);
