@@ -19,6 +19,7 @@
 
 - A talkgroup of an EDACS or Provoice system is numbered in agency-fleet-subfleet form — agency, fleet, subfleet — on the listening screens, where the older page wrote one decimal number. The administration pages still ask for that number in decimal and show it that way.
 - It is built to be used with a keyboard and a screen reader, where the older page was built for a mouse. What you have selected is always visible, a skip link jumps past the navigation, announcements reach a screen reader as they happen, and every control — the player, the call list, the menus, the dialogs — can be reached without a mouse.
+- The listening page answers an access re-ask with the code your device already has. When you are mid-listening and the operator changes the access configuration, every open page is asked to unlock again; 8.0.0-beta.1 brought the unlock screen back every time, so a page you had left open had to be typed into again. The page now sends the code it kept on the device, the way version 6.6.3 did, and the unlock screen only returns when the server turns that code down — after too many refusals, when the code has expired, or when it is no longer on the server. The unlock box, its label, and what you see after a code you typed is refused are unchanged.
 
 ### The log and the administration page
 

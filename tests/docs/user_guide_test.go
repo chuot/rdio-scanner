@@ -1092,6 +1092,24 @@ func TestTheGuideCarriesTheAccessCodeFacts(t *testing.T) {
 	)
 }
 
+// TestTheGuideSaysARememberedAccessCodeIsUsedWithoutAskingAgain covers the listener
+// who is mid-listening when the operator changes the access configuration: the page
+// answers that re-ask with the code it kept on the device, and the unlock screen
+// returns only when the server turns that code down. The claim has to sit in one
+// sentence of the access-code chapter, so a reader there learns it beside the screen
+// they are looking at.
+func TestTheGuideSaysARememberedAccessCodeIsUsedWithoutAskingAgain(t *testing.T) {
+	body := userGuidePath(t)
+
+	chapter := userGuideSpokenText(t, userGuideChapter(t, body, "ch-07-access-codes"))
+
+	wants := []string{"remembers", "without asking", "refuses"}
+
+	if !guideSentenceSays(chapter, wants) {
+		t.Errorf("no sentence of the access-code chapter says all of %q at once", strings.Join(wants, ", "))
+	}
+}
+
 // The phone chapter carries the update dialog's own title, question, and
 // actions, and the help chapter carries the help notice's own opening words.
 func TestTheGuideCarriesThePhoneAndUpdateFacts(t *testing.T) {
