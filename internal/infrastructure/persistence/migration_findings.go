@@ -56,6 +56,11 @@ const (
 	migrationFindingsIndexPostgres = `CREATE UNIQUE INDEX "migration_findings_table_row" ON "migrationFindings" ("tableName","rowId")`
 )
 
+// migrationDamagedUnitsTable is the table half of the key a damaged unit is recorded under. A unit the
+// legacy migration left holding no radio reference stands in the live units table, which no step of the
+// pass drops, so its finding outlives every legacy table the deployment still holds.
+const migrationDamagedUnitsTable = "units"
+
 // ensureMigrationFindings gives the database the findings record and the index that holds each finding
 // once, idempotent the way every other step of the startup pass is.
 func ensureMigrationFindings(ctx context.Context, s store) error {

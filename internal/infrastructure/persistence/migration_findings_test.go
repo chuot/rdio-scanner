@@ -369,6 +369,20 @@ func hasUniqueIndexNamed(statement, index, table string, columns ...string) bool
 	return true
 }
 
+// hasMigrationFindingsTable reports whether the deployment holds the findings record at all, which is
+// the question both the migration's gate and the maintenance run ask before either touches it.
+func hasMigrationFindingsTable(t *testing.T, db *sql.DB) bool {
+	t.Helper()
+
+	for _, name := range readTableNames(t, db) {
+		if name == "migrationFindings" {
+			return true
+		}
+	}
+
+	return false
+}
+
 // createMigrationFindings runs the record's own creation step directly, for a test that needs a
 // deployment whose record already stands without seeding a legacy table to make the pass build one.
 // The step is idempotent, so a fixture may ask for it as many times as it likes.

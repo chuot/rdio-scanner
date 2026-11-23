@@ -1329,10 +1329,19 @@ func TestServerReportsTheDamageALegacyMigrationLeftBehind(t *testing.T) {
 		"the migration left 2 units damaged: they hold no radio reference",
 		`the migration left unit 301 "Engine 12" of Grand Metro (10001) damaged`,
 		`the migration left unit 302 "Car 4" of Grand Metro (10001) damaged`,
-		`the migration left unit 303 "6789" of Grand Metro (10001) damaged`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the startup console does not say %q:\n%s", want, out)
+		}
+	}
+
+	for _, gone := range []string{
+		"labelled with its own number",
+		`the migration left unit 303 `,
+	} {
+		if strings.Contains(out, gone) {
+			t.Errorf("the startup console says %q, want the unit the migration invented left unnamed at startup: it is "+
+				"the maintenance run's to name and remove:\n%s", gone, out)
 		}
 	}
 
@@ -1346,9 +1355,9 @@ func TestServerReportsTheDamageALegacyMigrationLeftBehind(t *testing.T) {
 
 	// the search index and the catalog are separate stores, so the test
 	// drives the http layer rather than the objects underneath
-	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'database' AND "message" LIKE 'the migration left%'`); got != 5 {
-		t.Errorf("the log view holds %d entries from the damage report, want the five lines the startup said: "+
-			"two summaries and one per damaged unit", got)
+	if got := countRows(t, srv.db, `SELECT COUNT(*) FROM "logs" WHERE "source" = 'database' AND "message" LIKE 'the migration left%'`); got != 3 {
+		t.Errorf("the log view holds %d entries from the damage report, want the three lines the startup said: "+
+			"one summary and one per damaged unit", got)
 	}
 
 	// the search index is a separate store rather than a view over the

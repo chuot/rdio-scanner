@@ -3097,9 +3097,11 @@ func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 	return nil
 }
 
-// reportMigrationDamage reads the two shapes the legacy migration pass leaves in a database that
-// pass has already run over and writes what it finds to `progress`; it changes no row, and a
-// failure to read is reported and carried on from.
+// reportMigrationDamage reads the damage the legacy migration pass left in a database that pass has
+// already run over and writes what it finds to `progress`; it changes no row, and a failure to read is
+// reported and carried on from. Only the unit that holds no radio reference is named: the unit labelled
+// with the number the migration invented for it is damage a maintenance run is asked to remove, and the
+// run names those rows when it removes them.
 func reportMigrationDamage(ctx context.Context, s store, progress Progress) {
 	const section, operation = "migration", "damage"
 
@@ -3113,9 +3115,7 @@ func reportMigrationDamage(ctx context.Context, s store, progress Progress) {
 		return
 	}
 
-	defer rows.Close()
-
-	lost, made := []string{}, []string{}
+	lost, identities := []string{}, []int64{}
 
 	for rows.Next() {
 		var (
@@ -3130,24 +3130,87 @@ func reportMigrationDamage(ctx context.Context, s store, progress Progress) {
 			continue
 		}
 
-		line := fmt.Sprintf("the migration left unit %d %q of %s damaged", unitID.Int64, label.String,
-			damagedSystem(systemLabel, systemRef))
+		if unitRef.Int64 != 0 {
+			continue
+		}
 
-		switch {
-		case unitRef.Int64 == 0:
-			lost = append(lost, line)
+		lost = append(lost, fmt.Sprintf("the migration left unit %d %q of %s damaged", unitID.Int64, label.String,
+			damagedSystem(systemLabel, systemRef)))
 
-		case label.String == strconv.FormatInt(unitRef.Int64, 10):
-			made = append(made, line)
+		identities = append(identities, unitID.Int64)
+	}
+
+	// The reading is finished before anything is written, so the record of what is said is never made
+	// beside a result set still open on the same connection.
+	rows.Close()
+
+	reportDamageSaidOnce(ctx, s, progress, lost, identities)
+}
+
+// reportDamageSaidOnce names only the damaged units this start is the first to meet, and counts exactly
+// those in its summary line. The record is created here when it does not already stand: a deployment
+// whose legacy tables are long gone has no other step that would build it, and without it every start
+// names the same units again. A record this start cannot build, begin, write into, or commit is named as
+// a failure and the damage under it is said in full, because the record decides only whether a sentence
+// is repeated.
+func reportDamageSaidOnce(ctx context.Context, s store, progress Progress, found []string, identities []int64) {
+	const one, many, cause = "it holds no radio reference", "they hold no radio reference",
+		"the numbers they were migrated from are not in this database"
+
+	if len(found) == 0 {
+		return
+	}
+
+	// A record this start cannot build, begin, or commit is a failure of its own, said beside the damage
+	// it was meant to keep quiet: the record decides only whether the same sentence is repeated.
+	failed := func(why error) {
+		progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not record what it found: %s", why.Error()))
+
+		reportDamaged(progress, found, one, many, cause)
+	}
+
+	if err := ensureMigrationFindings(ctx, s); err != nil {
+		failed(err)
+
+		return
+	}
+
+	tx, err := s.begin(ctx)
+	if err != nil {
+		failed(err)
+
+		return
+	}
+
+	said := []string{}
+
+	for at, line := range found {
+		first, err := recordFinding(ctx, tx, migrationDamagedUnitsTable, identities[at])
+		if err != nil {
+			progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not record what it found: %s", err.Error()))
+			said = append(said, line)
+
+			continue
+		}
+
+		if first {
+			said = append(said, line)
 		}
 	}
 
-	reportDamaged(progress, lost, "it holds no radio reference", "they hold no radio reference",
-		"the numbers they were migrated from are not in this database")
+	if len(said) == 0 {
+		tx.rollback()
 
-	reportDamaged(progress, made, "it is labelled with its own number",
-		"they are labelled with their own numbers",
-		"the shape of a unit the migration created rather than a deployment named")
+		return
+	}
+
+	if err := tx.commit(); err != nil {
+		failed(err)
+
+		return
+	}
+
+	reportDamaged(progress, said, one, many, cause)
 }
 
 // damagedSystem names the system a unit belongs to the way an operator names one: its label, and the

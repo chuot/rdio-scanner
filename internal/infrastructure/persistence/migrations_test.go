@@ -85,6 +85,20 @@ func damageReport(progress []string) []string {
 	return found
 }
 
+// recordFailureLines keeps the lines that name a findings record the startup pass could not build or
+// write, which is the half of the damage report that is about the record rather than the rows.
+func recordFailureLines(progress []string) []string {
+	found := []string{}
+
+	for _, line := range progress {
+		if strings.HasPrefix(line, "the migration could not record") {
+			found = append(found, line)
+		}
+	}
+
+	return found
+}
+
 // carriedLines keeps the lines one start said about the rows it could not carry — the line that counts
 // the group and the sentence for each row in it — out of a progress report.
 func carriedLines(progress []string) []string {
@@ -3176,28 +3190,30 @@ func TestMigrateRecoversTheCallsASurvivingV6TableStillHolds(t *testing.T) {
 
 // The unrecoverable half: a finished damaged migration leaves units whose
 // radio reference was thrown away and the numbers they came from nowhere in
-// the database; the startup report names each one and invents nothing.
+// the database; the startup report names each unit that holds no reference,
+// names them at the start that first reads them, and invents nothing.
 func TestMigrateReportsTheDamageItCannotRepair(t *testing.T) {
 	db := openDamagedFixture(t, "migrated")
 
 	// The audioLength column is a schema change the pass owns, said once;
 	// this test is about the damage report leaving rows alone, read from the
-	// start that finds the database already in shape.
-	migrateDatabase(t, db)
-
-	before := tableSnapshot(t, db)
-
+	// start that first reads the rows the legacy pass left damaged.
 	got := damageReport(migrateDatabase(t, db))
 	want := []string{
 		"the migration left 2 units damaged: they hold no radio reference, the numbers they were migrated from are not in this database",
 		`the migration left unit 301 "Engine 12" of Grand Metro (10001) damaged`,
 		`the migration left unit 302 "Car 4" of Grand Metro (10001) damaged`,
-		"the migration left 1 unit damaged: it is labelled with its own number, the shape of a unit the migration created rather than a deployment named",
-		`the migration left unit 303 "6789" of Grand Metro (10001) damaged`,
 	}
 
 	if !equalStrings(got, want) {
 		t.Errorf("the startup report:\n  got  %v\n  want %v", got, want)
+	}
+
+	before := tableSnapshot(t, db)
+
+	if again := damageReport(migrateDatabase(t, db)); len(again) != 0 {
+		t.Errorf("the start after the one that named the damage reported:\n  got  %v\n  want nothing: each unit it "+
+			"would name was named already", again)
 	}
 
 	for _, row := range rowsOf(t, db, "units", `"unitId", "label", "unitRef"`) {
@@ -3216,23 +3232,207 @@ func TestMigrateReportsTheDamageItCannotRepair(t *testing.T) {
 	}
 }
 
-// The idempotence rule: the damage report is a reading, not a pass that
-// changes what the next start reads, so a second start on the same damaged
-// database says the same thing about the same rows.
-func TestMigrateReportsTheSameDamageAtEveryStart(t *testing.T) {
+// The said-once rule: the damage report is a reading, and the record of what the pass has announced
+// makes it a reading that says what it has not said before. The units it named at the first start are
+// standing there still at the second and the third, and named at neither.
+func TestMigrateNamesTheDamageOnlyAtTheStartThatFirstReadsIt(t *testing.T) {
 	db := openDamagedFixture(t, "migrated")
 
 	first := damageReport(migrateDatabase(t, db))
 	before := tableSnapshot(t, db)
 
-	second := damageReport(migrateDatabase(t, db))
+	if len(first) == 0 {
+		t.Fatal("the first start named no damage, want the units the fixture holds with no radio reference")
+	}
 
-	if !equalStrings(second, first) {
-		t.Errorf("the second start reported:\n  got  %v\n  want %v", second, first)
+	for _, start := range []int{2, 3} {
+		if got := damageReport(migrateDatabase(t, db)); len(got) != 0 {
+			t.Errorf("start %d reported:\n  got  %v\n  want nothing: the first start named those units", start, got)
+		}
 	}
 
 	if after := tableSnapshot(t, db); after != before {
-		t.Errorf("the second start changed the database:\n  got  %s\n  want %s", after, before)
+		t.Errorf("the later starts changed the database:\n  got  %s\n  want %s", after, before)
+	}
+}
+
+// The other damaged shape: a unit whose label is the number the migration invented for it. It stays
+// standing and unnamed at startup, because naming and removing it is the maintenance run's decision,
+// not something a start announces about a deployment the operator named.
+func TestMigrateReportsNothingAboutTheUnitsTheMigrationLabelledWithTheirOwnNumbers(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	progress := migrateDatabase(t, db)
+
+	invented := []string{}
+
+	for _, row := range rowsOf(t, db, "units", `"unitId", "label", "unitRef"`) {
+		if row[1] == row[2] {
+			invented = append(invented, fmt.Sprintf("the migration left unit %s ", row[0]))
+		}
+	}
+
+	if len(invented) == 0 {
+		t.Fatal("the fixture holds no unit labelled with its own number, want the fixture this reading is written against")
+	}
+
+	named := []string{}
+
+	for _, line := range damageReport(progress) {
+		if strings.Contains(line, "labelled with") {
+			named = append(named, line)
+
+			continue
+		}
+
+		for _, unit := range invented {
+			if strings.Contains(line, unit) {
+				named = append(named, line)
+
+				break
+			}
+		}
+	}
+
+	if len(named) != 0 {
+		t.Errorf("the startup report named the units the migration invented: %v, want them left standing and unnamed; "+
+			"the run that removes those rows is the maintenance run, and it names them itself", named)
+	}
+}
+
+// The group line counts the units this start names. A deployment that gains a damaged unit after the
+// start that named the standing ones says one unit and names only the new one.
+func TestMigrateCountsOnlyTheDamagedUnitsItNamesAtThisStart(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 3 {
+		t.Fatalf("the first start named %d damage lines, want the summary and the two units holding no reference: %v",
+			len(got), got)
+	}
+
+	mustExec(t, db, `INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef") VALUES (999, 'Hand 9', 0, 101, 0)`)
+
+	got := damageReport(migrateDatabase(t, db))
+	want := []string{
+		"the migration left 1 unit damaged: it holds no radio reference, the numbers they were migrated from are not in this database",
+		`the migration left unit 999 "Hand 9" of Grand Metro (10001) damaged`,
+	}
+
+	if !equalStrings(got, want) {
+		t.Errorf("the start that met a damaged unit for the first time:\n  got  %v\n  want %v", got, want)
+	}
+}
+
+// The record is what makes the said-once rule survive a restart, and a deployment whose legacy tables
+// went years ago has nothing that would otherwise create it: the start that names damaged units has to
+// leave the record standing, or the next start names the same units again.
+func TestMigrateRecordsTheDamageItNamedAlthoughNoLegacyTableStands(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 3 {
+		t.Fatalf("the first start named %d damage lines, want the summary and the two units holding no reference: %v",
+			len(got), got)
+	}
+
+	if !hasMigrationFindingsTable(t, db) {
+		t.Fatalf("the start that named the damage left no findings record standing: %v", readTableNames(t, db))
+	}
+
+	got := readRows(t, db, `SELECT "tableName", "rowId" FROM "migrationFindings" ORDER BY "rowId"`)
+	want := [][]string{{"units", "301"}, {"units", "302"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the record holds %v, want the two units the start named", got)
+	}
+}
+
+// A start with nothing to say creates nothing: the record belongs to a deployment that has a legacy
+// table to read or damage to name, the way the archive belongs to one with rows to archive.
+func TestMigrateCreatesNoRecordWhereItHasNothingToName(t *testing.T) {
+	db := openEmptyDatabase(t)
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 0 {
+		t.Fatalf("a fresh database was reported as damaged: %v", got)
+	}
+
+	if hasMigrationFindingsTable(t, db) {
+		t.Errorf("a database with no legacy table and no damage gained the findings record: %v", readTableNames(t, db))
+	}
+}
+
+// The record is what carries the said-once rule across a restart, and it is not what makes the damage
+// findable. A start that cannot build the record says everything it read anyway: a record that will not
+// stand is a reason to say more, not a reason to keep quiet.
+func TestMigrateStillNamesTheDamageWhenItCannotBuildTheRecord(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 3 {
+		t.Fatalf("the first start named %d damage lines, want the summary and the two units holding no reference: %v",
+			len(got), got)
+	}
+
+	// Something else holds the name the record uses, and nothing can be written into it: this is the
+	// deployment whose record was broken between two starts.
+	mustExec(t, db, `DROP TABLE "migrationFindings"`)
+	mustExec(t, db, `CREATE VIEW "migrationFindings" AS SELECT 0 AS "findingId", '' AS "tableName", 0 AS "rowId", `+
+		`0 AS "saidAt"`)
+
+	progress := migrateDatabase(t, db)
+
+	if got, want := damageReport(progress), damageReportOfTheFixture(); !equalStrings(got, want) {
+		t.Errorf("the start that could not build the record:\n  got  %v\n  want %v", got, want)
+	}
+
+	if lines := recordFailureLines(progress); len(lines) == 0 {
+		t.Errorf("the start said nothing about the record it could not build, want that failure named beside the "+
+			"damage it reported:\n%v", progress)
+	}
+}
+
+// The other half of the same rule: the record stands, and refuses the row. Each finding is a write the
+// start has to attempt, and each attempt that fails is said while the damage under it is still named.
+func TestMigrateStillNamesTheDamageWhenItCannotWriteTheRecord(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 3 {
+		t.Fatalf("the first start named %d damage lines, want the summary and the two units holding no reference: %v",
+			len(got), got)
+	}
+
+	// The name, the columns, and the index are all there, and a rule attached to the table refuses every
+	// unit the pass would record: the write fails on each finding while the record itself stands.
+	mustExec(t, db, `DROP TABLE "migrationFindings"`)
+	mustExec(t, db, `CREATE TABLE "migrationFindings" ("findingId" integer NOT NULL PRIMARY KEY AUTOINCREMENT, `+
+		`"tableName" text NOT NULL, "rowId" integer NOT NULL, "saidAt" integer NOT NULL)`)
+	mustExec(t, db, `CREATE UNIQUE INDEX "migration_findings_table_row" ON "migrationFindings" ("tableName","rowId")`)
+	mustExec(t, db, `CREATE TRIGGER "migration_findings_refuses_units" BEFORE INSERT ON "migrationFindings" `+
+		`WHEN NEW."tableName" = 'units' BEGIN SELECT RAISE(ABORT, 'the findings record refuses this row'); END`)
+
+	progress := migrateDatabase(t, db)
+
+	if got, want := damageReport(progress), damageReportOfTheFixture(); !equalStrings(got, want) {
+		t.Errorf("the start that could not write the record:\n  got  %v\n  want %v", got, want)
+	}
+
+	lines := recordFailureLines(progress)
+
+	if len(lines) == 0 {
+		t.Errorf("the start said nothing about the record it could not write, want that failure named beside the "+
+			"damage it reported:\n%v", progress)
+	}
+
+	if got := countRows(t, db, "migrationFindings"); got != 0 {
+		t.Errorf("the record holds %d rows after %d refused findings, want the refused writes left it empty", got, len(lines))
+	}
+}
+
+// damageReportOfTheFixture is what the startup report says on the damaged fixture's two units that hold
+// no radio reference, repeated by the cases that read the report under a broken record.
+func damageReportOfTheFixture() []string {
+	return []string{
+		"the migration left 2 units damaged: they hold no radio reference, the numbers they were migrated from are not in this database",
+		`the migration left unit 301 "Engine 12" of Grand Metro (10001) damaged`,
+		`the migration left unit 302 "Car 4" of Grand Metro (10001) damaged`,
 	}
 }
 
