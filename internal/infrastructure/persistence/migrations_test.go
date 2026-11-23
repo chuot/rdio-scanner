@@ -85,6 +85,34 @@ func damageReport(progress []string) []string {
 	return found
 }
 
+// recordFailureLines keeps the lines that name a findings record the startup pass could not build or
+// write, which is the half of the damage report that is about the record rather than the rows.
+func recordFailureLines(progress []string) []string {
+	found := []string{}
+
+	for _, line := range progress {
+		if strings.HasPrefix(line, "the migration could not record") {
+			found = append(found, line)
+		}
+	}
+
+	return found
+}
+
+// carriedLines keeps the lines one start said about the rows it could not carry — the line that counts
+// the group and the sentence for each row in it — out of a progress report.
+func carriedLines(progress []string) []string {
+	found := []string{}
+
+	for _, line := range progress {
+		if strings.HasPrefix(line, "the migration could not carry ") {
+			found = append(found, line)
+		}
+	}
+
+	return found
+}
+
 // tableSnapshot reads the tables the startup report is asked to leave alone, so that a test can
 // prove the report read the database instead of writing it.
 func tableSnapshot(t *testing.T, db *sql.DB) string {
@@ -318,11 +346,11 @@ func hasV6Table(t *testing.T, db *sql.DB, table string) bool {
 }
 
 // A v6 database comes out holding exactly the v7 schema's tables, none of the
-// v6 tables left behind; the archive and its unique index are the pass's own,
+// v6 tables left behind; the archive and the findings record are the pass's own,
 // created where one of the legacy tables was there to read a row out of, and
 // ApplySchema may not add them to a database the other server wrote.
 var archivedTables = func() []string {
-	tables := append(append([]string{}, legacyTables...), "migrationArchive")
+	tables := append(append([]string{}, legacyTables...), "migrationArchive", "migrationFindings")
 
 	sort.Strings(tables)
 
@@ -330,7 +358,8 @@ var archivedTables = func() []string {
 }()
 
 // liveTablesOnly are the tables a database gains when the pass finds none of the
-// legacy table names to read: the live tables, with no archive built beside them.
+// legacy table names to read: the live tables, with no archive and no findings
+// record built beside them.
 var liveTablesOnly = func() []string {
 	tables := append([]string{}, legacyTables...)
 
@@ -381,43 +410,63 @@ func TestMigrateAnnouncesEachV6TableItFoundInLegacyOrder(t *testing.T) {
 // kinds of line: the table it is carrying, the key it added, and what it could
 // not carry or repair, and each has to read as one of them.
 func TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems(t *testing.T) {
-	// The clean fixture and the one with the rows the pass cannot read: the
-	// second is where the lines the archive adds are said, and a line the pass
-	// says has to be classifiable as one of the kinds the pass says.
-	for _, db := range []*sql.DB{openLegacyV6Database(t), openLegacyV6PartialDatabase(t)} {
-		lines := migrateLines(t, db)
+	// The clean fixture, the one with the rows the pass cannot read, and two deployments with one row
+	// each that went wrong in a way the clean fixtures do not hold: an options blob that is not JSON, and
+	// a talkgroup the v8 table refused. Every reason research names as a defect has to come back as a
+	// problem on some fixture this guard reads.
+	for _, build := range []func(*testing.T) *sql.DB{
+		openLegacyV6Database,
+		openLegacyV6PartialDatabase,
+		func(t *testing.T) *sql.DB {
+			db := openLegacyV6Database(t)
+
+			mustExec(t, db, `UPDATE "rdioScannerConfigs" SET "val" = 'branding = Rdio Legacy' WHERE "key" = 'options'`)
+
+			return db
+		},
+		func(t *testing.T) *sql.DB {
+			db := openLegacyV6Database(t)
+
+			mustExec(t, db, `INSERT INTO "rdioScannerTalkgroups" ("_id", "frequency", "groupId", "id", "label", "led", "name", "order", "systemId", "tagId") VALUES (205, 1514004000, 3, 1514004, 'No tag', NULL, 'No tag', 5, 10001, 999)`)
+
+			return db
+		},
+	} {
+		lines := migrateLines(t, build(t))
 
 		problems := 0
 
-		for _, line := range lines {
-			switch {
-			case strings.HasSuffix(line.message, "..."):
-				if line.level != domain.LogLevelInfo {
-					t.Errorf("%q is filed under %q, want a notice: the pass found that table and carried it",
-						line.message, line.level)
-				}
+		for at, line := range lines {
+			want := domain.LogLevelInfo
+			kind := "a notice: the pass found that table and carried it, or added that key to a table the deployment is already using"
 
-			case strings.HasPrefix(line.message, "created the call history index "):
-				if line.level != domain.LogLevelInfo {
-					t.Errorf("%q is filed under %q, want a notice: a key the pass added to a table the "+
-						"deployment is already using is something the operator should see coming",
-						line.message, line.level)
-				}
+			switch {
+			case strings.HasSuffix(line.message, "..."),
+				strings.HasPrefix(line.message, "created the call history index "):
 
 			case strings.Contains(line.message, "could not be finished"),
-				strings.HasPrefix(line.message, "the migration could not carry"),
 				strings.HasPrefix(line.message, "the migration carried"),
 				strings.HasPrefix(line.message, "the migration left"):
-				if line.level != domain.LogLevelWarn {
-					t.Errorf("%q is filed under %q, want a problem: this is a row or a unit the upgrade could not carry",
-						line.message, line.level)
-				}
+				want = domain.LogLevelWarn
+				kind = "a problem: this is a table the upgrade could not finish, or a table it left where it found it"
 
-				problems++
+			case strings.HasPrefix(line.message, "the migration could not carry"):
+				want = carriageLevel(lines, at)
+				kind = carriageReason(line.message)
 
 			default:
 				t.Errorf("%q is filed under %q, which is neither an announcement, nor a key the pass added, nor a problem: the pass says nothing else, so a line it says has to read as one of those three",
 					line.message, line.level)
+
+				continue
+			}
+
+			if line.level != want {
+				t.Errorf("%q is filed under %q, want %q: %s", line.message, line.level, want, kind)
+			}
+
+			if want == domain.LogLevelWarn {
+				problems++
 			}
 		}
 
@@ -427,9 +476,83 @@ func TestTheMigrationSaysItsAnnouncementsAsNoticesAndItsFailuresAsProblems(t *te
 	}
 }
 
+// carriageLevel is the level a sentence about a row the migration left behind has to be filed under: a
+// notice when every value it names is one this release does not carry on purpose, and a problem when it
+// names a row that went wrong. The line that counts a group follows the rows it counts, so a group of
+// intended left-behinds stays a notice and a group holding one defect is a problem.
+func carriageLevel(lines []progressLine, at int) string {
+	message := lines[at].message
+
+	if !countsArchivedRows(message) {
+		if intentionalCarriage(message) {
+			return domain.LogLevelInfo
+		}
+
+		return domain.LogLevelWarn
+	}
+
+	for next := at + 1; next < len(lines) && strings.HasPrefix(lines[next].message, "the migration could not carry ") &&
+		!countsArchivedRows(lines[next].message); next++ {
+		if !intentionalCarriage(lines[next].message) {
+			return domain.LogLevelWarn
+		}
+	}
+
+	return domain.LogLevelInfo
+}
+
+// countsArchivedRows reports the line a stage says above the rows it left behind, the one that names how
+// many there are and where they are kept.
+func countsArchivedRows(message string) bool {
+	return strings.Contains(message, ` kept in the migrationArchive table`)
+}
+
+// intentionalCarriage reports a sentence about a row this release left behind because it has nowhere to
+// put it, not because the row is damaged: a configuration value with no v7 option of that name, or a
+// migration record with no v7 bookkeeping table. A sentence that names anything else beside them is about
+// a row that went wrong.
+func intentionalCarriage(message string) bool {
+	if !strings.Contains(message, "v8 has no option of that name") &&
+		!strings.Contains(message, "this server has no migration bookkeeping to carry it into") {
+		return false
+	}
+
+	for _, defect := range []string{
+		"the value has the wrong shape",
+		"it could not be read",
+		"the database refused it",
+		"the database refused another value of it",
+		"it holds no ",
+		"is not in this database",
+	} {
+		if strings.Contains(message, defect) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// carriageReason is the sentence the level guard writes when a row left behind is filed at the wrong
+// level, in the language of why the row was left behind.
+func carriageReason(message string) string {
+	if countsArchivedRows(message) {
+		return "the line that counts a group is filed under the highest level among the rows it counts"
+	}
+
+	if intentionalCarriage(message) {
+		return "this is a value this release has no option of, or a migration record it keeps no bookkeeping table for: nothing is missing and there is nothing to fix"
+	}
+
+	return "this is a row or a unit the upgrade could not carry"
+}
+
 // The wording of each line the archive adds, in the order the pass says it,
 // and the level it is filed under; the summary comes first because an operator
-// reading the log needs the count before the list.
+// reading the log needs the count before the list. The fixture's options blob
+// holds only names this release has no option of, and its bookkeeping table has
+// no v7 counterpart, so those lines are notices; every row that went wrong is a
+// problem.
 func TestMigrateSaysEveryRowItCouldNotCarryAndEveryTableItLeftBehind(t *testing.T) {
 	db := openLegacyV6PartialDatabase(t)
 
@@ -448,11 +571,11 @@ func TestMigrateSaysEveryRowItCouldNotCarryAndEveryTableItLeftBehind(t *testing.
 		{level: domain.LogLevelWarn, message: `the migration left the talkgroups table where it found it: a row of it could not be read`},
 		{level: domain.LogLevelWarn, message: `the migration could not carry 1 unit: it is kept in the migrationArchive table`},
 		{level: domain.LogLevelWarn, message: `the migration could not carry unit 304 "Orphan Engine": its system 10009 is not in this database`},
-		{level: domain.LogLevelWarn, message: `the migration could not carry 1 config row: it is kept in the migrationArchive table`},
-		{level: domain.LogLevelWarn, message: `the migration could not carry the config row "options": it holds values this server cannot carry: "autoDetectGroups" (v8 has no option of that name), "unknownKey" (v8 has no option of that name)`},
-		{level: domain.LogLevelWarn, message: `the migration could not carry 2 migration records: they are kept in the migrationArchive table`},
-		{level: domain.LogLevelWarn, message: `the migration could not carry migration record 1 "20210115105958-new-v5.1-tables": this server has no migration bookkeeping to carry it into`},
-		{level: domain.LogLevelWarn, message: `the migration could not carry migration record 2 "20220101070000-new-v6-tables": this server has no migration bookkeeping to carry it into`},
+		{level: domain.LogLevelInfo, message: `the migration could not carry 1 config row: it is kept in the migrationArchive table`},
+		{level: domain.LogLevelInfo, message: `the migration could not carry the config row "options": it holds values this server cannot carry: "autoDetectGroups" (v8 has no option of that name), "unknownKey" (v8 has no option of that name)`},
+		{level: domain.LogLevelInfo, message: `the migration could not carry 2 migration records: they are kept in the migrationArchive table`},
+		{level: domain.LogLevelInfo, message: `the migration could not carry migration record 1 "20210115105958-new-v5.1-tables": this server has no migration bookkeeping to carry it into`},
+		{level: domain.LogLevelInfo, message: `the migration could not carry migration record 2 "20220101070000-new-v6-tables": this server has no migration bookkeeping to carry it into`},
 		{level: domain.LogLevelWarn, message: `the migration could not carry 1 log: it is kept in the migrationArchive table`},
 		{level: domain.LogLevelWarn, message: `the migration could not carry log 405: it holds no message`},
 		{level: domain.LogLevelWarn, message: `the migration could not carry 1 downstream: it is kept in the migrationArchive table`},
@@ -917,8 +1040,9 @@ func TestMigrateTwiceOverACrashedLegacyDatabaseChangesNothing(t *testing.T) {
 
 	progress := migrateDatabase(t, db)
 
-	// The startup damage report says its lines again, as it does at every start. What the second pass
-	// must not do is read the v6 tables a second time or report a failure for doing so.
+	// The startup damage report names the damage this server cannot repair. What the second pass must
+	// not do is read the v6 tables a second time, announce a migration it is not running, or report a
+	// failure for doing so.
 	for _, line := range progress {
 		if strings.HasPrefix(line, "migrating ") || strings.Contains(line, "could not be finished") {
 			t.Errorf("the second pass over a crashed legacy database migrated or failed: %v", progress)
@@ -1104,10 +1228,13 @@ func TestMigrateSaysNothingAboutCallsAtEachOfThreeStartsOnAFinishedDeployment(t 
 }
 
 // A row this server cannot read keeps the whole table, and it is the only thing that does. The start
-// after the one that left it behind has nothing to carry: it says what it left and why, and it does
-// not announce a migration it is not running.
+// that finds the unread row says what it left and why; the start after that meets the same table and
+// the same unread row and says nothing, because it already said it. Neither start announces a
+// migration it is not running.
 func TestMigrateLeavesACallsTableWithARowItCannotReadWithoutAnnouncingAMigration(t *testing.T) {
 	db := openLegacyV6PartialDatabase(t)
+
+	warn := "the migration left the calls table where it found it: a row of it could not be read"
 
 	first := migrateDatabase(t, db)
 
@@ -1115,19 +1242,28 @@ func TestMigrateLeavesACallsTableWithARowItCannotReadWithoutAnnouncingAMigration
 		t.Fatalf("the pass that carried the fixture's calls did not announce them: %v", first)
 	}
 
+	if !hasString(first, warn) {
+		t.Fatalf("the pass that left the calls table said nothing about why: %v", first)
+	}
+
 	carried := rowsOf(t, db, "calls", `"callId"`)
 	archived := archivedRows(t, db, "rdioScannerCalls")
+	leftover := rowsOf(t, db, "rdioScannerCalls", "*")
 
 	progress := migrateDatabase(t, db)
 
-	warn := "the migration left the calls table where it found it: a row of it could not be read"
-
-	if !hasString(progress, warn) {
-		t.Errorf("the pass that left the calls table said nothing about why: %v", progress)
+	if hasString(progress, warn) {
+		t.Errorf("a start after the one that found the unread calls row said it again: %v", progress)
 	}
 
 	if !hasV6Table(t, db, "rdioScannerCalls") {
 		t.Errorf("a pass dropped a calls table holding the row it could not read: %v", progress)
+	}
+
+	// Every column of every row of the table it left standing is byte for byte what the pass that
+	// found the unread row left: saying the finding once changes the console, not the table.
+	if rows := rowsOf(t, db, "rdioScannerCalls", "*"); !equalStrings(flat(rows), flat(leftover)) {
+		t.Errorf("a repeat pass changed the table it left standing:\n  was  %v\n  now  %v", flat(leftover), flat(rows))
 	}
 
 	if hasString(progress, "migrating calls...") {
@@ -1149,6 +1285,316 @@ func TestMigrateLeavesACallsTableWithARowItCannotReadWithoutAnnouncingAMigration
 
 	if rows := archivedRows(t, db, "rdioScannerCalls"); !equalStrings(flat(rows), flat(archived)) {
 		t.Errorf("a repeat pass archived a row a second time:\n  was  %v\n  now  %v", flat(archived), flat(rows))
+	}
+}
+
+// A leftover table takes its finding with it when it goes, and a table that comes back is something
+// this server has never said: the sentence is said again. The finding belongs to the table, not to the
+// deployment.
+func TestMigrateSaysALeftoverCallsTableAgainAfterItWentAndCameBack(t *testing.T) {
+	db := openLegacyV6PartialDatabase(t)
+
+	warn := "the migration left the calls table where it found it: a row of it could not be read"
+
+	first := migrateDatabase(t, db)
+
+	if count := countString(first, warn); count != 1 {
+		t.Fatalf("the pass that left the calls table said it %d times, want once: %v", count, first)
+	}
+
+	again := migrateDatabase(t, db)
+
+	if count := countString(again, warn); count != 0 {
+		t.Fatalf("a start after the one that found the unread calls row said it %d times: %v", count, again)
+	}
+
+	// The row that kept the table goes, and with it the reason the pass had for leaving the table
+	// where it found it: the pass finishes the table and drops it, and everything the record knew
+	// about that table goes with it.
+	mustExec(t, db, `DELETE FROM "rdioScannerCalls" WHERE "id" = 709`)
+
+	if progress := migrateDatabase(t, db); hasV6Table(t, db, "rdioScannerCalls") {
+		t.Fatalf("a pass left a calls table whose every row it had already carried or archived: %v", progress)
+	}
+
+	// The same table arrives again holding a row it cannot read, in the shape the fixture's unread row
+	// has. It is a finding this server has never said, and it says it once, and no later start says it.
+	leftoverCallsTable(t, db, []string{
+		`INSERT INTO "rdioScannerCalls" VALUES(720,X'000102617564696F20666F722063616C6C20373230','720.wav','audio/wav','not a timestamp','[]',1514006000,'[]',0,'[]',10001,1514000)`,
+	})
+
+	progress := migrateDatabase(t, db)
+
+	if count := countString(progress, warn); count != 1 {
+		t.Errorf("a calls table that came back holding an unread row was said %d times, want once: %v", count, progress)
+	}
+
+	if !hasV6Table(t, db, "rdioScannerCalls") {
+		t.Errorf("a pass dropped a calls table holding the row it could not read: %v", progress)
+	}
+
+	later := migrateDatabase(t, db)
+
+	if count := countString(later, warn); count != 0 {
+		t.Errorf("a start after the one that found the calls table that came back said it again: %v", later)
+	}
+}
+
+// The maintenance run ends a leftover table and the sentence this server said about it together: the
+// table goes with the record of findings, so a calls table that arrives after a run is a finding no
+// start has made, and it is said once again.
+func TestMigrateSaysALeftoverTableAgainAfterTheMaintenanceRunClearedTheRecord(t *testing.T) {
+	db := openLegacyV6PartialDatabase(t)
+
+	warn := "the migration left the calls table where it found it: a row of it could not be read"
+
+	first := migrateDatabase(t, db)
+
+	if count := countString(first, warn); count != 1 {
+		t.Fatalf("the pass that left the calls table said it %d times, want once: %v", count, first)
+	}
+
+	if _, err := NewMaintenance(db, DialectSqlite).ClearMigrationDamage(context.Background()); err != nil {
+		t.Fatalf("ClearMigrationDamage over the deployment that left a calls table: %v", err)
+	}
+
+	if hasV6Table(t, db, "rdioScannerCalls") {
+		t.Fatalf("the maintenance run left the calls table standing: %v", readTableNames(t, db))
+	}
+
+	if hasMigrationFindingsTable(t, db) {
+		t.Fatalf("the maintenance run left the findings record standing: %v", readTableNames(t, db))
+	}
+
+	// The same table, holding the same row its timestamp would not fit, comes back after the run that
+	// cleared the record. Nothing in the deployment remembers saying anything about it.
+	leftoverCallsTable(t, db, []string{
+		`INSERT INTO "rdioScannerCalls" VALUES(709,X'000102617564696F20666F722063616C6C20373039','709.wav','audio/wav','not a timestamp','[]',1514000000,'[]',0,'[]',10001,1514000)`,
+	})
+
+	progress := migrateDatabase(t, db)
+
+	if count := countString(progress, warn); count != 1 {
+		t.Errorf("a calls table that came back after a run cleared the record was said %d times, want once: %v", count, progress)
+	}
+
+	if again := migrateDatabase(t, db); countString(again, warn) != 0 {
+		t.Errorf("a start after the one that found the calls table that came back after the run said it again: %v", again)
+	}
+}
+
+// The rows one start said it could not carry are the rows its archive gained: each sentence names the
+// identity and the reason the archive row holds. A later start that meets those same rows while it has
+// new work to do carries the new row, says nothing about a finding it has already made, and leaves the
+// archive as the first start left it.
+func TestMigrateSaysArchivedCallsOnlyAtTheStartThatFirstNamedThem(t *testing.T) {
+	db := openLegacyV6PartialDatabase(t)
+
+	first := migrateDatabase(t, db)
+
+	archived := archivedRows(t, db, "rdioScannerCalls")
+
+	if len(archived) == 0 {
+		t.Fatalf("the pass that read the fixture's calls archived no calls row: %v", first)
+	}
+
+	for _, row := range archived {
+		sentence := fmt.Sprintf("the migration could not carry call %s: %s", row[1], row[2])
+
+		if count := countString(first, sentence); count != 1 {
+			t.Fatalf("the pass that archived call %s said %q %d times, want once: %v", row[1], sentence, count, first)
+		}
+	}
+
+	leftoverCallsTable(t, db, []string{
+		`INSERT INTO "rdioScannerCalls" VALUES(730,X'000102617564696F20666F722063616C6C20373330','730.wav','audio/wav','2025-06-15 13:00:00.000 +0000 UTC','[]',1514000000,'[1514001]',12345,'[]',10001,1514000)`,
+	})
+
+	held := countRows(t, db, "migrationArchive")
+	carried := countRows(t, db, "calls")
+
+	progress := migrateDatabase(t, db)
+
+	// The new row is carried: that is why this start read a table whose older rows it has no news about.
+	if got := countRows(t, db, "calls"); got != carried+1 {
+		t.Fatalf("the start that met a new calls row carried %d rows, want the one new row: %v", got-carried, progress)
+	}
+
+	if lines := carriedLines(progress); len(lines) != 0 {
+		t.Errorf("a start that met calls rows it had already said about said %d of them: %v", len(lines), lines)
+	}
+
+	if rows := archivedRows(t, db, "rdioScannerCalls"); !equalStrings(flat(rows), flat(archived)) {
+		t.Errorf("a start that met the archived calls again changed the archive:\n  was  %v\n  now  %v", flat(archived), flat(rows))
+	}
+
+	if got := countRows(t, db, "migrationArchive"); got != held {
+		t.Errorf("the archive gained %d rows at a start that named no finding: %v", got-held, progress)
+	}
+}
+
+// The line that counts a group counts what that start names. A row the record already holds is still
+// archived whenever the pass has to read it again, but it is neither counted nor named: a start with one
+// new finding says one finding.
+func TestMigrateCountsOnlyTheFindingsANewStartNames(t *testing.T) {
+	db := openLegacyV6PartialDatabase(t)
+
+	first := migrateDatabase(t, db)
+
+	known := archivedRows(t, db, "rdioScannerCalls")
+
+	if len(known) == 0 {
+		t.Fatalf("the pass that read the fixture's calls archived no calls row: %v", first)
+	}
+
+	// A row the live tables can take, and one they cannot: the standing table has new work in it, and
+	// one finding in that work is new to this server.
+	leftoverCallsTable(t, db, []string{
+		`INSERT INTO "rdioScannerCalls" VALUES(730,X'000102617564696F20666F722063616C6C20373330','730.wav','audio/wav','2025-06-15 13:00:00.000 +0000 UTC','[]',1514000000,'[1514001]',12345,'[]',10001,1514000)`,
+		`INSERT INTO "rdioScannerCalls" VALUES(731,X'','731.wav','audio/wav','2025-06-15 13:05:00.000 +0000 UTC','[]',1514001000,'[1514001]',12345,'[]',10001,1514001)`,
+	})
+
+	progress := migrateDatabase(t, db)
+
+	count := `the migration could not carry 1 call: it is kept in the migrationArchive table`
+	newRow := `the migration could not carry call 731: it holds no audio`
+
+	if got := countString(progress, count); got != 1 {
+		t.Errorf("the start that first met call 731 said the line that counts it %d times, want once: %v", got, progress)
+	}
+
+	if got := countString(progress, newRow); got != 1 {
+		t.Errorf("the start that first met call 731 said the row %d times, want once: %v", got, progress)
+	}
+
+	// The count agrees with what the start names: one row counted, one row named, and nothing said about
+	// the rows the record already holds.
+	if lines := carriedLines(progress); len(lines) != 2 {
+		t.Errorf("the start named %d lines about calls it could not carry, want the count of one row and that row: %v", len(lines), lines)
+	}
+
+	for _, row := range known {
+		sentence := fmt.Sprintf("the migration could not carry call %s: %s", row[1], row[2])
+
+		if got := countString(progress, sentence); got != 0 {
+			t.Errorf("a start that met call %s again said %q %d times: %v", row[1], sentence, got, progress)
+		}
+	}
+
+	if rows := archivedRows(t, db, "rdioScannerCalls"); len(rows) != len(known)+1 {
+		t.Errorf("the archive holds %d calls rows after a start that met one new one, want %d: %v",
+			len(rows), len(known)+1, progress)
+	}
+
+	if !hasV6Table(t, db, "rdioScannerCalls") {
+		t.Errorf("a pass dropped a calls table holding the row it could not read: %v", progress)
+	}
+}
+
+// The record of a finding and the row it stands for are separate promises. A row the archive lost while
+// the record still names it is archived again, quietly: the finding was said, and saying it again would
+// tell the operator nothing they do not already know.
+func TestMigrateArchivesARowWhoseFindingIsAlreadyOnRecord(t *testing.T) {
+	db := openLegacyV6PartialDatabase(t)
+
+	first := migrateDatabase(t, db)
+
+	held := archivedRows(t, db, "rdioScannerCalls")
+
+	if len(held) == 0 {
+		t.Fatalf("the pass that read the fixture's calls archived no calls row: %v", first)
+	}
+
+	mustExec(t, db, `DELETE FROM "migrationArchive" WHERE "tableName" = 'rdioScannerCalls'`)
+
+	if rows := archivedRows(t, db, "rdioScannerCalls"); len(rows) != 0 {
+		t.Fatalf("the archive still holds %d calls rows after the test took them out: %v", len(rows), rows)
+	}
+
+	leftoverCallsTable(t, db, []string{
+		`INSERT INTO "rdioScannerCalls" VALUES(730,X'000102617564696F20666F722063616C6C20373330','730.wav','audio/wav','2025-06-15 13:00:00.000 +0000 UTC','[]',1514000000,'[1514001]',12345,'[]',10001,1514000)`,
+	})
+
+	progress := migrateDatabase(t, db)
+
+	if rows := archivedRows(t, db, "rdioScannerCalls"); !equalStrings(flat(rows), flat(held)) {
+		t.Errorf("a start met calls rows whose archive rows were gone and wrote:\n  got  %v\n  want %v", flat(rows), flat(held))
+	}
+
+	for _, row := range held {
+		sentence := fmt.Sprintf("the migration could not carry call %s: %s", row[1], row[2])
+
+		if got := countString(progress, sentence); got != 0 {
+			t.Errorf("a start archived call %s again and said %q %d times: %v", row[1], sentence, got, progress)
+		}
+	}
+}
+
+// A units table a row it cannot read keeps standing is re-read by every later start. The orphan it
+// archived the first time is on record, so a start that meets it again while it has new work to do names
+// only the new one: the count line and the row sentence agree with what the archive gained at that start,
+// and the startup report says nothing about damage because the start left none.
+func TestMigrateCountsOnlyWhatANewArchivedUnitGains(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	// A row whose scan fails is what keeps a table: the first pass leaves the units table where it finds
+	// it, and every later start reads the orphan it already archived on its way to new work.
+	mustExec(t, db, `INSERT INTO "rdioScannerUnits" VALUES(306,55557,'Broken Unit','not a number',10001)`)
+
+	first := migrateDatabase(t, db)
+
+	known := `the migration could not carry unit 304 "Orphan Engine": its system 10009 is not in this database`
+
+	if got := countString(first, known); got != 1 {
+		t.Fatalf("the pass that archived unit 304 said it %d times, want once: %v", got, first)
+	}
+
+	if !hasV6Table(t, db, "rdioScannerUnits") {
+		t.Fatalf("a pass dropped a units table holding the row it could not read: %v", first)
+	}
+
+	mustExec(t, db, `INSERT INTO "rdioScannerUnits" VALUES(305,55556,'Orphan Car',4,10009)`)
+
+	held := countRows(t, db, "migrationArchive")
+
+	progress := migrateDatabase(t, db)
+
+	if got := countString(progress, known); got != 0 {
+		t.Errorf("a start that met unit 304 again said it %d times: %v", got, progress)
+	}
+
+	newUnit := `the migration could not carry unit 305 "Orphan Car": its system 10009 is not in this database`
+
+	if got := countString(progress, newUnit); got != 1 {
+		t.Errorf("the start that first met unit 305 said it %d times, want once: %v", got, progress)
+	}
+
+	count := "the migration could not carry 1 unit: it is kept in the migrationArchive table"
+
+	if got := countString(progress, count); got != 1 {
+		t.Errorf("the start that gained one archived unit said the line that counts it %d times, want once: %v", got, progress)
+	}
+
+	leftover := "the migration left the units table where it found it: a row of it could not be read"
+
+	if got := countString(progress, leftover); got != 0 {
+		t.Errorf("a start that met the unread units row again said why the table stands %d times: %v", got, progress)
+	}
+
+	if got := archivedRow(t, db, "rdioScannerUnits", 304); got == nil || got[2] != "its system 10009 is not in this database" {
+		t.Errorf("the archive for the unit the record already named: %v", got)
+	}
+
+	if got := archivedRow(t, db, "rdioScannerUnits", 305); got == nil {
+		t.Errorf("the archive does not hold the unit this start first met: %v", progress)
+	}
+
+	if got := countRows(t, db, "migrationArchive"); got != held+1 {
+		t.Errorf("the archive gained %d rows at a start that named one finding, want the one unit it archived: %v", got-held, progress)
+	}
+
+	if lines := damageReport(progress); len(lines) != 0 {
+		t.Errorf("a start that only archived a unit said something about damage: %v", lines)
 	}
 }
 
@@ -1918,6 +2364,95 @@ func TestMigrateOptionsArchivesABlobThatCouldNotBeRead(t *testing.T) {
 
 	if !holdsColumn(carried, "secret") || !holdsColumn(carried, "extra") {
 		t.Errorf("the options lost the rows the pass could carry: %v", carried)
+	}
+}
+
+// The fixture's blob is the shape a real deployment is in: the names the pass could not carry are ones
+// this release has nowhere to put. Nothing is missing and there is nothing to fix, so both the sentence
+// about the row and the count above it are notices, and the archive holds the row exactly as it did
+// before any level was decided.
+func TestMigrateSaysTheOptionsThisReleaseHasNoOptionOfAsNotices(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	lines := migrateLines(t, db)
+
+	got := []progressLine{}
+
+	for _, line := range lines {
+		if strings.Contains(line.message, "config row") {
+			got = append(got, line)
+		}
+	}
+
+	reason := `it holds values this server cannot carry: "autoDetectGroups" (v8 has no option of that name), "unknownKey" (v8 has no option of that name)`
+
+	want := []progressLine{
+		{level: domain.LogLevelInfo, message: `the migration could not carry 1 config row: it is kept in the migrationArchive table`},
+		{level: domain.LogLevelInfo, message: `the migration could not carry the config row "options": ` + reason},
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("the pass said %d lines about the options it left behind:\n  got  %v\n  want %v", len(got), got, want)
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d:\n  got  %q under %q\n  want %q under %q", i+1, got[i].message, got[i].level, want[i].message, want[i].level)
+		}
+	}
+
+	archived := archivedRows(t, db, "rdioScannerConfigs")
+
+	if len(archived) != 1 {
+		t.Fatalf("the archive holds %d config rows, want the options row filed as a record: %v", len(archived), archived)
+	}
+
+	if archived[0][1] != "1" {
+		t.Errorf("the archive holds the config row for %q, want the one the fixture's options row is", archived[0][1])
+	}
+
+	if archived[0][2] != reason {
+		t.Errorf("the archived config row says %q, want the reason the notice says: %v", archived[0][2], archived)
+	}
+
+	for _, held := range []string{`"_id":1`, `"key":"options"`, `autoDetectGroups`, `unknownKey`} {
+		if !strings.Contains(archived[0][3], held) {
+			t.Errorf("the archived config row does not hold %s, want the v6 row as the table held it: %s", held, archived[0][3])
+		}
+	}
+}
+
+// One blob holding both halves: a name this release has no option of, and a value of a shape this server
+// cannot read. The row does hold something that went wrong, so the one sentence about it stays a problem,
+// and so does the count above it.
+func TestMigrateSaysAValueWithTheWrongShapeAsAProblemBesideANameItHasNoOptionOf(t *testing.T) {
+	db := openLegacyV6Database(t)
+
+	mustExec(t, db, `UPDATE "rdioScannerConfigs" SET "val" = '{"branding":"Rdio Legacy","pruneDays":"thirty days","unknownKey":"dropped"}' WHERE "key" = 'options'`)
+
+	lines := migrateLines(t, db)
+
+	got := []progressLine{}
+
+	for _, line := range lines {
+		if strings.Contains(line.message, "config row") {
+			got = append(got, line)
+		}
+	}
+
+	want := []progressLine{
+		{level: domain.LogLevelWarn, message: `the migration could not carry 1 config row: it is kept in the migrationArchive table`},
+		{level: domain.LogLevelWarn, message: `the migration could not carry the config row "options": it holds values this server cannot carry: "pruneDays" (the value has the wrong shape), "unknownKey" (v8 has no option of that name)`},
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("the pass said %d lines about the options it left behind:\n  got  %v\n  want %v", len(got), got, want)
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d:\n  got  %q under %q\n  want %q under %q", i+1, got[i].message, got[i].level, want[i].message, want[i].level)
+		}
 	}
 }
 
@@ -2698,28 +3233,30 @@ func TestMigrateRecoversTheCallsASurvivingV6TableStillHolds(t *testing.T) {
 
 // The unrecoverable half: a finished damaged migration leaves units whose
 // radio reference was thrown away and the numbers they came from nowhere in
-// the database; the startup report names each one and invents nothing.
+// the database; the startup report names each unit that holds no reference,
+// names them at the start that first reads them, and invents nothing.
 func TestMigrateReportsTheDamageItCannotRepair(t *testing.T) {
 	db := openDamagedFixture(t, "migrated")
 
 	// The audioLength column is a schema change the pass owns, said once;
 	// this test is about the damage report leaving rows alone, read from the
-	// start that finds the database already in shape.
-	migrateDatabase(t, db)
-
-	before := tableSnapshot(t, db)
-
+	// start that first reads the rows the legacy pass left damaged.
 	got := damageReport(migrateDatabase(t, db))
 	want := []string{
 		"the migration left 2 units damaged: they hold no radio reference, the numbers they were migrated from are not in this database",
 		`the migration left unit 301 "Engine 12" of Grand Metro (10001) damaged`,
 		`the migration left unit 302 "Car 4" of Grand Metro (10001) damaged`,
-		"the migration left 1 unit damaged: it is labelled with its own number, the shape of a unit the migration created rather than a deployment named",
-		`the migration left unit 303 "6789" of Grand Metro (10001) damaged`,
 	}
 
 	if !equalStrings(got, want) {
 		t.Errorf("the startup report:\n  got  %v\n  want %v", got, want)
+	}
+
+	before := tableSnapshot(t, db)
+
+	if again := damageReport(migrateDatabase(t, db)); len(again) != 0 {
+		t.Errorf("the start after the one that named the damage reported:\n  got  %v\n  want nothing: each unit it "+
+			"would name was named already", again)
 	}
 
 	for _, row := range rowsOf(t, db, "units", `"unitId", "label", "unitRef"`) {
@@ -2738,23 +3275,243 @@ func TestMigrateReportsTheDamageItCannotRepair(t *testing.T) {
 	}
 }
 
-// The idempotence rule: the damage report is a reading, not a pass that
-// changes what the next start reads, so a second start on the same damaged
-// database says the same thing about the same rows.
-func TestMigrateReportsTheSameDamageAtEveryStart(t *testing.T) {
+// The said-once rule: the damage report is a reading, and the record of what the pass has announced
+// makes it a reading that says what it has not said before. The units it named at the first start are
+// standing there still at the second and the third, and named at neither.
+func TestMigrateNamesTheDamageOnlyAtTheStartThatFirstReadsIt(t *testing.T) {
 	db := openDamagedFixture(t, "migrated")
 
 	first := damageReport(migrateDatabase(t, db))
 	before := tableSnapshot(t, db)
 
-	second := damageReport(migrateDatabase(t, db))
+	if len(first) == 0 {
+		t.Fatal("the first start named no damage, want the units the fixture holds with no radio reference")
+	}
 
-	if !equalStrings(second, first) {
-		t.Errorf("the second start reported:\n  got  %v\n  want %v", second, first)
+	for _, start := range []int{2, 3} {
+		if got := damageReport(migrateDatabase(t, db)); len(got) != 0 {
+			t.Errorf("start %d reported:\n  got  %v\n  want nothing: the first start named those units", start, got)
+		}
 	}
 
 	if after := tableSnapshot(t, db); after != before {
-		t.Errorf("the second start changed the database:\n  got  %s\n  want %s", after, before)
+		t.Errorf("the later starts changed the database:\n  got  %s\n  want %s", after, before)
+	}
+}
+
+// The other damaged shape: a unit whose label is the number the migration invented for it. It stays
+// standing and unnamed at startup, because naming and removing it is the maintenance run's decision,
+// not something a start announces about a deployment the operator named.
+func TestMigrateReportsNothingAboutTheUnitsTheMigrationLabelledWithTheirOwnNumbers(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	progress := migrateDatabase(t, db)
+
+	invented := []string{}
+
+	for _, row := range rowsOf(t, db, "units", `"unitId", "label", "unitRef"`) {
+		if row[1] == row[2] {
+			invented = append(invented, fmt.Sprintf("the migration left unit %s ", row[0]))
+		}
+	}
+
+	if len(invented) == 0 {
+		t.Fatal("the fixture holds no unit labelled with its own number, want the fixture this reading is written against")
+	}
+
+	named := []string{}
+
+	for _, line := range damageReport(progress) {
+		if strings.Contains(line, "labelled with") {
+			named = append(named, line)
+
+			continue
+		}
+
+		for _, unit := range invented {
+			if strings.Contains(line, unit) {
+				named = append(named, line)
+
+				break
+			}
+		}
+	}
+
+	if len(named) != 0 {
+		t.Errorf("the startup report named the units the migration invented: %v, want them left standing and unnamed; "+
+			"the run that removes those rows is the maintenance run, and it names them itself", named)
+	}
+}
+
+// The group line counts the units this start names. A deployment that gains a damaged unit after the
+// start that named the standing ones says one unit and names only the new one.
+func TestMigrateCountsOnlyTheDamagedUnitsItNamesAtThisStart(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 3 {
+		t.Fatalf("the first start named %d damage lines, want the summary and the two units holding no reference: %v",
+			len(got), got)
+	}
+
+	mustExec(t, db, `INSERT INTO "units" ("unitId", "label", "order", "systemId", "unitRef") VALUES (999, 'Hand 9', 0, 101, 0)`)
+
+	got := damageReport(migrateDatabase(t, db))
+	want := []string{
+		"the migration left 1 unit damaged: it holds no radio reference, the numbers they were migrated from are not in this database",
+		`the migration left unit 999 "Hand 9" of Grand Metro (10001) damaged`,
+	}
+
+	if !equalStrings(got, want) {
+		t.Errorf("the start that met a damaged unit for the first time:\n  got  %v\n  want %v", got, want)
+	}
+}
+
+// The record is what makes the said-once rule survive a restart, and a deployment whose legacy tables
+// went years ago has nothing that would otherwise create it: the start that names damaged units has to
+// leave the record standing, or the next start names the same units again.
+func TestMigrateRecordsTheDamageItNamedAlthoughNoLegacyTableStands(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 3 {
+		t.Fatalf("the first start named %d damage lines, want the summary and the two units holding no reference: %v",
+			len(got), got)
+	}
+
+	if !hasMigrationFindingsTable(t, db) {
+		t.Fatalf("the start that named the damage left no findings record standing: %v", readTableNames(t, db))
+	}
+
+	got := readRows(t, db, `SELECT "tableName", "rowId" FROM "migrationFindings" ORDER BY "rowId"`)
+	want := [][]string{{"units", "301"}, {"units", "302"}}
+
+	if !equalStrings(flat(got), flat(want)) {
+		t.Errorf("the record holds %v, want the two units the start named", got)
+	}
+}
+
+// The maintenance run clears the record with the archive and the tables it clears, so the start that
+// follows a run says again what the run left standing. The run takes out the rows it names and the
+// account of what has been said; it does not decide what a start may say about the rows it left.
+func TestMigrateSaysAgainTheDamageThatStandsAfterAMaintenanceRunClearedTheRecord(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 3 {
+		t.Fatalf("the start before the run named %d damage lines, want the summary and the two units holding no reference: %v",
+			len(got), got)
+	}
+
+	report, err := NewMaintenance(db, DialectSqlite).ClearMigrationDamage(context.Background())
+	if err != nil {
+		t.Fatalf("ClearMigrationDamage over the deployment that named its damage: %v", err)
+	}
+
+	if len(report.Units) == 0 {
+		t.Fatalf("the run removed no unit labelled with its own number, want the fixture's: %+v", report.Units)
+	}
+
+	if hasMigrationFindingsTable(t, db) {
+		t.Fatalf("the maintenance run left the findings record standing: %v", readTableNames(t, db))
+	}
+
+	got := damageReport(migrateDatabase(t, db))
+
+	if !equalStrings(got, damageReportOfTheFixture()) {
+		t.Errorf("the start that follows a run that cleared the record:\n  got  %v\n  want %v: the run left those units "+
+			"standing, and a deployment that was told what to clear has no reason to keep quiet about them", got, damageReportOfTheFixture())
+	}
+
+	if again := damageReport(migrateDatabase(t, db)); len(again) != 0 {
+		t.Errorf("a start after the one that spoke again after the run reported:\n  got  %v\n  want nothing: that start named those units", again)
+	}
+}
+
+// A start with nothing to say creates nothing: the record belongs to a deployment that has a legacy
+// table to read or damage to name, the way the archive belongs to one with rows to archive.
+func TestMigrateCreatesNoRecordWhereItHasNothingToName(t *testing.T) {
+	db := openEmptyDatabase(t)
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 0 {
+		t.Fatalf("a fresh database was reported as damaged: %v", got)
+	}
+
+	if hasMigrationFindingsTable(t, db) {
+		t.Errorf("a database with no legacy table and no damage gained the findings record: %v", readTableNames(t, db))
+	}
+}
+
+// The record is what carries the said-once rule across a restart, and it is not what makes the damage
+// findable. A start that cannot build the record says everything it read anyway: a record that will not
+// stand is a reason to say more, not a reason to keep quiet.
+func TestMigrateStillNamesTheDamageWhenItCannotBuildTheRecord(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 3 {
+		t.Fatalf("the first start named %d damage lines, want the summary and the two units holding no reference: %v",
+			len(got), got)
+	}
+
+	// Something else holds the name the record uses, and nothing can be written into it: this is the
+	// deployment whose record was broken between two starts.
+	mustExec(t, db, `DROP TABLE "migrationFindings"`)
+	mustExec(t, db, `CREATE VIEW "migrationFindings" AS SELECT 0 AS "findingId", '' AS "tableName", 0 AS "rowId", `+
+		`0 AS "saidAt"`)
+
+	progress := migrateDatabase(t, db)
+
+	if got, want := damageReport(progress), damageReportOfTheFixture(); !equalStrings(got, want) {
+		t.Errorf("the start that could not build the record:\n  got  %v\n  want %v", got, want)
+	}
+
+	if lines := recordFailureLines(progress); len(lines) == 0 {
+		t.Errorf("the start said nothing about the record it could not build, want that failure named beside the "+
+			"damage it reported:\n%v", progress)
+	}
+}
+
+// The other half of the same rule: the record stands, and refuses the row. Each finding is a write the
+// start has to attempt, and each attempt that fails is said while the damage under it is still named.
+func TestMigrateStillNamesTheDamageWhenItCannotWriteTheRecord(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 3 {
+		t.Fatalf("the first start named %d damage lines, want the summary and the two units holding no reference: %v",
+			len(got), got)
+	}
+
+	// The name, the columns, and the index are all there, and a rule attached to the table refuses every
+	// unit the pass would record: the write fails on each finding while the record itself stands.
+	mustExec(t, db, `DROP TABLE "migrationFindings"`)
+	mustExec(t, db, `CREATE TABLE "migrationFindings" ("findingId" integer NOT NULL PRIMARY KEY AUTOINCREMENT, `+
+		`"tableName" text NOT NULL, "rowId" integer NOT NULL, "saidAt" integer NOT NULL)`)
+	mustExec(t, db, `CREATE UNIQUE INDEX "migration_findings_table_row" ON "migrationFindings" ("tableName","rowId")`)
+	mustExec(t, db, `CREATE TRIGGER "migration_findings_refuses_units" BEFORE INSERT ON "migrationFindings" `+
+		`WHEN NEW."tableName" = 'units' BEGIN SELECT RAISE(ABORT, 'the findings record refuses this row'); END`)
+
+	progress := migrateDatabase(t, db)
+
+	if got, want := damageReport(progress), damageReportOfTheFixture(); !equalStrings(got, want) {
+		t.Errorf("the start that could not write the record:\n  got  %v\n  want %v", got, want)
+	}
+
+	lines := recordFailureLines(progress)
+
+	if len(lines) == 0 {
+		t.Errorf("the start said nothing about the record it could not write, want that failure named beside the "+
+			"damage it reported:\n%v", progress)
+	}
+
+	if got := countRows(t, db, "migrationFindings"); got != 0 {
+		t.Errorf("the record holds %d rows after %d refused findings, want the refused writes left it empty", got, len(lines))
+	}
+}
+
+// damageReportOfTheFixture is what the startup report says on the damaged fixture's two units that hold
+// no radio reference, repeated by the cases that read the report under a broken record.
+func damageReportOfTheFixture() []string {
+	return []string{
+		"the migration left 2 units damaged: they hold no radio reference, the numbers they were migrated from are not in this database",
+		`the migration left unit 301 "Engine 12" of Grand Metro (10001) damaged`,
+		`the migration left unit 302 "Car 4" of Grand Metro (10001) damaged`,
 	}
 }
 
@@ -2800,6 +3557,20 @@ func flat(rows [][]string) []string {
 	}
 
 	return out
+}
+
+// countString reports how many reported lines are exactly the sentence named, which is how a test says
+// one finding was said once rather than once per row or once per start.
+func countString(values []string, want string) int {
+	count := 0
+
+	for _, value := range values {
+		if value == want {
+			count++
+		}
+	}
+
+	return count
 }
 
 // holdsColumn reports whether any of the rows names that value in any column, which is how a test

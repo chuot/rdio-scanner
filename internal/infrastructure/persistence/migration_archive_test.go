@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"rdio-scanner/internal/domain"
 )
 
 // migrationInstant is the moment the migration tests stamp archived rows with, so that archivedAt is
@@ -278,6 +280,274 @@ func TestArchivingTheSameRowTwiceHoldsItOnce(t *testing.T) {
 	if got := countRows(t, db, "migrationArchive"); got != 1 {
 		t.Errorf("the archive holds %d rows after archiving the same v6 row twice, want it held exactly once", got)
 	}
+}
+
+// The archive row and the sentence about it are separate promises. A row the record of findings already
+// names is archived again whenever a pass has to read it, and no start says it again: what the record
+// gates is what the start tells the operator, never what the archive holds.
+func TestArchiverArchivesARowTheRecordAlreadyNamesWithoutSayingIt(t *testing.T) {
+	db := openEmptyDatabase(t)
+
+	migrateDatabase(t, db)
+
+	// The pass creates the archive and the record of findings only where a legacy table is present to
+	// read from, and this database holds none: the test is about a finding a start already made, so it
+	// asks for both tables the pass would have created for it.
+	createMigrationArchive(t, db)
+	createMigrationFindings(t, db)
+
+	s := newStore(db, DialectSqlite)
+	s.clock = fixedClock{migrationInstant}
+
+	tx, err := s.begin(context.Background())
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+
+	// The finding is on record, the way the start that first met the row left it.
+	if first, err := recordFinding(context.Background(), tx, "rdioScannerCalls", 706); err != nil || !first {
+		tx.rollback()
+
+		t.Fatalf("putting the finding on record: first=%v err=%v", first, err)
+	}
+
+	lines := []progressLine{}
+
+	archiver := archiving(context.Background(), tx, func(level, message string) {
+		lines = append(lines, progressLine{level: level, message: message})
+	}, "rdioScannerCalls", "call", "calls")
+
+	if err := archiver.skip(706, `call 706`, "it holds no audio", map[string]any{"id": 706, "system": 10001}); err != nil {
+		tx.rollback()
+
+		t.Fatalf("archiving the row the record already names: %v", err)
+	}
+
+	archiver.report()
+
+	if err := tx.commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	if rows := archivedRows(t, db, "rdioScannerCalls"); len(rows) != 1 {
+		t.Errorf("the archive holds %d calls rows, want the one the pass re-archived without a sentence: %v", len(rows), rows)
+	}
+
+	if len(lines) != 0 {
+		t.Errorf("a start that named no new finding said %d lines: %v", len(lines), lines)
+	}
+}
+
+// The line that counts a group counts what that start names, not what its pass read: a row already on
+// record is archived without being counted or named, and the one finding new to the server is both.
+func TestArchiverCountsOnlyTheFindingsItFirstNames(t *testing.T) {
+	db := openEmptyDatabase(t)
+
+	migrateDatabase(t, db)
+
+	createMigrationArchive(t, db)
+	createMigrationFindings(t, db)
+
+	s := newStore(db, DialectSqlite)
+	s.clock = fixedClock{migrationInstant}
+
+	tx, err := s.begin(context.Background())
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+
+	if first, err := recordFinding(context.Background(), tx, "rdioScannerCalls", 706); err != nil || !first {
+		tx.rollback()
+
+		t.Fatalf("putting the finding on record: first=%v err=%v", first, err)
+	}
+
+	lines := []progressLine{}
+
+	archiver := archiving(context.Background(), tx, func(level, message string) {
+		lines = append(lines, progressLine{level: level, message: message})
+	}, "rdioScannerCalls", "call", "calls")
+
+	for _, row := range []struct {
+		id     int64
+		named  string
+		reason string
+	}{
+		{706, `call 706`, "it holds no audio"},
+		{731, `call 731`, "its talkgroup 1514001 is not in this database"},
+	} {
+		if err := archiver.skip(row.id, row.named, row.reason, map[string]any{"id": row.id, "system": 10001}); err != nil {
+			tx.rollback()
+
+			t.Fatalf("archiving %s: %v", row.named, err)
+		}
+	}
+
+	archiver.report()
+
+	if err := tx.commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	messages := []string{}
+
+	for _, line := range lines {
+		messages = append(messages, line.message)
+	}
+
+	count := "the migration could not carry 1 call: it is kept in the migrationArchive table"
+	known := "the migration could not carry call 706: it holds no audio"
+	fresh := "the migration could not carry call 731: its talkgroup 1514001 is not in this database"
+
+	if got := countString(messages, count); got != 1 {
+		t.Errorf("the start that named one new finding said the line that counts it %d times, want once: %v", got, messages)
+	}
+
+	if got := countString(messages, known); got != 0 {
+		t.Errorf("the start re-archived a row already on record and said %q %d times: %v", known, got, messages)
+	}
+
+	if got := countString(messages, fresh); got != 1 {
+		t.Errorf("the start that first met call 731 said it %d times, want once: %v", got, messages)
+	}
+
+	if got := countRows(t, db, "migrationArchive"); got != 2 {
+		t.Errorf("the archive holds %d rows, want both rows the pass read: %v", got, archivedRows(t, db, "rdioScannerCalls"))
+	}
+}
+
+// A row left behind on purpose and a row that went wrong are one group when one stage read them both.
+// The line that counts the group is filed at the higher level of the two, so the defect is not hidden by
+// the notice beside it, and each row keeps the level its own reason has.
+func TestArchiverFilesTheCountOfItsFindingsAtTheHighestLevelAmongThem(t *testing.T) {
+	db := openEmptyDatabase(t)
+
+	migrateDatabase(t, db)
+
+	createMigrationArchive(t, db)
+	createMigrationFindings(t, db)
+
+	s := newStore(db, DialectSqlite)
+	s.clock = fixedClock{migrationInstant}
+
+	tx, err := s.begin(context.Background())
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+
+	lines := []progressLine{}
+
+	archiver := archiving(context.Background(), tx, func(level, message string) {
+		lines = append(lines, progressLine{level: level, message: message})
+	}, "rdioScannerConfigs", "config row", "config rows")
+
+	intentional := `it holds values this server cannot carry: "autoDetectGroups" (v8 has no option of that name)`
+
+	if err := archiver.skipAsNotice(1, `the config row "options"`, intentional, map[string]any{"_id": 1, "key": "options"}); err != nil {
+		tx.rollback()
+
+		t.Fatalf("archiving the options this release has no option of: %v", err)
+	}
+
+	if err := archiver.skip(2, `a config row`, "the database refused it", map[string]any{"_id": 2, "key": "secret"}); err != nil {
+		tx.rollback()
+
+		t.Fatalf("archiving the value the database refused: %v", err)
+	}
+
+	archiver.report()
+
+	if err := tx.commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	want := []progressLine{
+		{level: domain.LogLevelWarn, message: `the migration could not carry 2 config rows: they are kept in the migrationArchive table`},
+		{level: domain.LogLevelInfo, message: `the migration could not carry the config row "options": ` + intentional},
+		{level: domain.LogLevelWarn, message: `the migration could not carry a config row: the database refused it`},
+	}
+
+	if !equalProgress(lines, want) {
+		t.Errorf("a group holding both kinds of finding said:\n  got  %v\n  want %v", lines, want)
+	}
+}
+
+// The group a start says when everything it left behind is something this release does not carry on
+// purpose: it is a record of what the deployment had, not a list of casualties, so the whole group is a
+// notice.
+func TestArchiverSaysAGroupLeftBehindOnPurposeAsANotice(t *testing.T) {
+	db := openEmptyDatabase(t)
+
+	migrateDatabase(t, db)
+
+	createMigrationArchive(t, db)
+	createMigrationFindings(t, db)
+
+	s := newStore(db, DialectSqlite)
+	s.clock = fixedClock{migrationInstant}
+
+	tx, err := s.begin(context.Background())
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+
+	lines := []progressLine{}
+
+	archiver := archiving(context.Background(), tx, func(level, message string) {
+		lines = append(lines, progressLine{level: level, message: message})
+	}, "rdioScannerConfigs", "config row", "config rows")
+
+	for _, row := range []struct {
+		id     int64
+		key    string
+		named  string
+		reason string
+	}{
+		{1, "options", `the config row "options"`, `it holds values this server cannot carry: "autoDetectGroups" (v8 has no option of that name), "unknownKey" (v8 has no option of that name)`},
+		{3, "extra", `the config row "extra"`, `it holds values this server cannot carry: "nested" (v8 has no option of that name)`},
+	} {
+		if err := archiver.skipAsNotice(row.id, row.named, row.reason, map[string]any{"_id": row.id, "key": row.key}); err != nil {
+			tx.rollback()
+
+			t.Fatalf("archiving %s: %v", row.named, err)
+		}
+	}
+
+	archiver.report()
+
+	if err := tx.commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	want := []progressLine{
+		{level: domain.LogLevelInfo, message: `the migration could not carry 2 config rows: they are kept in the migrationArchive table`},
+		{level: domain.LogLevelInfo, message: `the migration could not carry the config row "options": it holds values this server cannot carry: "autoDetectGroups" (v8 has no option of that name), "unknownKey" (v8 has no option of that name)`},
+		{level: domain.LogLevelInfo, message: `the migration could not carry the config row "extra": it holds values this server cannot carry: "nested" (v8 has no option of that name)`},
+	}
+
+	if !equalProgress(lines, want) {
+		t.Errorf("a group this release left behind on purpose said:\n  got  %v\n  want %v", lines, want)
+	}
+
+	if got := countRows(t, db, "migrationFindings"); got != 2 {
+		t.Errorf("the record of findings holds %d rows, want the two the start named: %v", got, archivedRows(t, db, "rdioScannerConfigs"))
+	}
+}
+
+// equalProgress compares the lines a migration stage reported, level and wording together, in the order
+// it said them.
+func equalProgress(got, want []progressLine) bool {
+	if len(got) != len(want) {
+		return false
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 // An archive write that cannot run is a failure the caller is told about, not a row

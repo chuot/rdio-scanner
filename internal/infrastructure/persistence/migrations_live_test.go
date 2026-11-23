@@ -40,6 +40,11 @@ var liveSeedOrder = []string{
 	"rdioScannerAccesses",
 }
 
+// liveFindingsIndex is the one key the findings record is held by. The live reading of that record asks the
+// backend both for the key in its own catalog and for the refusal a second copy of a finding meets there, and
+// both answers name it.
+const liveFindingsIndex = "migration_findings_table_row"
+
 // liveSettings reads one backend's connection out of the environment, the way the server reads
 // its own database out of its configuration. Nothing here falls back to sqlite or to a default
 // port: a live test that quietly reached a different database than the harness started would
@@ -1197,25 +1202,28 @@ func liveFinishedLeftoverCallsTable(t *testing.T, dialect Dialect) {
 	}
 }
 
-func TestMigrateLiveOnMariaDBLeavesACallsTableWithARowItCannotReadWithoutAnnouncingAMigration(t *testing.T) {
+func TestMigrateLiveOnMariaDBSaysTheCallsRowItCannotReadOnceAcrossStarts(t *testing.T) {
 	liveUnreadableRowKeepsTheTable(t, DialectMariadb)
 }
 
-func TestMigrateLiveOnPostgreSQLLeavesACallsTableWithARowItCannotReadWithoutAnnouncingAMigration(t *testing.T) {
+func TestMigrateLiveOnPostgreSQLSaysTheCallsRowItCannotReadOnceAcrossStarts(t *testing.T) {
 	liveUnreadableRowKeepsTheTable(t, DialectPostgresql)
 }
 
-// liveUnreadableRowKeepsTheTable runs the unread-row reading on a live backend, from the seeded v6.6.3
-// deployment with one of its call timestamps rewritten into something this server cannot read. The first
-// start carries the rows it can and leaves the table with the row it could not read; the start after that
-// has nothing to carry, so the only thing it says about calls is the sentence naming the table and the
-// row, and not a migration it is not running.
+// liveUnreadableRowKeepsTheTable runs the unread-row reading on a live backend over three starts, from the
+// seeded v6.6.3 deployment with one of its call timestamps rewritten into something this server cannot read.
+// The first start carries the rows it can, says the sentence naming the table it left standing, and puts that
+// sentence on the record; every start after it meets the finding it already announced and says nothing about
+// calls at all, while the table, the row in it, the carried calls and the filed rows stay as the first start
+// left them.
 func liveUnreadableRowKeepsTheTable(t *testing.T, dialect Dialect) {
 	t.Helper()
 
 	db := liveDatabase(t, dialect)
 
 	liveUnreadableRow(t, db, dialect, 702)
+
+	warn := "the migration left the calls table where it found it: a row of it could not be read"
 
 	first := liveMigrate(t, db, dialect)
 
@@ -1224,40 +1232,413 @@ func liveUnreadableRowKeepsTheTable(t *testing.T, dialect Dialect) {
 			"read is not the only odd thing about this database: %v", dialect, liveProgressText(first))
 	}
 
+	if said := liveSaidLine(first, warn); said != 1 {
+		t.Fatalf("the %s pass that left the calls table standing said the sentence naming it %d times, want once: %v",
+			dialect, said, liveProgressText(first))
+	}
+
 	carried := rowsOf(t, db, "calls", `"callId"`)
 	archived := archivedRows(t, db, "rdioScannerCalls")
 	unreadable := readRows(t, db, `SELECT "id", "dateTime", "audioName" FROM "rdioScannerCalls" WHERE "id" = 702`)
+	recorded := liveFindingPairs(t, db, "rdioScannerCalls")
 
 	if len(unreadable) != 1 {
 		t.Fatalf("the calls table does not hold the row 702 whose timestamp was rewritten: %v", unreadable)
 	}
 
+	if !slices.Contains(recorded, "rdioScannerCalls|0") {
+		t.Fatalf("the %s pass left the calls table standing without putting that finding on its record: %v",
+			dialect, recorded)
+	}
+
+	for start := 2; start <= 3; start++ {
+		next := liveMigrate(t, db, dialect)
+
+		if lines := liveSaidAboutCalls(next); len(lines) != 0 {
+			t.Errorf("the %s pass number %d said something about a calls table whose finding it already has: %v",
+				dialect, start, lines)
+		}
+
+		if !hasTable(t, db, dialect, "rdioScannerCalls") {
+			t.Errorf("a %s pass dropped a calls table holding the row it could not read: %v", dialect, liveProgressText(next))
+		}
+
+		if now := readRows(t, db, `SELECT "id", "dateTime", "audioName" FROM "rdioScannerCalls" WHERE "id" = 702`); !equalStrings(flat(now), flat(unreadable)) {
+			t.Errorf("the %s pass number %d rewrote the row it could not read:\n  was  %v\n  now  %v",
+				dialect, start, flat(unreadable), flat(now))
+		}
+
+		if now := rowsOf(t, db, "calls", `"callId"`); !equalStrings(flat(now), flat(carried)) {
+			t.Errorf("the %s pass number %d left a row behind and changed which rows the calls table holds:\n  was  %v\n  now  %v",
+				dialect, start, flat(carried), flat(now))
+		}
+
+		if now := archivedRows(t, db, "rdioScannerCalls"); !equalStrings(flat(now), flat(archived)) {
+			t.Errorf("the %s pass number %d archived a row a second time:\n  was  %v\n  now  %v",
+				dialect, start, flat(archived), flat(now))
+		}
+
+		if now := liveFindingPairs(t, db, "rdioScannerCalls"); !equalStrings(now, recorded) {
+			t.Errorf("the %s pass number %d changed what the record holds about the calls table:\n  was  %v\n  now  %v",
+				dialect, start, recorded, now)
+		}
+	}
+}
+
+func TestMigrateLiveOnMariaDBHoldsEachFindingItSaidUnderOneUniqueKey(t *testing.T) {
+	liveFindingsRecordShape(t, DialectMariadb)
+}
+
+func TestMigrateLiveOnPostgreSQLHoldsEachFindingItSaidUnderOneUniqueKey(t *testing.T) {
+	liveFindingsRecordShape(t, DialectPostgresql)
+}
+
+// liveFindingsRecordShape reads the findings record a live backend is left holding after a pass that finished
+// with something to say about a table: the seeded v6.6.3 deployment with one call timestamp rewritten into
+// something this server cannot read, so the calls table outlives the pass and the finding naming it outlives it
+// too. A deployment whose every legacy table was carried and dropped leaves the record empty, because dropping
+// a table takes the findings that name it with it, and a record with nothing in it proves nothing about a key.
+// The reading asks the backend for the key in its own catalog, then asks the engine for the refusal a second
+// copy of a finding meets there, because a catalog names a key without saying it is unique, and finally asks
+// the statement the pass writes with to answer that same pair as a finding it has already announced rather than
+// as a failure.
+func liveFindingsRecordShape(t *testing.T, dialect Dialect) {
+	t.Helper()
+
+	db := liveDatabase(t, dialect)
+
+	ctx := context.Background()
+
+	liveUnreadableRow(t, db, dialect, 702)
+
+	liveMigrate(t, db, dialect)
+
+	if !hasTable(t, db, dialect, migrationFindingsTable) {
+		t.Fatalf("the %s pass left no findings record behind", dialect)
+	}
+
+	indexes, err := hasCallIndexShape(ctx, newStore(db, dialect), migrationFindingsTable)
+	if err != nil {
+		t.Fatalf("reading the keys of the %s findings record: %v", dialect, err)
+	}
+
+	declared := []string{}
+	found := indexSpec{}
+
+	for _, index := range indexes {
+		declared = append(declared, index.name+" ("+strings.Join(index.columns, ", ")+")")
+
+		if index.name == liveFindingsIndex {
+			found = index
+		}
+	}
+
+	if found.name == "" {
+		t.Fatalf("the %s findings record has no key named %s; that backend reports: %v", dialect, liveFindingsIndex, declared)
+	}
+
+	if !equalStrings(found.columns, []string{"tableName", "rowId"}) {
+		t.Fatalf("the %s key %s covers %v, want the table name and the row identity in that order: %v",
+			dialect, liveFindingsIndex, found.columns, declared)
+	}
+
+	recorded := liveFindingPairs(t, db, "")
+
+	if len(recorded) == 0 {
+		t.Fatalf("the %s pass left the calls table standing over the row it could not read and put nothing on its "+
+			"record, so the record proves nothing about holding one finding once", dialect)
+	}
+
+	if !slices.Contains(recorded, "rdioScannerCalls|0") {
+		t.Fatalf("the %s record does not hold the finding naming the calls table the pass left standing: %v", dialect, recorded)
+	}
+
+	filed := liveArchivePairs(t, db)
+
+	s := newStore(db, dialect)
+
+	table, rowId := liveSplitPair(recorded[0])
+
+	// The refusal is what makes the record say a finding once: a plain write of a pair the record already
+	// holds has to be turned down, and turned down by that key.
+	plain := `INSERT INTO "` + migrationFindingsTable + `" ("tableName", "rowId", "saidAt") VALUES (?, ?, ?)`
+
+	if _, err := s.exec(ctx, plain, table, rowId, migrationInstant.UnixMilli()); err == nil {
+		t.Errorf("the %s backend accepted a second row for the finding %s %d, so %s does not hold each finding once",
+			dialect, table, rowId, liveFindingsIndex)
+	} else if !strings.Contains(strings.ToLower(err.Error()), "duplicate") || !strings.Contains(err.Error(), liveFindingsIndex) {
+		t.Errorf("the %s backend refused a second row for the finding %s %d as %q, which does not name the key %s",
+			dialect, table, rowId, err.Error(), liveFindingsIndex)
+	}
+
+	// The statement the pass itself writes with reports the same pair as already known: no error, and no row
+	// changed, which is how the pass knows the finding is not a new one.
+	result, err := s.exec(ctx, findingsInsertStatement(dialect), table, rowId, migrationInstant.UnixMilli())
+
+	if err != nil {
+		t.Errorf("the %s insert the pass writes reported %v for the finding %s %d it had already announced",
+			dialect, err, table, rowId)
+	} else if affected, err := result.RowsAffected(); err != nil {
+		t.Fatalf("reading what the tolerating insert changed: %v", err)
+	} else if affected != 0 {
+		t.Errorf("the %s insert the pass writes reported %d rows changed for the finding %s %d it had already "+
+			"announced, want none: a changed row is how that pass reads a finding it has not said yet",
+			dialect, affected, table, rowId)
+	}
+
+	// A finding outlives the table it names and no longer: a pass that dropped a table took what the record
+	// knew about it, and a finding naming a table no deployment holds is one no later start could ever meet.
+	for _, pair := range recorded {
+		name, _ := liveSplitPair(pair)
+
+		if name != migrationDamagedUnitsTable && !slices.Contains(v6MigrationTables, name) {
+			t.Errorf("the %s record holds the finding %s, which names a table this pass reads nothing out of: %v",
+				dialect, pair, recorded)
+		}
+
+		if !hasTable(t, db, dialect, name) {
+			t.Errorf("the %s record still holds the finding %s after the pass dropped the table it names, which is a "+
+				"finding no start can meet again: %v", dialect, pair, recorded)
+		}
+	}
+
+	// The calls table is the one this deployment still holds, so the findings the record holds about it are the
+	// rows the pass filed from it, plus the one naming the table it left standing.
+	filedFromCalls := livePairsNamed(filed, "rdioScannerCalls")
+	recordedAboutCalls := liveFindingPairs(t, db, "rdioScannerCalls")
+
+	for _, pair := range filedFromCalls {
+		if !slices.Contains(recordedAboutCalls, pair) {
+			t.Errorf("the %s record does not hold the finding for the calls row the pass filed: %s is filed, the record "+
+				"holds %v", dialect, pair, recordedAboutCalls)
+		}
+	}
+
+	for _, pair := range recordedAboutCalls {
+		if pair == "rdioScannerCalls|0" || slices.Contains(filedFromCalls, pair) {
+			continue
+		}
+
+		t.Errorf("the %s record holds a finding about the calls table for a row the pass never filed: %s, against the "+
+			"rows it filed %v", dialect, pair, filedFromCalls)
+	}
+
+	if repeated := liveRepeatedPairs(recorded); len(repeated) != 0 {
+		t.Errorf("the %s record holds these findings more than once: %v", dialect, repeated)
+	}
+}
+
+func TestMigrateLiveOnMariaDBSaysATableItCouldNotDropAtEveryStart(t *testing.T) {
+	liveRefusedTableDropSaidAtEveryStart(t, DialectMariadb)
+}
+
+func TestMigrateLiveOnPostgreSQLSaysATableItCouldNotDropAtEveryStart(t *testing.T) {
+	liveRefusedTableDropSaidAtEveryStart(t, DialectPostgresql)
+}
+
+// liveRefusedTableDropSaidAtEveryStart runs the failure reading on a live backend: a fork's own table holds a
+// note per call under a foreign key onto the v6 calls table, so the calls stage accounts for every row, asks
+// for the DROP, and is turned down. The line naming that is not a finding this server quiets, so it is said at
+// each start, in the same words, and nothing the pass already carried or filed is carried or filed again.
+func liveRefusedTableDropSaidAtEveryStart(t *testing.T, dialect Dialect) {
+	t.Helper()
+
+	db := liveDatabase(t, dialect)
+
+	liveRefusingCallNotes(t, db, dialect, 702)
+
+	first := liveMigrate(t, db, dialect)
+
+	carried := rowsOf(t, db, "calls", `"callId"`)
+	filed := countRows(t, db, "migrationArchive")
+
+	// The rows the stage carried before it asked for the DROP are the thing a refusal could take back, and
+	// the whole point of accounting for a table before dropping it is that a table kept standing keeps
+	// nothing in it unaccounted for: every row of the legacy table is in the new one or in the archive.
+	if got, want := len(carried)+len(livePairsNamed(liveArchivePairs(t, db), "rdioScannerCalls")), countRows(t, db, "rdioScannerCalls"); got != want {
+		t.Errorf("the first %s pass accounted for %d of the %d calls rows its own DROP was turned down for, so the "+
+			"refusal left rows in a table no start will finish reading: %d carried, %d filed",
+			dialect, got, want, len(carried), len(livePairsNamed(liveArchivePairs(t, db), "rdioScannerCalls")))
+	}
+
+	firstFailure := liveCallsFailure(first)
+
+	if firstFailure == "" {
+		t.Fatalf("the first %s pass over a calls table its own DROP was turned down said nothing about that stage: %v",
+			dialect, liveProgressText(first))
+	}
+
 	second := liveMigrate(t, db, dialect)
 
-	warn := "the migration left the calls table where it found it: a row of it could not be read"
+	secondFailure := liveCallsFailure(second)
 
-	if !hasString(liveProgressText(second), warn) {
-		t.Errorf("the %s pass that left the calls table said nothing about why: %v", dialect, liveProgressText(second))
+	if secondFailure == "" {
+		t.Errorf("the second %s pass said nothing about the calls table it could not drop the start before: %v",
+			dialect, liveProgressText(second))
+	} else if secondFailure != firstFailure {
+		t.Errorf("the %s pass said the refused calls table in different words at the second start:\n  first   %s\n  second  %s",
+			dialect, firstFailure, secondFailure)
 	}
 
 	if !hasTable(t, db, dialect, "rdioScannerCalls") {
-		t.Errorf("a %s pass dropped a calls table holding the row it could not read: %v", dialect, liveProgressText(second))
+		t.Errorf("a %s pass dropped a calls table another table still points at: %v", dialect, liveProgressText(second))
 	}
 
-	if hasString(liveProgressText(second), "migrating calls...") {
-		t.Errorf("the %s pass announced a calls migration for a table whose rows it does not carry: %v", dialect, liveProgressText(second))
+	if slices.Contains(liveFindingPairs(t, db, "rdioScannerCalls"), "rdioScannerCalls|0") {
+		t.Errorf("the %s pass put the calls table it could not drop on its record as a finding, which is the one way "+
+			"it could stop saying the failure line at the next start", dialect)
 	}
 
-	if now := readRows(t, db, `SELECT "id", "dateTime", "audioName" FROM "rdioScannerCalls" WHERE "id" = 702`); !equalStrings(flat(now), flat(unreadable)) {
-		t.Errorf("the %s pass rewrote the row it could not read:\n  was  %v\n  now  %v", dialect, flat(unreadable), flat(now))
+	if now := countRows(t, db, "migrationArchive"); now != filed {
+		t.Errorf("the second %s pass filed %d rows beside the %d the first one filed", dialect, now, filed)
 	}
 
 	if now := rowsOf(t, db, "calls", `"callId"`); !equalStrings(flat(now), flat(carried)) {
-		t.Errorf("the %s pass left a row behind and changed which rows the calls table holds:\n  was  %v\n  now  %v",
+		t.Errorf("the second %s pass changed which rows the calls table holds:\n  was  %v\n  now  %v",
 			dialect, flat(carried), flat(now))
 	}
+}
 
-	if now := archivedRows(t, db, "rdioScannerCalls"); !equalStrings(flat(now), flat(archived)) {
-		t.Errorf("the %s pass archived a row a second time:\n  was  %v\n  now  %v", dialect, flat(archived), flat(now))
+// liveSaidLine counts the lines a live pass said with exactly this text.
+func liveSaidLine(lines []progressLine, text string) int {
+	said := 0
+
+	for _, line := range lines {
+		if line.message == text {
+			said++
+		}
+	}
+
+	return said
+}
+
+// liveSaidAboutCalls returns the lines a live pass said that named calls at all, at any level: the reading
+// that wants a start silent about a table it already reported needs every calls sentence, not only the warning.
+func liveSaidAboutCalls(lines []progressLine) []string {
+	said := []string{}
+
+	for _, line := range lines {
+		if strings.Contains(strings.ToLower(line.message), "call") {
+			said = append(said, line.message)
+		}
+	}
+
+	return said
+}
+
+// liveCallsFailure returns the warning a live pass said about a calls stage it could not finish, or the empty
+// string when it said none. The backend's own words sit in the middle of that line, so the line is returned
+// whole rather than matched against one backend's wording.
+func liveCallsFailure(lines []progressLine) string {
+	for _, line := range lines {
+		if line.level == domain.LogLevelWarn && strings.Contains(line.message, "the migration of calls could not be finished") {
+			return line.message
+		}
+	}
+
+	return ""
+}
+
+// liveFindingPairs reads the findings record as the pairs it is held by, one string per row: the table name
+// and the row identity the finding names, joined. An empty table name asks for every row the record holds.
+func liveFindingPairs(t *testing.T, db *sql.DB, table string) []string {
+	t.Helper()
+
+	query := `SELECT "tableName", "rowId" FROM "migrationFindings"`
+
+	if table != "" {
+		query += ` WHERE "tableName" = '` + table + `'`
+	}
+
+	return liveJoinPairs(readRows(t, db, query+` ORDER BY "tableName", "rowId"`))
+}
+
+// liveArchivePairs reads the archive as the same pairs, so that a finding the pass filed and a finding the
+// pass recorded can be compared without either table's other columns getting in the way.
+func liveArchivePairs(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+
+	return liveJoinPairs(readRows(t, db, `SELECT "tableName", "rowId" FROM "migrationArchive" ORDER BY "tableName", "rowId"`))
+}
+
+func liveJoinPairs(rows [][]string) []string {
+	pairs := make([]string, 0, len(rows))
+
+	for _, row := range rows {
+		pairs = append(pairs, row[0]+"|"+row[1])
+	}
+
+	return pairs
+}
+
+func livePairsNamed(pairs []string, table string) []string {
+	named := []string{}
+
+	for _, pair := range pairs {
+		if strings.HasPrefix(pair, table+"|") {
+			named = append(named, pair)
+		}
+	}
+
+	return named
+}
+
+// liveRepeatedPairs names the pairs a list holds more than once.
+func liveRepeatedPairs(pairs []string) []string {
+	seen := map[string]int{}
+	repeated := []string{}
+
+	for _, pair := range pairs {
+		seen[pair]++
+
+		if seen[pair] == 2 {
+			repeated = append(repeated, pair)
+		}
+	}
+
+	return repeated
+}
+
+// liveSplitPair takes one findings pair back into the table name and the row identity the finding names.
+func liveSplitPair(pair string) (string, int64) {
+	table, rest, ok := strings.Cut(pair, "|")
+
+	if !ok {
+		panic(fmt.Sprintf("liveSplitPair: %q holds no table name and row identity", pair))
+	}
+
+	rowId, err := strconv.ParseInt(rest, 10, 64)
+	if err != nil {
+		panic(fmt.Sprintf("liveSplitPair: %q is not a row identity: %v", rest, err))
+	}
+
+	return table, rowId
+}
+
+// liveRefusingCallNotes puts a fork's own table on a live backend: one note per call, with a foreign key onto
+// the v6 calls table. The v6 server never wrote such a table, and nothing in this server's migration knows it,
+// so it stands and holds the calls table it points at against being dropped.
+func liveRefusingCallNotes(t *testing.T, db *sql.DB, dialect Dialect, rowId int) {
+	t.Helper()
+
+	statement := ""
+
+	switch dialect {
+	case DialectMariadb:
+		statement = "create table `callNotes` (`id` integer primary key auto_increment, `callId` integer not null, " +
+			"`note` varchar(255) not null, constraint `call_notes_call_id` foreign key (`callId`) references `rdioScannerCalls` (`id`));"
+	case DialectPostgresql:
+		statement = `create table "callNotes" ("id" serial not null primary key, "callId" integer not null ` +
+			`references "rdioScannerCalls" ("id"), "note" varchar(255) not null);`
+	default:
+		t.Fatalf("liveRefusingCallNotes has no statement for the %s backend", dialect)
+	}
+
+	applyStatements(t, db, []string{statement})
+
+	s := newStore(db, dialect)
+
+	if _, err := s.exec(context.Background(), `INSERT INTO "callNotes" ("callId", "note") VALUES (?, ?)`, rowId, "a note the v6 server never wrote"); err != nil {
+		t.Fatalf("seeding the note that holds the calls table in place: %v", err)
 	}
 }

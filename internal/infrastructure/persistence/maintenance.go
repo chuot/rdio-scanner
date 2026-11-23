@@ -51,6 +51,12 @@ var v6MigrationTables = []string{
 // table a clearing drops once those rows have been named.
 const migrationArchiveTable = "migrationArchive"
 
+// migrationFindingsTable is the table the migration pass keeps its account of what it has already
+// announced in, and the table a clearing drops with the archive it was written beside. It is not one of
+// the names the migration reads or a clearing drops as legacy tables: no carry stage reads it, and it
+// holds no row of the deployment's.
+const migrationFindingsTable = "migrationFindings"
+
 // legacyTablesPresent answers whether the deployment still holds any of the legacy tables the
 // migration reads, which is the only state in which a migration pass has rows it might not carry and
 // the only state in which a finished deployment has a legacy table left to drop.
@@ -82,6 +88,7 @@ type clearStatements struct {
 	deleteUnit      string
 	archiveRows     string
 	dropArchive     string
+	dropFindings    string
 	countLegacyRow  string
 	dropLegacyTable string
 }
@@ -111,6 +118,7 @@ func NewMaintenance(db *sql.DB, dialect Dialect) *Maintenance {
 			deleteUnit:      `DELETE FROM "units" WHERE "unitId" = ?`,
 			archiveRows:     `SELECT "tableName", "rowId", "reason", "archivedAt" FROM "` + migrationArchiveTable + `" ORDER BY "tableName", "rowId"`,
 			dropArchive:     `DROP TABLE "` + migrationArchiveTable + `"`,
+			dropFindings:    `DROP TABLE "` + migrationFindingsTable + `"`,
 			countLegacyRow:  `SELECT COUNT(*) FROM "%s"`,
 			dropLegacyTable: `DROP TABLE "%s"`,
 		},
@@ -118,12 +126,15 @@ func NewMaintenance(db *sql.DB, dialect Dialect) *Maintenance {
 }
 
 // ClearMigrationDamage drops the legacy tables the deployment still holds, then the migration archive
-// table with every row in it, then the unit rows a migration made rather than a deployment named. The
-// order is the one that ends a cycle rather than starts it: a carry step reads a legacy table and
-// archives what it cannot carry, so emptying the archive while a legacy table stands would have it
-// full again on the next start. Everything goes in one transaction that commits once at the end, so a
-// failure anywhere in it leaves the deployment exactly as it was. The compaction is not part of this:
-// it belongs after the commit, and it is the run's caller's own statement.
+// table with every row in it, then the record of what the migration pass has already announced, then the
+// unit rows a migration made rather than a deployment named. The order is the one that ends a cycle
+// rather than starts it: a carry step reads a legacy table and archives what it cannot carry, so emptying
+// the archive while a legacy table stands would have it full again on the next start. The record of
+// findings goes with the archive it was written beside, which is what lets the start after a run say
+// again whatever that run left standing; clearing it is not one of the three removals the run reports.
+// Everything goes in one transaction that commits once at the end, so a failure anywhere in it leaves the
+// deployment exactly as it was. The compaction is not part of this: it belongs after the commit, and it
+// is the run's caller's own statement.
 func (m *Maintenance) ClearMigrationDamage(ctx context.Context) (ports.MigrationDamageReport, error) {
 	const section, operation = "maintenance", "clear"
 
@@ -142,6 +153,11 @@ func (m *Maintenance) ClearMigrationDamage(ctx context.Context) (ports.Migration
 	}
 
 	archived, err := tableExists(ctx, m.store, migrationArchiveTable)
+	if err != nil {
+		return report, operationError(section, operation, err)
+	}
+
+	recorded, err := tableExists(ctx, m.store, migrationFindingsTable)
 	if err != nil {
 		return report, operationError(section, operation, err)
 	}
@@ -191,6 +207,18 @@ func (m *Maintenance) ClearMigrationDamage(ctx context.Context) (ports.Migration
 		report.DroppedArchive = true
 	}
 
+	// The record of findings goes with the rows and tables it was written about. It is dropped rather
+	// than emptied so that a deployment which never had one is not given one, and it is not reported:
+	// the run lists the unit rows, the tables, and the archive rows it removed, and the record holds
+	// none of those.
+	if recorded {
+		if _, err := tx.exec(ctx, m.statements.dropFindings); err != nil {
+			tx.rollback()
+
+			return report, statementError(section, operation, err, m.statements.dropFindings)
+		}
+	}
+
 	// Every unit row is read and each one handed to the Domain predicate, through the same read the
 	// report-only half of the run asks: the shape the predicate names is a label read as the plain decimal
 	// form of its own number, and a backend asked to compare a text label with a number reads a number out
@@ -227,7 +255,9 @@ func (m *Maintenance) ClearMigrationDamage(ctx context.Context) (ports.Migration
 // they hold, and the migration archive with every row kept in it. The classes are read in the order a run
 // performs them, so the listing an operator reads before deciding is built from the same account the run
 // reports afterwards. The read runs in a read-only transaction, which is what lets the deployment be
-// exactly what it was when the listing was read while a server of the same deployment is not running.
+// exactly what it was when the listing was read while a server of the same deployment is not running. The
+// account the migration keeps of what it has already announced stays exactly where it was: a listing
+// removes nothing, and that record is what a running server reads to know what it has already said.
 func (m *Maintenance) ReadMigrationDamage(ctx context.Context) (ports.MigrationDamageReport, error) {
 	const section, operation = "maintenance", "read"
 

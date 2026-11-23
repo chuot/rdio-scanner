@@ -1205,6 +1205,8 @@ var maintenanceRunWording = []string{
 	"removes three things a migration leaves behind",
 	"the migrationArchive table with every row in it",
 	"any legacy table the migration left standing",
+	"clears the account of what the migration has already said",
+	"the migrationFindings table beside the archive",
 	"clears the records first and compacts the file afterwards",
 	"a unit whose label is one you wrote, a unit with a number range, a unit with no radio number of its own, and every recorded call",
 	"The archive is the only copy of the configuration a migration could not carry.",
@@ -1225,6 +1227,86 @@ func TestTheGuideWarnsWhatAMaintenanceRunRemovesFromAnOlderDatabase(t *testing.T
 	for _, stated := range maintenanceRunWording {
 		if !strings.Contains(chapter, stated) {
 			t.Errorf("the guide's migration chapter does not say what a maintenance run does: %q is missing", stated)
+		}
+	}
+}
+
+// what the migration reports about a deployment, and how often it reports it again, is what an operator
+// reads under Database after an upgrade: the account the server keeps of what it has already said, which
+// sentences a later start says again because they name work it has not finished, the two sentences that are
+// notices rather than damage, and the two shapes of damaged unit an operator can tell apart and act on. The
+// claims are read in the order an operator needs them: how often a sentence comes, where the account lives,
+// what the account keeps quiet, what still comes until the work is done, and what to do about each unit.
+var migrationAnnouncementStates = []struct {
+	fragment string
+	says     string
+}{
+	{fragment: "is reported once", says: "that each thing the migration reports about a database is reported once"},
+	{fragment: "migrationfindings", says: "and names the table that account is kept in"},
+	{fragment: "says nothing about it", says: "that a start meeting a finding the account already holds says nothing about it"},
+	{fragment: "has still not finished", says: "that what a later start says again is only work it has still not finished"},
+	{fragment: "no option of", says: "that an option value this release has no option of is a notice rather than damage"},
+	{fragment: "bookkeeping an older server kept", says: "and the same for the bookkeeping an older server kept that this server has none of"},
+	{fragment: "no radio number of its own", says: "the unit left with no radio number of its own, which no run removes and an operator has to act on"},
+	{fragment: "the radio number the migration invented", says: "and the unit the recordings brought into being, which a run removes and names as it goes"},
+}
+
+// the database chapter is where a reader learns the migration runs at every start, and it is where the link
+// to what the one-shot run clears sits, so the account the clearing goes with belongs in its list and the
+// finding-once rule beside the claim that an interrupted migration resumes on its own.
+var databaseChapterClearing = []string{
+	"a finding the migration has already reported is reported once",
+	"the archive, the units the migration left damaged, the legacy tables a row the migration could not read kept standing, and the account of what the migration has already said",
+}
+
+// the migration chapter is where an operator reads what the log will hold, so it says how often each
+// sentence comes and names the record behind that, and it cannot promise the same finding at a start the
+// record has already answered for.
+func TestTheGuideSaysTheMigrationReportsEachFindingOnce(t *testing.T) {
+	body := guidePath(t)
+
+	plain := strings.ToLower(words(subsectionOf(t, body, "What each start says, and what it says once")))
+
+	at := -1
+
+	for _, state := range migrationAnnouncementStates {
+		found := strings.Index(plain, state.fragment)
+
+		if found < 0 {
+			t.Errorf("the guide's migration chapter does not say %s: it carries no %q", state.says, state.fragment)
+
+			continue
+		}
+
+		if found < at {
+			t.Errorf("the guide's migration chapter says %s out of order: %q comes before the claim it follows", state.says, state.fragment)
+		}
+
+		at = found
+	}
+
+	// the whole point of the record is that a finding is not repeated, so the section that names it cannot
+	// also promise one at every start: a reader told both cannot tell which start they are reading about.
+	for _, unwanted := range []string{"at every start", "at each start"} {
+		if strings.Contains(plain, unwanted) {
+			t.Errorf("the guide's migration chapter still says a migration finding comes %q, which is what the account "+
+				"of what the migration has already said exists to stop: %s", unwanted, plain)
+		}
+	}
+}
+
+// the database chapter's link to the one-shot run is the sentence a reader follows from a migration that
+// stopped halfway, so it names the account beside the archive, the damaged units, and the kept-standing
+// tables it already names.
+func TestTheDatabaseChapterNamesWhatTheOneShotRunClearsFromAMigratedDatabase(t *testing.T) {
+	body := guidePath(t)
+
+	plain := strings.ToLower(words(subsectionOf(t, body, "When an older database is opened")))
+
+	for _, stated := range databaseChapterClearing {
+		if !strings.Contains(plain, stated) {
+			t.Errorf("the guide's database chapter does not say what a migrated database holds until a run clears it, "+
+				"or how often the migration reports the same finding: %q is missing", stated)
 		}
 	}
 }

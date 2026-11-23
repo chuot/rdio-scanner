@@ -106,11 +106,13 @@ type GetMigrationDamageReportResult struct {
 }
 
 // ClearMigrationDamageHandler clears the records a legacy migration left in problem: the legacy tables a
-// migration left standing, the archive table holding what it could not carry, and the unit rows labelled
-// with their own radio numbers. The clearing itself belongs to the store, which does all three in one
-// transaction and in the order that ends the cycle a kept legacy table sets up. This handler names what
-// went in the words an operator reads and files each removal in the server log, so a deployment cleared
-// months ago can still be explained.
+// migration left standing, the archive table holding what it could not carry, the account the migration
+// keeps of the findings it has already announced, and the unit rows labelled with their own radio
+// numbers. The clearing itself belongs to the store, which does them in one transaction and in the order
+// that ends the cycle a kept legacy table sets up. That account is not one of the removals this handler
+// lists: it holds no row of the deployment's, and emptying it is what lets a later start say again
+// whatever the run left standing. This handler names what went in the words an operator reads and files
+// each removal in the server log, so a deployment cleared months ago can still be explained.
 type ClearMigrationDamageHandler struct {
 	clearer ports.MigrationClearer
 	logs    ports.LogRepository

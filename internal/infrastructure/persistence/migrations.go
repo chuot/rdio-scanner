@@ -116,6 +116,14 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 		if err := ensureMigrationArchive(ctx, s); err != nil {
 			return operationError("database", "migrate", err)
 		}
+
+		// The findings record is created beside the archive for the same reason: what it
+		// holds is what this server has already said about the legacy tables this pass
+		// reads, and a deployment holding none of them has nothing to have said. A record
+		// that already stands stands on with its findings whatever the probe answers.
+		if err := ensureMigrationFindings(ctx, s); err != nil {
+			return operationError("database", "migrate", err)
+		}
 	}
 
 	// The options table gets its one-row-per-key rule before any step writes option
@@ -268,20 +276,60 @@ func parseV6DateTime(text string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("%q is not a datetime in any of the shapes a v6 database writes", text)
 }
 
+// dropV6Savepoint is the point a stage's transaction falls back to when the `DROP` of a table that stage has
+// finished accounting for is turned down. PostgreSQL aborts a transaction at the first statement that fails, so
+// a refusal coming from another table's foreign key would take the rows the stage carried with it, answer the
+// commit as a rollback, and stop the whole pass — a deployment another account wrote a table into would never
+// start. MariaDB's storage engine finishes a failed `DROP` outside the transaction and sqlite leaves a
+// transaction usable after a failed statement, so only PostgreSQL is given a point to fall back to.
+const dropV6Savepoint = "migration_drop_v6_table"
+
 // dropV6Table drops the v6 table a migration has just read, unless some row of it could not be
 // read. `unread` is set by the row loop when a scan fails, and the cursor error covers a read that
-// stopped before the end of the table: both name a row the pass never saw.
+// stopped before the end of the table: both name a row the pass never saw. The reason a table is
+// left standing is said once, because the finding goes on record with it, and a table that is
+// dropped takes everything the record knows about it off the record.
 func dropV6Table(ctx context.Context, tx transaction, progress Progress, part, section, operation, table string, unread bool) {
 	if unread {
-		progress(domain.LogLevelWarn, fmt.Sprintf("the migration left the %s table where it found it: a row of it could not be read", part))
+		sayFinding(ctx, tx, progress, domain.LogLevelWarn, table, 0,
+			fmt.Sprintf("the migration left the %s table where it found it: a row of it could not be read", part))
 
 		return
+	}
+
+	fallback := ""
+
+	if tx.store.dialect == DialectPostgresql {
+		fallback = `SAVEPOINT ` + dropV6Savepoint
+
+		if _, err := tx.exec(ctx, fallback); err != nil {
+			reportFailure(progress, part, section, operation, err, fallback)
+
+			return
+		}
 	}
 
 	query := `DROP TABLE "` + table + `"`
 
 	if _, err := tx.exec(ctx, query); err != nil {
 		reportFailure(progress, part, section, operation, err, query)
+
+		// A table another account points at is left standing, not carried off with the stage: the
+		// transaction goes back to where it stood before the `DROP`, the rows this stage carried stay
+		// carried, and the pass finishes the stage and goes on to the next one.
+		if fallback != "" {
+			rollback := `ROLLBACK TO ` + fallback
+
+			if _, err := tx.exec(ctx, rollback); err != nil {
+				progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not go on after it left the %s table standing: %s", part, err.Error()))
+			}
+		}
+
+		return
+	}
+
+	if err := forgetFindingsForTable(ctx, tx, table); err != nil {
+		progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not clear what it had recorded about the %s table: %s", part, err.Error()))
 	}
 }
 
@@ -1541,7 +1589,16 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 			continue
 		}
 
-		if err := arch.skip(rowID, named, reason, original); err != nil {
+		// A row whose every uncarriable value is a name this release has no option of holds nothing that
+		// went wrong, so the sentence about it is a notice. A value of the wrong shape, or an insert the
+		// database refused, is a row that did go wrong, and that sentence stays a problem.
+		file := arch.skip
+
+		if !refused && onlyNamesWithoutAnOption(cannot) {
+			file = arch.skipAsNotice
+		}
+
+		if err := file(rowID, named, reason, original); err != nil {
 			tx.rollback()
 
 			return err
@@ -1560,6 +1617,24 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 	}
 
 	return nil
+}
+
+// onlyNamesWithoutAnOption reports a list of values the options pass could not carry where every one of
+// them is a name this release has no option of. That row holds nothing that went wrong: it is a record of
+// a setting the deployment used to have, and the values of the wrong shape or the inserts the database
+// refused are what make a row a problem. An empty list is neither.
+func onlyNamesWithoutAnOption(cannot []string) bool {
+	if len(cannot) == 0 {
+		return false
+	}
+
+	for _, name := range cannot {
+		if !strings.HasSuffix(name, ` (v8 has no option of that name)`) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // migrateMeta mirrors `migrateMeta` in `server/migrations.go`: it archives the v6 migration
@@ -1609,7 +1684,9 @@ func migrateMeta(ctx context.Context, s store, progress Progress) error {
 
 		rowId++
 
-		if err := arch.skip(rowId, namedRow("migration record", rowId, name),
+		// v8 keeps no list of the migrations it has applied, so the old server's list has nowhere to go:
+		// the row is archived so it is not thrown away, and said as a notice because nothing is missing.
+		if err := arch.skipAsNotice(rowId, namedRow("migration record", rowId, name),
 			"this server has no migration bookkeeping to carry it into", name.String); err != nil {
 			tx.rollback()
 
@@ -1625,7 +1702,8 @@ func migrateMeta(ctx context.Context, s store, progress Progress) error {
 		// A row the pass never saw: the table keeps it, as every other migration
 		// leaves a table it could not read whole. The drop is all this pass does,
 		// and a table it could not read whole is not a table it drops.
-		progress(domain.LogLevelWarn, fmt.Sprintf("the migration left the %s table where it found it: a row of it could not be read", part))
+		sayFinding(ctx, tx, progress, domain.LogLevelWarn, "rdioScannerMeta", 0,
+			fmt.Sprintf("the migration left the %s table where it found it: a row of it could not be read", part))
 
 		if err := tx.commit(); err != nil {
 			tx.rollback()
@@ -1646,6 +1724,12 @@ func migrateMeta(ctx context.Context, s store, progress Progress) error {
 		tx.rollback()
 
 		return statementError(section, operation, err, drop)
+	}
+
+	// The table is gone, so every finding the record holds about it is gone with it, and a meta table
+	// that arrives again is something this server has never said.
+	if err := forgetFindingsForTable(ctx, tx, "rdioScannerMeta"); err != nil {
+		progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not clear what it had recorded about the %s table: %s", part, err.Error()))
 	}
 
 	if err := tx.commit(); err != nil {
@@ -3044,9 +3128,11 @@ func migrateAccesses(ctx context.Context, s store, progress Progress) error {
 	return nil
 }
 
-// reportMigrationDamage reads the two shapes the legacy migration pass leaves in a database that
-// pass has already run over and writes what it finds to `progress`; it changes no row, and a
-// failure to read is reported and carried on from.
+// reportMigrationDamage reads the damage the legacy migration pass left in a database that pass has
+// already run over and writes what it finds to `progress`; it changes no row, and a failure to read is
+// reported and carried on from. Only the unit that holds no radio reference is named: the unit labelled
+// with the number the migration invented for it is damage a maintenance run is asked to remove, and the
+// run names those rows when it removes them.
 func reportMigrationDamage(ctx context.Context, s store, progress Progress) {
 	const section, operation = "migration", "damage"
 
@@ -3060,9 +3146,7 @@ func reportMigrationDamage(ctx context.Context, s store, progress Progress) {
 		return
 	}
 
-	defer rows.Close()
-
-	lost, made := []string{}, []string{}
+	lost, identities := []string{}, []int64{}
 
 	for rows.Next() {
 		var (
@@ -3077,24 +3161,87 @@ func reportMigrationDamage(ctx context.Context, s store, progress Progress) {
 			continue
 		}
 
-		line := fmt.Sprintf("the migration left unit %d %q of %s damaged", unitID.Int64, label.String,
-			damagedSystem(systemLabel, systemRef))
+		if unitRef.Int64 != 0 {
+			continue
+		}
 
-		switch {
-		case unitRef.Int64 == 0:
-			lost = append(lost, line)
+		lost = append(lost, fmt.Sprintf("the migration left unit %d %q of %s damaged", unitID.Int64, label.String,
+			damagedSystem(systemLabel, systemRef)))
 
-		case label.String == strconv.FormatInt(unitRef.Int64, 10):
-			made = append(made, line)
+		identities = append(identities, unitID.Int64)
+	}
+
+	// The reading is finished before anything is written, so the record of what is said is never made
+	// beside a result set still open on the same connection.
+	rows.Close()
+
+	reportDamageSaidOnce(ctx, s, progress, lost, identities)
+}
+
+// reportDamageSaidOnce names only the damaged units this start is the first to meet, and counts exactly
+// those in its summary line. The record is created here when it does not already stand: a deployment
+// whose legacy tables are long gone has no other step that would build it, and without it every start
+// names the same units again. A record this start cannot build, begin, write into, or commit is named as
+// a failure and the damage under it is said in full, because the record decides only whether a sentence
+// is repeated.
+func reportDamageSaidOnce(ctx context.Context, s store, progress Progress, found []string, identities []int64) {
+	const one, many, cause = "it holds no radio reference", "they hold no radio reference",
+		"the numbers they were migrated from are not in this database"
+
+	if len(found) == 0 {
+		return
+	}
+
+	// A record this start cannot build, begin, or commit is a failure of its own, said beside the damage
+	// it was meant to keep quiet: the record decides only whether the same sentence is repeated.
+	failed := func(why error) {
+		progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not record what it found: %s", why.Error()))
+
+		reportDamaged(progress, found, one, many, cause)
+	}
+
+	if err := ensureMigrationFindings(ctx, s); err != nil {
+		failed(err)
+
+		return
+	}
+
+	tx, err := s.begin(ctx)
+	if err != nil {
+		failed(err)
+
+		return
+	}
+
+	said := []string{}
+
+	for at, line := range found {
+		first, err := recordFinding(ctx, tx, migrationDamagedUnitsTable, identities[at])
+		if err != nil {
+			progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not record what it found: %s", err.Error()))
+			said = append(said, line)
+
+			continue
+		}
+
+		if first {
+			said = append(said, line)
 		}
 	}
 
-	reportDamaged(progress, lost, "it holds no radio reference", "they hold no radio reference",
-		"the numbers they were migrated from are not in this database")
+	if len(said) == 0 {
+		tx.rollback()
 
-	reportDamaged(progress, made, "it is labelled with its own number",
-		"they are labelled with their own numbers",
-		"the shape of a unit the migration created rather than a deployment named")
+		return
+	}
+
+	if err := tx.commit(); err != nil {
+		failed(err)
+
+		return
+	}
+
+	reportDamaged(progress, said, one, many, cause)
 }
 
 // damagedSystem names the system a unit belongs to the way an operator names one: its label, and the

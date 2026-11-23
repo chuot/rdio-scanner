@@ -1425,11 +1425,13 @@ bcrypt_cost = 12</code></pre>
 
   <p>
     Each start re-runs the migration, and a row already archived simply archives as nothing rather than
-    clashing, so a migration interrupted halfway resumes on its own. For a version 5 deployment, Chapter
-    24 gives the route in and the checks to make once the migration reports itself done, including
+    clashing, so a migration interrupted halfway resumes on its own. A finding the migration has already
+    reported is reported once, and the account of what it has reported lives in the migrated database
+    itself. For a version 5 deployment, Chapter 24 gives the route in and the checks to make once the
+    migration reports itself done, including
     <a href="#ch-24-upgrading-and-migrating">what the one-shot <code>-vacuum</code> run clears</a> from a
-    migrated database: the archive, the units the migration left damaged, and the legacy tables a row the
-    migration could not read kept standing.
+    migrated database: the archive, the units the migration left damaged, the legacy tables a row the
+    migration could not read kept standing, and the account of what the migration has already said.
   </p>
 
   <h3>Keeping it healthy</h3>
@@ -4172,7 +4174,8 @@ $ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
     A row the pass cannot carry does not stop the pass. The row is archived with the reason written
     beside it, and the migration goes on. An old table is dropped only once every row in it has been
     carried or archived, so a table still standing because one row of it could not be read is read again
-    on the next start, and its already-archived rows archive as nothing.
+    on the next start, its already-archived rows archive as nothing, and the reason that table is still
+    standing is named once and not at every start after it.
   </p>
 
   <p>
@@ -4180,6 +4183,40 @@ $ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
     escaping quotes by hand and left a handful of text columns unescaped, so a single quote in one of
     them turned that row's insert into a syntax error and the row was gone. Rows like those migrate here,
     passed to the database as bound parameters instead of stitched into text.
+  </p>
+
+  <h3>What each start says, and what it says once</h3>
+
+  <p>
+    Each thing the migration reports about a database is reported once. The server keeps its account of
+    what it has already announced in that database, in the table named <code>migrationFindings</code>: one
+    row for each old table it left standing, each row it could not carry, and each unit it found damaged,
+    written beside the archive. A start that meets a finding the account already holds leaves the finding on
+    the account and says nothing about it, so the log of a database that finished migrating says no more
+    than the start that finished it said. What a start does say again, in the same words, is the work it has
+    still not finished: a stage that failed, an old table its own <code>DROP</code> was turned down for, or a
+    name the new schema already holds.
+  </p>
+
+  <p>
+    Two sentences that read as problems in earlier releases are notices, filed at the level the migration's
+    other notices are filed at: an option value this release has no option of, and the bookkeeping an older
+    server kept that this server has none of. Neither one is damage. The first names a setting this release
+    does not have, the second a record the old server kept about its own migration, and both are archived as
+    they always were: the archive still holds them, and the configuration the new server reads still has no
+    setting to put them in.
+  </p>
+
+  <p>
+    The damage a start names and the damage a run removes are two shapes of row, and only one of them is the
+    server's to take away. A unit the migration left with no radio number of its own is the one a start
+    names, by its identifier, its label, and the system it hangs off, and no run removes it: a unit with no
+    number of its own is a row an operator may have made on purpose. Give that unit a number, describe it, or
+    delete it at <a href="#ch-08-administration-interface">the administration interface</a>. The migration
+    does not name that unit again after the start that first met it, so the line you read then is the notice.
+    A unit the recordings brought into being — one whose label is the radio number the migration invented for
+    it, with no number range of its own — is not named at a start at all, and <code>-vacuum</code> removes
+    it, naming each one as it goes.
   </p>
 
   <h3>The migration archive</h3>
@@ -4220,10 +4257,14 @@ $ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
     A first start migrates a database and leaves it as it stands: it does not clean one.
     <code>-vacuum</code> is the one-shot that cleans, and it removes three things a migration leaves
     behind: the units the migration left damaged, the <code>migrationArchive</code> table with every row
-    in it, and any legacy table the migration left standing because a row of it could not be read. The
-    run clears the records first and compacts the file afterwards, prints one line per removal and the
-    pages the compaction took back, and stops without starting a server. <code>-vacuum_dry_run</code>
-    prints that same listing as what the run would do, and removes nothing.
+    in it, and any legacy table the migration left standing because a row of it could not be read. It clears
+    the account of what the migration has already said — the <code>migrationFindings</code> table beside the
+    archive — with those three, so a start after the cleaning reports the findings it meets again as though
+    it were meeting them for the first time. The run clears the records first and compacts the file
+    afterwards, prints one line per removal and the pages the compaction took back, and stops without
+    starting a server. The account is cleared without a line of its own, because no row of it is a row of the
+    deployment's. <code>-vacuum_dry_run</code> prints that same listing as what the run would do, and removes
+    nothing.
   </p>
 
   <p>
