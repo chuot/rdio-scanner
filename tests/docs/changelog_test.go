@@ -288,3 +288,56 @@ func TestTheVersionEightEntrySaysAMaskWithABracketAroundATokenIsRefused(t *testi
 		}
 	}
 }
+
+// TestTheVersionEightEntrySaysTheUpgradeSaysEachMigrationFindingOnce holds the release's word about the
+// migration announcements to one bullet of the group an operator updating from 6.6.3 reads first: the finding
+// record by name, the two sentences that moved to the notice level, the shape of what a start names on a damaged
+// deployment, and the one-shot run that clears the record. Someone whose log got quieter after the update has to
+// find out why from this entry, and only from this one bullet.
+func TestTheVersionEightEntrySaysTheUpgradeSaysEachMigrationFindingOnce(t *testing.T) {
+	section := versionEightSection(t)
+
+	claims := []struct {
+		states string
+		need   string
+	}{
+		{states: "that each reason the migration has is said once across starts", need: "said once"},
+		{states: "that the record holding those findings is named", need: "migrationfindings"},
+		{states: "that an option with no equivalent in this version is a notice", need: "notice"},
+		{states: "that the migration bookkeeping being left behind is a notice", need: "bookkeeping"},
+		{states: "that a start names the units the migration damaged", need: "units"},
+		{states: "that the one-shot run clears that record", need: "-vacuum"},
+		{states: "that the guide chapter holding the whole reading is pointed at", need: "chapter 24"},
+	}
+
+	bullets := regexp.MustCompile(`(?m)^- .*`).FindAllString(versionEightGroup(t, section, "Updating from version 6.6.3"), -1)
+
+	found := 0
+
+	for _, entry := range bullets {
+		lowered := strings.ToLower(entry)
+
+		if !strings.Contains(lowered, "migrationfindings") {
+			continue
+		}
+
+		found++
+
+		for _, claim := range claims {
+			if !strings.Contains(lowered, strings.ToLower(claim.need)) {
+				t.Errorf("the entry that names the findings record does not state %s: it carries no %q in %q",
+					claim.states, claim.need, strings.TrimSpace(entry))
+			}
+		}
+	}
+
+	if found == 0 {
+		t.Errorf("the group %q names no findings record, so an operator whose log changed after the update has "+
+			"nothing to search for", "Updating from version 6.6.3")
+	}
+
+	if found > 1 {
+		t.Errorf("%d entries of the group %q name the findings record: the reading of one record belongs in one "+
+			"bullet, not spread over the group", found, "Updating from version 6.6.3")
+	}
+}
