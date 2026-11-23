@@ -116,6 +116,14 @@ func Migrate(ctx context.Context, db *sql.DB, dialect Dialect, clock ports.Clock
 		if err := ensureMigrationArchive(ctx, s); err != nil {
 			return operationError("database", "migrate", err)
 		}
+
+		// The findings record is created beside the archive for the same reason: what it
+		// holds is what this server has already said about the legacy tables this pass
+		// reads, and a deployment holding none of them has nothing to have said. A record
+		// that already stands stands on with its findings whatever the probe answers.
+		if err := ensureMigrationFindings(ctx, s); err != nil {
+			return operationError("database", "migrate", err)
+		}
 	}
 
 	// The options table gets its one-row-per-key rule before any step writes option
@@ -270,10 +278,13 @@ func parseV6DateTime(text string) (time.Time, error) {
 
 // dropV6Table drops the v6 table a migration has just read, unless some row of it could not be
 // read. `unread` is set by the row loop when a scan fails, and the cursor error covers a read that
-// stopped before the end of the table: both name a row the pass never saw.
+// stopped before the end of the table: both name a row the pass never saw. The reason a table is
+// left standing is said once, because the finding goes on record with it, and a table that is
+// dropped takes everything the record knows about it off the record.
 func dropV6Table(ctx context.Context, tx transaction, progress Progress, part, section, operation, table string, unread bool) {
 	if unread {
-		progress(domain.LogLevelWarn, fmt.Sprintf("the migration left the %s table where it found it: a row of it could not be read", part))
+		sayFinding(ctx, tx, progress, domain.LogLevelWarn, table, 0,
+			fmt.Sprintf("the migration left the %s table where it found it: a row of it could not be read", part))
 
 		return
 	}
@@ -282,6 +293,12 @@ func dropV6Table(ctx context.Context, tx transaction, progress Progress, part, s
 
 	if _, err := tx.exec(ctx, query); err != nil {
 		reportFailure(progress, part, section, operation, err, query)
+
+		return
+	}
+
+	if err := forgetFindingsForTable(ctx, tx, table); err != nil {
+		progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not clear what it had recorded about the %s table: %s", part, err.Error()))
 	}
 }
 
@@ -1541,7 +1558,16 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 			continue
 		}
 
-		if err := arch.skip(rowID, named, reason, original); err != nil {
+		// A row whose every uncarriable value is a name this release has no option of holds nothing that
+		// went wrong, so the sentence about it is a notice. A value of the wrong shape, or an insert the
+		// database refused, is a row that did go wrong, and that sentence stays a problem.
+		file := arch.skip
+
+		if !refused && onlyNamesWithoutAnOption(cannot) {
+			file = arch.skipAsNotice
+		}
+
+		if err := file(rowID, named, reason, original); err != nil {
 			tx.rollback()
 
 			return err
@@ -1560,6 +1586,24 @@ func migrateOptions(ctx context.Context, s store, progress Progress) error {
 	}
 
 	return nil
+}
+
+// onlyNamesWithoutAnOption reports a list of values the options pass could not carry where every one of
+// them is a name this release has no option of. That row holds nothing that went wrong: it is a record of
+// a setting the deployment used to have, and the values of the wrong shape or the inserts the database
+// refused are what make a row a problem. An empty list is neither.
+func onlyNamesWithoutAnOption(cannot []string) bool {
+	if len(cannot) == 0 {
+		return false
+	}
+
+	for _, name := range cannot {
+		if !strings.HasSuffix(name, ` (v8 has no option of that name)`) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // migrateMeta mirrors `migrateMeta` in `server/migrations.go`: it archives the v6 migration
@@ -1609,7 +1653,9 @@ func migrateMeta(ctx context.Context, s store, progress Progress) error {
 
 		rowId++
 
-		if err := arch.skip(rowId, namedRow("migration record", rowId, name),
+		// v8 keeps no list of the migrations it has applied, so the old server's list has nowhere to go:
+		// the row is archived so it is not thrown away, and said as a notice because nothing is missing.
+		if err := arch.skipAsNotice(rowId, namedRow("migration record", rowId, name),
 			"this server has no migration bookkeeping to carry it into", name.String); err != nil {
 			tx.rollback()
 
@@ -1625,7 +1671,8 @@ func migrateMeta(ctx context.Context, s store, progress Progress) error {
 		// A row the pass never saw: the table keeps it, as every other migration
 		// leaves a table it could not read whole. The drop is all this pass does,
 		// and a table it could not read whole is not a table it drops.
-		progress(domain.LogLevelWarn, fmt.Sprintf("the migration left the %s table where it found it: a row of it could not be read", part))
+		sayFinding(ctx, tx, progress, domain.LogLevelWarn, "rdioScannerMeta", 0,
+			fmt.Sprintf("the migration left the %s table where it found it: a row of it could not be read", part))
 
 		if err := tx.commit(); err != nil {
 			tx.rollback()
@@ -1646,6 +1693,12 @@ func migrateMeta(ctx context.Context, s store, progress Progress) error {
 		tx.rollback()
 
 		return statementError(section, operation, err, drop)
+	}
+
+	// The table is gone, so every finding the record holds about it is gone with it, and a meta table
+	// that arrives again is something this server has never said.
+	if err := forgetFindingsForTable(ctx, tx, "rdioScannerMeta"); err != nil {
+		progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not clear what it had recorded about the %s table: %s", part, err.Error()))
 	}
 
 	if err := tx.commit(); err != nil {

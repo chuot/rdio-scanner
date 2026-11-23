@@ -175,7 +175,16 @@ type migrationArchiver struct {
 	table    string
 	one      string
 	many     string
-	behind   []string
+	behind   []archivedFinding
+}
+
+// archivedFinding is one sentence the report holds for the operator: the line, and the level the reason
+// it gives is filed under. A row this release left behind because it has nowhere to put it is a notice,
+// a row that went wrong is a problem, and the line that counts the group is filed under the higher level
+// of the findings beneath it.
+type archivedFinding struct {
+	level   string
+	message string
 }
 
 // archiving opens the archive for one migration's v6 table. `one` and `many` are what this server calls
@@ -185,35 +194,81 @@ func archiving(ctx context.Context, tx transaction, progress Progress, table, on
 }
 
 // skip keeps the record of one v6 row the migration read and could not carry: the row goes into the
-// archive with the reason, and the reason is held for the operator at warn level. `named` is the row
+// archive with the reason, and the reason is held for the operator as a problem. `named` is the row
 // in the language of the system — `talkgroup 204 "Orphan"`, `call 705` — and `reason` is the tail of
-// that sentence, which is also what the archive's reason column holds.
+// that sentence, which is also what the archive's reason column holds. A row the record of findings
+// already names is archived again and said by nobody: the start that first met it told the operator, and
+// a later start that has new work to do has nothing new to tell them about that row.
 func (a *migrationArchiver) skip(rowId int64, named, reason string, contents any) error {
+	return a.file(domain.LogLevelWarn, rowId, named, reason, contents)
+}
+
+// skipAsNotice keeps the record of one v6 row this release left behind because it has nowhere to put it
+// rather than because the row is damaged — a configuration value with no v7 option of that name, a
+// migration record with no v7 bookkeeping table. The row is archived exactly as a skipped one is, and
+// only the sentence about it is a notice instead of a problem.
+func (a *migrationArchiver) skipAsNotice(rowId int64, named, reason string, contents any) error {
+	return a.file(domain.LogLevelInfo, rowId, named, reason, contents)
+}
+
+// file is both postures: the archive write, then the sentence held for the operator when the record of
+// findings says this start is the first to name the row.
+func (a *migrationArchiver) file(level string, rowId int64, named, reason string, contents any) error {
 	if err := archiveRow(a.ctx, a.tx, a.table, rowId, reason, contents); err != nil {
 		return err
 	}
 
-	a.behind = append(a.behind, fmt.Sprintf("the migration could not carry %s: %s", named, reason))
+	first, err := recordFinding(a.ctx, a.tx, a.table, rowId)
+
+	if err != nil {
+		// A record this start cannot write does not get to hide what it found: the finding is said, and
+		// the failure that stopped the record is said beside it.
+		a.progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not record what it found: %s", err.Error()))
+		a.behind = append(a.behind, archivedFinding{
+			level:   level,
+			message: fmt.Sprintf("the migration could not carry %s: %s", named, reason),
+		})
+
+		return nil
+	}
+
+	if first {
+		a.behind = append(a.behind, archivedFinding{
+			level:   level,
+			message: fmt.Sprintf("the migration could not carry %s: %s", named, reason),
+		})
+	}
 
 	return nil
 }
 
 // report says what the migration left in the archive: one line naming the count and where the rows are,
 // then one line per row an operator can go and look at. It says nothing at all when there is nothing to
-// say.
+// say, and the count it names is of the rows this start found, not of the rows its pass re-read on the
+// way to them. The line that counts the group is filed under the highest level among the rows it counts,
+// so a group of values this release does not carry on purpose stays a notice, and one holding a damaged
+// row is a problem.
 func (a *migrationArchiver) report() {
 	if len(a.behind) == 0 {
 		return
 	}
 
-	if len(a.behind) == 1 {
-		a.progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not carry 1 %s: it is kept in the migrationArchive table", a.one))
-	} else {
-		a.progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not carry %d %s: they are kept in the migrationArchive table", len(a.behind), a.many))
+	countLevel := domain.LogLevelInfo
+
+	for _, finding := range a.behind {
+		if finding.level == domain.LogLevelWarn {
+			countLevel = domain.LogLevelWarn
+		}
 	}
 
-	for _, line := range a.behind {
-		a.progress(domain.LogLevelWarn, line)
+	if len(a.behind) == 1 {
+		a.progress(countLevel, fmt.Sprintf("the migration could not carry 1 %s: it is kept in the migrationArchive table", a.one))
+	} else {
+		a.progress(countLevel, fmt.Sprintf("the migration could not carry %d %s: they are kept in the migrationArchive table", len(a.behind), a.many))
+	}
+
+	for _, finding := range a.behind {
+		a.progress(finding.level, finding.message)
 	}
 }
 
