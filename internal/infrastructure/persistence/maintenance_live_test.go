@@ -18,7 +18,10 @@ import (
 
 // damagedLiveSeedOrder is the order the recorded damaged deployment's rows are seeded in: every table
 // a foreign key looks a reference up in comes before the table that names it. The sqlite fixture was
-// written with enforcement switched off, so the order is what makes the same rows seedable here.
+// written with enforcement switched off, so the order is what makes the same rows seedable here. The
+// findings record comes last because it names the other tables without a foreign key pointing at them,
+// and it is seeded because it is what the fixture's own migration pass left behind: a live clearing that
+// was never given one would prove nothing about clearing it.
 var damagedLiveSeedOrder = []string{
 	"systems",
 	"tags",
@@ -38,6 +41,7 @@ var damagedLiveSeedOrder = []string{
 	"dirwatches",
 	"logs",
 	"options",
+	"migrationFindings",
 }
 
 // damagedLiveUnseedableUnits are the rows of the recorded fixture a live backend cannot be handed,
@@ -56,12 +60,19 @@ func TestClearMigrationDamageLiveOnPostgreSQLRemovesTheSameUnitsAsOnSqlite(t *te
 }
 
 // liveClearDamagedDeployment opens the recorded damaged deployment on a running backend, clears it,
-// and holds the run to the same removed rows, the same survivors, and the same silence about the
-// archive and the legacy tables the deployment holds none of.
+// and holds the run to the same removed rows, the same survivors, the same removal of the findings
+// record the fixture's own migration pass left, and the same silence about the archive and the legacy
+// tables the deployment holds none of.
 func liveClearDamagedDeployment(t *testing.T, dialect Dialect) {
 	t.Helper()
 
 	db := openLiveDamagedDeployment(t, dialect)
+
+	held := readRows(t, db, `SELECT "tableName","rowId" FROM "migrationFindings" ORDER BY "tableName","rowId"`)
+
+	if len(held) == 0 {
+		t.Fatalf("the damaged deployment on %s holds no findings, so a clearing that drops its record proves nothing", dialect)
+	}
 
 	report, err := NewMaintenance(db, dialect).ClearMigrationDamage(context.Background())
 	if err != nil {
@@ -164,6 +175,13 @@ func liveClearDamagedDeployment(t *testing.T, dialect Dialect) {
 		}
 	}
 
+	// The record of what the deployment's own migration pass announced goes with the rows the run cleared,
+	// on a backend as on a file: it is dropped, and the run says nothing about dropping it.
+	if hasTable(t, db, dialect, migrationFindingsTable) {
+		t.Errorf("the clearing on %s left the findings record standing with %d rows, want it gone with what it cleared: "+
+			"it held %v", dialect, countRows(t, db, migrationFindingsTable), held)
+	}
+
 	for _, kept := range damagedDeploymentRowCounts {
 		want := kept.rows
 
@@ -203,6 +221,12 @@ func openLiveDamagedDeployment(t *testing.T, dialect Dialect) *sql.DB {
 
 	if err := ApplySchema(context.Background(), db, dialect); err != nil {
 		t.Fatalf("ApplySchema on %s: %v", dialect, err)
+	}
+
+	// The startup pass gives a database the findings record, and this deployment is written by the schema
+	// alone, so the record the fixture's migration pass left is given here before its rows are copied in.
+	if err := ensureMigrationFindings(context.Background(), newStore(db, dialect)); err != nil {
+		t.Fatalf("giving %s the findings record: %v", dialect, err)
 	}
 
 	seedDamagedDeploymentLive(t, db, dialect)

@@ -276,6 +276,14 @@ func parseV6DateTime(text string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("%q is not a datetime in any of the shapes a v6 database writes", text)
 }
 
+// dropV6Savepoint is the point a stage's transaction falls back to when the `DROP` of a table that stage has
+// finished accounting for is turned down. PostgreSQL aborts a transaction at the first statement that fails, so
+// a refusal coming from another table's foreign key would take the rows the stage carried with it, answer the
+// commit as a rollback, and stop the whole pass — a deployment another account wrote a table into would never
+// start. MariaDB's storage engine finishes a failed `DROP` outside the transaction and sqlite leaves a
+// transaction usable after a failed statement, so only PostgreSQL is given a point to fall back to.
+const dropV6Savepoint = "migration_drop_v6_table"
+
 // dropV6Table drops the v6 table a migration has just read, unless some row of it could not be
 // read. `unread` is set by the row loop when a scan fails, and the cursor error covers a read that
 // stopped before the end of the table: both name a row the pass never saw. The reason a table is
@@ -289,10 +297,33 @@ func dropV6Table(ctx context.Context, tx transaction, progress Progress, part, s
 		return
 	}
 
+	fallback := ""
+
+	if tx.store.dialect == DialectPostgresql {
+		fallback = `SAVEPOINT ` + dropV6Savepoint
+
+		if _, err := tx.exec(ctx, fallback); err != nil {
+			reportFailure(progress, part, section, operation, err, fallback)
+
+			return
+		}
+	}
+
 	query := `DROP TABLE "` + table + `"`
 
 	if _, err := tx.exec(ctx, query); err != nil {
 		reportFailure(progress, part, section, operation, err, query)
+
+		// A table another account points at is left standing, not carried off with the stage: the
+		// transaction goes back to where it stood before the `DROP`, the rows this stage carried stay
+		// carried, and the pass finishes the stage and goes on to the next one.
+		if fallback != "" {
+			rollback := `ROLLBACK TO ` + fallback
+
+			if _, err := tx.exec(ctx, rollback); err != nil {
+				progress(domain.LogLevelWarn, fmt.Sprintf("the migration could not go on after it left the %s table standing: %s", part, err.Error()))
+			}
+		}
 
 		return
 	}
