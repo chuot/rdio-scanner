@@ -142,11 +142,46 @@ var damagedDeploymentRemovedUnits = []domain.Unit{
 	{ID: 307, Label: "1514000", SystemID: 101, UnitRef: 1514000},
 }
 
+// findingsRecordRows is what the deployment's record of announced findings holds, each finding by the
+// table it was said about and the identifier beside it. Every fixture here runs the migration pass, so
+// the deployments these cases clear have already said what they found.
+func findingsRecordRows(t *testing.T, db *sql.DB) [][]string {
+	t.Helper()
+
+	if !hasMigrationFindingsTable(t, db) {
+		t.Fatalf("the deployment holds no findings record, want the one its own migration pass left: %v", readTableNames(t, db))
+	}
+
+	held := readRows(t, db, `SELECT "tableName","rowId" FROM "migrationFindings" ORDER BY "tableName","rowId"`)
+
+	if len(held) == 0 {
+		t.Fatalf("the deployment's findings record holds nothing, want the findings its migration pass announced: %v", readTableNames(t, db))
+	}
+
+	return held
+}
+
+// assertMigrationFindingsCleared says the record the deployment held is gone with what the run cleared,
+// along with the findings it held in it: the record is not a deployment's memory that outlives the rows
+// and tables it was written about.
+func assertMigrationFindingsCleared(t *testing.T, db *sql.DB, held [][]string) {
+	t.Helper()
+
+	if hasMigrationFindingsTable(t, db) {
+		t.Errorf("the maintenance run left the findings record standing with %d rows, want it gone with what it cleared: it held %v, the deployment now holds %v",
+			countRows(t, db, "migrationFindings"), held, readTableNames(t, db))
+	}
+}
+
 // TestClearMigrationDamageRemovesTheDamagedUnitRowsAndNothingElse names the removed set by
 // identifier and by the stored values that make each row damage, then asks after every other kind
-// of row the deployment holds.
+// of row the deployment holds. The findings record is the one thing beside the damaged rows that
+// does not survive the run: it is the account of what the server has already said, and a run leaves
+// the deployment free to say what still stands again.
 func TestClearMigrationDamageRemovesTheDamagedUnitRowsAndNothingElse(t *testing.T) {
 	db := openDamagedDeploymentDatabase(t)
+
+	held := findingsRecordRows(t, db)
 
 	report, err := NewMaintenance(db, DialectSqlite).ClearMigrationDamage(context.Background())
 	if err != nil {
@@ -199,6 +234,11 @@ func TestClearMigrationDamageRemovesTheDamagedUnitRowsAndNothingElse(t *testing.
 			t.Errorf("the clearing reported unit %d (%q) as removed, want it kept", survivor.ID, survivor.Label)
 		}
 	}
+
+	// The findings record is the one thing beside the damaged rows that does not survive: it is the
+	// account of what the server has already said, and a run that took out rows and tables has said
+	// nothing about what it left standing.
+	assertMigrationFindingsCleared(t, db, held)
 
 	for _, kept := range damagedDeploymentRowCounts {
 		if got := countRows(t, db, kept.table); got != kept.rows {
@@ -265,9 +305,12 @@ func TestClearMigrationDamageLeavesTheSurvivingUnitsInTheirOwnOrder(t *testing.T
 }
 
 // TestClearMigrationDamageIsRepeatable is the guarantee a mistaken second run rests on: the rule
-// reads what the first run left, and what it left is nothing it names.
+// reads what the first run left, and what it left is nothing it names. The second run goes over a
+// deployment whose record of what the server has said is already gone, and says nothing about one.
 func TestClearMigrationDamageIsRepeatable(t *testing.T) {
 	db := openDamagedDeploymentDatabase(t)
+
+	held := findingsRecordRows(t, db)
 
 	first, err := NewMaintenance(db, DialectSqlite).ClearMigrationDamage(context.Background())
 	if err != nil {
@@ -278,13 +321,19 @@ func TestClearMigrationDamageIsRepeatable(t *testing.T) {
 		t.Fatalf("the first clearing removed no unit row, want the damaged ones")
 	}
 
+	assertMigrationFindingsCleared(t, db, held)
+
 	second, err := NewMaintenance(db, DialectSqlite).ClearMigrationDamage(context.Background())
 	if err != nil {
-		t.Fatalf("the second ClearMigrationDamage: %v", err)
+		t.Fatalf("the second ClearMigrationDamage over a deployment whose record the first run cleared: %v", err)
 	}
 
 	if len(second.Units) != 0 {
 		t.Errorf("the second clearing removed %d unit rows, want none: %+v", len(second.Units), second.Units)
+	}
+
+	if hasMigrationFindingsTable(t, db) {
+		t.Errorf("the second clearing built a findings record the first run had already cleared: %v", readTableNames(t, db))
 	}
 
 	if got := countRows(t, db, "units"); got != 6 {
@@ -528,7 +577,8 @@ func openDamagedDeploymentDatabaseWithArchive(t *testing.T) *sql.DB {
 // TestClearMigrationDropsTheMigrationArchiveAndNamesEveryRowInIt is the destructive half read
 // against the archive's own contents: the table goes with every row in it, whatever kind of row it
 // is, and each one is named by where it came from, its identifier there, and the reason stored with
-// it. The values that only the contents column hold never ride into the report.
+// it. The values that only the contents column hold never ride into the report, and the record of
+// findings those rows were said for goes with them.
 func TestClearMigrationDropsTheMigrationArchiveAndNamesEveryRowInIt(t *testing.T) {
 	db := openDamagedDeploymentDatabaseWithArchive(t)
 
@@ -537,6 +587,9 @@ func TestClearMigrationDropsTheMigrationArchiveAndNamesEveryRowInIt(t *testing.T
 	if len(before) != len(damagedDeploymentArchiveRows) {
 		t.Fatalf("the fixture's archive holds %d rows, want the %d it was given: %v", len(before), len(damagedDeploymentArchiveRows), before)
 	}
+
+	// The record holds the findings the start that archived those rows announced.
+	held := findingsRecordRows(t, db)
 
 	report, err := NewMaintenance(db, DialectSqlite).ClearMigrationDamage(context.Background())
 	if err != nil {
@@ -548,6 +601,9 @@ func TestClearMigrationDropsTheMigrationArchiveAndNamesEveryRowInIt(t *testing.T
 			t.Fatalf("the migration archive is still among the deployment's tables after the clearing: %v", readTableNames(t, db))
 		}
 	}
+
+	// The record of what the server said about those rows goes with the rows it said them about.
+	assertMigrationFindingsCleared(t, db, held)
 
 	if !report.DroppedArchive {
 		t.Errorf("the clearing did not report dropping the migration archive it dropped")
@@ -753,7 +809,8 @@ func openDamagedDeploymentDatabaseWithLegacyTables(t *testing.T) *sql.DB {
 
 // TestClearMigrationDropsTheLegacyTablesTheDeploymentHoldsAndNamesEachOne is the table half: every
 // legacy table in the deployment goes, and each one is named by what it was and how many rows it held
-// while it stood.
+// while it stood. The record of what the deployment has already said goes with the tables those
+// findings were said beside.
 func TestClearMigrationDropsTheLegacyTablesTheDeploymentHoldsAndNamesEachOne(t *testing.T) {
 	db := openDamagedDeploymentDatabaseWithLegacyTables(t)
 
@@ -769,6 +826,10 @@ func TestClearMigrationDropsTheLegacyTablesTheDeploymentHoldsAndNamesEachOne(t *
 		before[table] = rows
 	}
 
+	// What the record holds was keyed to these tables: the startup pass records a leftover table under
+	// its own name, with no row beside it.
+	held := findingsRecordRows(t, db)
+
 	report, err := NewMaintenance(db, DialectSqlite).ClearMigrationDamage(context.Background())
 	if err != nil {
 		t.Fatalf("ClearMigrationDamage: %v", err)
@@ -779,6 +840,8 @@ func TestClearMigrationDropsTheLegacyTablesTheDeploymentHoldsAndNamesEachOne(t *
 			t.Errorf("the clearing left the legacy table %s in the deployment: %v", name, readTableNames(t, db))
 		}
 	}
+
+	assertMigrationFindingsCleared(t, db, held)
 
 	if len(report.DroppedTables) != len(damagedDeploymentLegacyTables) {
 		t.Fatalf("the clearing reported %d dropped tables, want one for each of the %d the deployment held: %+v",
@@ -818,6 +881,34 @@ func TestClearMigrationNamesNoLegacyTableForADeploymentThatHoldsNone(t *testing.
 	if len(report.DroppedTables) != 0 {
 		t.Errorf("the clearing reported %d dropped tables for a deployment holding none of the legacy names: %+v",
 			len(report.DroppedTables), report.DroppedTables)
+	}
+}
+
+// TestClearMigrationCreatesNoFindingsRecordForADeploymentThatHoldsNone is the run pointed at a deployment
+// that has never said anything about what it found. The record is not something a clearing gives a
+// database: a run that has a record drops it, and a run that has none leaves the deployment without one,
+// while still clearing the tables and rows the deployment really holds.
+func TestClearMigrationCreatesNoFindingsRecordForADeploymentThatHoldsNone(t *testing.T) {
+	db := openDamagedDeploymentDatabaseWithLegacyTables(t)
+
+	mustExec(t, db, `DROP TABLE IF EXISTS "migrationFindings"`)
+
+	if hasMigrationFindingsTable(t, db) {
+		t.Fatal("the fixture holds a findings record it was written to hold none of")
+	}
+
+	report, err := NewMaintenance(db, DialectSqlite).ClearMigrationDamage(context.Background())
+	if err != nil {
+		t.Fatalf("ClearMigrationDamage over a deployment with no findings record: %v", err)
+	}
+
+	if hasMigrationFindingsTable(t, db) {
+		t.Errorf("the clearing built a findings record in a deployment that held none: %v", readTableNames(t, db))
+	}
+
+	if len(report.DroppedTables) != len(damagedDeploymentLegacyTables) {
+		t.Errorf("the clearing dropped %d tables from a deployment holding %d legacy ones: %+v",
+			len(report.DroppedTables), len(damagedDeploymentLegacyTables), report.DroppedTables)
 	}
 }
 
@@ -1255,6 +1346,30 @@ func TestReadMigrationDamageSaysNothingAboutTheClassesADeploymentDoesNotHold(t *
 	}
 }
 
+// TestReadingMigrationDamageLeavesTheFindingsRecordStanding is the half of the clearing that must not
+// ride into the dry run: the reading names everything a run would clear, the record of what the server
+// has already said among it, and leaves that record where it found it. A listing that emptied the
+// record would leave the running server unable to tell what it had already announced.
+func TestReadingMigrationDamageLeavesTheFindingsRecordStanding(t *testing.T) {
+	db := openDamagedDeploymentHoldingEveryClass(t)
+
+	held := findingsRecordRows(t, db)
+
+	if _, err := NewMaintenance(db, DialectSqlite).ReadMigrationDamage(context.Background()); err != nil {
+		t.Fatalf("ReadMigrationDamage: %v", err)
+	}
+
+	if !hasMigrationFindingsTable(t, db) {
+		t.Fatalf("the reading dropped the record of findings a run would clear: %v", readTableNames(t, db))
+	}
+
+	standing := readRows(t, db, `SELECT "tableName","rowId" FROM "migrationFindings" ORDER BY "tableName","rowId"`)
+
+	if !equalStrings(flat(standing), flat(held)) {
+		t.Errorf("the reading left %v in the findings record, want the findings it found there: %v", standing, held)
+	}
+}
+
 // TestTheReadingReportsTheSameAccountTheClearingReports holds the store to one account: the listing a dry
 // run is built from and the listing a real run is built from come from one deployment read twice, once
 // without removing anything and once removing it, and the two accounts name the same rows, tables, and
@@ -1291,6 +1406,7 @@ var pinnedClearStatements = clearStatements{
 	deleteUnit:      `DELETE FROM "units" WHERE "unitId" = ?`,
 	archiveRows:     `SELECT "tableName", "rowId", "reason", "archivedAt" FROM "migrationArchive" ORDER BY "tableName", "rowId"`,
 	dropArchive:     `DROP TABLE "migrationArchive"`,
+	dropFindings:    `DROP TABLE "migrationFindings"`,
 	countLegacyRow:  `SELECT COUNT(*) FROM "%s"`,
 	dropLegacyTable: `DROP TABLE "%s"`,
 }
@@ -1319,6 +1435,7 @@ func TestClearMigrationBuildsThePinnedStatementForEachDialect(t *testing.T) {
 			{"the unit row it removes", got.deleteUnit, tc.want.deleteUnit, "units"},
 			{"the archive rows it reads", got.archiveRows, tc.want.archiveRows, "migrationArchive"},
 			{"the archive table it drops", got.dropArchive, tc.want.dropArchive, "migrationArchive"},
+			{"the record of findings it drops", got.dropFindings, tc.want.dropFindings, "migrationFindings"},
 			{"the rows a legacy table held", fmt.Sprintf(got.countLegacyRow, "rdioScannerUnits"), fmt.Sprintf(tc.want.countLegacyRow, "rdioScannerUnits"), "rdioScannerUnits"},
 			{"the legacy table it drops", fmt.Sprintf(got.dropLegacyTable, "rdioScannerUnits"), fmt.Sprintf(tc.want.dropLegacyTable, "rdioScannerUnits"), "rdioScannerUnits"},
 		} {

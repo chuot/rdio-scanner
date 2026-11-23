@@ -1340,6 +1340,49 @@ func TestMigrateSaysALeftoverCallsTableAgainAfterItWentAndCameBack(t *testing.T)
 	}
 }
 
+// The maintenance run ends a leftover table and the sentence this server said about it together: the
+// table goes with the record of findings, so a calls table that arrives after a run is a finding no
+// start has made, and it is said once again.
+func TestMigrateSaysALeftoverTableAgainAfterTheMaintenanceRunClearedTheRecord(t *testing.T) {
+	db := openLegacyV6PartialDatabase(t)
+
+	warn := "the migration left the calls table where it found it: a row of it could not be read"
+
+	first := migrateDatabase(t, db)
+
+	if count := countString(first, warn); count != 1 {
+		t.Fatalf("the pass that left the calls table said it %d times, want once: %v", count, first)
+	}
+
+	if _, err := NewMaintenance(db, DialectSqlite).ClearMigrationDamage(context.Background()); err != nil {
+		t.Fatalf("ClearMigrationDamage over the deployment that left a calls table: %v", err)
+	}
+
+	if hasV6Table(t, db, "rdioScannerCalls") {
+		t.Fatalf("the maintenance run left the calls table standing: %v", readTableNames(t, db))
+	}
+
+	if hasMigrationFindingsTable(t, db) {
+		t.Fatalf("the maintenance run left the findings record standing: %v", readTableNames(t, db))
+	}
+
+	// The same table, holding the same row its timestamp would not fit, comes back after the run that
+	// cleared the record. Nothing in the deployment remembers saying anything about it.
+	leftoverCallsTable(t, db, []string{
+		`INSERT INTO "rdioScannerCalls" VALUES(709,X'000102617564696F20666F722063616C6C20373039','709.wav','audio/wav','not a timestamp','[]',1514000000,'[]',0,'[]',10001,1514000)`,
+	})
+
+	progress := migrateDatabase(t, db)
+
+	if count := countString(progress, warn); count != 1 {
+		t.Errorf("a calls table that came back after a run cleared the record was said %d times, want once: %v", count, progress)
+	}
+
+	if again := migrateDatabase(t, db); countString(again, warn) != 0 {
+		t.Errorf("a start after the one that found the calls table that came back after the run said it again: %v", again)
+	}
+}
+
 // The rows one start said it could not carry are the rows its archive gained: each sentence names the
 // identity and the reason the archive row holds. A later start that meets those same rows while it has
 // new work to do carries the new row, says nothing about a finding it has already made, and leaves the
@@ -3343,6 +3386,42 @@ func TestMigrateRecordsTheDamageItNamedAlthoughNoLegacyTableStands(t *testing.T)
 
 	if !equalStrings(flat(got), flat(want)) {
 		t.Errorf("the record holds %v, want the two units the start named", got)
+	}
+}
+
+// The maintenance run clears the record with the archive and the tables it clears, so the start that
+// follows a run says again what the run left standing. The run takes out the rows it names and the
+// account of what has been said; it does not decide what a start may say about the rows it left.
+func TestMigrateSaysAgainTheDamageThatStandsAfterAMaintenanceRunClearedTheRecord(t *testing.T) {
+	db := openDamagedFixture(t, "migrated")
+
+	if got := damageReport(migrateDatabase(t, db)); len(got) != 3 {
+		t.Fatalf("the start before the run named %d damage lines, want the summary and the two units holding no reference: %v",
+			len(got), got)
+	}
+
+	report, err := NewMaintenance(db, DialectSqlite).ClearMigrationDamage(context.Background())
+	if err != nil {
+		t.Fatalf("ClearMigrationDamage over the deployment that named its damage: %v", err)
+	}
+
+	if len(report.Units) == 0 {
+		t.Fatalf("the run removed no unit labelled with its own number, want the fixture's: %+v", report.Units)
+	}
+
+	if hasMigrationFindingsTable(t, db) {
+		t.Fatalf("the maintenance run left the findings record standing: %v", readTableNames(t, db))
+	}
+
+	got := damageReport(migrateDatabase(t, db))
+
+	if !equalStrings(got, damageReportOfTheFixture()) {
+		t.Errorf("the start that follows a run that cleared the record:\n  got  %v\n  want %v: the run left those units "+
+			"standing, and a deployment that was told what to clear has no reason to keep quiet about them", got, damageReportOfTheFixture())
+	}
+
+	if again := damageReport(migrateDatabase(t, db)); len(again) != 0 {
+		t.Errorf("a start after the one that spoke again after the run reported:\n  got  %v\n  want nothing: that start named those units", again)
 	}
 }
 
