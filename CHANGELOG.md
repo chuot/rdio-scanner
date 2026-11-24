@@ -46,6 +46,10 @@
 
 - The server no longer holds its real-time interface apart from the rest of itself. The whole server — the REST API and the live listener connection alike — is GNU GPL version 3, and a deployment you host yourself answers both for its own clients without an agreement with anyone. The separate policy document earlier versions pointed at is gone; chapter 27 of the [administrator guide](docs/admin-guide.html) states the licence.
 
+### The published container image
+
+- `chuot/rdio-scanner:latest`, and each version tag the project publishes beside it, now names one image index over `linux/amd64`, `linux/arm/v7`, and `linux/arm64`: a host that pulls either name receives the image built for its own architecture, so a machine that is not amd64 no longer has to know the architecture's name to start the server. The architecture-named tags are published as before and each one still names a single architecture's image, which is what you pull when you want a particular build. Chapter 4 of the [administrator guide](docs/admin-guide.html) says which architecture a machine that imports audio needs, and the [compile guide](COMPILING.md) says how the three images and the index that carries them are built.
+
 - Numerous fixes and improvements across the server, the administration, and the listener's web application.
 
 ## Version 7.0 (never officially released)

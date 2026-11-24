@@ -16,8 +16,13 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -231,6 +236,722 @@ func TestTheImageTagIsTheVersionSpelledTheWayAnImageTagAllows(t *testing.T) {
 	if tag := imageTagFor("8.0.0-beta1"); tag != "8.0.0-beta1" {
 		t.Errorf("the tag for 8.0.0-beta1 is %q, want 8.0.0-beta1: there is no git metadata in that version to rewrite", tag)
 	}
+}
+
+// a podman run asked for all three architectures adds every image it builds to one manifest list,
+// named from the version the run resolved and carrying no architecture of its own: the list is what
+// carries the three architectures under one name, and it is the run's own work, not a tag.
+func TestThePodmanRunAskedForAllThreeBuildsEachImageIntoTheManifestListItAssembles(t *testing.T) {
+	version := theVersion(t)
+	want := containerImage + ":" + imageTagFor(version.String()) + theManifestListSuffix
+
+	for _, target := range containerTargets {
+		s := containerStep(options{sub: subContainer, target: target, all: true}, "/repo", version, theMoment, podmanProgram)
+
+		list := theOptionValue(s.args, "--manifest")
+
+		if list != want {
+			t.Errorf("the podman %s image build adds its image to %q, want the one list the run assembles, %q: the three architectures reach one name through that list",
+				target, list, want)
+		}
+
+		// The list is added to the tags, not traded for them: every leg still writes the pair its
+		// own architecture names, and the linux-amd64 leg still writes the plain pair the published
+		// image has always carried.
+		tagged := []string{
+			containerImage + ":" + imageTagFor(version.String()) + "-" + target,
+			containerImage + ":" + containerLatestTag + "-" + target,
+		}
+
+		if target == containerTarget {
+			tagged = append(tagged,
+				containerImage+":"+imageTagFor(version.String()),
+				containerImage+":"+containerLatestTag)
+		}
+
+		for _, tag := range tagged {
+			if !carriesArgument(s.args, tag) {
+				t.Errorf("the podman %s image build carries %v as its tags, want %q beside the list it names: the list carries the index, the tags stay runnable images",
+					target, s.args, tag)
+			}
+		}
+	}
+}
+
+// a run that assembles nothing assembles nothing under either container program: the single-target
+// run names no manifest list, and the docker route assembles its index in a build of its own rather
+// than by naming a list on each leg.
+func TestTheContainerRunThatAssemblesNoIndexNamesNoManifestList(t *testing.T) {
+	for _, program := range []string{podmanProgram, dockerProgram} {
+		for _, target := range containerTargets {
+			s := containerStep(options{sub: subContainer, target: target}, "/repo", theVersion(t), theMoment, program)
+
+			if list := theOptionValue(s.args, "--manifest"); list != "" {
+				t.Errorf("the %s %s image build names %q as a manifest list, want none: a run building one image assembles no index",
+					program, target, list)
+			}
+		}
+	}
+
+	for _, target := range containerTargets {
+		s := containerStep(options{sub: subContainer, target: target, all: true}, "/repo", theVersion(t), theMoment, dockerProgram)
+
+		if list := theOptionValue(s.args, "--manifest"); list != "" {
+			t.Errorf("the docker %s image build of an all-architectures run names %q as a manifest list, want none: docker assembles the three architectures in one exported build of its own, and its legs stay the builds today's cases pin",
+				target, list)
+		}
+	}
+}
+
+// theManifestListSuffix is what marks the list a run assembles as its own: no published tag and no
+// architecture suffix carries it.
+const theManifestListSuffix = "-index"
+
+// theOptionValue reads the value a long option carries, spelled either glued to it or as the
+// argument after it, and says nothing when the option is absent.
+func theOptionValue(args []string, option string) string {
+	for i, arg := range args {
+		if value, ok := strings.CutPrefix(arg, option+"="); ok {
+			return value
+		}
+
+		if arg == option && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+
+	return ""
+}
+
+// the podman route writes the manifest list it filled as one OCI layout file under .build/: the
+// program's own manifest transport carries every architecture in the list into that file, and no
+// registry, host, or other transport appears anywhere on the line.
+func TestThePodmanRunAskedForAllThreeWritesItsManifestListAsOneLayoutFile(t *testing.T) {
+	s := containerManifestExportStep("/repo", theVersion(t), podmanProgram)
+
+	if s.name != podmanProgram {
+		t.Errorf("the run's index step names %q, want the program the run resolved: %q", s.name, podmanProgram)
+	}
+
+	if len(s.args) < 2 || s.args[0] != "manifest" || s.args[1] != "push" {
+		t.Fatalf("the run's index step runs %v, want podman's manifest push", s.args)
+	}
+
+	if format := theOptionValue(s.args, "--format"); format != "oci" {
+		t.Errorf("the run's index step writes the layout in %q, want oci: an index a registry or a copy command can read is OCI, not the program's own format", format)
+	}
+
+	if !carriesFlag(s.args, "--all") {
+		t.Errorf("the run's index step carries no --all in %v, want it: the list holds three architectures and the default pushes only one", s.args)
+	}
+
+	list := containerImage + ":8.0.0-gdb79311" + theManifestListSuffix
+	if !carriesArgument(s.args, list) {
+		t.Errorf("the run's index step pushes %v, want the list the three legs built into, %q", s.args, list)
+	}
+
+	want := filepath.Join(".build", containerImage+"-8.0.0-gdb79311"+theIndexFileSuffix)
+
+	if !carriesArgument(s.args, "oci-archive:"+want) {
+		t.Errorf("the run's index step writes to %v, want the one layout file under %s, %q", s.args, ".build", want)
+	}
+
+	if s.dir != "/repo" {
+		t.Errorf("the run's index step runs in %q, want the repository the run is building", s.dir)
+	}
+
+	for _, arg := range s.args {
+		if arg == "push" && s.args[0] != "manifest" {
+			t.Errorf("the run's index step runs %q on its own, which publishes: only the manifest transport writes a file here", arg)
+		}
+
+		if strings.Contains(arg, "://") {
+			t.Errorf("the run's index step carries %q, which reaches a registry through a transport the run never uses: the index is a file", arg)
+		}
+	}
+}
+
+// the list a podman run assembles is cleared before the three builds name it and again once its
+// file is written: podman refuses a list name an image or an earlier list already holds, and the
+// list is the run's own working name, not something the machine keeps. The clear carries --ignore
+// because podman's manifest rm answers "image not known" and ends 1 when the name is in the store
+// no more than a first run leaves it, and a clear that reads that answer as a failure stops a run
+// before it has built anything.
+func TestThePodmanRunAskedForAllThreeClearsTheManifestListNameItAssembles(t *testing.T) {
+	s := containerManifestClearStep("/repo", theVersion(t), podmanProgram)
+
+	if s.name != podmanProgram {
+		t.Errorf("the run's list-clearing step names %q, want the program the run resolved: %q", s.name, podmanProgram)
+	}
+
+	if len(s.args) != 4 || s.args[0] != "manifest" || s.args[1] != "rm" || s.args[2] != "--ignore" {
+		t.Fatalf("the run's list-clearing step runs %v, want podman's manifest rm with --ignore naming one list", s.args)
+	}
+
+	want := containerImage + ":8.0.0-gdb79311" + theManifestListSuffix
+
+	if !carriesArgument(s.args, want) {
+		t.Errorf("the run's list-clearing step removes %v, want the one list the run assembles, %q", s.args, want)
+	}
+
+	for _, arg := range s.args {
+		if strings.Contains(arg, "://") || strings.Contains(arg, "/") {
+			t.Errorf("the run's list-clearing step carries %q, which names a registry or a namespace: the list it removes is a name in this machine's own store", arg)
+		}
+	}
+}
+
+// the docker route assembles the three architectures in one build of its own: the platforms are
+// named in the order the tool lists the architectures, the build writes the same layout file podman
+// writes, it carries no attestation manifests, and it tags nothing because a manifest list cannot be
+// loaded into the local store.
+func TestTheDockerRunAskedForAllThreeAssemblesTheIndexInOneExportedBuild(t *testing.T) {
+	s := containerIndexBuildStep("/repo", theVersion(t), theMoment, dockerProgram)
+
+	if s.name != dockerProgram {
+		t.Errorf("the run's index build names %q, want the program the run resolved: %q", s.name, dockerProgram)
+	}
+
+	if len(s.args) == 0 || s.args[0] != "buildx" || s.args[1] != "build" {
+		t.Fatalf("the run's index build runs %v, want docker's buildx build", s.args)
+	}
+
+	platforms := strings.Join([]string{
+		containerPlatformFor("linux-amd64"),
+		containerPlatformFor("linux-arm"),
+		containerPlatformFor("linux-arm64"),
+	}, ",")
+
+	if got := theOptionValue(s.args, "--platform"); got != platforms {
+		t.Errorf("the run's index build asks for %q, want the three architectures in the order the tool lists them, %q", got, platforms)
+	}
+
+	if file := theFlagValue(s.args, "-f"); file != "Containerfile" {
+		t.Errorf("the run's index build names %q as the file it builds from, want Containerfile", file)
+	}
+
+	if dest := theFlagValue(s.args, "-o"); !strings.HasPrefix(dest, "type=oci,dest=") {
+		t.Errorf("the run's index build exports with %q, want type=oci and the layout file as its destination: the release artifact is the file, not a build cache", dest)
+	}
+
+	for _, arg := range s.args {
+		if strings.HasPrefix(arg, "--provenance") && arg != "--provenance=false" {
+			t.Errorf("the run's index build carries %q, want attestation off: attestation manifests ride in the index as platforms no image is built for", arg)
+		}
+
+		if strings.HasPrefix(arg, "--sbom") && arg != "--sbom=false" {
+			t.Errorf("the run's index build carries %q, want the software bill of materials off, for the same reason", arg)
+		}
+	}
+
+	if !carriesArgument(s.args, "--provenance=false") || !carriesArgument(s.args, "--sbom=false") {
+		t.Errorf("the run's index build carries %v, want both --provenance=false and --sbom=false: the index names the three architectures and nothing else", s.args)
+	}
+
+	file := filepath.Join(".build", containerImage+"-8.0.0-gdb79311"+theIndexFileSuffix)
+
+	if !carriesArgument(s.args, "type=oci,dest="+file) {
+		t.Errorf("the run's index build carries %v, want the export destination %q: the same file podman writes is what the release publishes", s.args, file)
+	}
+
+	for _, arg := range s.args {
+		if arg == "-t" || strings.HasPrefix(arg, "-t=") {
+			t.Errorf("the run's index build tags an image in %v: docker cannot load a multi-architecture build into the local store, so the three images come from the three legs and this build writes only the file", s.args)
+		}
+
+		if strings.Contains(arg, "builder") {
+			t.Errorf("the run's index build carries %q, which names a builder the tool chose: the builder a host uses is the host's own choice", arg)
+		}
+
+		if arg == "push" || strings.Contains(arg, "://") {
+			t.Errorf("the run's index build carries %q, which publishes: the index is a file the operator publishes", arg)
+		}
+	}
+
+	for _, arg := range s.args {
+		if !strings.HasPrefix(arg, "--build-arg") {
+			continue
+		}
+
+		for _, word := range []string{"TARGETARCH", "TARGETOS", "TARGETPLATFORM", "TARGETVARIANT", "BUILDPLATFORM", "GOARCH", "GOOS", "GOARM"} {
+			if strings.Contains(arg, word) {
+				t.Errorf("the run's index build passes %q, which names an architecture as a build argument: the container program fills %s itself from the platforms it was asked for", arg, word)
+			}
+		}
+	}
+
+	if version := theFlagValue(s.args, "--build-arg"); version != "VERSION=8.0.0+gdb79311" {
+		t.Errorf("the run's index build carries %q as its first build argument, want the version the run resolved", version)
+	}
+}
+
+// theIndexFileSuffix names the file the run writes as what it is: an OCI layout archive, not an
+// image a host can run.
+const theIndexFileSuffix = ".oci"
+
+// theIndexFixture is one manifest an assembled index names, spelled the way the tool spells the
+// platform it was built for: linux/arm/v7 is the index's arm entry carrying variant v7. A fixture
+// that records itself under recordAs is stored with a digest that is not its bytes' digest, which is
+// how a written index disagrees with itself.
+type theIndexFixture struct {
+	platform string
+	recordAs string
+}
+
+// theIndexArtifact is what a layout file holds, spelled the way a run reports it: the file's path,
+// the digest of the image index inside it, and the digest of each manifest by the platform word it
+// was written for.
+type theIndexArtifact struct {
+	path   string
+	digest string
+	byWord map[string]string
+}
+
+// theThreeIndexFixtures are the three architectures a container image is built for, spelled as the
+// index spells them.
+func theThreeIndexFixtures() []theIndexFixture {
+	fixtures := []theIndexFixture{}
+
+	for _, target := range containerTargets {
+		platform := containerPlatformFor(target)
+
+		fixtures = append(fixtures, theIndexFixture{platform: platform})
+	}
+
+	return fixtures
+}
+
+// theOCILayoutFile writes an OCI layout file at path in the shape both container programs write one:
+// an index.json naming a single image index, that index naming one manifest per fixture entry, and a
+// blob for every digest either names.
+func theOCILayoutFile(t *testing.T, path string, named []theIndexFixture) theIndexArtifact {
+	t.Helper()
+
+	manifests := []map[string]any{}
+
+	bodies := map[string][]byte{}
+
+	byWord := map[string]string{}
+
+	for _, one := range named {
+		word := strings.Split(one.platform, "/")
+
+		if len(word) < 2 {
+			t.Fatalf("the fixture platform %q is not spelled os/architecture", one.platform)
+		}
+
+		platform := map[string]string{"os": word[0], "architecture": word[1]}
+
+		if len(word) > 2 {
+			platform["variant"] = word[2]
+		}
+
+		// a manifest names the config blob of the image it describes, which is what makes two
+		// platforms two different sets of bytes, and so two different digests, the way a layout
+		// a container program wrote has them.
+		configBody, err := json.Marshal(map[string]string{
+			"architecture": platform["architecture"],
+			"os":           platform["os"],
+		})
+		if err != nil {
+			t.Fatalf("json.Marshal(the config of %s): %v", one.platform, err)
+		}
+
+		configDigest := "sha256:" + theDigestOf(configBody)
+
+		body, err := json.Marshal(map[string]any{
+			"mediaType":     "application/vnd.oci.image.manifest.v1+json",
+			"schemaVersion": 2,
+			"config": map[string]any{
+				"mediaType": "application/vnd.oci.image.config.v1+json",
+				"digest":    configDigest,
+				"size":      len(configBody),
+			},
+		})
+		if err != nil {
+			t.Fatalf("json.Marshal(the manifest for %s): %v", one.platform, err)
+		}
+
+		digest := "sha256:" + theDigestOf(body)
+
+		// a fixture recorded under a name its own bytes do not hash to is an index whose entry
+		// disagrees with the blob it points at, which is the shape of a file no run should report.
+		if one.recordAs != "" {
+			digest = one.recordAs
+		}
+
+		entry := map[string]any{
+			"mediaType": "application/vnd.oci.image.manifest.v1+json",
+			"digest":    digest,
+			"size":      len(body),
+			"platform":  platform,
+		}
+
+		if platform["os"] == "unknown" && platform["architecture"] == "unknown" {
+			// unknown/unknown is how a BuildKit attestation entry is spelled, and the
+			// annotations are what a real one carries with it: an entry like this names no
+			// architecture a container image was built for.
+			entry["annotations"] = map[string]string{
+				"vnd.docker.reference.digest": theDigestOf([]byte("the image this attestation is about")),
+				"vnd.docker.reference.type":   "attestation-manifest",
+			}
+		}
+
+		manifests = append(manifests, entry)
+
+		byWord[one.platform] = digest
+
+		bodies[digest] = body
+		bodies[configDigest] = configBody
+	}
+
+	index := map[string]any{
+		"schemaVersion": 2,
+		"mediaType":     "application/vnd.oci.image.index.v1+json",
+		"manifests":     manifests,
+	}
+
+	indexBody, err := json.Marshal(index)
+	if err != nil {
+		t.Fatalf("json.Marshal(the image index): %v", err)
+	}
+
+	indexDigest := "sha256:" + theDigestOf(indexBody)
+
+	bodies[indexDigest] = indexBody
+
+	top := map[string]any{
+		"schemaVersion": 2,
+		"manifests": []map[string]any{{
+			"mediaType": "application/vnd.oci.image.index.v1+json",
+			"digest":    indexDigest,
+			"size":      len(indexBody),
+		}},
+	}
+
+	topBody, err := json.Marshal(top)
+	if err != nil {
+		t.Fatalf("json.Marshal(index.json): %v", err)
+	}
+
+	entries := []theLayoutEntry{
+		{name: "oci-layout", body: []byte(`{"imageLayoutVersion":"1.0.0"}`)},
+		{name: "index.json", body: topBody},
+	}
+
+	for digest, body := range bodies {
+		entries = append(entries, theLayoutEntry{name: theBlobPath(digest), body: body})
+	}
+
+	theWriteLayoutFile(t, path, entries)
+
+	return theIndexArtifact{path: path, digest: indexDigest, byWord: byWord}
+}
+
+// theBlobPath is where an OCI layout stores the bytes a digest names.
+func theBlobPath(digest string) string {
+	return "blobs/sha256/" + strings.TrimPrefix(digest, "sha256:")
+}
+
+// theLayoutEntries reads every file a layout archive holds, which is how a case changes what a
+// written file holds without writing a second archive by hand.
+func theLayoutEntries(t *testing.T, path string) []theLayoutEntry {
+	t.Helper()
+
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("os.Open(%s): %v", path, err)
+	}
+
+	defer file.Close()
+
+	reader := tar.NewReader(file)
+
+	entries := []theLayoutEntry{}
+
+	for {
+		hdr, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			t.Fatalf("reading %s: %v", path, err)
+		}
+
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+
+		body, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatalf("reading %s from %s: %v", hdr.Name, path, err)
+		}
+
+		entries = append(entries, theLayoutEntry{name: hdr.Name, body: body})
+	}
+
+	return entries
+}
+
+// theLayoutEntry is one file an OCI layout archive holds.
+type theLayoutEntry struct {
+	name string
+	body []byte
+}
+
+// theWriteLayoutFile writes the entries as a tar archive, which is the container format an OCI layout
+// is stored in.
+func theWriteLayoutFile(t *testing.T, path string, entries []theLayoutEntry) {
+	t.Helper()
+
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("os.Create(%s): %v", path, err)
+	}
+
+	defer file.Close()
+
+	writer := tar.NewWriter(file)
+
+	for _, one := range entries {
+		hdr := &tar.Header{
+			Name:     one.name,
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Size:     int64(len(one.body)),
+		}
+
+		if err := writer.WriteHeader(hdr); err != nil {
+			t.Fatalf("WriteHeader(%s): %v", one.name, err)
+		}
+
+		if _, err := writer.Write(one.body); err != nil {
+			t.Fatalf("Write(%s): %v", one.name, err)
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("closing %s: %v", path, err)
+	}
+}
+
+// theDigestOf is the hex half of the digest an OCI layout names a blob by.
+func theDigestOf(body []byte) string {
+	sum := sha256.Sum256(body)
+
+	return hex.EncodeToString(sum[:])
+}
+
+// A run that assembled an index reports what is inside the file it wrote: the digest of the image
+// index, and one manifest digest per architecture, each named by the platform it was built for, read
+// out of the file with no container program asked.
+func TestTheIndexFileHoldsTheImageIndexAndTheThreeManifestsTheRunAssembled(t *testing.T) {
+	dir := t.TempDir()
+
+	// The fixtures are named in an order of their own, because the index a container program
+	// writes does not promise the order the release matrix names the architectures in, and what a
+	// run reports has to name them in that order whatever the file's entries happen to be in.
+	named := []theIndexFixture{
+		{platform: containerPlatformFor("linux-arm64")},
+		{platform: containerPlatformFor("linux-amd64")},
+		{platform: containerPlatformFor("linux-arm")},
+	}
+
+	wrote := theOCILayoutFile(t, filepath.Join(dir, "assembled"+theIndexFileSuffix), named)
+
+	index, err := readContainerIndex(wrote.path)
+	if err != nil {
+		t.Fatalf("readContainerIndex(%s): %v", wrote.path, err)
+	}
+
+	if index.digest != wrote.digest {
+		t.Errorf("the index read from %s reports %q as the image index digest, want the digest of the index the file holds, %q", wrote.path, index.digest, wrote.digest)
+	}
+
+	if len(index.manifests) != len(containerTargets) {
+		t.Fatalf("the index read from %s names %d manifests, want one for each architecture a container image is built for: %v", wrote.path, len(index.manifests), index.manifests)
+	}
+
+	want := []struct{ word, platform, variant string }{
+		{"linux/amd64", "linux/amd64", ""},
+		{"linux/arm/v7", "linux/arm", "v7"},
+		{"linux/arm64", "linux/arm64", ""},
+	}
+
+	for i, one := range want {
+		got := index.manifests[i]
+
+		if got.platform != one.platform {
+			t.Errorf("the %d manifest the index names is for %s, want %s: %v", i+1, got.platform, one.platform, index.manifests)
+		}
+
+		if got.variant != one.variant {
+			t.Errorf("the index names %q as the variant of %s, want %q: the variant is how a 32-bit ARM image is told from the others", got.variant, one.platform, one.variant)
+		}
+
+		if got.digest != wrote.byWord[one.word] {
+			t.Errorf("the index names %s as the digest of the %s manifest, want the digest of the manifest the file was written with, %s", got.digest, one.word, wrote.byWord[one.word])
+		}
+	}
+}
+
+// The manifest an index names is the bytes the file holds, not the number index.json says it is: an
+// archive whose recorded digest disagrees with the blob it points at is refused, naming the
+// architecture that entry was written for.
+func TestAnIndexFileWhoseRecordedDigestIsNotTheDigestOfItsBlobIsRefused(t *testing.T) {
+	dir := t.TempDir()
+
+	named := theThreeIndexFixtures()
+
+	for i, one := range named {
+		if one.platform == containerPlatformFor("linux-arm64") {
+			named[i].recordAs = "sha256:" + strings.Repeat("0", 64)
+		}
+	}
+
+	path := filepath.Join(dir, "broken"+theIndexFileSuffix)
+
+	wrote := theOCILayoutFile(t, path, named)
+
+	if wrote.byWord["linux/arm64"] == "" {
+		t.Fatalf("the fixture recorded no digest for linux/arm64: %v", wrote.byWord)
+	}
+
+	_, err := readContainerIndex(path)
+	if err == nil {
+		t.Errorf("readContainerIndex(%s) answered no error, and an index whose %s entry names %s, a digest its bytes do not hash to, describes an artifact the run did not write", path, containerPlatformFor("linux-arm64"), wrote.byWord["linux/arm64"])
+
+		return
+	}
+
+	if !strings.Contains(err.Error(), containerPlatformFor("linux-arm64")) {
+		t.Errorf("the refusal %q does not name the %s entry that disagrees with its blob", err.Error(), containerPlatformFor("linux-arm64"))
+	}
+}
+
+// The image index a layout names is the artifact whose digest a run reports, so an archive whose
+// index blob is not the bytes that digest was taken from is refused naming that digest: the numbers
+// a release records are only worth recording when the file holds the bytes they were read from.
+func TestAnIndexFileWhoseImageIndexBlobIsNotTheBytesItsDigestNamesIsRefused(t *testing.T) {
+	dir := t.TempDir()
+
+	wrote := theOCILayoutFile(t, filepath.Join(dir, "assembled"+theIndexFileSuffix), theThreeIndexFixtures())
+
+	entries := theLayoutEntries(t, wrote.path)
+
+	for i, one := range entries {
+		if one.name == theBlobPath(wrote.digest) {
+			// A space added to the end of the bytes is JSON that still reads the same and hashes
+			// to something else, which is the disagreement the run must not report over.
+			entries[i].body = append(one.body, ' ')
+		}
+	}
+
+	broken := filepath.Join(dir, "broken"+theIndexFileSuffix)
+
+	theWriteLayoutFile(t, broken, entries)
+
+	_, err := readContainerIndex(broken)
+	if err == nil {
+		t.Fatalf("readContainerIndex(%s) answered no error, and the %s blob the file holds hashes to something else", broken, wrote.digest)
+	}
+
+	if !strings.Contains(err.Error(), wrote.digest) {
+		t.Errorf("the refusal %q does not name %s, the digest whose bytes disagree with it", err.Error(), wrote.digest)
+	}
+}
+
+// An index carrying an attestation manifest is refused: its entry is spelled unknown/unknown, which
+// names no platform this run built an image for, and a registry that does not understand BuildKit
+// attestations refuses the whole index for that one entry.
+func TestAnIndexFileCarryingAnEntryForNoPlatformIsRefused(t *testing.T) {
+	dir := t.TempDir()
+
+	named := append(theThreeIndexFixtures(), theIndexFixture{platform: "unknown/unknown"})
+
+	path := filepath.Join(dir, "attested"+theIndexFileSuffix)
+
+	_, err := readContainerIndex(theOCILayoutFile(t, path, named).path)
+	if err == nil {
+		t.Fatalf("readContainerIndex(%s) answered no error, and an index naming a fourth entry is not the index of three images", path)
+	}
+
+	msg := err.Error()
+
+	if !strings.Contains(msg, "unknown/unknown") {
+		t.Errorf("the refusal %q does not name the entry the index carries: the operator has to see why the file was refused", msg)
+	}
+}
+
+// An index that names two of the three architectures is a partial artifact: the run asked for three
+// images, and the file that holds two of them is refused naming the one it does not hold.
+func TestAnIndexFileNamingTwoOfTheThreeArchitecturesIsRefused(t *testing.T) {
+	dir := t.TempDir()
+
+	named := []theIndexFixture{
+		{platform: containerPlatformFor("linux-amd64")},
+		{platform: containerPlatformFor("linux-arm")},
+	}
+
+	path := filepath.Join(dir, "partial"+theIndexFileSuffix)
+
+	_, err := readContainerIndex(theOCILayoutFile(t, path, named).path)
+	if err == nil {
+		t.Fatalf("readContainerIndex(%s) answered no error, and an index naming two architectures is not what a run asked for all three wrote", path)
+	}
+
+	msg := err.Error()
+
+	if !strings.Contains(msg, containerPlatformFor("linux-arm64")) {
+		t.Errorf("the refusal %q does not name %s, the architecture the index holds no manifest for", msg, containerPlatformFor("linux-arm64"))
+	}
+}
+
+// the base image an assembling run proves the host can execute is the image the finished image is
+// taken from: the platform the host is asked about is the platform the build would have to build for.
+func TestTheAssemblyCheckRunsTheImageTheContainerfileShipsFrom(t *testing.T) {
+	contents, err := os.ReadFile(filepath.Join("..", "..", "Containerfile"))
+	if err != nil {
+		t.Fatalf("ReadFile(Containerfile): %v", err)
+	}
+
+	stage, found := theShippingContainerfileStage(theContainerfileStages(string(contents)))
+	if !found {
+		t.Fatal("the Containerfile has no shipping stage, and an image is shipped from one")
+	}
+
+	_, image, found := strings.Cut(stage.from, " ")
+	if !found {
+		t.Fatalf("the shipping stage starts %q, which names no image", stage.from)
+	}
+
+	if containerBaseImage != image {
+		t.Errorf("the host check runs %q, want %q, the image the finished image is taken from: a proof run of another image proves nothing about the build that follows",
+			containerBaseImage, image)
+	}
+}
+
+// carriesFlag reports whether a command line carries a flag with no value glued to it.
+func carriesFlag(args []string, flag string) bool {
+	for _, arg := range args {
+		if arg == flag {
+			return true
+		}
+	}
+
+	return false
+}
+
+// carriesArgument reports whether a command line carries one argument exactly as spelled.
+func carriesArgument(args []string, want string) bool {
+	for _, arg := range args {
+		if arg == want {
+			return true
+		}
+	}
+
+	return false
 }
 
 // theImageTagGrammar is the tag grammar a registry accepts.
@@ -1373,62 +2094,92 @@ func aMachineWith(programs ...string) func(string) (string, error) {
 }
 
 // the container step names the resolved program and the Containerfile it builds from, asks for
-// the architecture exactly once, and never publishes: the arguments name no build argument
-// carrying an architecture, no push, no manifest list, and no registry to push to.
+// the architecture exactly once, and publishes nothing: no argument names a registry host or a
+// namespace, carries a transport that reaches one, or runs a push. The podman route's manifest
+// transport appears only as the --manifest= the legs of an assembling run name, and only under
+// podman: the docker route's legs carry neither the word manifest nor a push.
 func TestTheReleaseImageBuildNamesTheProgramAndTheFileItBuildsFrom(t *testing.T) {
 	for _, program := range []string{podmanProgram, dockerProgram} {
-		for _, target := range containerTargets {
-			s := containerStep(options{sub: subContainer, target: target}, "/repo", theVersion(t), theMoment, program)
+		for _, assembling := range []bool{false, true} {
+			for _, target := range containerTargets {
+				o := options{sub: subContainer, target: target, all: assembling}
+				s := containerStep(o, "/repo", theVersion(t), theMoment, program)
 
-			if s.name != program {
-				t.Errorf("the release image build names %q, want the program the run resolved: %q", s.name, program)
-			}
-
-			if len(s.args) == 0 || s.args[0] != "build" {
-				t.Fatalf("the release image build runs %v, want a build", s.args)
-			}
-
-			if file := theFlagValue(s.args, "-f"); file != "Containerfile" {
-				t.Errorf("the release image build names %q as the file it builds from, want Containerfile: docker looks for Dockerfile and does not find Containerfile",
-					file)
-			}
-
-			// the architecture is named once, by the flag the container program selects
-			// the build architecture with, and by nothing else: the automatic build
-			// arguments carry what that flag asked for.
-			named := 0
-
-			for _, arg := range s.args {
-				if strings.HasPrefix(arg, "--platform=") {
-					named++
-				}
-			}
-
-			if named != 1 {
-				t.Errorf("the %s image build names the build architecture %d times, want once: %v", target, named, s.args)
-			}
-
-			for _, arg := range s.args {
-				if !strings.HasPrefix(arg, "--build-arg") {
-					continue
+				if s.name != program {
+					t.Errorf("the release image build names %q, want the program the run resolved: %q", s.name, program)
 				}
 
-				for _, word := range []string{"TARGETARCH", "TARGETOS", "TARGETPLATFORM", "TARGETVARIANT", "BUILDPLATFORM", "GOARCH", "GOOS", "GOARM"} {
-					if strings.Contains(arg, word) {
-						t.Errorf("the %s image build passes %q, which names the architecture as a build argument: the container program fills %s itself from the platform it was asked for",
-							target, arg, word)
+				if len(s.args) == 0 || s.args[0] != "build" {
+					t.Fatalf("the release image build runs %v, want a build", s.args)
+				}
+
+				if file := theFlagValue(s.args, "-f"); file != "Containerfile" {
+					t.Errorf("the release image build names %q as the file it builds from, want Containerfile: docker looks for Dockerfile and does not find Containerfile",
+						file)
+				}
+
+				// the architecture is named once, by the flag the container program selects
+				// the build architecture with, and by nothing else: the automatic build
+				// arguments carry what that flag asked for.
+				named := 0
+
+				for _, arg := range s.args {
+					if strings.HasPrefix(arg, "--platform=") {
+						named++
 					}
 				}
-			}
 
-			for _, arg := range s.args {
-				if arg == "push" || arg == "manifest" {
-					t.Errorf("the %s image build runs %q, and the build publishes nothing: it writes an image into this machine's container store", target, arg)
+				if named != 1 {
+					t.Errorf("the %s image build names the build architecture %d times, want once: %v", target, named, s.args)
 				}
 
-				if strings.HasPrefix(arg, "-t") || strings.Contains(arg, "rdio-scanner:") {
-					if strings.Contains(arg, "/") {
-						t.Errorf("the %s image build tags %q, which names a registry or a namespace the build publishes to", target, arg)
+				for _, arg := range s.args {
+					if !strings.HasPrefix(arg, "--build-arg") {
+						continue
+					}
+
+					for _, word := range []string{"TARGETARCH", "TARGETOS", "TARGETPLATFORM", "TARGETVARIANT", "BUILDPLATFORM", "GOARCH", "GOOS", "GOARM"} {
+						if strings.Contains(arg, word) {
+							t.Errorf("the %s image build passes %q, which names the architecture as a build argument: the container program fills %s itself from the platform it was asked for",
+								target, arg, word)
+						}
+					}
+				}
+
+				for _, arg := range s.args {
+					if arg == "push" {
+						t.Errorf("the %s image build runs %q, and the build publishes nothing: it writes an image into this machine's container store", target, arg)
+					}
+
+					if strings.Contains(arg, "://") {
+						t.Errorf("the %s image build carries %q, a transport that reaches a registry: the release publishes only the file the run writes, and the owner carries it", target, arg)
+					}
+
+					if strings.HasPrefix(arg, "-t") || strings.Contains(arg, "rdio-scanner:") {
+						if strings.Contains(arg, "/") && !strings.HasPrefix(arg, "--platform=") {
+							t.Errorf("the %s image build names %q, which holds a registry or a namespace the build publishes to", target, arg)
+						}
+					}
+
+					// A manifest list the legs build into is this run's own working name, and only
+					// podman has one: a bare manifest subcommand on a build line, or the word under
+					// docker, is the tool reaching for a program action it does not take.
+					if arg == "manifest" || strings.HasPrefix(arg, "manifest ") {
+						t.Errorf("the %s image build runs %q, and an image build assembles nothing: the podman route assembles through --manifest= on the legs and one manifest push of the finished list", target, arg)
+					}
+
+					if value, ok := strings.CutPrefix(arg, "--manifest="); ok {
+						if program != podmanProgram {
+							t.Errorf("the docker %s image build names %q as a manifest list, and docker assembles its index in one exported build of its own", target, value)
+						}
+
+						if !assembling {
+							t.Errorf("the %s image build of a run that assembles no index names %q as a manifest list", target, value)
+						}
+
+						if value != containerManifestListFor(theVersion(t)) {
+							t.Errorf("the %s image build names %q as the list it builds into, want the run's own name: %q", target, value, containerManifestListFor(theVersion(t)))
+						}
 					}
 				}
 			}
@@ -1603,9 +2354,11 @@ func TestTheCompileGuideSaysWhatTheToolAsksTheCompilerToRecord(t *testing.T) {
 }
 
 // the compile guide says which architectures a container image is built for, how the
-// architecture reaches the container program, what tags the run writes, and what host the
-// arm image needs. A maintainer who builds an arm image from a source tree reads these facts
-// off the guide, and no other document in the published repository states them.
+// architecture reaches the container program, what tags the run writes, what host the arm image
+// needs, what an all run assembles and where it writes it, and what the owner types to publish
+// that index under each container program. A maintainer who builds an arm image, or publishes the
+// three architectures, from a source tree reads these facts off the guide, and no other document
+// in the published repository states them.
 func TestTheCompileGuideNamesTheArchitecturesAContainerImageIsBuiltFor(t *testing.T) {
 	section := theGuideSection(t, "## What to type")
 
@@ -1698,14 +2451,84 @@ func TestTheCompileGuideNamesTheArchitecturesAContainerImageIsBuiltFor(t *testin
 		}
 	}
 
+	// What an `--all` run assembles, and the one file it lands in. An operator who publishes the
+	// three architectures has to read the file's name, what its index names, and the fact that the
+	// index is a file and never a tag they could pull from their own store.
+	for _, want := range []string{
+		"one image index over the three architectures",
+		"`.build/rdio-scanner-<version>.oci`",
+		"with every blob its entries name",
+		"names the three platforms and nothing else",
+		"`variant` recorded",
+		"no attestation manifest",
+		"names a single-architecture runnable image",
+		"writes no index file",
+		"the index is never a local tag",
+	} {
+		if !strings.Contains(passage, want) {
+			t.Errorf("the compile guide's container image section never says %q, which is what a --all run assembles and where it puts it", want)
+		}
+	}
+
+	// The digests the run reports, read out of the file it wrote, and the closing line that names
+	// that file whether or not the assembly produced it.
+	for _, want := range []string{
+		"the index digest and the three manifest digests",
+		"container 3 images written, index",
+		"no index",
+	} {
+		if !strings.Contains(passage, want) {
+			t.Errorf("the compile guide's container image section never says %q, which is how a run reports the index it assembled", want)
+		}
+	}
+
+	// Publishing is the owner's action under the program they have, and the guide carries both
+	// sequences: the podman one, which reads the images the run left in the store, and the skopeo
+	// one, which reads the file. Each names what the publishing host has to have installed, and the
+	// guide says plainly that the tool runs neither.
+	for _, want := range []string{
+		"podman manifest create rdio-scanner:<version>-index",
+		"podman manifest push --all rdio-scanner:<version>-index",
+		"podman manifest rm rdio-scanner:<version>-index",
+		"skopeo copy --all oci-archive:.build/rdio-scanner-<version>.oci",
+		"docker buildx create --name rdio-scanner --driver docker-container --use",
+		"the publishing host has to have",
+		"the tool runs none of those lines",
+	} {
+		if !strings.Contains(passage, want) {
+			t.Errorf("the compile guide's container image section never names %q, which is what the owner types to publish the index or to give a host the builder its assembly needs", want)
+		}
+	}
+
+	// The file is build output: it sits where the build's own output sits, and nothing reads it back.
+	for _, want := range []string{"build output", "deleting it costs nothing"} {
+		if !strings.Contains(passage, want) {
+			t.Errorf("the compile guide's container image section never calls the index file %s, which is what it is", want)
+		}
+	}
+
+	// The sentence this feature retires, and the loose-image publishing it went with. A guide that
+	// still says a run assembles no index sends the operator to three tags a registry cannot pick an
+	// architecture from.
+	for _, gone := range []string{
+		"assembles no manifest list",
+		"publishes three separate images",
+	} {
+		if strings.Contains(passage, gone) {
+			t.Errorf("the compile guide's container image section says %q, and a --all run assembles the index that name now covers", gone)
+		}
+	}
+
 	// The exit code an incomplete set of things written ends at: the guide names both shapes the
-	// release run and the container run answer with it, because both say which targets wrote none.
+	// release run and the container run answer with it, because both say which targets wrote none,
+	// and a container run that wrote its three images and no index answers with it too.
 	exits := theGuideSubsection(t, "### What the exit code says")
 
 	for _, want := range []string{
 		"a release run wrote fewer archives",
 		"a container run wrote fewer images",
 		"than it was asked for",
+		"and no index",
 	} {
 		if !strings.Contains(exits, want) {
 			t.Errorf("the compile guide's exit code section does not say %s, which is what exit code 3 reports", want)

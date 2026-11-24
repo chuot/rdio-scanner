@@ -207,6 +207,77 @@ func versionEightGroup(t *testing.T, section, name string) string {
 	return rest
 }
 
+// the published container image is what an operator who runs the server in a container pulls, so
+// the entry names it under its own group and says in one line what pulling the published name now
+// delivers on a machine that is not amd64.
+func TestTheVersionEightEntrySaysThePublishedImageCarriesTheThreeArchitectures(t *testing.T) {
+	section := versionEightSection(t)
+
+	const group = "The published container image"
+
+	entries := regexp.MustCompile(`(?m)^- .*`).FindAllString(versionEightGroup(t, section, group), -1)
+
+	if len(entries) == 0 {
+		t.Fatalf("the group %q carries no entry to read", group)
+	}
+
+	// One line says the whole claim, so a reader scanning the group meets the pull and what it
+	// delivers together.
+	want := []string{
+		"chuot/rdio-scanner",
+		"image index",
+		"linux/amd64",
+		"linux/arm/v7",
+		"linux/arm64",
+		"its own architecture",
+	}
+
+	found := ""
+
+	for _, entry := range entries {
+		lowered := strings.ToLower(entry)
+
+		if !strings.Contains(lowered, "image index") {
+			continue
+		}
+
+		for _, phrase := range want {
+			if !strings.Contains(lowered, strings.ToLower(phrase)) {
+				t.Errorf("the group %q does not say %q on the line that names the image index: %q", group, phrase, strings.TrimSpace(entry))
+			}
+		}
+
+		if found != "" {
+			t.Errorf("the group %q states the published index in more than one entry: %q and %q",
+				group, strings.TrimSpace(found), strings.TrimSpace(entry))
+		}
+
+		found = entry
+	}
+
+	if found == "" {
+		t.Errorf("the Version 8.0 entry does not say under %q what pulling %s now delivers, naming the index and the three architectures it carries",
+			group, "chuot/rdio-scanner")
+	}
+
+	// What the published tag was before, and the loose pull it forced on an arm host. The entry
+	// names the index, so it does not also say the published name was one architecture's image.
+	for _, gone := range []string{
+		"amd64 only",
+		"only the amd64",
+		"only available for amd64",
+	} {
+		if strings.Contains(strings.ToLower(versionEightGroup(t, section, group)), gone) {
+			t.Errorf("the group %q says %q, and the published name now carries every architecture the image is built for", group, gone)
+		}
+	}
+
+	// The group is one of the entry's groups, so the line that closes the entry still closes it.
+	if strings.Index(section, "### "+group+"\n") > strings.LastIndex(section, "\n- ") {
+		t.Errorf("the group %q sits after the line that closes the Version 8.0 entry", group)
+	}
+}
+
 // the entry tells an upgrading operator what the directory watcher now makes of a file name, in
 // the words the operator would search the entry for.
 func TestTheVersionEightEntrySaysWhatTheWatcherReadsOutOfAFileName(t *testing.T) {

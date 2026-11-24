@@ -1713,27 +1713,31 @@ func TestAContainerRunIsForTheArchitectureTheContainerfileChecksFor(t *testing.T
 func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenBuildsThreeImages(t *testing.T) {
 	tl, out, ran := fakeRun(released, "")
 
+	theRunThatWritesItsIndex(t, tl, ran)
+
 	if code := tl.run([]string{"container", "--all"}, out); code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
 	}
 
-	got := []string{}
-	for _, s := range *ran {
-		got = append(got, s.label+" "+s.result)
-	}
-
 	// The whole run is one ffmpeg block per target, in the order the tool lists the three
-	// architectures, and then one image per target in that same order.
+	// architectures, and then one image per target in that same order. The list the podman route
+	// gathers those images into is cleared before the first build fills it and again once the file
+	// its export wrote is there.
 	want := []string{
 		"scanner " + appBundle[subScanner],
 		"admin " + appBundle[subAdmin],
 		"ffmpeg linux-amd64",
 		"ffmpeg linux-arm",
 		"ffmpeg linux-arm64",
-		"container rdio-scanner:8.0.0-linux-amd64",
-		"container rdio-scanner:8.0.0-linux-arm",
-		"container rdio-scanner:8.0.0-linux-arm64",
+		"container clear rdio-scanner:8.0.0" + theManifestListSuffix,
+		"container build rdio-scanner:8.0.0-linux-amd64",
+		"container build rdio-scanner:8.0.0-linux-arm",
+		"container build rdio-scanner:8.0.0-linux-arm64",
+		"container export " + theIndexFile,
+		"container clear rdio-scanner:8.0.0" + theManifestListSuffix,
 	}
+
+	got := theStepWords(*ran)
 
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("the container --all run ran\n  %v\nwant\n  %v", got, want)
@@ -1743,12 +1747,7 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 		t.Errorf("the run's log %q does not say 3 images written", out.String())
 	}
 
-	images := []step{}
-	for _, s := range *ran {
-		if s.label == subContainer {
-			images = append(images, s)
-		}
-	}
+	images := theImageSteps(*ran)
 
 	if len(images) != len(containerTargets) {
 		t.Fatalf("the container --all run built %d images, want one for each of the three architectures", len(images))
@@ -1757,6 +1756,8 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 	// Each image step carries the argument list the single-target step is pinned to,
 	// with its own platform and its own architecture-named tag pair: only the
 	// linux-amd64 one carries the unarch'd pair the published image has always had.
+	// Every leg also names the one manifest list the run assembles, which is where
+	// the three architectures are gathered before the run writes their index.
 	for i, wantArgs := range [][]string{
 		{
 			"build",
@@ -1769,6 +1770,7 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 			"-t", "rdio-scanner:latest-linux-amd64",
 			"-t", "rdio-scanner:8.0.0",
 			"-t", "rdio-scanner:latest",
+			"--manifest=rdio-scanner:8.0.0-index",
 			".",
 		},
 		{
@@ -1780,6 +1782,7 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 			"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
 			"-t", "rdio-scanner:8.0.0-linux-arm",
 			"-t", "rdio-scanner:latest-linux-arm",
+			"--manifest=rdio-scanner:8.0.0-index",
 			".",
 		},
 		{
@@ -1791,6 +1794,7 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 			"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
 			"-t", "rdio-scanner:8.0.0-linux-arm64",
 			"-t", "rdio-scanner:latest-linux-arm64",
+			"--manifest=rdio-scanner:8.0.0-index",
 			".",
 		},
 	} {
@@ -1799,16 +1803,23 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 		}
 	}
 
-	// The run builds images and publishes none: no argument pushes, writes a manifest list,
-	// names a host, or asks the program to build from any file but the Containerfile.
+	// The run builds images and publishes none: no argument pushes, names a host or a transport
+	// that reaches one, or asks the program to build from any file but the Containerfile. The one
+	// manifest list the legs name is this run's own: the image name the tags use, the version the
+	// run resolved, and the suffix no published tag carries, with no host and no architecture in it.
 	for i, s := range images {
 		given := 0
+		lists := []string{}
 
 		for _, arg := range s.args {
-			for _, forbidden := range []string{"push", "manifest", "://"} {
+			for _, forbidden := range []string{"push", "://"} {
 				if strings.Contains(arg, forbidden) {
 					t.Errorf("the %s image step carries %q, and a container run publishes nothing", containerTargets[i], arg)
 				}
+			}
+
+			if value, ok := strings.CutPrefix(arg, "--manifest="); ok {
+				lists = append(lists, value)
 			}
 
 			if arg == "-f" {
@@ -1819,6 +1830,41 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 		if given != 1 {
 			t.Errorf("the %s image step names the file it builds from %d times, want once: %v", containerTargets[i], given, s.args)
 		}
+
+		wantList := "rdio-scanner:8.0.0" + theManifestListSuffix
+
+		if len(lists) != 1 || lists[0] != wantList {
+			t.Errorf("the %s image step names %v as the manifest lists it builds into, want the one list this run assembles, %q",
+				containerTargets[i], lists, wantList)
+		}
+	}
+
+	// The run's one export writes the layout file and reaches no registry: the transport names a file
+	// under the build's own output directory, and no argument carries a host.
+	exports := []step{}
+
+	for _, s := range *ran {
+		if theStepExportsIndex(s) {
+			exports = append(exports, s)
+		}
+	}
+
+	if len(exports) != 1 {
+		t.Fatalf("the container --all run ran %v as its index export, want the one command that writes the layout file", exports)
+	}
+
+	if exports[0].result != theIndexFile {
+		t.Errorf("the run's export writes %s, want the layout file %s", exports[0].result, theIndexFile)
+	}
+
+	for _, arg := range exports[0].args {
+		if strings.Contains(arg, "://") {
+			t.Errorf("the export carries %q, and the index is written as a file and pushed to no registry", arg)
+		}
+
+		if strings.HasPrefix(arg, "oci-archive:") && !strings.HasPrefix(arg[len("oci-archive:"):], buildDir+"/") {
+			t.Errorf("the export writes %q, and the layout file lands in the build output directory %s", arg, buildDir)
+		}
 	}
 }
 
@@ -1826,7 +1872,9 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 // about; the version, the notes, the two shared application builds, and the closing summary name
 // none.
 func TestAContainerRunAskedForAllNamesTheTargetEveryLineOfItsLogIsAbout(t *testing.T) {
-	tl, out, _ := fakeRun(released, "")
+	tl, out, ran := fakeRun(released, "")
+
+	theRunThatWritesItsIndex(t, tl, ran)
 
 	if code := tl.run([]string{"container", "--all"}, out); code != 0 {
 		t.Fatalf("exit code = %d, want 0", code)
@@ -1842,7 +1890,8 @@ func TestAContainerRunAskedForAllNamesTheTargetEveryLineOfItsLogIsAbout(t *testi
 		word := strings.Fields(line)[0]
 
 		// The run's own untagged lines are the version line, the notes, the two shared
-		// application builds, and the summary of what the whole run wrote.
+		// application builds, the index the whole run assembled, and the summary of what the
+		// whole run wrote.
 		if word == "version" || word == "note" || word == subScanner || word == subAdmin || word == subContainer {
 			continue
 		}
@@ -1904,10 +1953,8 @@ func TestAContainerRunAskedForATargetThatWroteNoFfmpegExitsNonZero(t *testing.T)
 	}
 
 	got := []string{}
-	for _, s := range *ran {
-		if s.label == subContainer {
-			got = append(got, s.result)
-		}
+	for _, s := range theImageSteps(*ran) {
+		got = append(got, s.result)
 	}
 
 	want := []string{"rdio-scanner:8.0.0-linux-amd64", "rdio-scanner:8.0.0-linux-arm64"}
@@ -1947,10 +1994,8 @@ func TestAContainerRunAskedForAllCarriesOnPastAnImageBuildThatFailed(t *testing.
 	}
 
 	got := []string{}
-	for _, s := range *ran {
-		if s.label == subContainer {
-			got = append(got, s.result)
-		}
+	for _, s := range theImageSteps(*ran) {
+		got = append(got, s.result)
 	}
 
 	want := []string{"rdio-scanner:8.0.0-linux-amd64", "rdio-scanner:8.0.0-linux-arm64"}
@@ -2055,6 +2100,686 @@ func TestAContainerRunOnAMachineOutsideTheThreeIsRefusedBeforeAnythingBuilds(t *
 			t.Errorf("container %s ran %v, and a refused request assembles no ffmpeg and no container step", word, *ran)
 		}
 	}
+}
+
+// theImageSteps are the container steps that build one image. A run that assembles an index runs
+// further container steps that clear its manifest list and export the index, and a case reading which
+// images a run built reads only the builds.
+func theImageSteps(ran []step) []step {
+	images := []step{}
+
+	for _, s := range ran {
+		if s.label == subContainer && len(s.args) > 0 && s.args[0] == "build" {
+			images = append(images, s)
+		}
+	}
+
+	return images
+}
+
+// theStepWords render a recorded run as the words that say what each step did. Every container step
+// carries the same label, so a case reading the order a run cleared its list, built its images, and
+// exported its index reads them apart.
+func theStepWords(ran []step) []string {
+	words := []string{}
+
+	for _, s := range ran {
+		if s.label == subContainer {
+			words = append(words, "container "+theContainerStepWord(s))
+
+			continue
+		}
+
+		words = append(words, s.label+" "+s.result)
+	}
+
+	return words
+}
+
+// theContainerStepWord names a container step by what it asks the container program to do. The list
+// a clearing step names is its last argument, whatever flags the program takes beside it.
+func theContainerStepWord(s step) string {
+	switch {
+	case len(s.args) > 2 && s.args[0] == "manifest" && s.args[1] == "rm":
+		return "clear " + s.args[len(s.args)-1]
+	case len(s.args) > 2 && s.args[0] == "manifest" && s.args[1] == "push":
+		return "export " + s.result
+	case len(s.args) > 1 && s.args[0] == "buildx":
+		return "export " + s.result
+	default:
+		return "build " + s.result
+	}
+}
+
+// theStepExportsIndex reports the one step of a container run that writes the layout file: the podman
+// route pushes its manifest list into an archive, the docker route exports the layout from a buildx
+// build.
+func theStepExportsIndex(s step) bool {
+	if s.label != subContainer || len(s.args) < 2 {
+		return false
+	}
+
+	return (s.args[0] == "manifest" && s.args[1] == "push") || s.args[0] == "buildx"
+}
+
+// theIndexRun records every step a container run asked for and writes the layout file the export step
+// names. The file goes where the step says it lands and nowhere else, which is a path no run reaches
+// unless the run made the directory for it first, and the entries a case hands this stand-in are what
+// the run then reads its digests out of.
+func theIndexRun(t *testing.T, ran *[]step, repo string, named []theIndexFixture, wrote *theIndexArtifact) func(step) error {
+	return func(s step) error {
+		*ran = append(*ran, s)
+
+		if !theStepExportsIndex(s) {
+			return nil
+		}
+
+		*wrote = theOCILayoutFile(t, filepath.Join(repo, s.result), named)
+
+		return nil
+	}
+}
+
+// theIndexFile is the layout file a container run building the released version writes: build output
+// under the directory build output lives in, named from the tag word the images are tagged with.
+const theIndexFile = ".build/rdio-scanner-8.0.0.oci"
+
+// theRunThatWritesItsIndex gives a container run a tree it can write its layout file into, and a
+// stand-in that writes one when its export step asks: a case reading what an assembling run did reads a
+// run that reached the end of itself. What it hands back is the artifact the stand-in writes, because
+// the run reads its digests out of that file.
+func theRunThatWritesItsIndex(t *testing.T, tl *tool, ran *[]step) *theIndexArtifact {
+	t.Helper()
+
+	repo := t.TempDir()
+
+	tl.repo = repo
+
+	wrote := theIndexArtifact{}
+
+	tl.execute = theIndexRun(t, ran, repo, theThreeIndexFixtures(), &wrote)
+
+	return &wrote
+}
+
+// theIndexReport is the line a run that assembled an index writes about the file it wrote, built from
+// the artifact the case itself wrote: the layout file, the digest of the image index inside it, and one
+// manifest digest for each architecture the index names, in the order the tool lists the architectures.
+func theIndexReport(wrote theIndexArtifact) string {
+	parts := []string{theIndexFile + " index " + wrote.digest}
+
+	for _, target := range containerTargets {
+		platform := containerPlatformFor(target)
+
+		parts = append(parts, platform+" "+wrote.byWord[platform])
+	}
+
+	return theRunLine(subContainer, strings.Join(parts, ", "))
+}
+
+// theRunLine is one line of a run's log: the word that says what kind of line it is and what it says.
+func theRunLine(label string, says string) string {
+	return fmt.Sprintf("%-7s %s", label, says)
+}
+
+// theLeftoverIndexLine is the line an assembling podman run that never reached its export leaves in
+// this machine's store, and the command the operator types to clear it. The run names the command and
+// runs none of it.
+func theLeftoverIndexLine() string {
+	return theRunLine("note", "rdio-scanner:8.0.0"+theManifestListSuffix+" is left in podman's store: podman manifest rm rdio-scanner:8.0.0"+theManifestListSuffix)
+}
+
+// A run that assembled an index reports what the file it wrote holds: the digest of the image index
+// inside it, and the digest of each architecture's manifest, read out of the file with no container
+// program asked. The directory the file lands in is the run's own doing.
+func TestAContainerRunAskedForAllThreeReportsTheDigestsItReadsOutOfTheIndexFileItWrote(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+
+	wrote := theRunThatWritesItsIndex(t, tl, ran)
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0: %s", code, out.String())
+	}
+
+	if !strings.Contains(out.String(), theIndexReport(*wrote)) {
+		t.Errorf("the run's log %q does not carry %q: the run reports the index it assembled out of the file it wrote", out.String(), theIndexReport(*wrote))
+	}
+
+	if !strings.Contains(out.String(), theRunLine(subContainer, "3 images written, index "+theIndexFile)) {
+		t.Errorf("the run's log %q does not close by naming the index it wrote beside the images it wrote", out.String())
+	}
+
+	if _, err := os.Stat(filepath.Join(tl.repo, theIndexFile)); err != nil {
+		t.Errorf("the run wrote no %s: %v, and the export was asked to write it", theIndexFile, err)
+	}
+}
+
+// An export that said no after the three images were written is a run that wrote images and assembled
+// no index: it ends 3 naming the index it does not have, and on the podman route it names the manifest
+// list its legs left in this machine's store and the command that clears it. The run clears nothing
+// itself: the list is handed back to the operator.
+func TestAContainerRunAskedForAllThreeWhoseExportFailedEndsNamingTheMissingIndex(t *testing.T) {
+	repo := t.TempDir()
+
+	tl, out, ran := fakeRun(released, "")
+
+	tl.repo = repo
+
+	tl.execute = func(s step) error {
+		if theStepExportsIndex(s) {
+			return errors.New("the container program said no")
+		}
+
+		*ran = append(*ran, s)
+
+		return nil
+	}
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 3 {
+		t.Fatalf("exit code = %d, want 3: %d images were written and no index was assembled", code, len(theImageSteps(*ran)))
+	}
+
+	if len(theImageSteps(*ran)) != len(containerTargets) {
+		t.Fatalf("the run built %v, want the three images the export failed after", theImageSteps(*ran))
+	}
+
+	if !strings.Contains(out.String(), theRunLine(subContainer, "3 images written, no index "+theIndexFile)) {
+		t.Errorf("the run's log %q does not name the index it did not write", out.String())
+	}
+
+	if !strings.Contains(errout.String(), theIndexFile) {
+		t.Errorf("the failure %q does not name the index file the export was writing", errout.String())
+	}
+
+	if !strings.Contains(out.String(), theLeftoverIndexLine()) {
+		t.Errorf("the run's log %q does not name the manifest list its legs left in the store and the command that clears it", out.String())
+	}
+
+	clears := 0
+
+	for _, s := range *ran {
+		if theContainerStepWord(s) == "clear rdio-scanner:8.0.0"+theManifestListSuffix {
+			clears++
+		}
+	}
+
+	if clears != 1 {
+		t.Errorf("the run ran %d steps clearing the list, want the one before the legs: a run that never exported leaves the list for the operator to clear", clears)
+	}
+}
+
+// A layout file that disagrees with the index the run was asked to assemble is an index the run
+// refuses to report: the file is there, the index inside it names an entry no container image is built
+// for, and the run ends 3 naming the index it has not got. The list its legs filled is already cleared,
+// because the file that names no index was written.
+func TestAContainerRunAskedForAllThreeRefusesAnIndexFileThatNamesNoArchitectureItBuilt(t *testing.T) {
+	repo := t.TempDir()
+
+	wrote := theIndexArtifact{}
+
+	tl, out, ran := fakeRun(released, "")
+
+	tl.repo = repo
+
+	// An attestation entry rides in an index a container program wrote without the flags that turn
+	// it off, and it names no architecture a container image is built for.
+	named := append(theThreeIndexFixtures(), theIndexFixture{platform: "unknown/unknown"})
+
+	tl.execute = theIndexRun(t, ran, repo, named, &wrote)
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 3 {
+		t.Fatalf("exit code = %d, want 3: the file was written and the index inside it is refused", code)
+	}
+
+	if !strings.Contains(out.String(), theRunLine(subContainer, "3 images written, no index "+theIndexFile)) {
+		t.Errorf("the run's log %q does not name the index it refused to report", out.String())
+	}
+
+	if !strings.Contains(errout.String(), "unknown/unknown") {
+		t.Errorf("the failure %q does not name the entry the index carries and the run refuses", errout.String())
+	}
+
+	if strings.Contains(out.String(), theLeftoverIndexLine()) {
+		t.Errorf("the run's log %q names a leftover manifest list, and a run that wrote its file cleared the list already", out.String())
+	}
+
+	if len(theImageSteps(*ran)) != len(containerTargets) {
+		t.Fatalf("the run built %v, want the three images whose index was refused", theImageSteps(*ran))
+	}
+}
+
+// The docker route assembles the same index out of the same three legs, exporting the layout from one
+// buildx build: no manifest list is named anywhere, because the docker route has none, and what the
+// run reports afterwards is the same reading of the same file.
+func TestADockerRunAskedForAllThreeExportsTheIndexFromItsBuildxBuildAndReportsIt(t *testing.T) {
+	t.Setenv(containerProgramEnv, dockerProgram)
+
+	repo := t.TempDir()
+
+	wrote := theIndexArtifact{}
+
+	tl, out, ran := fakeRun(released, "")
+
+	tl.repo = repo
+
+	asked := []string{}
+
+	tl.theRun = theHostThatAnswers([]theHostAnswer{
+		{askedFor: "buildx version", out: theBuildxVersionReport},
+		{askedFor: "buildx inspect", out: theDockerBuilderReport("docker-container", theThreeContainerPlatforms...)},
+	}, &asked)
+
+	tl.execute = theIndexRun(t, ran, repo, theThreeIndexFixtures(), &wrote)
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0: %s", code, out.String())
+	}
+
+	want := []string{
+		"scanner " + appBundle[subScanner],
+		"admin " + appBundle[subAdmin],
+		"ffmpeg linux-amd64",
+		"ffmpeg linux-arm",
+		"ffmpeg linux-arm64",
+		"container build rdio-scanner:8.0.0-linux-amd64",
+		"container build rdio-scanner:8.0.0-linux-arm",
+		"container build rdio-scanner:8.0.0-linux-arm64",
+		"container export " + theIndexFile,
+	}
+
+	got := theStepWords(*ran)
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the docker run asked for\n  %v\nwant\n  %v: the three legs are what they are today, and the export build comes after them", got, want)
+	}
+
+	if !strings.Contains(out.String(), theIndexReport(wrote)) {
+		t.Errorf("the run's log %q does not carry %q: the docker route reports the index it exported the same way", out.String(), theIndexReport(wrote))
+	}
+
+	if !strings.Contains(out.String(), theRunLine(subContainer, "3 images written, index "+theIndexFile)) {
+		t.Errorf("the run's log %q does not close by naming the index it wrote", out.String())
+	}
+
+	for _, forbidden := range []string{theManifestListSuffix, theLeftoverIndexLine()} {
+		if strings.Contains(out.String(), forbidden) {
+			t.Errorf("the run's log %q names %q, and the docker route assembles no manifest list", out.String(), forbidden)
+		}
+	}
+}
+
+// A container run that assembles no index writes no layout file: it creates no directory for one, names
+// no manifest list and no buildx, and reports no digest beside the one image it built.
+func TestASingleTargetContainerRunWritesNoIndexFileAndReportsNoDigest(t *testing.T) {
+	for _, target := range containerTargets {
+		repo := t.TempDir()
+
+		tl, out, ran := fakeRun(released, "")
+
+		tl.repo = repo
+
+		if code := tl.run([]string{"container", target}, out); code != 0 {
+			t.Fatalf("container %s answers exit %d, want 0: %s", target, code, out.String())
+		}
+
+		if _, err := os.Stat(filepath.Join(repo, theIndexFile)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("container %s wrote %s: %v, and a run that assembles no index writes no layout file", target, theIndexFile, err)
+		}
+
+		for _, s := range theImageSteps(*ran) {
+			for _, arg := range s.args {
+				if strings.Contains(arg, "manifest") || strings.Contains(arg, "buildx") {
+					t.Errorf("the container %s run carries %q, and a run that assembles no index names no list and no buildx", target, arg)
+				}
+			}
+		}
+
+		if strings.Contains(out.String(), "sha256:") || strings.Contains(out.String(), theManifestListSuffix) {
+			t.Errorf("the container %s run's log %q names an index or a manifest list, and a single image assembles neither", target, out.String())
+		}
+
+		if !strings.Contains(out.String(), theRunLine(subContainer, "1 image written")) {
+			t.Errorf("the container %s run's log %q does not close the way a single image run closes today", target, out.String())
+		}
+	}
+}
+
+// theHostAnswer is one command a container run asks of the machine it runs on, and what this
+// stand-in host answers it. Commands are matched by the word that tells them apart, because a gate
+// case reads which questions were asked rather than the order they were asked in.
+type theHostAnswer struct {
+	askedFor string
+	out      string
+	err      error
+}
+
+// theHostThatAnswers answers the commands an assembling run asks of the host and records every
+// command line it was asked: a refusal is half of what a gate case reads, and the other half is
+// that the run asked nothing else of the host and ran no step.
+func theHostThatAnswers(answered []theHostAnswer, asked *[]string) command {
+	return func(argv []string, stdin []byte) ([]byte, error) {
+		line := strings.Join(argv, " ")
+
+		*asked = append(*asked, line)
+
+		for _, a := range answered {
+			if strings.Contains(line, a.askedFor) {
+				return []byte(a.out), a.err
+			}
+		}
+
+		return []byte(theContainerMachineHasTheseCores + "\n"), nil
+	}
+}
+
+// theBuildxVersionReport and theDockerBuilderReport are what docker answers for the two readings
+// of a host that assembles through buildx, copied from the words this machine's docker writes.
+const theBuildxVersionReport = "github.com/docker/buildx v0.34.0 3e73561e39785683b31b05eeab1ef645be44ca42\n"
+
+func theDockerBuilderReport(driver string, platforms ...string) string {
+	return "Name:          default\nDriver:        " + driver +
+		"\n\nNodes:\nName:             default\nEndpoint:         default\nStatus:           running" +
+		"\nBuildKit version: v0.30.0\nPlatforms:        " + strings.Join(platforms, ", ") + "\n"
+}
+
+// theThreeContainerPlatforms are the platforms a run asked for all three architectures builds for,
+// in the order the tool lists the architectures.
+var theThreeContainerPlatforms = []string{"linux/amd64", "linux/arm/v7", "linux/arm64"}
+
+// theArmLauncher is the program this host runs ARM instructions with, and the name the refusal of a
+// host that cannot run them carries: it is what the operator installs, and so what the refusal has
+// to name.
+const theArmLauncher = "qemu-user-static"
+
+// The remedy for a host whose docker builder cannot export the layout file is a builder the operator
+// creates themselves: the tool names the line and runs none of it.
+const theBuilderRemedy = "docker buildx create --name rdio-scanner --driver docker-container --use"
+
+// A docker run asked for all three architectures on a host whose current builder cannot export an OCI
+// layout is refused before it compiles anything: the builder that exports the index is a host change
+// the operator makes, and the refusal carries the line they type.
+func TestADockerRunAskedForAllThreeIsRefusedWhenItsBuilderCannotExportTheIndex(t *testing.T) {
+	t.Setenv(containerProgramEnv, dockerProgram)
+
+	tl, out, ran := fakeRun(released, "")
+
+	asked := []string{}
+
+	tl.theRun = theHostThatAnswers([]theHostAnswer{
+		{askedFor: "buildx version", out: theBuildxVersionReport},
+		{askedFor: "buildx inspect", out: theDockerBuilderReport("docker", theThreeContainerPlatforms...)},
+	}, &asked)
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1: a host that cannot export the index is refused, not half-built", code)
+	}
+
+	if steps := theBuildSteps(*ran); len(steps) != 0 {
+		t.Errorf("the refused run ran %v, and a host that cannot export the index compiles no ffmpeg and builds no image", steps)
+	}
+
+	msg := errout.String()
+
+	for _, want := range []string{`driver "docker"`, "OCI", theBuilderRemedy} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the refusal %q does not name %q: it has to say what the host lacks and the line that supplies it", msg, want)
+		}
+	}
+
+	if !carriesTheAsk(asked, "buildx version") || !carriesTheAsk(asked, "buildx inspect") {
+		t.Errorf("the run asked %v, and a docker run that assembles reads its builder before it builds", asked)
+	}
+
+	for _, line := range asked {
+		if strings.Contains(line, " build ") || strings.Contains(line, "-t ") {
+			t.Errorf("the run asked %q, and a refused run asks the host for no image build", line)
+		}
+	}
+}
+
+// A host without buildx cannot assemble at all: the run asks buildx its first question, and the
+// answer that it is not there ends the run there.
+func TestADockerRunAskedForAllThreeIsRefusedWhenTheHostHasNoBuildx(t *testing.T) {
+	t.Setenv(containerProgramEnv, dockerProgram)
+
+	tl, out, ran := fakeRun(released, "")
+
+	asked := []string{}
+
+	tl.theRun = theHostThatAnswers([]theHostAnswer{
+		{askedFor: "buildx version", err: errors.New("docker: 'buildx' is not a docker command")},
+	}, &asked)
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+
+	if steps := theBuildSteps(*ran); len(steps) != 0 {
+		t.Errorf("the refused run ran %v, and a host with no buildx assembles no ffmpeg and no image", steps)
+	}
+
+	msg := errout.String()
+
+	if !strings.Contains(msg, "buildx") {
+		t.Errorf("the refusal %q does not name buildx, the tool the docker route assembles through", msg)
+	}
+
+	if !strings.Contains(msg, "install") {
+		t.Errorf("the refusal %q names no host change that supplies buildx", msg)
+	}
+
+	if carriesTheAsk(asked, "buildx inspect") {
+		t.Errorf("the run asked %v, and a host that has no buildx is refused at that answer", asked)
+	}
+}
+
+// A builder that declares no ARMv7 among the platforms it can target cannot build the linux-arm
+// image: the refusal names the target, the platform that target builds for, and the launcher that
+// makes a host able to run it.
+func TestADockerRunAskedForAllThreeIsRefusedWhenItsBuilderDeclaresNoArmV7(t *testing.T) {
+	t.Setenv(containerProgramEnv, dockerProgram)
+
+	tl, out, ran := fakeRun(released, "")
+
+	asked := []string{}
+
+	tl.theRun = theHostThatAnswers([]theHostAnswer{
+		{askedFor: "buildx version", out: theBuildxVersionReport},
+		{askedFor: "buildx inspect", out: theDockerBuilderReport("docker-container", "linux/amd64", "linux/arm64")},
+	}, &asked)
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+
+	if steps := theBuildSteps(*ran); len(steps) != 0 {
+		t.Errorf("the refused run ran %v, and a builder that declares no ARMv7 is told so before any layer is compiled", steps)
+	}
+
+	msg := errout.String()
+
+	for _, want := range []string{"linux-arm", "linux/arm/v7", theArmLauncher} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the refusal %q does not name %q: the run has to say which target the host cannot build", msg, want)
+		}
+	}
+}
+
+// A podman run asked for all three architectures proves this host can execute each foreign
+// architecture before it builds, and the proof is one run of the base image for that platform: a host
+// that cannot run it is refused naming the target, its platform, and the launcher it lacks, with no
+// ffmpeg compiled and no image asked for.
+func TestAPodmanRunAskedForAllThreeIsRefusedWhenTheHostCannotRunTheArmPlatform(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+	tl.machine = func() host { return host{goos: "linux", goarch: "amd64", cpus: 4} }
+
+	asked := []string{}
+
+	tl.theRun = theHostThatAnswers([]theHostAnswer{
+		{askedFor: "--platform=linux/arm/v7", err: errors.New("exec format error")},
+		{askedFor: "--platform=linux/arm64", out: "aarch64\n"},
+	}, &asked)
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+
+	if steps := theBuildSteps(*ran); len(steps) != 0 {
+		t.Errorf("the refused run ran %v, and a host that cannot run ARM builds no ffmpeg and no image", steps)
+	}
+
+	msg := errout.String()
+
+	for _, want := range []string{"linux-arm", "linux/arm/v7", theArmLauncher, "uname -m"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the refusal %q does not name %q: the operator has to be able to run the check the run ran", msg, want)
+		}
+	}
+
+	if checks := thePlatformChecks(asked); len(checks) != 1 {
+		t.Errorf("the run asked the host %v, and a run refused at the first platform it cannot run asks for no second proof", checks)
+	}
+}
+
+// The two architectures a host is not are the two a podman run proves: the machine's own
+// architecture needs no proof, and both proofs run before any ffmpeg is compiled.
+func TestAPodmanRunAskedForAllThreeProvesTheTwoForeignArchitecturesBeforeItBuilds(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+	tl.machine = func() host { return host{goos: "linux", goarch: "amd64", cpus: 4} }
+
+	theRunThatWritesItsIndex(t, tl, ran)
+
+	asked := []string{}
+
+	tl.theRun = theHostThatAnswers([]theHostAnswer{
+		{askedFor: "--platform=linux/arm/v7", out: "armv7l\n"},
+		{askedFor: "--platform=linux/arm64", out: "aarch64\n"},
+	}, &asked)
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0: %s", code, out.String())
+	}
+
+	want := []string{"linux/arm/v7", "linux/arm64"}
+
+	got := thePlatformChecks(asked)
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the run proved the platforms %v, want %v: the architecture this machine is needs no proof, and the two it is not are proved in the order the tool lists the architectures",
+			got, want)
+	}
+
+	images := theImageSteps(*ran)
+
+	if len(images) != len(containerTargets) {
+		t.Errorf("the run built %d images after it proved the host, want one for each of the three architectures: %v", len(images), *ran)
+	}
+}
+
+// A single target assembles no index, so it asks the host none of the questions an assembling run
+// asks: neither program checks a builder or a foreign architecture for it, and the build runs.
+func TestASingleTargetContainerRunAsksTheHostNoAssemblyQuestion(t *testing.T) {
+	for _, program := range []string{podmanProgram, dockerProgram} {
+		t.Setenv(containerProgramEnv, program)
+
+		tl, out, ran := fakeRun(released, "")
+
+		asked := []string{}
+
+		tl.theRun = theHostThatAnswers([]theHostAnswer{
+			{askedFor: "buildx", err: errors.New("this host answers no buildx question")},
+			{askedFor: "uname -m", err: errors.New("this host runs no foreign architecture")},
+		}, &asked)
+
+		tl.errout = &bytes.Buffer{}
+
+		if code := tl.run([]string{"container", "linux-arm"}, out); code != 0 {
+			t.Fatalf("%s container linux-arm answers exit %d, want 0: %s", program, code, out.String())
+		}
+
+		for _, line := range asked {
+			if strings.Contains(line, "buildx") || strings.Contains(line, "uname -m") {
+				t.Errorf("the %s run asked the host %q, and a run that assembles no index asks no assembly question", program, line)
+			}
+		}
+
+		images := 0
+
+		for _, s := range *ran {
+			if s.label == subContainer {
+				images++
+			}
+		}
+
+		if images != 1 {
+			t.Errorf("the %s run built %d images, want the one image it was asked for: %v", program, images, *ran)
+		}
+	}
+}
+
+// carriesTheAsk reports whether a recorded host reading asked a command naming a word.
+func carriesTheAsk(asked []string, word string) bool {
+	for _, line := range asked {
+		if strings.Contains(line, word) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// theBuildSteps are the steps a refused container run must not have run: the ffmpeg compiles and
+// the image builds, which are the two costs a host check exists to avoid paying. Both bundles are
+// built before any container phase and carry no architecture, so they are not what these cases read.
+func theBuildSteps(ran []step) []step {
+	steps := []step{}
+
+	for _, s := range ran {
+		if s.label == subFFmpeg || s.label == subContainer {
+			steps = append(steps, s)
+		}
+	}
+
+	return steps
+}
+
+// thePlatformChecks are the platforms a recorded run asked the host to prove, in the order it asked.
+func thePlatformChecks(asked []string) []string {
+	platforms := []string{}
+
+	for _, line := range asked {
+		for _, arg := range strings.Split(line, " ") {
+			if value, found := strings.CutPrefix(arg, "--platform="); found && strings.Contains(line, "uname -m") {
+				platforms = append(platforms, value)
+			}
+		}
+	}
+
+	return platforms
 }
 
 // A clean run removes the release output, the dependencies, and both bundles' contents, and

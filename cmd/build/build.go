@@ -467,6 +467,15 @@ func (t tool) runContainer(o options, version buildinfo.Version, stdout io.Write
 		return fail(t.errout, err)
 	}
 
+	// an index is assembled only out of more than one architecture, so only a run that resolved
+	// more than one target is asked what its host can do: three images compiled and then refused
+	// at the export is the failure these readings answer before any of it costs anything.
+	if len(targets) > 1 {
+		if err := t.checkContainerAssembly(targets, program); err != nil {
+			return fail(t.errout, err)
+		}
+	}
+
 	// a single target's log needs no prefix;
 	// every line of a three-architecture run has to name the target it is about.
 	prefix := len(targets) > 1
@@ -508,6 +517,23 @@ func (t tool) runContainer(o options, version buildinfo.Version, stdout io.Write
 		ready = append(ready, tr)
 	}
 
+	// The podman route gathers the three architectures into one manifest list as it builds them, so
+	// the list name has to be free before the first build fills it: the program refuses a name an
+	// image or an earlier run's list already holds, and a leftover list would be one this run adds to.
+	assembling := len(targets) > 1 && program == podmanProgram
+
+	listFilled := false
+
+	listCleared := !assembling
+
+	if assembling && len(ready) > 0 {
+		if err := t.execute(containerManifestClearStep(t.repo, version, program)); err != nil {
+			return fail(t.errout, fmt.Errorf("%s cleared no %s: %w", program, containerManifestListFor(version), err))
+		}
+
+		listFilled = true
+	}
+
 	// the image builds run one after another and not at once: each one compiles a server
 	// inside its own image, and the container program builds one image at a time.
 	var written []string
@@ -537,22 +563,140 @@ func (t tool) runContainer(o options, version buildinfo.Version, stdout io.Write
 		written = append(written, s.result)
 	}
 
+	// An index is assembled only out of the whole set of images: an index naming two of the three
+	// architectures would be published as the image for the third.
+	var assembly *theIndexAssembly
+
+	if len(none) == 0 && failed == nil && len(targets) > 1 {
+		one := t.assembleContainerIndex(version, program)
+
+		assembly = &one
+
+		listCleared = one.cleared
+	}
+
 	if failed != nil {
+		if listFilled && !listCleared {
+			noteLeftoverList(stdout, version, program)
+		}
+
 		return fail(t.errout, failed)
+	}
+
+	if assembly != nil {
+		if assembly.err != nil {
+			fmt.Fprintf(t.errout, "error  %v\n", assembly.err)
+		} else {
+			fmt.Fprintf(stdout, "%-7s %s\n", subContainer, containerIndexReading(assembly.file, assembly.index))
+		}
+
+		if listFilled && !listCleared {
+			noteLeftoverList(stdout, version, program)
+		}
+	}
+
+	// A run asked for all three architectures is finished only when the index those three images
+	// are the architectures of is there too: the index is the artifact the operator publishes.
+	indexWord := ""
+
+	if assembly != nil {
+		if assembly.err == nil {
+			indexWord = ", index " + assembly.file
+		} else {
+			indexWord = ", no index " + assembly.file
+		}
+	} else if len(targets) > 1 {
+		indexWord = ", no index " + containerIndexFileFor(version)
 	}
 
 	// the exit status says whether the images asked for are the images written:
 	// an incomplete set of images is a fact a script has to tell from a broken step.
 	if len(none) == 0 {
-		fmt.Fprintf(stdout, "%-7s %s written\n", subContainer, imagesWord(len(written)))
+		fmt.Fprintf(stdout, "%-7s %s written%s\n", subContainer, imagesWord(len(written)), indexWord)
 
-		return 0
+		if assembly == nil || assembly.err == nil {
+			return 0
+		}
+
+		return 3
 	}
 
-	fmt.Fprintf(stdout, "%-7s %s written, %s wrote none: %s\n",
-		subContainer, imagesWord(len(written)), targetsWord(len(none)), strings.Join(none, ", "))
+	fmt.Fprintf(stdout, "%-7s %s written, %s wrote none: %s%s\n",
+		subContainer, imagesWord(len(written)), targetsWord(len(none)), strings.Join(none, ", "), indexWord)
 
 	return 3
+}
+
+// theIndexAssembly is what a run that set out to assemble an index learned doing it: the index it read
+// back out of the file it wrote, whether the manifest list the podman route filled is out of the
+// machine's store again, and what stopped it when something did.
+type theIndexAssembly struct {
+	index   containerIndex
+	file    string
+	cleared bool
+	err     error
+}
+
+// assembleContainerIndex writes the one layout file the run's images are gathered into and reads back
+// what it holds. The route is the one the resolved program provides: podman pushes the manifest list its
+// three builds filled into the file and then drops that list from the store, docker exports the layout
+// from one build of the three architectures. The output directory is made here because the file is the
+// only build output this run writes outside a container, and the reading is done out of the file rather
+// than asked of the program that wrote it: the numbers reported are the ones the artifact holds.
+func (t tool) assembleContainerIndex(version buildinfo.Version, program string) theIndexAssembly {
+	file := containerIndexFileFor(version)
+
+	// The docker route assembles no list, so it has nothing to clear.
+	out := theIndexAssembly{file: file, cleared: program != podmanProgram}
+
+	if err := os.MkdirAll(filepath.Join(t.repo, buildDir), 0o755); err != nil {
+		out.err = fmt.Errorf("%s made no %s: %v", program, buildDir, err)
+
+		return out
+	}
+
+	s := containerIndexBuildStep(t.repo, version, t.now(), program)
+
+	if program == podmanProgram {
+		s = containerManifestExportStep(t.repo, version, program)
+	}
+
+	if err := t.execute(s); err != nil {
+		out.err = fmt.Errorf("%s wrote no index %s: %w", program, file, err)
+
+		return out
+	}
+
+	// The list is working state for the one file its export wrote: it goes as soon as the file is
+	// there, so the machine keeps the images and not the list.
+	if program == podmanProgram {
+		if err := t.execute(containerManifestClearStep(t.repo, version, program)); err != nil {
+			out.err = fmt.Errorf("%s cleared no %s: %w", program, containerManifestListFor(version), err)
+
+			return out
+		}
+
+		out.cleared = true
+	}
+
+	index, err := readContainerIndex(filepath.Join(t.repo, file))
+	if err != nil {
+		out.err = fmt.Errorf("index %s: %w", file, err)
+
+		return out
+	}
+
+	out.index = index
+
+	return out
+}
+
+// noteLeftoverList says which manifest list a run left in this machine's store and the command that
+// clears it. The run names the command and runs none of it: what the store holds is the operator's.
+func noteLeftoverList(stdout io.Writer, version buildinfo.Version, program string) {
+	list := containerManifestListFor(version)
+
+	fmt.Fprintf(stdout, "%-7s %s is left in %s's store: %s manifest rm %s\n", "note", list, program, program, list)
 }
 
 // theWorkOfOneTarget is what one release worker says when it finishes:
