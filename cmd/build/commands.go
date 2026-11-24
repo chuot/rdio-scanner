@@ -564,6 +564,20 @@ func containerPlatformFor(target string) string {
 	return platform
 }
 
+// containerPlatformRank is where a platform an image index names sits in the order the release
+// matrix names the architectures, and a negative rank is a platform no container image is built
+// for. The rank is what lets a run report an index in its own order whatever order the container
+// program wrote the entries in, and what names an entry that belongs to no target.
+func containerPlatformRank(platform string) int {
+	for rank, target := range containerTargets {
+		if containerPlatformFor(target) == platform {
+			return rank
+		}
+	}
+
+	return -1
+}
+
 // manifestListSuffix marks the manifest list a container run assembles as its own work: no
 // published tag and no architecture suffix carries it, so the list can never be mistaken for
 // an image a host pulls or runs.

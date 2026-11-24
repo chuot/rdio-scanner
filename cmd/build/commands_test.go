@@ -16,8 +16,13 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -480,6 +485,425 @@ func TestTheDockerRunAskedForAllThreeAssemblesTheIndexInOneExportedBuild(t *test
 // theIndexFileSuffix names the file the run writes as what it is: an OCI layout archive, not an
 // image a host can run.
 const theIndexFileSuffix = ".oci"
+
+// theIndexFixture is one manifest an assembled index names, spelled the way the tool spells the
+// platform it was built for: linux/arm/v7 is the index's arm entry carrying variant v7. A fixture
+// that records itself under recordAs is stored with a digest that is not its bytes' digest, which is
+// how a written index disagrees with itself.
+type theIndexFixture struct {
+	platform string
+	recordAs string
+}
+
+// theIndexArtifact is what a layout file holds, spelled the way a run reports it: the file's path,
+// the digest of the image index inside it, and the digest of each manifest by the platform word it
+// was written for.
+type theIndexArtifact struct {
+	path   string
+	digest string
+	byWord map[string]string
+}
+
+// theThreeIndexFixtures are the three architectures a container image is built for, spelled as the
+// index spells them.
+func theThreeIndexFixtures() []theIndexFixture {
+	fixtures := []theIndexFixture{}
+
+	for _, target := range containerTargets {
+		platform := containerPlatformFor(target)
+
+		fixtures = append(fixtures, theIndexFixture{platform: platform})
+	}
+
+	return fixtures
+}
+
+// theOCILayoutFile writes an OCI layout file at path in the shape both container programs write one:
+// an index.json naming a single image index, that index naming one manifest per fixture entry, and a
+// blob for every digest either names.
+func theOCILayoutFile(t *testing.T, path string, named []theIndexFixture) theIndexArtifact {
+	t.Helper()
+
+	manifests := []map[string]any{}
+
+	bodies := map[string][]byte{}
+
+	byWord := map[string]string{}
+
+	for _, one := range named {
+		word := strings.Split(one.platform, "/")
+
+		if len(word) < 2 {
+			t.Fatalf("the fixture platform %q is not spelled os/architecture", one.platform)
+		}
+
+		platform := map[string]string{"os": word[0], "architecture": word[1]}
+
+		if len(word) > 2 {
+			platform["variant"] = word[2]
+		}
+
+		// a manifest names the config blob of the image it describes, which is what makes two
+		// platforms two different sets of bytes, and so two different digests, the way a layout
+		// a container program wrote has them.
+		configBody, err := json.Marshal(map[string]string{
+			"architecture": platform["architecture"],
+			"os":           platform["os"],
+		})
+		if err != nil {
+			t.Fatalf("json.Marshal(the config of %s): %v", one.platform, err)
+		}
+
+		configDigest := "sha256:" + theDigestOf(configBody)
+
+		body, err := json.Marshal(map[string]any{
+			"mediaType":     "application/vnd.oci.image.manifest.v1+json",
+			"schemaVersion": 2,
+			"config": map[string]any{
+				"mediaType": "application/vnd.oci.image.config.v1+json",
+				"digest":    configDigest,
+				"size":      len(configBody),
+			},
+		})
+		if err != nil {
+			t.Fatalf("json.Marshal(the manifest for %s): %v", one.platform, err)
+		}
+
+		digest := "sha256:" + theDigestOf(body)
+
+		// a fixture recorded under a name its own bytes do not hash to is an index whose entry
+		// disagrees with the blob it points at, which is the shape of a file no run should report.
+		if one.recordAs != "" {
+			digest = one.recordAs
+		}
+
+		entry := map[string]any{
+			"mediaType": "application/vnd.oci.image.manifest.v1+json",
+			"digest":    digest,
+			"size":      len(body),
+			"platform":  platform,
+		}
+
+		if platform["os"] == "unknown" && platform["architecture"] == "unknown" {
+			// unknown/unknown is how a BuildKit attestation entry is spelled, and the
+			// annotations are what a real one carries with it: an entry like this names no
+			// architecture a container image was built for.
+			entry["annotations"] = map[string]string{
+				"vnd.docker.reference.digest": theDigestOf([]byte("the image this attestation is about")),
+				"vnd.docker.reference.type":   "attestation-manifest",
+			}
+		}
+
+		manifests = append(manifests, entry)
+
+		byWord[one.platform] = digest
+
+		bodies[digest] = body
+		bodies[configDigest] = configBody
+	}
+
+	index := map[string]any{
+		"schemaVersion": 2,
+		"mediaType":     "application/vnd.oci.image.index.v1+json",
+		"manifests":     manifests,
+	}
+
+	indexBody, err := json.Marshal(index)
+	if err != nil {
+		t.Fatalf("json.Marshal(the image index): %v", err)
+	}
+
+	indexDigest := "sha256:" + theDigestOf(indexBody)
+
+	bodies[indexDigest] = indexBody
+
+	top := map[string]any{
+		"schemaVersion": 2,
+		"manifests": []map[string]any{{
+			"mediaType": "application/vnd.oci.image.index.v1+json",
+			"digest":    indexDigest,
+			"size":      len(indexBody),
+		}},
+	}
+
+	topBody, err := json.Marshal(top)
+	if err != nil {
+		t.Fatalf("json.Marshal(index.json): %v", err)
+	}
+
+	entries := []theLayoutEntry{
+		{name: "oci-layout", body: []byte(`{"imageLayoutVersion":"1.0.0"}`)},
+		{name: "index.json", body: topBody},
+	}
+
+	for digest, body := range bodies {
+		entries = append(entries, theLayoutEntry{name: theBlobPath(digest), body: body})
+	}
+
+	theWriteLayoutFile(t, path, entries)
+
+	return theIndexArtifact{path: path, digest: indexDigest, byWord: byWord}
+}
+
+// theBlobPath is where an OCI layout stores the bytes a digest names.
+func theBlobPath(digest string) string {
+	return "blobs/sha256/" + strings.TrimPrefix(digest, "sha256:")
+}
+
+// theLayoutEntries reads every file a layout archive holds, which is how a case changes what a
+// written file holds without writing a second archive by hand.
+func theLayoutEntries(t *testing.T, path string) []theLayoutEntry {
+	t.Helper()
+
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("os.Open(%s): %v", path, err)
+	}
+
+	defer file.Close()
+
+	reader := tar.NewReader(file)
+
+	entries := []theLayoutEntry{}
+
+	for {
+		hdr, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			t.Fatalf("reading %s: %v", path, err)
+		}
+
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+
+		body, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatalf("reading %s from %s: %v", hdr.Name, path, err)
+		}
+
+		entries = append(entries, theLayoutEntry{name: hdr.Name, body: body})
+	}
+
+	return entries
+}
+
+// theLayoutEntry is one file an OCI layout archive holds.
+type theLayoutEntry struct {
+	name string
+	body []byte
+}
+
+// theWriteLayoutFile writes the entries as a tar archive, which is the container format an OCI layout
+// is stored in.
+func theWriteLayoutFile(t *testing.T, path string, entries []theLayoutEntry) {
+	t.Helper()
+
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("os.Create(%s): %v", path, err)
+	}
+
+	defer file.Close()
+
+	writer := tar.NewWriter(file)
+
+	for _, one := range entries {
+		hdr := &tar.Header{
+			Name:     one.name,
+			Typeflag: tar.TypeReg,
+			Mode:     0o644,
+			Size:     int64(len(one.body)),
+		}
+
+		if err := writer.WriteHeader(hdr); err != nil {
+			t.Fatalf("WriteHeader(%s): %v", one.name, err)
+		}
+
+		if _, err := writer.Write(one.body); err != nil {
+			t.Fatalf("Write(%s): %v", one.name, err)
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("closing %s: %v", path, err)
+	}
+}
+
+// theDigestOf is the hex half of the digest an OCI layout names a blob by.
+func theDigestOf(body []byte) string {
+	sum := sha256.Sum256(body)
+
+	return hex.EncodeToString(sum[:])
+}
+
+// A run that assembled an index reports what is inside the file it wrote: the digest of the image
+// index, and one manifest digest per architecture, each named by the platform it was built for, read
+// out of the file with no container program asked.
+func TestTheIndexFileHoldsTheImageIndexAndTheThreeManifestsTheRunAssembled(t *testing.T) {
+	dir := t.TempDir()
+
+	// The fixtures are named in an order of their own, because the index a container program
+	// writes does not promise the order the release matrix names the architectures in, and what a
+	// run reports has to name them in that order whatever the file's entries happen to be in.
+	named := []theIndexFixture{
+		{platform: containerPlatformFor("linux-arm64")},
+		{platform: containerPlatformFor("linux-amd64")},
+		{platform: containerPlatformFor("linux-arm")},
+	}
+
+	wrote := theOCILayoutFile(t, filepath.Join(dir, "assembled"+theIndexFileSuffix), named)
+
+	index, err := readContainerIndex(wrote.path)
+	if err != nil {
+		t.Fatalf("readContainerIndex(%s): %v", wrote.path, err)
+	}
+
+	if index.digest != wrote.digest {
+		t.Errorf("the index read from %s reports %q as the image index digest, want the digest of the index the file holds, %q", wrote.path, index.digest, wrote.digest)
+	}
+
+	if len(index.manifests) != len(containerTargets) {
+		t.Fatalf("the index read from %s names %d manifests, want one for each architecture a container image is built for: %v", wrote.path, len(index.manifests), index.manifests)
+	}
+
+	want := []struct{ word, platform, variant string }{
+		{"linux/amd64", "linux/amd64", ""},
+		{"linux/arm/v7", "linux/arm", "v7"},
+		{"linux/arm64", "linux/arm64", ""},
+	}
+
+	for i, one := range want {
+		got := index.manifests[i]
+
+		if got.platform != one.platform {
+			t.Errorf("the %d manifest the index names is for %s, want %s: %v", i+1, got.platform, one.platform, index.manifests)
+		}
+
+		if got.variant != one.variant {
+			t.Errorf("the index names %q as the variant of %s, want %q: the variant is how a 32-bit ARM image is told from the others", got.variant, one.platform, one.variant)
+		}
+
+		if got.digest != wrote.byWord[one.word] {
+			t.Errorf("the index names %s as the digest of the %s manifest, want the digest of the manifest the file was written with, %s", got.digest, one.word, wrote.byWord[one.word])
+		}
+	}
+}
+
+// The manifest an index names is the bytes the file holds, not the number index.json says it is: an
+// archive whose recorded digest disagrees with the blob it points at is refused, naming the
+// architecture that entry was written for.
+func TestAnIndexFileWhoseRecordedDigestIsNotTheDigestOfItsBlobIsRefused(t *testing.T) {
+	dir := t.TempDir()
+
+	named := theThreeIndexFixtures()
+
+	for i, one := range named {
+		if one.platform == containerPlatformFor("linux-arm64") {
+			named[i].recordAs = "sha256:" + strings.Repeat("0", 64)
+		}
+	}
+
+	path := filepath.Join(dir, "broken"+theIndexFileSuffix)
+
+	wrote := theOCILayoutFile(t, path, named)
+
+	if wrote.byWord["linux/arm64"] == "" {
+		t.Fatalf("the fixture recorded no digest for linux/arm64: %v", wrote.byWord)
+	}
+
+	_, err := readContainerIndex(path)
+	if err == nil {
+		t.Errorf("readContainerIndex(%s) answered no error, and an index whose %s entry names %s, a digest its bytes do not hash to, describes an artifact the run did not write", path, containerPlatformFor("linux-arm64"), wrote.byWord["linux/arm64"])
+
+		return
+	}
+
+	if !strings.Contains(err.Error(), containerPlatformFor("linux-arm64")) {
+		t.Errorf("the refusal %q does not name the %s entry that disagrees with its blob", err.Error(), containerPlatformFor("linux-arm64"))
+	}
+}
+
+// The image index a layout names is the artifact whose digest a run reports, so an archive whose
+// index blob is not the bytes that digest was taken from is refused naming that digest: the numbers
+// a release records are only worth recording when the file holds the bytes they were read from.
+func TestAnIndexFileWhoseImageIndexBlobIsNotTheBytesItsDigestNamesIsRefused(t *testing.T) {
+	dir := t.TempDir()
+
+	wrote := theOCILayoutFile(t, filepath.Join(dir, "assembled"+theIndexFileSuffix), theThreeIndexFixtures())
+
+	entries := theLayoutEntries(t, wrote.path)
+
+	for i, one := range entries {
+		if one.name == theBlobPath(wrote.digest) {
+			// A space added to the end of the bytes is JSON that still reads the same and hashes
+			// to something else, which is the disagreement the run must not report over.
+			entries[i].body = append(one.body, ' ')
+		}
+	}
+
+	broken := filepath.Join(dir, "broken"+theIndexFileSuffix)
+
+	theWriteLayoutFile(t, broken, entries)
+
+	_, err := readContainerIndex(broken)
+	if err == nil {
+		t.Fatalf("readContainerIndex(%s) answered no error, and the %s blob the file holds hashes to something else", broken, wrote.digest)
+	}
+
+	if !strings.Contains(err.Error(), wrote.digest) {
+		t.Errorf("the refusal %q does not name %s, the digest whose bytes disagree with it", err.Error(), wrote.digest)
+	}
+}
+
+// An index carrying an attestation manifest is refused: its entry is spelled unknown/unknown, which
+// names no platform this run built an image for, and a registry that does not understand BuildKit
+// attestations refuses the whole index for that one entry.
+func TestAnIndexFileCarryingAnEntryForNoPlatformIsRefused(t *testing.T) {
+	dir := t.TempDir()
+
+	named := append(theThreeIndexFixtures(), theIndexFixture{platform: "unknown/unknown"})
+
+	path := filepath.Join(dir, "attested"+theIndexFileSuffix)
+
+	_, err := readContainerIndex(theOCILayoutFile(t, path, named).path)
+	if err == nil {
+		t.Fatalf("readContainerIndex(%s) answered no error, and an index naming a fourth entry is not the index of three images", path)
+	}
+
+	msg := err.Error()
+
+	if !strings.Contains(msg, "unknown/unknown") {
+		t.Errorf("the refusal %q does not name the entry the index carries: the operator has to see why the file was refused", msg)
+	}
+}
+
+// An index that names two of the three architectures is a partial artifact: the run asked for three
+// images, and the file that holds two of them is refused naming the one it does not hold.
+func TestAnIndexFileNamingTwoOfTheThreeArchitecturesIsRefused(t *testing.T) {
+	dir := t.TempDir()
+
+	named := []theIndexFixture{
+		{platform: containerPlatformFor("linux-amd64")},
+		{platform: containerPlatformFor("linux-arm")},
+	}
+
+	path := filepath.Join(dir, "partial"+theIndexFileSuffix)
+
+	_, err := readContainerIndex(theOCILayoutFile(t, path, named).path)
+	if err == nil {
+		t.Fatalf("readContainerIndex(%s) answered no error, and an index naming two architectures is not what a run asked for all three wrote", path)
+	}
+
+	msg := err.Error()
+
+	if !strings.Contains(msg, containerPlatformFor("linux-arm64")) {
+		t.Errorf("the refusal %q does not name %s, the architecture the index holds no manifest for", msg, containerPlatformFor("linux-arm64"))
+	}
+}
 
 // the base image an assembling run proves the host can execute is the image the finished image is
 // taken from: the platform the host is asked about is the platform the build would have to build for.
