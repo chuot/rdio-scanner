@@ -2351,9 +2351,11 @@ func TestTheCompileGuideSaysWhatTheToolAsksTheCompilerToRecord(t *testing.T) {
 }
 
 // the compile guide says which architectures a container image is built for, how the
-// architecture reaches the container program, what tags the run writes, and what host the
-// arm image needs. A maintainer who builds an arm image from a source tree reads these facts
-// off the guide, and no other document in the published repository states them.
+// architecture reaches the container program, what tags the run writes, what host the arm image
+// needs, what an all run assembles and where it writes it, and what the owner types to publish
+// that index under each container program. A maintainer who builds an arm image, or publishes the
+// three architectures, from a source tree reads these facts off the guide, and no other document
+// in the published repository states them.
 func TestTheCompileGuideNamesTheArchitecturesAContainerImageIsBuiltFor(t *testing.T) {
 	section := theGuideSection(t, "## What to type")
 
@@ -2446,14 +2448,84 @@ func TestTheCompileGuideNamesTheArchitecturesAContainerImageIsBuiltFor(t *testin
 		}
 	}
 
+	// What an `--all` run assembles, and the one file it lands in. An operator who publishes the
+	// three architectures has to read the file's name, what its index names, and the fact that the
+	// index is a file and never a tag they could pull from their own store.
+	for _, want := range []string{
+		"one image index over the three architectures",
+		"`.build/rdio-scanner-<version>.oci`",
+		"with every blob its entries name",
+		"names the three platforms and nothing else",
+		"`variant` recorded",
+		"no attestation manifest",
+		"names a single-architecture runnable image",
+		"writes no index file",
+		"the index is never a local tag",
+	} {
+		if !strings.Contains(passage, want) {
+			t.Errorf("the compile guide's container image section never says %q, which is what a --all run assembles and where it puts it", want)
+		}
+	}
+
+	// The digests the run reports, read out of the file it wrote, and the closing line that names
+	// that file whether or not the assembly produced it.
+	for _, want := range []string{
+		"the index digest and the three manifest digests",
+		"container 3 images written, index",
+		"no index",
+	} {
+		if !strings.Contains(passage, want) {
+			t.Errorf("the compile guide's container image section never says %q, which is how a run reports the index it assembled", want)
+		}
+	}
+
+	// Publishing is the owner's action under the program they have, and the guide carries both
+	// sequences: the podman one, which reads the images the run left in the store, and the skopeo
+	// one, which reads the file. Each names what the publishing host has to have installed, and the
+	// guide says plainly that the tool runs neither.
+	for _, want := range []string{
+		"podman manifest create rdio-scanner:<version>-index",
+		"podman manifest push --all rdio-scanner:<version>-index",
+		"podman manifest rm rdio-scanner:<version>-index",
+		"skopeo copy --all oci-archive:.build/rdio-scanner-<version>.oci",
+		"docker buildx create --name rdio-scanner --driver docker-container --use",
+		"the publishing host has to have",
+		"the tool runs none of those lines",
+	} {
+		if !strings.Contains(passage, want) {
+			t.Errorf("the compile guide's container image section never names %q, which is what the owner types to publish the index or to give a host the builder its assembly needs", want)
+		}
+	}
+
+	// The file is build output: it sits where the build's own output sits, and nothing reads it back.
+	for _, want := range []string{"build output", "deleting it costs nothing"} {
+		if !strings.Contains(passage, want) {
+			t.Errorf("the compile guide's container image section never calls the index file %s, which is what it is", want)
+		}
+	}
+
+	// The sentence this feature retires, and the loose-image publishing it went with. A guide that
+	// still says a run assembles no index sends the operator to three tags a registry cannot pick an
+	// architecture from.
+	for _, gone := range []string{
+		"assembles no manifest list",
+		"publishes three separate images",
+	} {
+		if strings.Contains(passage, gone) {
+			t.Errorf("the compile guide's container image section says %q, and a --all run assembles the index that name now covers", gone)
+		}
+	}
+
 	// The exit code an incomplete set of things written ends at: the guide names both shapes the
-	// release run and the container run answer with it, because both say which targets wrote none.
+	// release run and the container run answer with it, because both say which targets wrote none,
+	// and a container run that wrote its three images and no index answers with it too.
 	exits := theGuideSubsection(t, "### What the exit code says")
 
 	for _, want := range []string{
 		"a release run wrote fewer archives",
 		"a container run wrote fewer images",
 		"than it was asked for",
+		"and no index",
 	} {
 		if !strings.Contains(exits, want) {
 			t.Errorf("the compile guide's exit code section does not say %s, which is what exit code 3 reports", want)
