@@ -17,8 +17,12 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -562,6 +566,219 @@ func TestALaunchFolderThatCannotBeWrittenStopsTheStartAndNamesTheFolder(t *testi
 	if !strings.Contains(err.Error(), launch) {
 		t.Errorf("error = %q, want it to name %q: an operator told only that a folder is unwritable is not told which folder", err.Error(), launch)
 	}
+}
+
+// the deployment's database file can be readable and still not writable: an
+// operator chowned it to another account, or a container's bind mount carries a
+// file the image's account may not write. A start that finds that half-way
+// through a migration reports the driver's words and the statement it was
+// running, and names no file at all. The check that refuses a launch folder says
+// which folder; the same start has to say which file, before it opens the
+// deployment or writes a line of its banner.
+func TestADatabaseFileThatCannotBeWrittenStopsTheStartAndNamesTheFile(t *testing.T) {
+	cfg, out := newTestConfig(t)
+	dbFile := filepath.Join(cfg.BaseDir, "rdio-scanner.db")
+
+	seedDatabaseFile(t, dbFile, 0o400)
+
+	_, _, err := newConfig([]string{"-base_dir", cfg.BaseDir, "-db_file", dbFile, "-listen", freeListenAddr(t)}, "", out)
+	if err == nil {
+		t.Fatalf("newConfig started a server over a database file it cannot write: want the start refused")
+	}
+
+	if !strings.Contains(err.Error(), dbFile) {
+		t.Errorf("error = %q, want it to name %q: a refusal that does not say which file cannot be acted on", err.Error(), dbFile)
+	}
+}
+
+// a start that is refused must leave the deployment exactly as it found it: the
+// operator has to be able to fix the ownership and start again against the same
+// bytes, and a check that probes writability by creating or opening for writing
+// risks making a claim, a journal, or a half-written page behind it.
+func TestTheWritabilityCheckCreatesNoFileAndWritesNoByte(t *testing.T) {
+	cfg, out := newTestConfig(t)
+	dbFile := filepath.Join(cfg.BaseDir, "rdio-scanner.db")
+
+	seedDatabaseFile(t, dbFile, 0o444)
+
+	before := deploymentListing(t, cfg.BaseDir)
+
+	_, _, err := newConfig([]string{"-base_dir", cfg.BaseDir, "-db_file", dbFile, "-listen", freeListenAddr(t)}, "", out)
+	if err == nil {
+		t.Fatalf("newConfig started a server over a database file it cannot write: want the start refused")
+	}
+
+	after := deploymentListing(t, cfg.BaseDir)
+	if strings.Join(after, "\n") != strings.Join(before, "\n") {
+		t.Errorf("the refused start left the deployment folder as:\n%s\nwant exactly what it found:\n%s",
+			strings.Join(after, "\n"), strings.Join(before, "\n"))
+	}
+}
+
+// a writable file, whether this start creates it or an earlier release did, must
+// not be refused: the guard answers only a file the server genuinely cannot
+// write, and the starts that work today keep working.
+func TestAHealthyDeploymentAndAHealthyFirstStartAreNotRefused(t *testing.T) {
+	t.Run("a first start into an empty folder", func(t *testing.T) {
+		cfg, out := newTestConfig(t)
+
+		if _, _, err := newConfig([]string{"-base_dir", cfg.BaseDir, "-listen", freeListenAddr(t)}, "", out); err != nil {
+			t.Errorf("newConfig refused a first start into a writable folder: %v", err)
+		}
+	})
+
+	t.Run("a first start into an existing subfolder", func(t *testing.T) {
+		cfg, out := newTestConfig(t)
+		sub := filepath.Join(cfg.BaseDir, "db")
+
+		if err := os.Mkdir(sub, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+
+		dbFile := filepath.Join(sub, "rdio-scanner.db")
+
+		if _, _, err := newConfig([]string{"-base_dir", cfg.BaseDir, "-db_file", dbFile, "-listen", freeListenAddr(t)}, "", out); err != nil {
+			t.Errorf("newConfig refused a first start whose database file sits in the existing folder %s: %v", sub, err)
+		}
+	})
+
+	t.Run("an existing deployment the server has written before", func(t *testing.T) {
+		cfg, out := newTestConfig(t)
+		dbFile := filepath.Join(cfg.BaseDir, "rdio-scanner.db")
+
+		seedDatabaseFile(t, dbFile, 0o644)
+
+		if _, _, err := newConfig([]string{"-base_dir", cfg.BaseDir, "-db_file", dbFile, "-listen", freeListenAddr(t)}, "", out); err != nil {
+			t.Errorf("newConfig refused a deployment holding a database file at mode 0644: %v", err)
+		}
+	})
+
+	t.Run("an existing deployment in an existing subfolder", func(t *testing.T) {
+		cfg, out := newTestConfig(t)
+		sub := filepath.Join(cfg.BaseDir, "db")
+
+		if err := os.Mkdir(sub, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+
+		dbFile := filepath.Join(sub, "rdio-scanner.db")
+		seedDatabaseFile(t, dbFile, 0o644)
+
+		if _, _, err := newConfig([]string{"-base_dir", cfg.BaseDir, "-db_file", dbFile, "-listen", freeListenAddr(t)}, "", out); err != nil {
+			t.Errorf("newConfig refused a deployment at %s it can write: %v", dbFile, err)
+		}
+	})
+
+	t.Run("a base directory the account cannot write", func(t *testing.T) {
+		cfg, out := newTestConfig(t)
+		dbFile := filepath.Join(cfg.BaseDir, "rdio-scanner.db")
+
+		seedDatabaseFile(t, dbFile, 0o644)
+
+		if err := os.Chmod(cfg.BaseDir, 0o555); err != nil {
+			t.Fatalf("chmod %s: %v", cfg.BaseDir, err)
+		}
+
+		t.Cleanup(func() {
+			_ = os.Chmod(cfg.BaseDir, 0o755)
+		})
+
+		_, _, err := newConfig([]string{"-base_dir", cfg.BaseDir, "-db_file", dbFile, "-listen", freeListenAddr(t)}, "", out)
+		if err == nil {
+			t.Fatalf("newConfig accepted a base directory this account cannot write: want the start refused")
+		}
+
+		if !strings.Contains(err.Error(), cfg.BaseDir) {
+			t.Errorf("error = %q, want it to name the folder %q: the start that was already refused here keeps its own words", err.Error(), cfg.BaseDir)
+		}
+
+		if strings.Contains(err.Error(), "database file") {
+			t.Errorf("error = %q, want the refusal of the folder, not one about the file inside it", err.Error())
+		}
+	})
+}
+
+// seedDatabaseFile writes a file the size and shape of a deployment's database
+// and leaves it at the given mode, so a test measures a real file on disk rather
+// than a path the server invents.
+func seedDatabaseFile(t *testing.T, path string, mode os.FileMode) {
+	t.Helper()
+
+	body := strings.Repeat("rdio-scanner deployment page ", 512)
+
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("writing %s: %v", path, err)
+	}
+
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatalf("chmod %s: %v", path, err)
+	}
+
+	t.Cleanup(func() {
+		_ = os.Chmod(path, 0o644)
+	})
+}
+
+// freeListenAddr hands back an address no test is serving on, so a start checked
+// for a refusal never collides with another test's server on this host.
+func freeListenAddr(t *testing.T) string {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserving a free port: %v", err)
+	}
+
+	addr := ln.Addr().String()
+
+	if err := ln.Close(); err != nil {
+		t.Fatalf("releasing the free port: %v", err)
+	}
+
+	return addr
+}
+
+// deploymentListing names every entry of a deployment folder with its mode and a
+// digest of its contents, so a refused start can be compared against what it
+// found, including whether it left a claim or a journal behind.
+func deploymentListing(t *testing.T, dir string) []string {
+	t.Helper()
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("reading %s: %v", dir, err)
+	}
+
+	out := []string{}
+
+	for _, e := range entries {
+		path := filepath.Join(dir, e.Name())
+
+		info, err := os.Lstat(path)
+		if err != nil {
+			t.Fatalf("lstat %s: %v", path, err)
+		}
+
+		if info.IsDir() {
+			out = append(out, fmt.Sprintf("dir %s %04o", e.Name(), info.Mode().Perm()))
+
+			continue
+		}
+
+		body, err := os.ReadFile(path)
+		if err != nil {
+			out = append(out, fmt.Sprintf("file %s %04o %d bytes unreadable", e.Name(), info.Mode().Perm(), info.Size()))
+
+			continue
+		}
+
+		out = append(out, fmt.Sprintf("file %s %04o %d bytes sha256 %x", e.Name(), info.Mode().Perm(),
+			info.Size(), sha256.Sum256(body)))
+	}
+
+	slices.Sort(out)
+
+	return out
 }
 
 // the admin guide says -config_save rewrites the file from what the server
