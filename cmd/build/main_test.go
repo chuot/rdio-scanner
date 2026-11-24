@@ -1757,6 +1757,8 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 	// Each image step carries the argument list the single-target step is pinned to,
 	// with its own platform and its own architecture-named tag pair: only the
 	// linux-amd64 one carries the unarch'd pair the published image has always had.
+	// Every leg also names the one manifest list the run assembles, which is where
+	// the three architectures are gathered before the run writes their index.
 	for i, wantArgs := range [][]string{
 		{
 			"build",
@@ -1769,6 +1771,7 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 			"-t", "rdio-scanner:latest-linux-amd64",
 			"-t", "rdio-scanner:8.0.0",
 			"-t", "rdio-scanner:latest",
+			"--manifest=rdio-scanner:8.0.0-index",
 			".",
 		},
 		{
@@ -1780,6 +1783,7 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 			"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
 			"-t", "rdio-scanner:8.0.0-linux-arm",
 			"-t", "rdio-scanner:latest-linux-arm",
+			"--manifest=rdio-scanner:8.0.0-index",
 			".",
 		},
 		{
@@ -1791,6 +1795,7 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 			"--build-arg", "BUILD_TIME=2026-10-13T12:30:45Z",
 			"-t", "rdio-scanner:8.0.0-linux-arm64",
 			"-t", "rdio-scanner:latest-linux-arm64",
+			"--manifest=rdio-scanner:8.0.0-index",
 			".",
 		},
 	} {
@@ -1799,16 +1804,23 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 		}
 	}
 
-	// The run builds images and publishes none: no argument pushes, writes a manifest list,
-	// names a host, or asks the program to build from any file but the Containerfile.
+	// The run builds images and publishes none: no argument pushes, names a host or a transport
+	// that reaches one, or asks the program to build from any file but the Containerfile. The one
+	// manifest list the legs name is this run's own: the image name the tags use, the version the
+	// run resolved, and the suffix no published tag carries, with no host and no architecture in it.
 	for i, s := range images {
 		given := 0
+		lists := []string{}
 
 		for _, arg := range s.args {
-			for _, forbidden := range []string{"push", "manifest", "://"} {
+			for _, forbidden := range []string{"push", "://"} {
 				if strings.Contains(arg, forbidden) {
 					t.Errorf("the %s image step carries %q, and a container run publishes nothing", containerTargets[i], arg)
 				}
+			}
+
+			if value, ok := strings.CutPrefix(arg, "--manifest="); ok {
+				lists = append(lists, value)
 			}
 
 			if arg == "-f" {
@@ -1818,6 +1830,13 @@ func TestAContainerRunAskedForAllThreeArchitecturesCompilesThreeFfmpegPairsThenB
 
 		if given != 1 {
 			t.Errorf("the %s image step names the file it builds from %d times, want once: %v", containerTargets[i], given, s.args)
+		}
+
+		want := "rdio-scanner:8.0.0" + theManifestListSuffix
+
+		if len(lists) != 1 || lists[0] != want {
+			t.Errorf("the %s image step names %v as the manifest lists it builds into, want the one list this run assembles, %q",
+				containerTargets[i], lists, want)
 		}
 	}
 }

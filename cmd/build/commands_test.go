@@ -233,6 +233,192 @@ func TestTheImageTagIsTheVersionSpelledTheWayAnImageTagAllows(t *testing.T) {
 	}
 }
 
+// a podman run asked for all three architectures adds every image it builds to one manifest list,
+// named from the version the run resolved and carrying no architecture of its own: the list is what
+// carries the three architectures under one name, and it is the run's own work, not a tag.
+func TestThePodmanRunAskedForAllThreeBuildsEachImageIntoTheManifestListItAssembles(t *testing.T) {
+	version := theVersion(t)
+	want := containerImage + ":" + imageTagFor(version.String()) + theManifestListSuffix
+
+	for _, target := range containerTargets {
+		s := containerStep(options{sub: subContainer, target: target, all: true}, "/repo", version, theMoment, podmanProgram)
+
+		list := theOptionValue(s.args, "--manifest")
+
+		if list != want {
+			t.Errorf("the podman %s image build adds its image to %q, want the one list the run assembles, %q: the three architectures reach one name through that list",
+				target, list, want)
+		}
+
+		// The list is added to the tags, not traded for them: every leg still writes the pair its
+		// own architecture names, and the linux-amd64 leg still writes the plain pair the published
+		// image has always carried.
+		tagged := []string{
+			containerImage + ":" + imageTagFor(version.String()) + "-" + target,
+			containerImage + ":" + containerLatestTag + "-" + target,
+		}
+
+		if target == containerTarget {
+			tagged = append(tagged,
+				containerImage+":"+imageTagFor(version.String()),
+				containerImage+":"+containerLatestTag)
+		}
+
+		for _, tag := range tagged {
+			if !carriesArgument(s.args, tag) {
+				t.Errorf("the podman %s image build carries %v as its tags, want %q beside the list it names: the list carries the index, the tags stay runnable images",
+					target, s.args, tag)
+			}
+		}
+	}
+}
+
+// a run that assembles nothing assembles nothing under either container program: the single-target
+// run names no manifest list, and the docker route assembles its index in a build of its own rather
+// than by naming a list on each leg.
+func TestTheContainerRunThatAssemblesNoIndexNamesNoManifestList(t *testing.T) {
+	for _, program := range []string{podmanProgram, dockerProgram} {
+		for _, target := range containerTargets {
+			s := containerStep(options{sub: subContainer, target: target}, "/repo", theVersion(t), theMoment, program)
+
+			if list := theOptionValue(s.args, "--manifest"); list != "" {
+				t.Errorf("the %s %s image build names %q as a manifest list, want none: a run building one image assembles no index",
+					program, target, list)
+			}
+		}
+	}
+
+	for _, target := range containerTargets {
+		s := containerStep(options{sub: subContainer, target: target, all: true}, "/repo", theVersion(t), theMoment, dockerProgram)
+
+		if list := theOptionValue(s.args, "--manifest"); list != "" {
+			t.Errorf("the docker %s image build of an all-architectures run names %q as a manifest list, want none: docker assembles the three architectures in one exported build of its own, and its legs stay the builds today's cases pin",
+				target, list)
+		}
+	}
+}
+
+// theManifestListSuffix is what marks the list a run assembles as its own: no published tag and no
+// architecture suffix carries it.
+const theManifestListSuffix = "-index"
+
+// theOptionValue reads the value a long option carries, spelled either glued to it or as the
+// argument after it, and says nothing when the option is absent.
+func theOptionValue(args []string, option string) string {
+	for i, arg := range args {
+		if value, ok := strings.CutPrefix(arg, option+"="); ok {
+			return value
+		}
+
+		if arg == option && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+
+	return ""
+}
+
+// the podman route writes the manifest list it filled as one OCI layout file under .build/: the
+// program's own manifest transport carries every architecture in the list into that file, and no
+// registry, host, or other transport appears anywhere on the line.
+func TestThePodmanRunAskedForAllThreeWritesItsManifestListAsOneLayoutFile(t *testing.T) {
+	s := containerManifestExportStep("/repo", theVersion(t), podmanProgram)
+
+	if s.name != podmanProgram {
+		t.Errorf("the run's index step names %q, want the program the run resolved: %q", s.name, podmanProgram)
+	}
+
+	if len(s.args) < 2 || s.args[0] != "manifest" || s.args[1] != "push" {
+		t.Fatalf("the run's index step runs %v, want podman's manifest push", s.args)
+	}
+
+	if format := theOptionValue(s.args, "--format"); format != "oci" {
+		t.Errorf("the run's index step writes the layout in %q, want oci: an index a registry or a copy command can read is OCI, not the program's own format", format)
+	}
+
+	if !carriesFlag(s.args, "--all") {
+		t.Errorf("the run's index step carries no --all in %v, want it: the list holds three architectures and the default pushes only one", s.args)
+	}
+
+	list := containerImage + ":8.0.0-gdb79311" + theManifestListSuffix
+	if !carriesArgument(s.args, list) {
+		t.Errorf("the run's index step pushes %v, want the list the three legs built into, %q", s.args, list)
+	}
+
+	want := filepath.Join(".build", containerImage+"-8.0.0-gdb79311"+theIndexFileSuffix)
+
+	if !carriesArgument(s.args, "oci-archive:"+want) {
+		t.Errorf("the run's index step writes to %v, want the one layout file under %s, %q", s.args, ".build", want)
+	}
+
+	if s.dir != "/repo" {
+		t.Errorf("the run's index step runs in %q, want the repository the run is building", s.dir)
+	}
+
+	for _, arg := range s.args {
+		if arg == "push" && s.args[0] != "manifest" {
+			t.Errorf("the run's index step runs %q on its own, which publishes: only the manifest transport writes a file here", arg)
+		}
+
+		if strings.Contains(arg, "://") {
+			t.Errorf("the run's index step carries %q, which reaches a registry through a transport the run never uses: the index is a file", arg)
+		}
+	}
+}
+
+// the list a podman run assembles is cleared before the three builds name it and again once its
+// file is written: podman refuses a list name an image or an earlier list already holds, and the
+// list is the run's own working name, not something the machine keeps.
+func TestThePodmanRunAskedForAllThreeClearsTheManifestListNameItAssembles(t *testing.T) {
+	s := containerManifestClearStep("/repo", theVersion(t), podmanProgram)
+
+	if s.name != podmanProgram {
+		t.Errorf("the run's list-clearing step names %q, want the program the run resolved: %q", s.name, podmanProgram)
+	}
+
+	if len(s.args) != 3 || s.args[0] != "manifest" || s.args[1] != "rm" {
+		t.Fatalf("the run's list-clearing step runs %v, want podman's manifest rm naming one list", s.args)
+	}
+
+	want := containerImage + ":8.0.0-gdb79311" + theManifestListSuffix
+
+	if !carriesArgument(s.args, want) {
+		t.Errorf("the run's list-clearing step removes %v, want the one list the run assembles, %q", s.args, want)
+	}
+
+	for _, arg := range s.args {
+		if strings.Contains(arg, "://") || strings.Contains(arg, "/") {
+			t.Errorf("the run's list-clearing step carries %q, which names a registry or a namespace: the list it removes is a name in this machine's own store", arg)
+		}
+	}
+}
+
+// theIndexFileSuffix names the file the run writes as what it is: an OCI layout archive, not an
+// image a host can run.
+const theIndexFileSuffix = ".oci"
+
+// carriesFlag reports whether a command line carries a flag with no value glued to it.
+func carriesFlag(args []string, flag string) bool {
+	for _, arg := range args {
+		if arg == flag {
+			return true
+		}
+	}
+
+	return false
+}
+
+// carriesArgument reports whether a command line carries one argument exactly as spelled.
+func carriesArgument(args []string, want string) bool {
+	for _, arg := range args {
+		if arg == want {
+			return true
+		}
+	}
+
+	return false
+}
+
 // theImageTagGrammar is the tag grammar a registry accepts.
 var theImageTagGrammar = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`)
 
@@ -1373,62 +1559,92 @@ func aMachineWith(programs ...string) func(string) (string, error) {
 }
 
 // the container step names the resolved program and the Containerfile it builds from, asks for
-// the architecture exactly once, and never publishes: the arguments name no build argument
-// carrying an architecture, no push, no manifest list, and no registry to push to.
+// the architecture exactly once, and publishes nothing: no argument names a registry host or a
+// namespace, carries a transport that reaches one, or runs a push. The podman route's manifest
+// transport appears only as the --manifest= the legs of an assembling run name, and only under
+// podman: the docker route's legs carry neither the word manifest nor a push.
 func TestTheReleaseImageBuildNamesTheProgramAndTheFileItBuildsFrom(t *testing.T) {
 	for _, program := range []string{podmanProgram, dockerProgram} {
-		for _, target := range containerTargets {
-			s := containerStep(options{sub: subContainer, target: target}, "/repo", theVersion(t), theMoment, program)
+		for _, assembling := range []bool{false, true} {
+			for _, target := range containerTargets {
+				o := options{sub: subContainer, target: target, all: assembling}
+				s := containerStep(o, "/repo", theVersion(t), theMoment, program)
 
-			if s.name != program {
-				t.Errorf("the release image build names %q, want the program the run resolved: %q", s.name, program)
-			}
-
-			if len(s.args) == 0 || s.args[0] != "build" {
-				t.Fatalf("the release image build runs %v, want a build", s.args)
-			}
-
-			if file := theFlagValue(s.args, "-f"); file != "Containerfile" {
-				t.Errorf("the release image build names %q as the file it builds from, want Containerfile: docker looks for Dockerfile and does not find Containerfile",
-					file)
-			}
-
-			// the architecture is named once, by the flag the container program selects
-			// the build architecture with, and by nothing else: the automatic build
-			// arguments carry what that flag asked for.
-			named := 0
-
-			for _, arg := range s.args {
-				if strings.HasPrefix(arg, "--platform=") {
-					named++
-				}
-			}
-
-			if named != 1 {
-				t.Errorf("the %s image build names the build architecture %d times, want once: %v", target, named, s.args)
-			}
-
-			for _, arg := range s.args {
-				if !strings.HasPrefix(arg, "--build-arg") {
-					continue
+				if s.name != program {
+					t.Errorf("the release image build names %q, want the program the run resolved: %q", s.name, program)
 				}
 
-				for _, word := range []string{"TARGETARCH", "TARGETOS", "TARGETPLATFORM", "TARGETVARIANT", "BUILDPLATFORM", "GOARCH", "GOOS", "GOARM"} {
-					if strings.Contains(arg, word) {
-						t.Errorf("the %s image build passes %q, which names the architecture as a build argument: the container program fills %s itself from the platform it was asked for",
-							target, arg, word)
+				if len(s.args) == 0 || s.args[0] != "build" {
+					t.Fatalf("the release image build runs %v, want a build", s.args)
+				}
+
+				if file := theFlagValue(s.args, "-f"); file != "Containerfile" {
+					t.Errorf("the release image build names %q as the file it builds from, want Containerfile: docker looks for Dockerfile and does not find Containerfile",
+						file)
+				}
+
+				// the architecture is named once, by the flag the container program selects
+				// the build architecture with, and by nothing else: the automatic build
+				// arguments carry what that flag asked for.
+				named := 0
+
+				for _, arg := range s.args {
+					if strings.HasPrefix(arg, "--platform=") {
+						named++
 					}
 				}
-			}
 
-			for _, arg := range s.args {
-				if arg == "push" || arg == "manifest" {
-					t.Errorf("the %s image build runs %q, and the build publishes nothing: it writes an image into this machine's container store", target, arg)
+				if named != 1 {
+					t.Errorf("the %s image build names the build architecture %d times, want once: %v", target, named, s.args)
 				}
 
-				if strings.HasPrefix(arg, "-t") || strings.Contains(arg, "rdio-scanner:") {
-					if strings.Contains(arg, "/") {
-						t.Errorf("the %s image build tags %q, which names a registry or a namespace the build publishes to", target, arg)
+				for _, arg := range s.args {
+					if !strings.HasPrefix(arg, "--build-arg") {
+						continue
+					}
+
+					for _, word := range []string{"TARGETARCH", "TARGETOS", "TARGETPLATFORM", "TARGETVARIANT", "BUILDPLATFORM", "GOARCH", "GOOS", "GOARM"} {
+						if strings.Contains(arg, word) {
+							t.Errorf("the %s image build passes %q, which names the architecture as a build argument: the container program fills %s itself from the platform it was asked for",
+								target, arg, word)
+						}
+					}
+				}
+
+				for _, arg := range s.args {
+					if arg == "push" {
+						t.Errorf("the %s image build runs %q, and the build publishes nothing: it writes an image into this machine's container store", target, arg)
+					}
+
+					if strings.Contains(arg, "://") {
+						t.Errorf("the %s image build carries %q, a transport that reaches a registry: the release publishes only the file the run writes, and the owner carries it", target, arg)
+					}
+
+					if strings.HasPrefix(arg, "-t") || strings.Contains(arg, "rdio-scanner:") {
+						if strings.Contains(arg, "/") && !strings.HasPrefix(arg, "--platform=") {
+							t.Errorf("the %s image build names %q, which holds a registry or a namespace the build publishes to", target, arg)
+						}
+					}
+
+					// A manifest list the legs build into is this run's own working name, and only
+					// podman has one: a bare manifest subcommand on a build line, or the word under
+					// docker, is the tool reaching for a program action it does not take.
+					if arg == "manifest" || strings.HasPrefix(arg, "manifest ") {
+						t.Errorf("the %s image build runs %q, and an image build assembles nothing: the podman route assembles through --manifest= on the legs and one manifest push of the finished list", target, arg)
+					}
+
+					if value, ok := strings.CutPrefix(arg, "--manifest="); ok {
+						if program != podmanProgram {
+							t.Errorf("the docker %s image build names %q as a manifest list, and docker assembles its index in one exported build of its own", target, value)
+						}
+
+						if !assembling {
+							t.Errorf("the %s image build of a run that assembles no index names %q as a manifest list", target, value)
+						}
+
+						if value != containerManifestListFor(theVersion(t)) {
+							t.Errorf("the %s image build names %q as the list it builds into, want the run's own name: %q", target, value, containerManifestListFor(theVersion(t)))
+						}
 					}
 				}
 			}

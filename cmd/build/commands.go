@@ -564,6 +564,76 @@ func containerPlatformFor(target string) string {
 	return platform
 }
 
+// manifestListSuffix marks the manifest list a container run assembles as its own work: no
+// published tag and no architecture suffix carries it, so the list can never be mistaken for
+// an image a host pulls or runs.
+const manifestListSuffix = "-index"
+
+// containerManifestListFor spells the one manifest list a run assembling the three
+// architectures builds its images into. It is named from the same tag word the images use, so
+// the list and the images it holds are recognisably one run's output, and it carries no
+// architecture because it names all three.
+func containerManifestListFor(version buildinfo.Version) string {
+	return containerImage + ":" + imageTagFor(version.String()) + manifestListSuffix
+}
+
+// buildDir is the directory every build output the operator is meant to delete lives in, and
+// indexFileSuffix names the image index file as what it is: an OCI layout archive, which no
+// container program runs as an image.
+const (
+	buildDir        = ".build"
+	indexFileSuffix = ".oci"
+)
+
+// containerIndexFileFor spells that file. It is build output, so it lands under .build/ beside
+// the ffmpeg the run compiled, and it is named from the version the run resolved so an operator
+// publishing a release knows which run wrote it.
+func containerIndexFileFor(version buildinfo.Version) string {
+	return filepath.Join(buildDir, containerImage+"-"+imageTagFor(version.String())+indexFileSuffix)
+}
+
+// containerManifestClearStep drops the run's own manifest list name from the container program's
+// store. The program refuses a list name an image or an earlier list already holds, and the list
+// is working state for one run: it is cleared before the three builds name it, so a leftover from
+// an interrupted run cannot make this one fail, and again once its file is written, so the machine
+// keeps the images and not the list.
+func containerManifestClearStep(repo string, version buildinfo.Version, program string) step {
+	return step{
+		label:  subContainer,
+		result: "",
+		dir:    repo,
+		name:   program,
+		args: []string{
+			"manifest",
+			"rm",
+			containerManifestListFor(version),
+		},
+	}
+}
+
+// containerManifestExportStep asks podman to write the manifest list the three image builds filled
+// into that file: the layout is OCI so a registry or a copy command can read it without this
+// machine's container program, every architecture in the list travels with it, and the destination
+// is a file rather than a registry reference.
+func containerManifestExportStep(repo string, version buildinfo.Version, program string) step {
+	file := containerIndexFileFor(version)
+
+	return step{
+		label:  subContainer,
+		result: file,
+		dir:    repo,
+		name:   program,
+		args: []string{
+			"manifest",
+			"push",
+			"--format=oci",
+			"--all",
+			containerManifestListFor(version),
+			"oci-archive:" + file,
+		},
+	}
+}
+
 // containerStep asks the container program to build the image for one
 // architecture: the architecture is named once, by the platform the
 // program builds for, and the version and the build time arrive as build
@@ -571,6 +641,9 @@ func containerPlatformFor(target string) string {
 // architecture the run resolves. The image is tagged with the version and
 // with latest, each named for that architecture, and the linux-amd64 run
 // also writes the unarch'd pair the published image has always carried.
+// A run that builds all three architectures hands each image to the one
+// manifest list it assembles, which is how podman carries the three
+// architectures under one name.
 func containerStep(o options, repo string, version buildinfo.Version, created time.Time, program string) step {
 	// the run's target list is already resolved to real architecture words,
 	// so the step builds for the target it is given and guesses nothing.
@@ -597,6 +670,13 @@ func containerStep(o options, repo string, version buildinfo.Version, created ti
 
 	for _, tag := range tags {
 		args = append(args, "-t", tag)
+	}
+
+	// podman assembles the multi-architecture image from a manifest list it fills as it builds:
+	// every leg of an all-architectures run adds its image to the same list, and the run reads
+	// that list back into the index file it writes. A single-target run assembles nothing.
+	if o.all && program == podmanProgram {
+		args = append(args, "--manifest="+containerManifestListFor(version))
 	}
 
 	args = append(args, ".")
