@@ -933,14 +933,16 @@ mount points are the first thing to recheck, and
 <a href="#ch-25-troubleshooting">Troubleshooting</a> collects the log lines
 that name a bad mount.</p>
 <p><strong>Which architecture the image covers.</strong> The image is built for three
-architectures, and one build produces one of them: the three Linux builds the release matrix
-names — <code>linux-amd64</code>, <code>linux-arm64</code>, and <code>linux-arm</code>, which
-are the amd64 build, the ARM64 build, and the 32-bit ARM build. The published
-<code>chuot/rdio-scanner:latest</code> is the amd64 one. The other two are built by this
-project's own build tool, which names the architecture to the container program as the platform
-it asks for — <code>--platform=linux/amd64</code>, <code>--platform=linux/arm64</code>, or
-<code>--platform=linux/arm/v7</code> — and builds that image on whatever machine the tool runs
-on.</p>
+architectures: the three Linux builds the release matrix names — <code>linux-amd64</code>,
+<code>linux-arm64</code>, and <code>linux-arm</code>, which are the amd64 build, the ARM64 build,
+and the 32-bit ARM build. The published <code>chuot/rdio-scanner:latest</code> names one image
+index over the three architectures — an index whose entries name <code>linux/amd64</code>,
+<code>linux/arm/v7</code>, and <code>linux/arm64</code> — and the host that pulls that tag
+receives the image for its own architecture. Each architecture is also published under its own
+name, as <code>chuot/rdio-scanner:latest-linux-amd64</code>,
+<code>chuot/rdio-scanner:latest-linux-arm64</code>, and
+<code>chuot/rdio-scanner:latest-linux-arm</code>, and each of those tags names one architecture's
+image.</p>
 <p>Which one a machine runs is the same question the archives ask: pick the image whose
 architecture matches the machine that imports audio — for a Raspberry Pi 3 or 4, that is
 <code>linux-arm</code>, and on a modern 64-bit Raspberry Pi OS use <code>linux-arm64</code>. The
@@ -952,9 +954,11 @@ host whose kernel runs only 64-bit ARM code takes <code>linux-arm64</code> inste
 <code>rdio-scanner:latest-&lt;target&gt;</code>, so the ARM64 image starts under the name
 <code>rdio-scanner:latest-linux-arm64</code> with the same volume and port flags as the example
 above; the <code>linux-amd64</code> build also writes <code>rdio-scanner:&lt;version&gt;</code>
-and <code>rdio-scanner:latest</code>, so the plain name keeps naming the amd64 image. A build
-writes those tags on the machine it runs on and never pushes one, and it assembles no manifest
-list that bundles the three architectures under one name.</p>
+and <code>rdio-scanner:latest</code>, so the plain name keeps naming the amd64 image on the
+machine that built it. A build writes those tags on the machine it runs on and never pushes one.
+A build asked for all three architectures assembles the index the published tag names and writes
+it as one file, <code>.build/rdio-scanner-&lt;version&gt;.oci</code> under the build directory;
+the tags it writes stay one architecture each, and no index joins them.</p>
 <p>To keep the container alongside other services on the host, describe it in
 a <code>docker-compose.yml</code> instead of repeating flags. This is the
 minimum viable definition:</p>

@@ -1857,8 +1857,10 @@ func TestTheGuideSaysOneMacCompilesBothMacOSArchitectures(t *testing.T) {
 
 // the guide says which architectures the container image is built for, in the same product
 // names the release matrix uses, names the platform the container program is asked for each
-// one by, states for an image the host rule it already states for an archive, and names the
-// architecture in the tag an operator types when starting an image built on their own machine.
+// one by, states for an image the host rule it already states for an archive, names the
+// published tag as the index over the three architectures and the host rule that goes with it,
+// and names the architecture in the tag an operator types when starting an image built on their
+// own machine.
 func TestTheGuideSaysWhichArchitecturesTheContainerImageIsBuiltFor(t *testing.T) {
 	body := guidePath(t)
 
@@ -1888,11 +1890,39 @@ func TestTheGuideSaysWhichArchitecturesTheContainerImageIsBuiltFor(t *testing.T)
 		"64-bit Raspberry Pi OS",
 		"hard-float",
 		"latest-linux-arm64",
-		"no manifest list",
+		"named by the architecture it was built for",
 	} {
 		if !strings.Contains(section, strings.ToLower(want)) {
 			t.Errorf("the guide's container image section never says %q, which is what an operator choosing an image for their own machine reads off it", want)
 		}
+	}
+
+	// The published tag, the index it names, the three platforms that index covers, and the rule a
+	// host pulling it follows: one sentence, because an operator decides what to pull from that one
+	// sentence.
+	published := regexp.MustCompile(`latest names one image index over the three architectures [^.]*linux/amd64 [^.]*linux/arm/v7 [^.]*linux/arm64 [^.]*receives the image for its own architecture`)
+
+	if !published.MatchString(section) {
+		t.Error("the guide's container image section never names the published tag as one image index over the three architectures, which is what a host pulling that tag is choosing")
+	}
+
+	// What the guide said while the published tag was one architecture's image, and the loose
+	// publishing that went with it. A guide that still says either sends an operator to a platform
+	// line the pull does not need.
+	for _, gone := range []string{
+		"latest-amd64",
+		"is the amd64 one",
+		"no manifest list",
+	} {
+		if strings.Contains(section, gone) {
+			t.Errorf("the guide's container image section says %q, and the published tag now covers every architecture the image is built for", gone)
+		}
+	}
+
+	// The example that keeps the container beside other services pulls the one name, and a pull of
+	// an index that carries several architectures needs no platform pinned in it.
+	if strings.Contains(section, "platform:") {
+		t.Error("the guide's container image section carries a platform: line, which a host pulling the published index does not need")
 	}
 
 	// building an image for another architecture is an operator command, on its own line,
