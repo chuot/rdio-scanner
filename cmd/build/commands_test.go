@@ -373,7 +373,10 @@ func TestThePodmanRunAskedForAllThreeWritesItsManifestListAsOneLayoutFile(t *tes
 
 // the list a podman run assembles is cleared before the three builds name it and again once its
 // file is written: podman refuses a list name an image or an earlier list already holds, and the
-// list is the run's own working name, not something the machine keeps.
+// list is the run's own working name, not something the machine keeps. The clear carries --ignore
+// because podman's manifest rm answers "image not known" and ends 1 when the name is in the store
+// no more than a first run leaves it, and a clear that reads that answer as a failure stops a run
+// before it has built anything.
 func TestThePodmanRunAskedForAllThreeClearsTheManifestListNameItAssembles(t *testing.T) {
 	s := containerManifestClearStep("/repo", theVersion(t), podmanProgram)
 
@@ -381,8 +384,8 @@ func TestThePodmanRunAskedForAllThreeClearsTheManifestListNameItAssembles(t *tes
 		t.Errorf("the run's list-clearing step names %q, want the program the run resolved: %q", s.name, podmanProgram)
 	}
 
-	if len(s.args) != 3 || s.args[0] != "manifest" || s.args[1] != "rm" {
-		t.Fatalf("the run's list-clearing step runs %v, want podman's manifest rm naming one list", s.args)
+	if len(s.args) != 4 || s.args[0] != "manifest" || s.args[1] != "rm" || s.args[2] != "--ignore" {
+		t.Fatalf("the run's list-clearing step runs %v, want podman's manifest rm with --ignore naming one list", s.args)
 	}
 
 	want := containerImage + ":8.0.0-gdb79311" + theManifestListSuffix

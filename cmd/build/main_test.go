@@ -2136,11 +2136,12 @@ func theStepWords(ran []step) []string {
 	return words
 }
 
-// theContainerStepWord names a container step by what it asks the container program to do.
+// theContainerStepWord names a container step by what it asks the container program to do. The list
+// a clearing step names is its last argument, whatever flags the program takes beside it.
 func theContainerStepWord(s step) string {
 	switch {
 	case len(s.args) > 2 && s.args[0] == "manifest" && s.args[1] == "rm":
-		return "clear " + s.args[2]
+		return "clear " + s.args[len(s.args)-1]
 	case len(s.args) > 2 && s.args[0] == "manifest" && s.args[1] == "push":
 		return "export " + s.result
 	case len(s.args) > 1 && s.args[0] == "buildx":

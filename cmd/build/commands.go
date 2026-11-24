@@ -610,7 +610,10 @@ func containerIndexFileFor(version buildinfo.Version) string {
 // store. The program refuses a list name an image or an earlier list already holds, and the list
 // is working state for one run: it is cleared before the three builds name it, so a leftover from
 // an interrupted run cannot make this one fail, and again once its file is written, so the machine
-// keeps the images and not the list.
+// keeps the images and not the list. --ignore is what makes the first of those two readings the
+// ordinary one: the program answers "image not known" and ends 1 when the name is not in the store,
+// which is the state a run that assembled nothing before leaves, and that is the outcome the step
+// wanted rather than a failure.
 func containerManifestClearStep(repo string, version buildinfo.Version, program string) step {
 	return step{
 		label:  subContainer,
@@ -620,6 +623,7 @@ func containerManifestClearStep(repo string, version buildinfo.Version, program 
 		args: []string{
 			"manifest",
 			"rm",
+			"--ignore",
 			containerManifestListFor(version),
 		},
 	}
