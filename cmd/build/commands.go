@@ -634,6 +634,41 @@ func containerManifestExportStep(repo string, version buildinfo.Version, program
 	}
 }
 
+// containerIndexBuildStep is the docker route's assembly: one build of the three architectures that
+// exports the OCI layout file directly. It names no image tag, because a multi-architecture build
+// cannot be loaded into the local store — the three images come from the three legs — and it names
+// no builder, because which builder a host uses is the host's own decision. The attestation manifests
+// buildx adds by default ride in the index as entries whose platform is no architecture this project
+// builds for, so both are turned off.
+func containerIndexBuildStep(repo string, version buildinfo.Version, created time.Time, program string) step {
+	platforms := make([]string, 0, len(containerTargets))
+
+	for _, target := range containerTargets {
+		platforms = append(platforms, containerPlatformFor(target))
+	}
+
+	file := containerIndexFileFor(version)
+
+	return step{
+		label:  subContainer,
+		result: file,
+		dir:    repo,
+		name:   program,
+		args: []string{
+			"buildx",
+			"build",
+			"-f", "Containerfile",
+			"--platform=" + strings.Join(platforms, ","),
+			"--build-arg", "VERSION=" + version.String(),
+			"--build-arg", "BUILD_TIME=" + created.UTC().Format(time.RFC3339),
+			"--provenance=false",
+			"--sbom=false",
+			"-o", "type=oci,dest=" + file,
+			".",
+		},
+	}
+}
+
 // containerStep asks the container program to build the image for one
 // architecture: the architecture is named once, by the platform the
 // program builds for, and the version and the build time arrive as build

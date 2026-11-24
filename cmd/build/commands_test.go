@@ -393,6 +393,90 @@ func TestThePodmanRunAskedForAllThreeClearsTheManifestListNameItAssembles(t *tes
 	}
 }
 
+// the docker route assembles the three architectures in one build of its own: the platforms are
+// named in the order the tool lists the architectures, the build writes the same layout file podman
+// writes, it carries no attestation manifests, and it tags nothing because a manifest list cannot be
+// loaded into the local store.
+func TestTheDockerRunAskedForAllThreeAssemblesTheIndexInOneExportedBuild(t *testing.T) {
+	s := containerIndexBuildStep("/repo", theVersion(t), theMoment, dockerProgram)
+
+	if s.name != dockerProgram {
+		t.Errorf("the run's index build names %q, want the program the run resolved: %q", s.name, dockerProgram)
+	}
+
+	if len(s.args) == 0 || s.args[0] != "buildx" || s.args[1] != "build" {
+		t.Fatalf("the run's index build runs %v, want docker's buildx build", s.args)
+	}
+
+	platforms := strings.Join([]string{
+		containerPlatformFor("linux-amd64"),
+		containerPlatformFor("linux-arm"),
+		containerPlatformFor("linux-arm64"),
+	}, ",")
+
+	if got := theOptionValue(s.args, "--platform"); got != platforms {
+		t.Errorf("the run's index build asks for %q, want the three architectures in the order the tool lists them, %q", got, platforms)
+	}
+
+	if file := theFlagValue(s.args, "-f"); file != "Containerfile" {
+		t.Errorf("the run's index build names %q as the file it builds from, want Containerfile", file)
+	}
+
+	if dest := theFlagValue(s.args, "-o"); !strings.HasPrefix(dest, "type=oci,dest=") {
+		t.Errorf("the run's index build exports with %q, want type=oci and the layout file as its destination: the release artifact is the file, not a build cache", dest)
+	}
+
+	for _, arg := range s.args {
+		if strings.HasPrefix(arg, "--provenance") && arg != "--provenance=false" {
+			t.Errorf("the run's index build carries %q, want attestation off: attestation manifests ride in the index as platforms no image is built for", arg)
+		}
+
+		if strings.HasPrefix(arg, "--sbom") && arg != "--sbom=false" {
+			t.Errorf("the run's index build carries %q, want the software bill of materials off, for the same reason", arg)
+		}
+	}
+
+	if !carriesArgument(s.args, "--provenance=false") || !carriesArgument(s.args, "--sbom=false") {
+		t.Errorf("the run's index build carries %v, want both --provenance=false and --sbom=false: the index names the three architectures and nothing else", s.args)
+	}
+
+	file := filepath.Join(".build", containerImage+"-8.0.0-gdb79311"+theIndexFileSuffix)
+
+	if !carriesArgument(s.args, "type=oci,dest="+file) {
+		t.Errorf("the run's index build carries %v, want the export destination %q: the same file podman writes is what the release publishes", s.args, file)
+	}
+
+	for _, arg := range s.args {
+		if arg == "-t" || strings.HasPrefix(arg, "-t=") {
+			t.Errorf("the run's index build tags an image in %v: docker cannot load a multi-architecture build into the local store, so the three images come from the three legs and this build writes only the file", s.args)
+		}
+
+		if strings.Contains(arg, "builder") {
+			t.Errorf("the run's index build carries %q, which names a builder the tool chose: the builder a host uses is the host's own choice", arg)
+		}
+
+		if arg == "push" || strings.Contains(arg, "://") {
+			t.Errorf("the run's index build carries %q, which publishes: the index is a file the operator publishes", arg)
+		}
+	}
+
+	for _, arg := range s.args {
+		if !strings.HasPrefix(arg, "--build-arg") {
+			continue
+		}
+
+		for _, word := range []string{"TARGETARCH", "TARGETOS", "TARGETPLATFORM", "TARGETVARIANT", "BUILDPLATFORM", "GOARCH", "GOOS", "GOARM"} {
+			if strings.Contains(arg, word) {
+				t.Errorf("the run's index build passes %q, which names an architecture as a build argument: the container program fills %s itself from the platforms it was asked for", arg, word)
+			}
+		}
+	}
+
+	if version := theFlagValue(s.args, "--build-arg"); version != "VERSION=8.0.0+gdb79311" {
+		t.Errorf("the run's index build carries %q as its first build argument, want the version the run resolved", version)
+	}
+}
+
 // theIndexFileSuffix names the file the run writes as what it is: an OCI layout archive, not an
 // image a host can run.
 const theIndexFileSuffix = ".oci"
