@@ -481,6 +481,30 @@ func TestTheDockerRunAskedForAllThreeAssemblesTheIndexInOneExportedBuild(t *test
 // image a host can run.
 const theIndexFileSuffix = ".oci"
 
+// the base image an assembling run proves the host can execute is the image the finished image is
+// taken from: the platform the host is asked about is the platform the build would have to build for.
+func TestTheAssemblyCheckRunsTheImageTheContainerfileShipsFrom(t *testing.T) {
+	contents, err := os.ReadFile(filepath.Join("..", "..", "Containerfile"))
+	if err != nil {
+		t.Fatalf("ReadFile(Containerfile): %v", err)
+	}
+
+	stage, found := theShippingContainerfileStage(theContainerfileStages(string(contents)))
+	if !found {
+		t.Fatal("the Containerfile has no shipping stage, and an image is shipped from one")
+	}
+
+	_, image, found := strings.Cut(stage.from, " ")
+	if !found {
+		t.Fatalf("the shipping stage starts %q, which names no image", stage.from)
+	}
+
+	if containerBaseImage != image {
+		t.Errorf("the host check runs %q, want %q, the image the finished image is taken from: a proof run of another image proves nothing about the build that follows",
+			containerBaseImage, image)
+	}
+}
+
 // carriesFlag reports whether a command line carries a flag with no value glued to it.
 func carriesFlag(args []string, flag string) bool {
 	for _, arg := range args {

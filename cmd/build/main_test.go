@@ -2076,6 +2076,340 @@ func TestAContainerRunOnAMachineOutsideTheThreeIsRefusedBeforeAnythingBuilds(t *
 	}
 }
 
+// theHostAnswer is one command a container run asks of the machine it runs on, and what this
+// stand-in host answers it. Commands are matched by the word that tells them apart, because a gate
+// case reads which questions were asked rather than the order they were asked in.
+type theHostAnswer struct {
+	askedFor string
+	out      string
+	err      error
+}
+
+// theHostThatAnswers answers the commands an assembling run asks of the host and records every
+// command line it was asked: a refusal is half of what a gate case reads, and the other half is
+// that the run asked nothing else of the host and ran no step.
+func theHostThatAnswers(answered []theHostAnswer, asked *[]string) command {
+	return func(argv []string, stdin []byte) ([]byte, error) {
+		line := strings.Join(argv, " ")
+
+		*asked = append(*asked, line)
+
+		for _, a := range answered {
+			if strings.Contains(line, a.askedFor) {
+				return []byte(a.out), a.err
+			}
+		}
+
+		return []byte(theContainerMachineHasTheseCores + "\n"), nil
+	}
+}
+
+// theBuildxVersionReport and theDockerBuilderReport are what docker answers for the two readings
+// of a host that assembles through buildx, copied from the words this machine's docker writes.
+const theBuildxVersionReport = "github.com/docker/buildx v0.34.0 3e73561e39785683b31b05eeab1ef645be44ca42\n"
+
+func theDockerBuilderReport(driver string, platforms ...string) string {
+	return "Name:          default\nDriver:        " + driver +
+		"\n\nNodes:\nName:             default\nEndpoint:         default\nStatus:           running" +
+		"\nBuildKit version: v0.30.0\nPlatforms:        " + strings.Join(platforms, ", ") + "\n"
+}
+
+// theThreeContainerPlatforms are the platforms a run asked for all three architectures builds for,
+// in the order the tool lists the architectures.
+var theThreeContainerPlatforms = []string{"linux/amd64", "linux/arm/v7", "linux/arm64"}
+
+// theArmLauncher is the program this host runs ARM instructions with, and the name the refusal of a
+// host that cannot run them carries: it is what the operator installs, and so what the refusal has
+// to name.
+const theArmLauncher = "qemu-user-static"
+
+// The remedy for a host whose docker builder cannot export the layout file is a builder the operator
+// creates themselves: the tool names the line and runs none of it.
+const theBuilderRemedy = "docker buildx create --name rdio-scanner --driver docker-container --use"
+
+// A docker run asked for all three architectures on a host whose current builder cannot export an OCI
+// layout is refused before it compiles anything: the builder that exports the index is a host change
+// the operator makes, and the refusal carries the line they type.
+func TestADockerRunAskedForAllThreeIsRefusedWhenItsBuilderCannotExportTheIndex(t *testing.T) {
+	t.Setenv(containerProgramEnv, dockerProgram)
+
+	tl, out, ran := fakeRun(released, "")
+
+	asked := []string{}
+
+	tl.theRun = theHostThatAnswers([]theHostAnswer{
+		{askedFor: "buildx version", out: theBuildxVersionReport},
+		{askedFor: "buildx inspect", out: theDockerBuilderReport("docker", theThreeContainerPlatforms...)},
+	}, &asked)
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1: a host that cannot export the index is refused, not half-built", code)
+	}
+
+	if steps := theBuildSteps(*ran); len(steps) != 0 {
+		t.Errorf("the refused run ran %v, and a host that cannot export the index compiles no ffmpeg and builds no image", steps)
+	}
+
+	msg := errout.String()
+
+	for _, want := range []string{`driver "docker"`, "OCI", theBuilderRemedy} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the refusal %q does not name %q: it has to say what the host lacks and the line that supplies it", msg, want)
+		}
+	}
+
+	if !carriesTheAsk(asked, "buildx version") || !carriesTheAsk(asked, "buildx inspect") {
+		t.Errorf("the run asked %v, and a docker run that assembles reads its builder before it builds", asked)
+	}
+
+	for _, line := range asked {
+		if strings.Contains(line, " build ") || strings.Contains(line, "-t ") {
+			t.Errorf("the run asked %q, and a refused run asks the host for no image build", line)
+		}
+	}
+}
+
+// A host without buildx cannot assemble at all: the run asks buildx its first question, and the
+// answer that it is not there ends the run there.
+func TestADockerRunAskedForAllThreeIsRefusedWhenTheHostHasNoBuildx(t *testing.T) {
+	t.Setenv(containerProgramEnv, dockerProgram)
+
+	tl, out, ran := fakeRun(released, "")
+
+	asked := []string{}
+
+	tl.theRun = theHostThatAnswers([]theHostAnswer{
+		{askedFor: "buildx version", err: errors.New("docker: 'buildx' is not a docker command")},
+	}, &asked)
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+
+	if steps := theBuildSteps(*ran); len(steps) != 0 {
+		t.Errorf("the refused run ran %v, and a host with no buildx assembles no ffmpeg and no image", steps)
+	}
+
+	msg := errout.String()
+
+	if !strings.Contains(msg, "buildx") {
+		t.Errorf("the refusal %q does not name buildx, the tool the docker route assembles through", msg)
+	}
+
+	if !strings.Contains(msg, "install") {
+		t.Errorf("the refusal %q names no host change that supplies buildx", msg)
+	}
+
+	if carriesTheAsk(asked, "buildx inspect") {
+		t.Errorf("the run asked %v, and a host that has no buildx is refused at that answer", asked)
+	}
+}
+
+// A builder that declares no ARMv7 among the platforms it can target cannot build the linux-arm
+// image: the refusal names the target, the platform that target builds for, and the launcher that
+// makes a host able to run it.
+func TestADockerRunAskedForAllThreeIsRefusedWhenItsBuilderDeclaresNoArmV7(t *testing.T) {
+	t.Setenv(containerProgramEnv, dockerProgram)
+
+	tl, out, ran := fakeRun(released, "")
+
+	asked := []string{}
+
+	tl.theRun = theHostThatAnswers([]theHostAnswer{
+		{askedFor: "buildx version", out: theBuildxVersionReport},
+		{askedFor: "buildx inspect", out: theDockerBuilderReport("docker-container", "linux/amd64", "linux/arm64")},
+	}, &asked)
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+
+	if steps := theBuildSteps(*ran); len(steps) != 0 {
+		t.Errorf("the refused run ran %v, and a builder that declares no ARMv7 is told so before any layer is compiled", steps)
+	}
+
+	msg := errout.String()
+
+	for _, want := range []string{"linux-arm", "linux/arm/v7", theArmLauncher} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the refusal %q does not name %q: the run has to say which target the host cannot build", msg, want)
+		}
+	}
+}
+
+// A podman run asked for all three architectures proves this host can execute each foreign
+// architecture before it builds, and the proof is one run of the base image for that platform: a host
+// that cannot run it is refused naming the target, its platform, and the launcher it lacks, with no
+// ffmpeg compiled and no image asked for.
+func TestAPodmanRunAskedForAllThreeIsRefusedWhenTheHostCannotRunTheArmPlatform(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+	tl.machine = func() host { return host{goos: "linux", goarch: "amd64", cpus: 4} }
+
+	asked := []string{}
+
+	tl.theRun = theHostThatAnswers([]theHostAnswer{
+		{askedFor: "--platform=linux/arm/v7", err: errors.New("exec format error")},
+		{askedFor: "--platform=linux/arm64", out: "aarch64\n"},
+	}, &asked)
+
+	errout := &bytes.Buffer{}
+
+	tl.errout = errout
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+
+	if steps := theBuildSteps(*ran); len(steps) != 0 {
+		t.Errorf("the refused run ran %v, and a host that cannot run ARM builds no ffmpeg and no image", steps)
+	}
+
+	msg := errout.String()
+
+	for _, want := range []string{"linux-arm", "linux/arm/v7", theArmLauncher, "uname -m"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the refusal %q does not name %q: the operator has to be able to run the check the run ran", msg, want)
+		}
+	}
+
+	if checks := thePlatformChecks(asked); len(checks) != 1 {
+		t.Errorf("the run asked the host %v, and a run refused at the first platform it cannot run asks for no second proof", checks)
+	}
+}
+
+// The two architectures a host is not are the two a podman run proves: the machine's own
+// architecture needs no proof, and both proofs run before any ffmpeg is compiled.
+func TestAPodmanRunAskedForAllThreeProvesTheTwoForeignArchitecturesBeforeItBuilds(t *testing.T) {
+	tl, out, ran := fakeRun(released, "")
+	tl.machine = func() host { return host{goos: "linux", goarch: "amd64", cpus: 4} }
+
+	asked := []string{}
+
+	tl.theRun = theHostThatAnswers([]theHostAnswer{
+		{askedFor: "--platform=linux/arm/v7", out: "armv7l\n"},
+		{askedFor: "--platform=linux/arm64", out: "aarch64\n"},
+	}, &asked)
+
+	if code := tl.run([]string{"container", "--all"}, out); code != 0 {
+		t.Fatalf("exit code = %d, want 0: %s", code, out.String())
+	}
+
+	want := []string{"linux/arm/v7", "linux/arm64"}
+
+	got := thePlatformChecks(asked)
+
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("the run proved the platforms %v, want %v: the architecture this machine is needs no proof, and the two it is not are proved in the order the tool lists the architectures",
+			got, want)
+	}
+
+	images := 0
+
+	for _, s := range *ran {
+		if s.label == subContainer {
+			images++
+		}
+	}
+
+	if images != len(containerTargets) {
+		t.Errorf("the run built %d images after it proved the host, want one for each of the three architectures: %v", images, *ran)
+	}
+}
+
+// A single target assembles no index, so it asks the host none of the questions an assembling run
+// asks: neither program checks a builder or a foreign architecture for it, and the build runs.
+func TestASingleTargetContainerRunAsksTheHostNoAssemblyQuestion(t *testing.T) {
+	for _, program := range []string{podmanProgram, dockerProgram} {
+		t.Setenv(containerProgramEnv, program)
+
+		tl, out, ran := fakeRun(released, "")
+
+		asked := []string{}
+
+		tl.theRun = theHostThatAnswers([]theHostAnswer{
+			{askedFor: "buildx", err: errors.New("this host answers no buildx question")},
+			{askedFor: "uname -m", err: errors.New("this host runs no foreign architecture")},
+		}, &asked)
+
+		tl.errout = &bytes.Buffer{}
+
+		if code := tl.run([]string{"container", "linux-arm"}, out); code != 0 {
+			t.Fatalf("%s container linux-arm answers exit %d, want 0: %s", program, code, out.String())
+		}
+
+		for _, line := range asked {
+			if strings.Contains(line, "buildx") || strings.Contains(line, "uname -m") {
+				t.Errorf("the %s run asked the host %q, and a run that assembles no index asks no assembly question", program, line)
+			}
+		}
+
+		images := 0
+
+		for _, s := range *ran {
+			if s.label == subContainer {
+				images++
+			}
+		}
+
+		if images != 1 {
+			t.Errorf("the %s run built %d images, want the one image it was asked for: %v", program, images, *ran)
+		}
+	}
+}
+
+// carriesTheAsk reports whether a recorded host reading asked a command naming a word.
+func carriesTheAsk(asked []string, word string) bool {
+	for _, line := range asked {
+		if strings.Contains(line, word) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// theBuildSteps are the steps a refused container run must not have run: the ffmpeg compiles and
+// the image builds, which are the two costs a host check exists to avoid paying. Both bundles are
+// built before any container phase and carry no architecture, so they are not what these cases read.
+func theBuildSteps(ran []step) []step {
+	steps := []step{}
+
+	for _, s := range ran {
+		if s.label == subFFmpeg || s.label == subContainer {
+			steps = append(steps, s)
+		}
+	}
+
+	return steps
+}
+
+// thePlatformChecks are the platforms a recorded run asked the host to prove, in the order it asked.
+func thePlatformChecks(asked []string) []string {
+	platforms := []string{}
+
+	for _, line := range asked {
+		for _, arg := range strings.Split(line, " ") {
+			if value, found := strings.CutPrefix(arg, "--platform="); found && strings.Contains(line, "uname -m") {
+				platforms = append(platforms, value)
+			}
+		}
+	}
+
+	return platforms
+}
+
 // A clean run removes the release output, the dependencies, and both bundles' contents, and
 // builds nothing.
 func TestACleanRunRemovesTheReleaseOutputTheDependenciesAndTheBundleContents(t *testing.T) {

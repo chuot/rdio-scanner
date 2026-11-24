@@ -467,6 +467,15 @@ func (t tool) runContainer(o options, version buildinfo.Version, stdout io.Write
 		return fail(t.errout, err)
 	}
 
+	// an index is assembled only out of more than one architecture, so only a run that resolved
+	// more than one target is asked what its host can do: three images compiled and then refused
+	// at the export is the failure these readings answer before any of it costs anything.
+	if len(targets) > 1 {
+		if err := t.checkContainerAssembly(targets, program); err != nil {
+			return fail(t.errout, err)
+		}
+	}
+
 	// a single target's log needs no prefix;
 	// every line of a three-architecture run has to name the target it is about.
 	prefix := len(targets) > 1
