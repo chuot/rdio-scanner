@@ -591,6 +591,118 @@ func TestADatabaseFileThatCannotBeWrittenStopsTheStartAndNamesTheFile(t *testing
 	}
 }
 
+// a database file the account may write, sitting in a folder it may not, is the
+// folder failure it is: the server cannot make its claim or its journal beside
+// the file, and a start that learns that only when it tries to claim the
+// deployment says the database is in use. The refusal names the folder the
+// operator has to fix and the file that sits in it.
+func TestADatabaseFileInAFolderThatCannotBeWrittenNamesTheFolderAndTheFile(t *testing.T) {
+	cfg, out := newTestConfig(t)
+	sub := filepath.Join(cfg.BaseDir, "db")
+
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", sub, err)
+	}
+
+	dbFile := filepath.Join(sub, "rdio-scanner.db")
+	seedDatabaseFile(t, dbFile, 0o644)
+
+	if err := os.Chmod(sub, 0o555); err != nil {
+		t.Fatalf("chmod %s: %v", sub, err)
+	}
+
+	t.Cleanup(func() {
+		if err := os.Chmod(sub, 0o755); err != nil {
+			t.Errorf("chmod %s back: %v", sub, err)
+		}
+	})
+
+	_, _, err := newConfig([]string{"-base_dir", cfg.BaseDir, "-db_file", dbFile, "-listen", freeListenAddr(t)}, "", out)
+	if err == nil {
+		t.Fatalf("newConfig started a server whose database file sits in a folder it cannot write: want the start refused")
+	}
+
+	if !strings.Contains(err.Error(), sub) {
+		t.Errorf("error = %q, want it to name the folder %q: an operator who could fix the folder is not told which folder", err.Error(), sub)
+	}
+
+	if !strings.Contains(err.Error(), dbFile) {
+		t.Errorf("error = %q, want it to name the database file %q beside the folder", err.Error(), dbFile)
+	}
+
+	if strings.Contains(err.Error(), "in use") {
+		t.Errorf("error = %q, want it to say what is wrong with the folder, not that the deployment is in use", err.Error())
+	}
+}
+
+// a database file named inside a folder that is not there at all is a missing
+// folder, not a permissions problem: an operator who read "no write permissions"
+// would reach for chown or chmod on a folder that does not exist. The refusal
+// names the folder that is missing and says it is missing.
+func TestAMissingFolderIsNamedAsMissingAndNotAsUnwritable(t *testing.T) {
+	cfg, out := newTestConfig(t)
+	sub := filepath.Join(cfg.BaseDir, "data", "db")
+	dbFile := filepath.Join(sub, "rdio-scanner.db")
+
+	_, _, err := newConfig([]string{"-base_dir", cfg.BaseDir, "-db_file", dbFile, "-listen", freeListenAddr(t)}, "", out)
+	if err == nil {
+		t.Fatalf("newConfig started a server whose database folder %s is not there: want the start refused", sub)
+	}
+
+	if !strings.Contains(err.Error(), sub) {
+		t.Errorf("error = %q, want it to name the missing folder %q", err.Error(), sub)
+	}
+
+	if !strings.Contains(err.Error(), "not exist") {
+		t.Errorf("error = %q, want it to say the folder does not exist: an operator told the folder is not there creates one, and one told it cannot be written reaches for chmod", err.Error())
+	}
+
+	if strings.Contains(err.Error(), "permissions") {
+		t.Errorf("error = %q, want no claim of a permission problem on a folder that is not there", err.Error())
+	}
+
+	if _, err := os.Stat(sub); !os.IsNotExist(err) {
+		t.Errorf("the refused start created %q: want the missing folder left missing", sub)
+	}
+}
+
+// a database path that names a folder is that shape, and the driver's answer for
+// it is the same one it gives for several other faults: an operator who reads
+// "unable to open database file" cannot tell a folder from a missing file or a
+// corrupt one. The refusal says the path is a folder.
+func TestADatabasePathThatIsAFolderIsNamedAsAFolder(t *testing.T) {
+	cfg, out := newTestConfig(t)
+	dbFile := filepath.Join(cfg.BaseDir, "rdio-scanner.db")
+
+	if err := os.Mkdir(dbFile, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", dbFile, err)
+	}
+
+	before := deploymentListing(t, cfg.BaseDir)
+
+	_, _, err := newConfig([]string{"-base_dir", cfg.BaseDir, "-db_file", dbFile, "-listen", freeListenAddr(t)}, "", out)
+	if err == nil {
+		t.Fatalf("newConfig started a server whose database path %s is a folder: want the start refused", dbFile)
+	}
+
+	if !strings.Contains(err.Error(), dbFile) {
+		t.Errorf("error = %q, want it to name the path %q", err.Error(), dbFile)
+	}
+
+	if !strings.Contains(err.Error(), "folder") {
+		t.Errorf("error = %q, want it to say the path is a folder: the driver's words for this shape are the words it uses for three other faults", err.Error())
+	}
+
+	if strings.Contains(err.Error(), "permissions") {
+		t.Errorf("error = %q, want no claim of a permission problem on a path that is a folder", err.Error())
+	}
+
+	if after := deploymentListing(t, cfg.BaseDir); strings.Join(after, "\n") != strings.Join(before, "\n") {
+		t.Errorf("the refused start left the deployment folder as:\n%s\nwant exactly what it found:\n%s",
+			strings.Join(after, "\n"), strings.Join(before, "\n"))
+	}
+}
+
 // a start that is refused must leave the deployment exactly as it found it: the
 // operator has to be able to fix the ownership and start again against the same
 // bytes, and a check that probes writability by creating or opening for writing
