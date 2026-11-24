@@ -628,12 +628,11 @@ func (t tool) runContainer(o options, version buildinfo.Version, stdout io.Write
 }
 
 // theIndexAssembly is what a run that set out to assemble an index learned doing it: the index it read
-// back out of the file it wrote, whether that file is there, whether the manifest list the podman route
-// filled is out of the machine's store again, and what stopped it when something did.
+// back out of the file it wrote, whether the manifest list the podman route filled is out of the
+// machine's store again, and what stopped it when something did.
 type theIndexAssembly struct {
 	index   containerIndex
 	file    string
-	written bool
 	cleared bool
 	err     error
 }
@@ -667,8 +666,6 @@ func (t tool) assembleContainerIndex(version buildinfo.Version, program string) 
 
 		return out
 	}
-
-	out.written = true
 
 	// The list is working state for the one file its export wrote: it goes as soon as the file is
 	// there, so the machine keeps the images and not the list.
