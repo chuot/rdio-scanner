@@ -70,7 +70,25 @@ func refuseUnwritableDatabaseFile(config *Config) error {
 		return nil
 	}
 
-	return fmt.Errorf("no write permissions in the database file %s", dbFile)
+	return fmt.Errorf("no write permissions in the database file %s (%s)", dbFile, unwritableFileClause(info))
+}
+
+// unwritableFileClause supplies what follows the file a refusal named: its mode,
+// the uid that owns it, and the uid the server is running as. All three are read
+// after the failed attempt has decided the refusal, so they explain a decision
+// rather than make one, and they are the three numbers stat and id report for the
+// same file — the mode a chmod changes, the owner a chown changes, and the account
+// the deployment's own process reports. A path this system carries no uid for says
+// that, and no number is invented for it.
+func unwritableFileClause(info os.FileInfo) string {
+	mode := info.Mode().Perm()
+
+	owner, named := fileOwnerUID(info)
+	if !named {
+		return fmt.Sprintf("mode %04o, owned by an account this system does not name", mode)
+	}
+
+	return fmt.Sprintf("mode %04o, owned by uid %d; the server runs as uid %d", mode, owner, os.Getuid())
 }
 
 // canWriteFile asks the named file whether this process may write it, by opening

@@ -589,6 +589,13 @@ func TestADatabaseFileThatCannotBeWrittenStopsTheStartAndNamesTheFile(t *testing
 	if !strings.Contains(err.Error(), dbFile) {
 		t.Errorf("error = %q, want it to name %q: a refusal that does not say which file cannot be acted on", err.Error(), dbFile)
 	}
+
+	// the three numbers a fix turns on, all of them after the failed attempt has
+	// already decided the refusal: the mode the file carries, the account that
+	// owns it, and the account the server itself runs as.
+	if !strings.Contains(err.Error(), "(mode ") {
+		t.Errorf("error = %q, want it to carry the file's mode, its owner, and the uid the server runs as: an operator told only which file cannot tell which of the three to change", err.Error())
+	}
 }
 
 // a database file the account may write, sitting in a folder it may not, is the

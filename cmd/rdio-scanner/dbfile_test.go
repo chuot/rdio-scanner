@@ -19,7 +19,40 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+// statInfo stands in for the os.Lstat result of a path whose mode and owner are
+// named here, so the refusal's detail can be shown for a file another account
+// owns without another account on this machine.
+type statInfo struct {
+	name string
+	mode os.FileMode
+	sys  any
+}
+
+func (i statInfo) Name() string { return i.name }
+
+func (i statInfo) Size() int64 { return 0 }
+
+func (i statInfo) Mode() os.FileMode { return i.mode }
+
+func (i statInfo) ModTime() time.Time { return time.Time{} }
+
+func (i statInfo) IsDir() bool { return false }
+
+func (i statInfo) Sys() any { return i.sys }
+
+// a path that carries no uid at all is answered with the half this system does
+// know, and no invented number: the mode is what the failed attempt found, and
+// the owner is named as not named rather than as a uid nobody reported.
+func TestUnwritableFileClauseSaysTheOwnerIsNotNamedWhenThePathGivesNoUID(t *testing.T) {
+	clause := unwritableFileClause(statInfo{name: "rdio-scanner.db", mode: 0o600})
+
+	if want := "mode 0600, owned by an account this system does not name"; clause != want {
+		t.Errorf("unwritableFileClause = %q, want %q: a clause that prints a uid nobody reported sends the operator to a number that is not the file's", clause, want)
+	}
+}
 
 // canWriteFile is the whole decision the guard rests on, and its two answers are
 // the shapes the refusals divide on: a file this process can write, and one it
