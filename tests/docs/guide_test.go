@@ -1653,6 +1653,106 @@ func TestTheGuideSaysTheFfmpegIsCompiledForAudioOnly(t *testing.T) {
 	}
 }
 
+// databaseRefusalLines are the sentences a start whose database it cannot write is answered with, each written as
+// the code writes it and naming the file it reads the sentence from. Every one is quoted in the guide, so a
+// sentence reworded on one side is refused until the other side follows it.
+var databaseRefusalLines = []struct {
+	sentence string
+	builtIn  string
+}{
+	{sentence: "no write permissions in the database file %s (%s)", builtIn: "cmd/rdio-scanner/dbfile.go"},
+	{sentence: "no write permissions in %s, the folder the database file %s sits in", builtIn: "cmd/rdio-scanner/dbfile.go"},
+	{sentence: "the folder the database file was named in does not exist: %s", builtIn: "cmd/rdio-scanner/dbfile.go"},
+	{sentence: "the database file %s is a folder", builtIn: "cmd/rdio-scanner/dbfile.go"},
+	{sentence: "%w — the database file is %s", builtIn: "internal/app/server.go"},
+	{sentence: "the database is in use", builtIn: "internal/app/app.go"},
+	{sentence: "the database is in use — stop the server before vacuuming", builtIn: "cmd/rdio-scanner/main.go"},
+}
+
+// sentencePhrases cuts one of those sentences into the words it says around the paths it fills. Only words long
+// enough to be a phrase are kept, so a leftover verb or parenthesis is never the thing a guard asks a reader to
+// have been shown.
+func sentencePhrases(sentence string) []string {
+	parts := regexp.MustCompile(`%[a-z0-9]+`).Split(sentence, -1)
+
+	phrases := []string{}
+
+	for _, part := range parts {
+		phrase := strings.Trim(part, " ,;:()")
+
+		if len([]rune(phrase)) >= 10 {
+			phrases = append(phrases, phrase)
+		}
+	}
+
+	return phrases
+}
+
+// a start that cannot write its database is refused in one line naming the file, the folder it sits in, the folder
+// that is not there, or the path that is a folder, and the guide says each of those lines in the chapter an
+// operator who cannot start is already reading: one row of the symptom table, a subsection quoting the lines, and
+// the installation chapter's words naming the account the container image runs as and who has to own the volume.
+func TestTheGuideSaysWhatAStartThatCannotWriteItsDatabaseSays(t *testing.T) {
+	body := guidePath(t)
+
+	troubleshooting := chapterOf(t, body, "ch-25-troubleshooting")
+
+	symptoms := words(tableWithCaption(t, troubleshooting, "Symptom to place"))
+
+	for _, want := range []string{"The server will not start", "restarts on a loop"} {
+		if !strings.Contains(symptoms, want) {
+			t.Errorf("the guide's symptom table carries no row for a start that says %q", want)
+		}
+	}
+
+	text := words(troubleshooting)
+
+	for _, line := range databaseRefusalLines {
+		source := repoFile(t, strings.Split(line.builtIn, "/")...)
+
+		for _, phrase := range sentencePhrases(line.sentence) {
+			if !strings.Contains(text, phrase) {
+				t.Errorf("the guide's troubleshooting chapter never quotes %q, which a start that cannot write its database answers with", phrase)
+			}
+
+			if !strings.Contains(source, phrase) {
+				t.Errorf("%s no longer says %q, which the guide quotes as what such a start answers with", line.builtIn, phrase)
+			}
+		}
+	}
+
+	places := []struct {
+		chapter string
+		need    []string
+	}{
+		{
+			chapter: "ch-04-installation",
+			need: []string{
+				"uid 10001",
+				"data volume",
+			},
+		},
+		{
+			chapter: "ch-25-troubleshooting",
+			need: []string{
+				"rdio-scanner.lock",
+				"-base_dir",
+				"-db_file",
+			},
+		},
+	}
+
+	for _, p := range places {
+		chapterWords := words(chapterOf(t, body, p.chapter))
+
+		for _, want := range p.need {
+			if !strings.Contains(chapterWords, want) {
+				t.Errorf("the guide's chapter %q never says %q", p.chapter, want)
+			}
+		}
+	}
+}
+
 // the guide states the question the administration page asks when it finds a new version, in the
 // chapter an operator is already reading when the question appears, and states in the
 // troubleshooting chapter why a page opened over an address the browser will not give a worker
