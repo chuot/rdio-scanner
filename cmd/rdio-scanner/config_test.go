@@ -18,6 +18,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -815,6 +816,122 @@ func TestAHealthyDeploymentAndAHealthyFirstStartAreNotRefused(t *testing.T) {
 			t.Errorf("error = %q, want the refusal of the folder, not one about the file inside it", err.Error())
 		}
 	})
+}
+
+// the check answers a start that opens the deployment, and it answers none of the
+// modes that open nothing: the version, the saved configuration file, the command
+// modes that drive a server that is already running, and the actions this process
+// asks the host's service manager to take. A deployment an operator cannot write
+// must not stop them from asking the manager to stop the service, so those modes
+// are answered with no error at all and the file they were given is left as it was
+// found. The service actions are named as the operator names them; asking the host
+// for one is a dispatch this test does not reach, because config parsing decides
+// the mode and never talks to a manager.
+func TestAModeThatOpensNoDatabaseIsNotRefusedOverAnUnwritableDatabaseFile(t *testing.T) {
+	for _, flags := range [][]string{
+		{"-version"},
+		{"-config_save"},
+		{"-cmd", "help"},
+		{"-cmd", "config-get"},
+		{"-service", "stop"},
+		{"-service", "restart"},
+		{"-service", "install"},
+		{"-service", "uninstall"},
+	} {
+		cfg, out := newTestConfig(t)
+		dbFile := filepath.Join(cfg.BaseDir, "rdio-scanner.db")
+
+		seedDatabaseFile(t, dbFile, 0o444)
+
+		before := fileStatLine(t, dbFile)
+
+		args := append([]string{"-base_dir", cfg.BaseDir, "-db_file", dbFile, "-listen", freeListenAddr(t)}, flags...)
+
+		_, _, err := newConfig(args, "", out)
+		if err != nil {
+			t.Errorf("%v refused a file it was never asked to write: %v", flags, err)
+		}
+
+		if after := fileStatLine(t, dbFile); after != before {
+			t.Errorf("%v changed the database file it was given: %s, want %s", flags, after, before)
+		}
+
+		assertNoDeploymentSidecar(t, dbFile, flags)
+	}
+}
+
+// the modes that open the deployment are refused by the same check as the server
+// start, in the same words, before a claim is written beside the file: the ordinary
+// start, the maintenance run and its dry run, the administrator credential mode, and
+// the server the service manager is told to run, which is the one action under
+// -service that starts a server rather than asking for one.
+func TestAModeThatOpensTheDatabaseIsRefusedOverAnUnwritableDatabaseFile(t *testing.T) {
+	for _, flags := range [][]string{
+		{},
+		{"-vacuum"},
+		{"-vacuum", "-vacuum_dry_run"},
+		{"-admin_password", "a-chosen-one"},
+		{"-service", serviceActionRun},
+	} {
+		cfg, out := newTestConfig(t)
+		dbFile := filepath.Join(cfg.BaseDir, "rdio-scanner.db")
+
+		seedDatabaseFile(t, dbFile, 0o444)
+
+		before := fileStatLine(t, dbFile)
+
+		args := append([]string{"-base_dir", cfg.BaseDir, "-db_file", dbFile, "-listen", freeListenAddr(t)}, flags...)
+
+		_, _, err := newConfig(args, "", out)
+		if err == nil {
+			t.Fatalf("%v started over a database file it cannot write: want the start refused", flags)
+		}
+
+		if !strings.Contains(err.Error(), dbFile) {
+			t.Errorf("%v: error = %q, want it to name %q", flags, err.Error(), dbFile)
+		}
+
+		if !strings.Contains(err.Error(), "(mode 0444, owned by uid ") {
+			t.Errorf("%v: error = %q, want the file's mode and owner beside the name", flags, err.Error())
+		}
+
+		if after := fileStatLine(t, dbFile); after != before {
+			t.Errorf("%v changed the file it refused: %s, want %s", flags, after, before)
+		}
+
+		assertNoDeploymentSidecar(t, dbFile, flags)
+	}
+}
+
+// fileStatLine reports a file's mode and size together, so a run that was refused
+// can be compared against the file it was handed.
+func fileStatLine(t *testing.T, path string) string {
+	t.Helper()
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %s: %v", path, err)
+	}
+
+	return fmt.Sprintf("%04o %d bytes", info.Mode().Perm(), info.Size())
+}
+
+// assertNoDeploymentSidecar names the three files a start writes beside a database
+// it opens — its claim, its journal, and its write-ahead log — and fails when any of
+// them is found, so a refusal that arrives before the claim can be told from one
+// that arrived after it.
+func assertNoDeploymentSidecar(t *testing.T, dbFile string, flags []string) {
+	t.Helper()
+
+	for _, suffix := range []string{".lock", "-journal", "-wal"} {
+		path := dbFile + suffix
+
+		if _, err := os.Stat(path); err == nil {
+			t.Errorf("%v left %s behind: the run that was refused never reached the claim", flags, path)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s: %v", path, err)
+		}
+	}
 }
 
 // seedDatabaseFile writes a file the size and shape of a deployment's database
