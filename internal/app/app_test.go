@@ -972,6 +972,186 @@ func TestASecondServerAgainstALiveDeploymentIsRefused(t *testing.T) {
 	}
 }
 
+// a claim that failed because the folder would not hold the sidecar is not a
+// deployment another process holds. The composition root is what turns a claim
+// failure into the in-use refusal, and it has to keep the two apart: an operator
+// whose folder is owned by someone else is told the folder is the problem, not
+// that a server is running when none is.
+func TestAFolderThatWillNotHoldTheClaimIsNotReportedAsADeploymentInUse(t *testing.T) {
+	base := t.TempDir()
+
+	dbFile := filepath.Join(base, "rdio-scanner.db")
+
+	if err := os.Chmod(base, 0o555); err != nil {
+		t.Fatalf("chmod %s: %v", base, err)
+	}
+
+	defer func() {
+		if err := os.Chmod(base, 0o755); err != nil {
+			t.Errorf("chmod %s writable again: %v", base, err)
+		}
+	}()
+
+	srv, err := New(testConfigIn(base, io.Discard))
+	if err == nil {
+		_ = srv.Close()
+		t.Fatal("a composition root started over a folder that cannot hold its claim, want it refused")
+	}
+
+	if srv != nil {
+		t.Error("the refused start handed back an assembled server, want nothing assembled")
+	}
+
+	if errors.Is(err, ErrInUse) {
+		t.Errorf("the refusal is reported as a deployment in use: %v, want the folder's own failure", err)
+	}
+
+	if text := err.Error(); strings.Contains(text, "in use") {
+		t.Errorf("the refusal says the deployment is in use when nothing holds it: %q", text)
+	}
+
+	if !strings.Contains(err.Error(), dbFile) {
+		t.Errorf("the refusal does not name the database file the operator has to fix: %q, want it to name %q", err.Error(), dbFile)
+	}
+
+	// the reason the folder gave stays in the sentence, because the fix is the
+	// folder's ownership and not a server to stop
+	if !strings.Contains(err.Error(), "permission denied") {
+		t.Errorf("the refusal does not carry the reason the folder gave: %q", err.Error())
+	}
+}
+
+// a deployment another process holds is said in use once. The claim answers the
+// held deployment with the in-use failure of its own, and the composition root
+// adds the same words again beside it, so the operator reads one refusal as two.
+func TestADeploymentAnotherProcessHoldsIsSaidInUseOnce(t *testing.T) {
+	base := t.TempDir()
+
+	srv, err := New(testConfigIn(base, io.Discard))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	defer func() {
+		if err := srv.Close(); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	}()
+
+	second, err := New(testConfigIn(base, io.Discard))
+	if err == nil {
+		_ = second.Close()
+		t.Fatal("a second composition root against a live deployment started, want it refused as in use")
+	}
+
+	if !errors.Is(err, ErrInUse) {
+		t.Errorf("the refusal is %v, want it to say the deployment is in use", err)
+	}
+
+	if got := strings.Count(err.Error(), "the database is in use"); got != 1 {
+		t.Errorf("the refusal says the deployment is in use %d times: %q, want it said once", got, err.Error())
+	}
+}
+
+// a database failure the composition root reports on a file-backed deployment names the file the
+// operator named beside the words the failure already carries. The section prefix is what files the
+// line under the database subsystem, and the migration it names is what tells the operator which
+// half of the pass stopped; both stay exactly as they were.
+func TestADatabaseFailureOnAFileBackedDeploymentNamesTheDatabaseFile(t *testing.T) {
+	base := t.TempDir()
+
+	srv, err := New(testConfigIn(base, io.Discard))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if err := srv.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	dbFile := filepath.Join(base, "rdio-scanner.db")
+
+	if err := os.Chmod(dbFile, 0o444); err != nil {
+		t.Fatalf("chmod %s so no account can write it: %v", dbFile, err)
+	}
+
+	defer func() {
+		if err := os.Chmod(dbFile, 0o644); err != nil {
+			t.Errorf("chmod %s writable again: %v", dbFile, err)
+		}
+	}()
+
+	second, err := New(testConfigIn(base, io.Discard))
+	if err == nil {
+		_ = second.Close()
+		t.Fatal("a composition root started over a database file no account can write, want it refused")
+	}
+
+	if second != nil {
+		t.Error("the refused start handed back an assembled server, want nothing assembled")
+	}
+
+	if errors.Is(err, ErrInUse) {
+		t.Errorf("the refusal is reported as a deployment in use: %v, want the migration's own failure", err)
+	}
+
+	text := err.Error()
+
+	if !strings.Contains(text, dbFile) {
+		t.Errorf("the refusal does not name the database file the operator has to fix: %q, want it to name %q", text, dbFile)
+	}
+
+	if !strings.Contains(text, "database.migrate:") {
+		t.Errorf("the refusal no longer carries the section prefix that files the line: %q", text)
+	}
+
+	if !strings.Contains(text, "migration.") {
+		t.Errorf("the refusal no longer names the migration that stopped: %q", text)
+	}
+
+	if !strings.Contains(text, "attempt to write a readonly database") {
+		t.Errorf("the refusal no longer carries the failure the database gave: %q", text)
+	}
+}
+
+// the file is named only where there is a file to fix. A deployment on a database server has none:
+// its failure already names the host and the database it could not reach, and naming a file there
+// would send the operator to a folder that holds nothing of theirs.
+func TestADatabaseFailureOnAServerBackedDeploymentNamesNoDatabaseFile(t *testing.T) {
+	base := t.TempDir()
+
+	config := testConfigIn(base, io.Discard)
+	config.DbType = DbTypeMariadb
+	config.DbHost = "database.invalid"
+	config.DbPort = 3306
+	config.DbName = "rdio_scanner"
+	config.DbConnectTimeout = "not a duration"
+
+	srv, err := New(config)
+	if err == nil {
+		_ = srv.Close()
+		t.Fatal("a composition root reached a database whose data source it could not build, want it refused")
+	}
+
+	if srv != nil {
+		t.Error("the refused start handed back an assembled server, want nothing assembled")
+	}
+
+	if errors.Is(err, ErrInUse) {
+		t.Errorf("the refusal is reported as a deployment in use: %v, want the data source's own failure", err)
+	}
+
+	text := err.Error()
+
+	if !strings.Contains(text, "connect timeout") {
+		t.Errorf("the refusal does not carry the reason the data source gave: %q", text)
+	}
+
+	if strings.Contains(text, "rdio-scanner.db") {
+		t.Errorf("the refusal names a database file beside a deployment on a database server, which has no file to fix: %q", text)
+	}
+}
+
 // TestANewServerStartsAfterTheDeploymentIsClosed releases the claim
 // when the server closes: a new server over the same files starts, so
 // the lock belongs to the running server and not to the folder.
