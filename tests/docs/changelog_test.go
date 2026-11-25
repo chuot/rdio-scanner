@@ -412,3 +412,59 @@ func TestTheVersionEightEntrySaysTheUpgradeSaysEachMigrationFindingOnce(t *testi
 			"bullet, not spread over the group", found, "Updating from version 6.6.3")
 	}
 }
+
+// TestTheVersionEightEntrySaysAServerThatCannotWriteItsDatabaseNamesIt holds the release's word about a start
+// that cannot write the database file it was pointed at. The person whose container restarts on a loop searches
+// the entry for the file they own and cannot write, so the entry has to say the line the server now answers with,
+// the three numbers that line carries, and the two ways out of it — under a group named for starting the server,
+// which is where that person looks.
+func TestTheVersionEightEntrySaysAServerThatCannotWriteItsDatabaseNamesIt(t *testing.T) {
+	section := versionEightSection(t)
+
+	const group = "Starting the server"
+
+	entries := regexp.MustCompile(`(?m)^- .*`).FindAllString(versionEightGroup(t, section, group), -1)
+
+	if len(entries) == 0 {
+		t.Fatalf("the group %q carries no entry to read", group)
+	}
+
+	// The three numbers are what the refusal prints beside the file it names, and the
+	// two flags are the way out for a deployment that cannot be made writable where it is.
+	want := []string{
+		"write permissions",
+		"mode",
+		"owned by uid",
+		"the server runs as uid",
+		"-base_dir",
+		"-db_file",
+	}
+
+	found := 0
+
+	for _, entry := range entries {
+		lowered := strings.ToLower(entry)
+
+		if !strings.Contains(lowered, "write permissions") {
+			continue
+		}
+
+		found++
+
+		for _, phrase := range want {
+			if !strings.Contains(lowered, strings.ToLower(phrase)) {
+				t.Errorf("the group %q does not state %q on the line that names the refusal: %q", group, phrase, strings.TrimSpace(entry))
+			}
+		}
+	}
+
+	if found == 0 {
+		t.Errorf("the group %q carries no entry about a start that cannot write its database, so the operator "+
+			"whose server will not start has nothing to search for", group)
+	}
+
+	if found > 1 {
+		t.Errorf("%d entries of the group %q name the refusal: one line says what a start that cannot write its "+
+			"database says, not one line per shape it meets", found, group)
+	}
+}

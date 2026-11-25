@@ -209,9 +209,21 @@ func New(config Config) (*Server, error) {
 	// rdio-scanner process pointed at the same files is refused here rather
 	// than sharing the database and risking what an operator has recorded.
 	// The claim is released with the database in the stop.
+	//
+	// Only a claim another process holds is said as a deployment in use. The claim
+	// answers anything else that went wrong — a folder that will not hold the
+	// sidecar, a path with no folder in it — as a plain failure of its own, and an
+	// operator whose folder is owned by someone else has to be told the folder is
+	// the problem rather than sent to stop a server that is not running. The file
+	// the operator named is named here, because this is the first place that knows
+	// both the path and why it could not be claimed.
 	lock, err := dblock.Acquire(config.GetDbFilePath())
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrInUse, err)
+		if errors.Is(err, dblock.ErrInUse) {
+			return nil, ErrInUse
+		}
+
+		return nil, nameTheDatabaseFile(config, err)
 	}
 
 	srv.dbLock = lock
@@ -229,8 +241,10 @@ func New(config Config) (*Server, error) {
 		ConnectTimeout: config.DbConnectTimeout,
 	})
 	if err != nil {
+		// The claim is released before the failure is said, and the file the operator named goes
+		// beside the reason the data source gave.
 		_ = lock.Close()
-		return nil, err
+		return nil, nameTheDatabaseFile(config, err)
 	}
 
 	srv.db = db
@@ -250,8 +264,10 @@ func New(config Config) (*Server, error) {
 
 		migrationLines = append(migrationLines, domain.LogEntry{Level: level, Message: message})
 	}); err != nil {
+		// The prefix the migration carries, and the statement it named, are what file this line under
+		// the database subsystem: only the file is added beside them, and none of them is rewritten.
 		_ = lock.Close()
-		return nil, err
+		return nil, nameTheDatabaseFile(config, err)
 	}
 
 	if err := persistence.Seed(ctx, db, dialect); err != nil {
@@ -265,6 +281,20 @@ func New(config Config) (*Server, error) {
 	}
 
 	return srv, nil
+}
+
+// nameTheDatabaseFile puts the file the configuration named beside a failure that came out of the
+// deployment sitting at it. The failure's own words say what went wrong; the path says which file
+// the operator has to fix, and it is the one thing a caller above this one cannot add on its own.
+// Only a deployment held in a file has a file to name: a database the operator reaches through a
+// host and a name has no path here, and a sentence pointing at one sends them to a folder that
+// holds nothing of theirs.
+func nameTheDatabaseFile(config Config, err error) error {
+	if config.DbType != DbTypeSqlite {
+		return err
+	}
+
+	return fmt.Errorf("%w — the database file is %s", err, config.GetDbFilePath())
 }
 
 // wire builds the adapters, hands each one to the use cases that need it, and hangs the

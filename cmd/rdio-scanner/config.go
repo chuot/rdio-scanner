@@ -215,6 +215,16 @@ func newConfig(args []string, exePath string, stdout io.Writer) (*Config, Config
 		return config, ModeCommand, nil
 	}
 
+	// A start that opens the deployment writes its database file, so the file the
+	// operator named has to be writable by the account this process runs as. The
+	// modes answered above opened nothing, and asking the host's service manager
+	// to act is how an operator reaches a deployment they cannot write.
+	if !asksTheServiceManager(config.ServiceAction) {
+		if err := refuseUnwritableDatabaseFile(config); err != nil {
+			return nil, ModeExit, err
+		}
+	}
+
 	return config, ModeServe, nil
 }
 

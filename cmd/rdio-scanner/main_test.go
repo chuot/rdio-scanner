@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -515,6 +516,177 @@ func TestVacuumModeRefusesASecondRunWhileTheFirstHoldsTheLock(t *testing.T) {
 		}
 	case <-time.After(time.Minute):
 		t.Fatal("the first vacuum run never finished")
+	}
+}
+
+// A mode that opens the deployment is refused over a database file the account
+// cannot write before anything is asked of that file: the refusal names it, the
+// run ends 1, the file keeps its bytes and its mode, and no claim sidecar is left
+// where a start that reached the claim would have written one. The maintenance run
+// and its dry run, the administrator credential mode, and the server the service
+// manager is told to run are each asked for over the same file.
+func TestAModeThatOpensTheDatabaseIsRefusedBeforeItClaimsTheFile(t *testing.T) {
+	for _, flags := range [][]string{
+		{"-vacuum"},
+		{"-vacuum", "-vacuum_dry_run"},
+		{"-admin_password", "a-chosen-one"},
+		{"-service", serviceActionRun},
+	} {
+		base := t.TempDir()
+
+		dbPath := filepath.Join(base, "rdio-scanner.db")
+
+		seedDatabaseFile(t, dbPath, 0o444)
+
+		claim := dbPath + ".lock"
+
+		if _, err := os.Stat(claim); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%s: a deployment claim was found before the run: %v", flags[0], err)
+		}
+
+		before, err := os.ReadFile(dbPath)
+		if err != nil {
+			t.Fatalf("reading %s: %v", dbPath, err)
+		}
+
+		stdout := &bytes.Buffer{}
+
+		code := run(append([]string{"-base_dir", base, "-listen", freeListenAddr(t)}, flags...), stdout, noBundlesUnbuilt)
+
+		if code != 1 {
+			t.Fatalf("%s exited %d over an unwritable database file, want 1:\n%s", flags[0], code, stdout.String())
+		}
+
+		// the operator reads the file they have to fix, the mode it is at, who
+		// owns it, and the uid their start runs as, all on the one line
+		said := stdout.String()
+
+		for _, part := range []string{
+			"error: no write permissions in the database file ",
+			dbPath,
+			"(mode 0444, owned by uid ",
+			"; the server runs as uid ",
+		} {
+			if !strings.Contains(said, part) {
+				t.Errorf("%s did not say %q over a file it cannot write:\n%s", flags[0], part, said)
+			}
+		}
+
+		after, err := os.ReadFile(dbPath)
+		if err != nil {
+			t.Fatalf("reading %s after the run: %v", dbPath, err)
+		}
+
+		if !bytes.Equal(before, after) {
+			t.Errorf("%s changed the database file it refused to work with", flags[0])
+		}
+
+		info, err := os.Stat(dbPath)
+		if err != nil {
+			t.Fatalf("%s: reading %s after the run: %v", flags[0], dbPath, err)
+		}
+
+		if info.Mode().Perm() != 0o444 {
+			t.Errorf("%s left the database file at %04o, want 0444", flags[0], info.Mode().Perm())
+		}
+
+		// the refusal is what stops the start, so it is the claim the run never
+		// reached that proves the file was named before anything was asked of it
+		if _, err := os.Stat(claim); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s left a deployment claim behind over a file it cannot write: %v", flags[0], err)
+		}
+	}
+}
+
+// A mode that opens no database keeps the answer it gives today over a file the
+// account cannot write: the version, the saved configuration file, the command
+// modes that drive a server that is already running, and the actions this process
+// asks the host's service manager to take. Each is answered with the words and the
+// code it answers with now, none of them reaches the deployment, and the file they
+// were given keeps its bytes and its mode. The service action is named as one no
+// manager is asked to take, so the run reaches the manager's failure path rather
+// than a service installed on the host running the test.
+func TestAModeThatOpensNoDatabaseIsAnsweredOverAnUnwritableDatabaseFile(t *testing.T) {
+	for _, asked := range []struct {
+		flags []string
+		code  int
+		said  string
+	}{
+		{flags: []string{"-version"}, code: 0, said: Version},
+		{flags: []string{"-config_save"}, code: 0, said: "file created"},
+		{flags: []string{"-cmd", "help"}, code: 0, said: "Available Commands:"},
+		{flags: []string{"-cmd", "config-get"}, code: 1, said: "missing +out"},
+		{flags: []string{"-service", "bogus"}, code: 1, said: "bogus"},
+	} {
+		base := t.TempDir()
+
+		dbPath := filepath.Join(base, "rdio-scanner.db")
+
+		seedDatabaseFile(t, dbPath, 0o444)
+
+		claim := dbPath + ".lock"
+
+		if _, err := os.Stat(claim); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%v: a deployment claim was found before the run: %v", asked.flags, err)
+		}
+
+		before, err := os.ReadFile(dbPath)
+		if err != nil {
+			t.Fatalf("reading %s: %v", dbPath, err)
+		}
+
+		stdout := &bytes.Buffer{}
+
+		logOut := &bytes.Buffer{}
+
+		previous := log.Writer()
+		log.SetOutput(logOut)
+
+		defer log.SetOutput(previous)
+
+		code := run(append([]string{"-base_dir", base, "-listen", freeListenAddr(t)}, asked.flags...), stdout, noBundlesUnbuilt)
+
+		// both streams are read together: the version and the usage are printed,
+		// and a failure the host's manager answers is said through the logger
+		said := stdout.String() + logOut.String()
+
+		if code != asked.code {
+			t.Fatalf("%v answered with code %d, want the code it answers with today:\n%s", asked.flags, code, said)
+		}
+
+		if !strings.Contains(said, asked.said) {
+			t.Errorf("%v no longer says %q:\n%s", asked.flags, asked.said, said)
+		}
+
+		if strings.Contains(said, "no write permissions") {
+			t.Errorf("%v reported a refused file it was never asked to write:\n%s", asked.flags, said)
+		}
+
+		if strings.Contains(said, dbPath) {
+			t.Errorf("%v named the database file it never opened: %s", asked.flags, said)
+		}
+
+		if _, err := os.Stat(claim); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%v reached the deployment and left a claim behind: %v", asked.flags, err)
+		}
+
+		after, err := os.ReadFile(dbPath)
+		if err != nil {
+			t.Fatalf("reading %s after the run: %v", dbPath, err)
+		}
+
+		if !bytes.Equal(before, after) {
+			t.Errorf("%v changed the database file it was given", asked.flags)
+		}
+
+		info, err := os.Stat(dbPath)
+		if err != nil {
+			t.Fatalf("%s after the run: %v", dbPath, err)
+		}
+
+		if info.Mode().Perm() != 0o444 {
+			t.Errorf("%v left the database file at %04o, want 0444", asked.flags, info.Mode().Perm())
+		}
 	}
 }
 

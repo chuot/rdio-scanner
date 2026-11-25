@@ -932,6 +932,25 @@ runtime. Check the log for the opening lines described in
 mount points are the first thing to recheck, and
 <a href="#ch-25-troubleshooting">Troubleshooting</a> collects the log lines
 that name a bad mount.</p>
+<p><strong>Which account the container runs as, and who must own the data
+volume.</strong> The image creates one account for the server to run as — uid
+10001, named <code>rdio</code> — makes <code>/app/data</code> belong to it, and
+starts the server pointing at that directory. So everything on the data volume
+has to be writable by uid 10001: the database file, the folder it sits in, and
+the lock file beside them. A volume the container manager created for the image
+arrives owned the way the image made it, and needs nothing said. The example
+above mounts a directory of your own and runs the container as
+<code>--user $(id -u):$(id -g)</code>, the account that ran the command, which
+is writable because you created that directory; change one side without changing
+the other — drop the flag, name a different <code>user</code> in the compose
+file below, or mount a directory another account created — and the server
+refuses the start. It answers one line naming the database file it cannot write,
+with that file's mode, the uid that owns it, and the uid the server runs as, and
+the manager starts the container again to the same line.
+<a href="#ch-25-troubleshooting">Troubleshooting</a> quotes those lines and what
+each one means, and <a href="#ch-21-running-as-a-service">Running as a
+service</a> is what the same question looks like for a binary that is not inside
+a container.</p>
 <p><strong>Which architecture the image covers.</strong> The image is built for three
 architectures: the three Linux builds the release matrix names — <code>linux-amd64</code>,
 <code>linux-arm64</code>, and <code>linux-arm</code>, which are the amd64 build, the ARM64 build,
@@ -4366,6 +4385,7 @@ $ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
     <caption>Symptom to place</caption>
     <thead><tr><th scope="col">You see</th><th scope="col">Look here first</th><th scope="col">Chapter</th></tr></thead>
     <tbody>
+      <tr><td>The server will not start, or it starts and restarts on a loop</td><td>The line the server answered, and who owns the database file and the folder that file sits in</td><td><a href="#ch-04-installation">4</a>, <a href="#ch-07-database">7</a>, <a href="#ch-21-running-as-a-service">21</a></td></tr>
       <tr><td>A talkgroup that used to report is silent</td><td>The log, filtered to the subsystem that receives the audio, over the day it went quiet</td><td><a href="#ch-14-logs">14</a></td></tr>
       <tr><td>Calls arrive and play nothing</td><td>The conversion mode, and whether this build carries the converter</td><td><a href="#ch-13-options">13</a>, <a href="#ch-03-requirements">3</a></td></tr>
       <tr><td>The login is refused</td><td>The log under <em>Logins</em>, and the ten-minute window</td><td><a href="#ch-08-administration-interface">8</a>, <a href="#ch-22-security-hardening">22</a></td></tr>
@@ -4377,6 +4397,72 @@ $ psql -h 10.0.0.5 -U rdio rdio_scanner &lt; /backup/rdio-scanner-2026-10-02.sql
       <tr><td>The save bar will not save, or the conflict banner is up</td><td>What the banner says, and the other session that saved</td><td><a href="#ch-08-administration-interface">8</a></td></tr>
     </tbody>
   </table>
+
+  <h3>The server will not start, or it starts and restarts on a loop</h3>
+
+  <p>
+    A start that cannot write its own database is refused in one line, before the server claims anything, and the line
+    names the file. There is nothing to search the log for and nothing to guess at: the file, or the folder that file
+    sits in, belongs to an account the server does not run as. Seen from outside a container the same refusal looks
+    like a different problem, because the container manager starts the image again and the same line appears again: the
+    deployment reads as a server that restarts on a loop.
+  </p>
+
+  <p>
+    The lines below are transcribed from the runs that produced them, with the container deployment's
+    <code>/app/data</code> as the directory and the published image's account as the one running the server. The first
+    four are answered on the console before anything else is printed; the last three arrive through the server's own
+    logging, after the opening banner, which is how the two halves can be told apart.
+  </p>
+
+<pre><code>error: no write permissions in the database file /app/data/rdio-scanner.db (mode 0644, owned by uid 1000; the server runs as uid 10001)
+error: no write permissions in /app/data, the folder the database file /app/data/rdio-scanner.db sits in
+error: the folder the database file was named in does not exist: /app/data
+error: the database file /app/data/rdio-scanner.db is a folder
+2026-11-03 07:14:02 dblock.acquire: open /app/data/rdio-scanner.lock: is a directory — the database file is /app/data/rdio-scanner.db
+2026-11-03 07:14:02 the database is in use
+2026-11-03 07:14:02 the database is in use — stop the server before vacuuming</code></pre>
+
+  <p>
+    Every one of them ends the start with exit code <code>1</code>, and a refused start leaves nothing behind: no lock
+    file, no journal, no half-written database beside the file it named. What the file holds afterwards is what it held
+    before. On Windows the first line names the mode and says the owner is an account the system does not name, because
+    that system reports no uid for the file.
+  </p>
+
+  <ol>
+    <li>
+      <strong>Read the line as the shape it names.</strong> The first means the database file itself is not writable by
+      the account running the server, and it says the file's mode and owner beside the uid the server runs as. The
+      second means the folder is the problem: a mode-<code>644</code> file inside a folder the account cannot write is
+      refused with the folder named, and changing the file changes nothing. The third names a folder that is not there
+      — the start is refused rather than left to create a deployment nobody asked for. The fourth says the path the
+      deployment resolved to is a folder, not a file.
+    </li>
+    <li>
+      <strong>Check which account the server runs as.</strong> A binary started by hand writes as the account that
+      started it, and <a href="#ch-21-running-as-a-service">chapter 21</a> names the account a service runs under. The
+      published image runs its server as uid <code>10001</code>, and <a href="#ch-04-installation">chapter 4</a> says
+      who has to own the data volume for that image. A refusal that names two different uids is naming the whole
+      answer: the file belongs to one account and the server runs as another.
+    </li>
+    <li>
+      <strong>Make the file writable by that account, or move the deployment to it.</strong> Give that account write
+      permission on the file and on the folder it sits in, or point the deployment at a directory it already owns:
+      <code>-base_dir</code> moves the whole deployment, database file and lock file alike, and <code>-db_file</code>
+      names the file itself. <a href="#ch-07-database">Chapter 7</a> describes both settings, and
+      <a href="#ch-06-flags-and-ini">chapter 6</a> tabulates them.
+    </li>
+    <li>
+      <strong>Treat the last three lines as a different answer.</strong> They are not about permissions. The two that
+      say <em>the database is in use</em> mean another process already holds the deployment, through a lock file named
+      after the database file: <code>rdio-scanner.lock</code> beside <code>rdio-scanner.db</code>, or
+      <code>myscanner.lock</code> beside <code>myscanner.sqlite</code>. Stop the server that is serving, then start the
+      one you meant; a maintenance run against a deployment a live server holds says so in its own words, quoted above.
+      The line before them is a lock file that is a folder, and the server names it as the folder it is instead of
+      sending you to stop a server that is not running.
+    </li>
+  </ol>
 
   <h3>A talkgroup that used to report has gone silent</h3>
 
